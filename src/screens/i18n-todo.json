@@ -1,0 +1,23 @@
+[
+  {
+    "file": "main/SettingsScreen.js",
+    "line": 949,
+    "pattern": "prop",
+    "raw": "Company Size",
+    "key": "company_size"
+  },
+  {
+    "file": "main/SettingsScreen.js",
+    "line": 1014,
+    "pattern": "prop",
+    "raw": "Dashboard Currency",
+    "key": "dashboard_currency"
+  },
+  {
+    "file": "main/SettingsScreen.js",
+    "line": 1024,
+    "pattern": "prop",
+    "raw": "Payment Currency",
+    "key": "payment_currency"
+  }
+]

@@ -1,0 +1,5314 @@
+
+[0;35m[1m
+  ███████╗██╗  ██╗██╗██╗     ██╗     ███████╗██████╗ 
+  ██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝██╔══██╗
+  ███████╗█████╔╝ ██║██║     ██║     █████╗  ██║  ██║
+  ╚════██║██╔═██╗ ██║██║     ██║     ██╔══╝  ██║  ██║
+  ███████║██║  ██╗██║███████╗███████╗███████╗██████╔╝
+  ╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝╚═════╝ 
+[0m
+[1m         SkilledProz Hirer App — Codebase Overview[0m
+
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 API[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/api/client.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/api/client.js
+import axios from "axios";
+import Constants from "expo-constants";
+import * as SecureStore from "expo-secure-store";
+
+const API_URL =
+  Constants.expoConfig?.extra?.API_URL ||
+  "https://skilledpro-backend-production.up.railway.app/api";
+
+const ACCESS_KEY = "skp_access";
+const REFRESH_KEY = "skp_refresh";
+
+export const tokenStore = {
+  async getAccess() {
+    try { return await SecureStore.getItemAsync(ACCESS_KEY); } catch { return null; }
+  },
+  async getRefresh() {
+    try { return await SecureStore.getItemAsync(REFRESH_KEY); } catch { return null; }
+  },
+  async setTokens(access, refresh) {
+    try {
+      if (access) await SecureStore.setItemAsync(ACCESS_KEY, access);
+      if (refresh) await SecureStore.setItemAsync(REFRESH_KEY, refresh);
+    } catch {}
+  },
+  async clear() {
+    try {
+      await SecureStore.deleteItemAsync(ACCESS_KEY);
+      await SecureStore.deleteItemAsync(REFRESH_KEY);
+    } catch {}
+  },
+};
+
+const api = axios.create({
+  baseURL: API_URL,
+  timeout: 30000,
+  headers: { "Content-Type": "application/json" },
+});
+
+// Attach access token
+api.interceptors.request.use(async (config) => {
+  const token = await tokenStore.getAccess();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Refresh on 401 once
+let isRefreshing = false;
+let queued = [];
+
+const flush = (err, token) => {
+  queued.forEach(({ resolve, reject }) => {
+    if (err) reject(err);
+    else resolve(token);
+  });
+  queued = [];
+};
+
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config;
+    if (
+      error.response?.status === 401 &&
+      !original._retry &&
+      !original.url?.includes("/auth/refresh") &&
+      !original.url?.includes("/auth/login")
+    ) {
+      original._retry = true;
+      const refresh = await tokenStore.getRefresh();
+      if (!refresh) return Promise.reject(error);
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          queued.push({ resolve, reject });
+        }).then((token) => {
+          original.headers.Authorization = `Bearer ${token}`;
+          return api(original);
+        });
+      }
+
+      isRefreshing = true;
+      try {
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, {
+          refreshToken: refresh,
+        });
+        const newAccess = data?.data?.accessToken;
+        const newRefresh = data?.data?.refreshToken;
+        await tokenStore.setTokens(newAccess, newRefresh);
+        flush(null, newAccess);
+        original.headers.Authorization = `Bearer ${newAccess}`;
+        return api(original);
+      } catch (err) {
+        flush(err, null);
+        await tokenStore.clear();
+        return Promise.reject(err);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+/** Pull a friendly error message off an axios error. */
+export function getErrorMessage(err, fallback = "Something went wrong") {
+  return (
+    err?.response?.data?.message ||
+    err?.response?.data?.error ||
+    err?.message ||
+    fallback
+  );
+}
+
+export default api;
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/api/hirer.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/api/hirer.js
+import api from "./client";
+
+/**
+ * Hirer API client - thin wrappers around /hirer/* endpoints.
+ * Components import these instead of writing axios calls inline.
+ */
+export const hirerApi = {
+  // GET /api/hirer/me/dashboard
+  // → { stats: { totalBookings, activeBookings, completedBookings, totalSpent },
+  //     recentBookings: [...], recentWorkers: [...] }
+  getDashboard: () => api.get("/hirers/me/dashboard").then((r) => r.data.data),
+
+  // GET /api/hirer/me/profile
+  getMyProfile: () => api.get("/hirers/me/profile").then((r) => r.data.data),
+
+  // PUT /api/hirer/me/profile
+  updateProfile: (payload) =>
+    api.put("/hirers/me/profile", payload).then((r) => r.data.data),
+
+  // GET /api/hirer/me/bookings?status=&page=&limit=
+  getBookings: (params = {}) =>
+    api.get("/hirers/me/bookings", { params }).then((r) => r.data.data),
+
+  // GET /api/hirer/me/saved-workers
+  getSavedWorkers: () =>
+    api.get("/hirers/me/saved-workers").then((r) => r.data.data),
+
+  // GET /api/hirer/me/reviews/received
+  getReviewsReceived: (params = {}) =>
+    api.get("/hirers/me/reviews/received", { params }).then((r) => r.data.data),
+
+  // GET /api/hirer/me/reviews/given
+  getReviewsGiven: (params = {}) =>
+    api.get("/hirers/me/reviews/given", { params }).then((r) => r.data.data),
+
+  // GET /api/hirer/me/notifications
+  getNotifications: () =>
+    api.get("/hirers/me/notifications").then((r) => r.data.data),
+
+  // PATCH /api/hirer/me/notifications/read
+  markNotificationsRead: () =>
+    api.patch("/hirers/me/notifications/read").then((r) => r.data),
+};
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 COMPONENTS[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/components/AppButton.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/AppButton.js
+import React from "react";
+import {
+  Pressable,
+  ActivityIndicator,
+  StyleSheet,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AppText from "./AppText";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * AppButton — primary CTA used everywhere.
+ *
+ * variant:
+ *   - "primary" (default): solid orange, dark text — matches "Sign In", "Continue →"
+ *   - "secondary": panel bg with border — matches "← Back"
+ *   - "ghost": transparent
+ *   - "danger": red
+ *
+ * size: "md" (default) | "sm" | "lg"
+ */
+export default function AppButton({
+  title,
+  onPress,
+  variant = "primary",
+  size = "md",
+  loading = false,
+  disabled = false,
+  iconLeft,
+  iconRight,
+  fullWidth = true,
+  style,
+}) {
+  const { theme } = useTheme();
+  const palette = getPalette(variant, theme, disabled);
+  const dims = SIZE[size];
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || loading}
+      style={({ pressed }) => [
+        styles.base,
+        {
+          backgroundColor: palette.bg,
+          borderColor: palette.border,
+          borderWidth: variant === "secondary" || variant === "ghost" ? 1 : 0,
+          paddingVertical: dims.py,
+          paddingHorizontal: dims.px,
+          borderRadius: dims.radius,
+          opacity: pressed ? 0.85 : 1,
+          width: fullWidth ? "100%" : undefined,
+          alignSelf: fullWidth ? "stretch" : "flex-start",
+        },
+        style,
+      ]}
+    >
+      <View style={styles.row}>
+        {loading ? (
+          <ActivityIndicator color={palette.fg} />
+        ) : (
+          <>
+            {iconLeft ? (
+              <Ionicons
+                name={iconLeft}
+                size={dims.icon}
+                color={palette.fg}
+                style={{ marginRight: 8 }}
+              />
+            ) : null}
+            <AppText
+              variant={dims.textVariant}
+              weight="semibold"
+              style={{ color: palette.fg, textAlign: "center" }}
+              numberOfLines={1}
+            >
+              {title}
+            </AppText>
+            {iconRight ? (
+              <Ionicons
+                name={iconRight}
+                size={dims.icon}
+                color={palette.fg}
+                style={{ marginLeft: 8 }}
+              />
+            ) : null}
+          </>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+const SIZE = {
+  sm: { py: 10, px: 16, radius: 10, icon: 16, textVariant: "small" },
+  md: { py: 14, px: 20, radius: 12, icon: 18, textVariant: "subtitle" },
+  lg: { py: 16, px: 24, radius: 14, icon: 20, textVariant: "subtitle" },
+};
+
+function getPalette(variant, theme, disabled) {
+  const base = (() => {
+    switch (variant) {
+      case "secondary":
+        return {
+          bg: theme.colors.bgPanel,
+          fg: theme.colors.text,
+          border: theme.colors.border,
+        };
+      case "ghost":
+        return {
+          bg: "transparent",
+          fg: theme.colors.text,
+          border: theme.colors.border,
+        };
+      case "danger":
+        return {
+          bg: theme.colors.red,
+          fg: "#ffffff",
+          border: "transparent",
+        };
+      case "primary":
+      default:
+        return {
+          // The website uses pure orange button with near-black text on the
+          // "Sign In" CTA; we match that contrast.
+          bg: theme.colors.orange,
+          fg: "#0f0f1a",
+          border: "transparent",
+        };
+    }
+  })();
+
+  if (disabled) {
+    return { ...base, bg: theme.colors.orangeDim, fg: theme.colors.textDim };
+  }
+  return base;
+}
+
+const styles = StyleSheet.create({
+  base: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/AppCurrency.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/AppCurrency.js
+import React from "react";
+import AppText from "./AppText";
+import { useCurrency } from "../contexts/CurrencyContext";
+
+/**
+ * AppCurrency — render a monetary amount.
+ *
+ *   <AppCurrency amount={1500} />                     // uses global currency
+ *   <AppCurrency amount={1500} currencyCode="NGN" />  // overrides for this instance
+ *   <AppCurrency amount={1500} variant="title" />     // any AppText variant
+ *
+ * This is intentionally a thin component so screens never have to know how
+ * formatting works for a given user's locale.
+ */
+export default function AppCurrency({
+  amount,
+  currencyCode,
+  variant = "body",
+  weight,
+  tone,
+  style,
+  minimumFractionDigits,
+  maximumFractionDigits,
+}) {
+  const { format } = useCurrency();
+  const text = format(amount, {
+    currencyCode,
+    minimumFractionDigits,
+    maximumFractionDigits,
+  });
+
+  return (
+    <AppText variant={variant} weight={weight} tone={tone} style={style}>
+      {text}
+    </AppText>
+  );
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/AppInput.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/AppInput.js
+import React, { useState, forwardRef } from "react";
+import {
+  View,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  I18nManager,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AppText from "./AppText";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * AppInput — themed input that matches the website's pill input
+ *  (icon left, optional eye toggle for password, label above, error below).
+ */
+const AppInput = forwardRef(function AppInput(
+  {
+    label,
+    iconLeft,
+    placeholder,
+    value,
+    onChangeText,
+    onBlur,
+    onFocus,
+    secureTextEntry,
+    keyboardType = "default",
+    autoCapitalize = "none",
+    autoCorrect = false,
+    autoComplete,
+    textContentType,
+    error,
+    helperText,
+    rightAction,
+    rightActionLabel,
+    onRightActionPress,
+    multiline = false,
+    numberOfLines,
+    maxLength,
+    editable = true,
+    style,
+  },
+  ref,
+) {
+  const { theme } = useTheme();
+  const [focused, setFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const isPassword = !!secureTextEntry;
+  const obscured = isPassword && !showPassword;
+
+  const borderColor = error
+    ? theme.colors.red
+    : focused
+    ? theme.colors.borderFocus
+    : theme.colors.border;
+
+  return (
+    <View style={[styles.wrap, style]}>
+      {(label || onRightActionPress) && (
+        <View style={styles.labelRow}>
+          {label ? (
+            <AppText variant="label" tone="dim">
+              {label}
+            </AppText>
+          ) : (
+            <View />
+          )}
+          {onRightActionPress ? (
+            <Pressable onPress={onRightActionPress} hitSlop={6}>
+              <AppText variant="small" tone="brand" weight="semibold">
+                {rightActionLabel}
+              </AppText>
+            </Pressable>
+          ) : null}
+        </View>
+      )}
+
+      <View
+        style={[
+          styles.field,
+          {
+            backgroundColor: theme.colors.bgInput,
+            borderColor,
+            paddingVertical: multiline ? 12 : 0,
+          },
+        ]}
+      >
+        {iconLeft ? (
+          <Ionicons
+            name={iconLeft}
+            size={18}
+            color={theme.colors.textDim}
+            style={styles.iconLeft}
+          />
+        ) : null}
+
+        <TextInput
+          ref={ref}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={theme.colors.textMuted}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
+          secureTextEntry={obscured}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
+          autoComplete={autoComplete}
+          textContentType={textContentType}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          maxLength={maxLength}
+          editable={editable}
+          maxFontSizeMultiplier={1.2}
+          style={[
+            styles.input,
+            {
+              color: theme.colors.text,
+              textAlign: I18nManager.isRTL ? "right" : "left",
+              fontFamily: "DMSans_400Regular",
+              minHeight: multiline ? Math.max(48, (numberOfLines || 3) * 22) : 48,
+              paddingLeft: iconLeft ? 0 : 14,
+              paddingRight: isPassword ? 0 : 14,
+            },
+          ]}
+        />
+
+        {isPassword ? (
+          <Pressable
+            onPress={() => setShowPassword((s) => !s)}
+            hitSlop={8}
+            style={styles.eye}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off-outline" : "eye-outline"}
+              size={18}
+              color={theme.colors.textDim}
+            />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {error ? (
+        <AppText variant="small" tone="danger" style={styles.helper}>
+          {error}
+        </AppText>
+      ) : helperText ? (
+        <AppText variant="small" tone="muted" style={styles.helper}>
+          {helperText}
+        </AppText>
+      ) : null}
+    </View>
+  );
+});
+
+const styles = StyleSheet.create({
+  wrap: { gap: 8 },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  field: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  iconLeft: {
+    paddingLeft: 14,
+    paddingRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    paddingVertical: 0,
+  },
+  eye: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  helper: {
+    marginTop: 2,
+  },
+});
+
+export default AppInput;
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/AppScreen.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/AppScreen.js
+import React from "react";
+import {
+  View,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar as RNStatusBar,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * AppScreen — every screen mounts inside this wrapper. It handles:
+ *  - safe areas (notches, gesture bars)
+ *  - themed background
+ *  - keyboard avoidance
+ *  - optional scroll
+ *  - status bar style synced with the active theme
+ *  - pull-to-refresh (pass a <RefreshControl /> via `refreshControl` prop)
+ */
+export default function AppScreen({
+  children,
+  scroll = true,
+  keyboard = true,
+  padded = true,
+  edges = ["left", "right", "bottom"],
+  contentContainerStyle,
+  refreshControl,
+  style,
+}) {
+  const { theme, effectiveMode } = useTheme();
+
+  const body = scroll ? (
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      refreshControl={refreshControl}
+      contentContainerStyle={[
+        styles.scrollContent,
+        padded && styles.padded,
+        contentContainerStyle,
+      ]}
+    >
+      {children}
+    </ScrollView>
+  ) : (
+    <View
+      style={[
+        styles.viewContent,
+        padded && styles.padded,
+        contentContainerStyle,
+      ]}
+    >
+      {children}
+    </View>
+  );
+
+  return (
+    <SafeAreaView
+      edges={edges}
+      style={[styles.safe, { backgroundColor: theme.colors.bg }, style]}
+    >
+      <StatusBar style={effectiveMode === "light" ? "dark" : "light"} />
+      {keyboard ? (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.flex}
+          keyboardVerticalOffset={
+            Platform.OS === "ios" ? 0 : RNStatusBar.currentHeight || 0
+          }
+        >
+          {body}
+        </KeyboardAvoidingView>
+      ) : (
+        body
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  flex: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+  viewContent: { flex: 1 },
+  padded: { paddingHorizontal: 20, paddingVertical: 16 },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/AppText.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/AppText.js
+import React from "react";
+import { Text, StyleSheet } from "react-native";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * AppText — every piece of text in the app should use this component.
+ *
+ * Variants map to the website's typographic system:
+ *   - "display" / "displaySm" → Syne (the bold "Sign in to SkilledProz" headlines)
+ *   - "title"   → DM Sans 600, larger
+ *   - "body"    → DM Sans 400 (default)
+ *   - "label"   → uppercase tracking, used for form labels and "WELCOME BACK"
+ *   - "muted"   → for hints and helper text
+ *
+ * `tone` overrides color: "default" | "dim" | "muted" | "brand" | "danger" | "success"
+ *
+ * Because text is sized in `sp` and we don't allow OS-level font scaling beyond a
+ * cap, layouts hold up across long languages (German, Russian) without breaking.
+ */
+export default function AppText({
+  children,
+  variant = "body",
+  tone = "default",
+  weight,
+  align,
+  style,
+  numberOfLines,
+  selectable,
+  ...rest
+}) {
+  const { theme, fonts } = useTheme();
+
+  const variantStyle = VARIANTS[variant] || VARIANTS.body;
+  const fontFamily = weight
+    ? FAMILY_BY_WEIGHT[weight] || fonts.body
+    : variantStyle.fontFamily(fonts);
+
+  const color = TONE_COLOR(tone, theme);
+
+  return (
+    <Text
+      maxFontSizeMultiplier={1.3}
+      numberOfLines={numberOfLines}
+      selectable={selectable}
+      style={[
+        styles.base,
+        { fontFamily, color },
+        variantStyle.style,
+        align && { textAlign: align },
+        style,
+      ]}
+      {...rest}
+    >
+      {children}
+    </Text>
+  );
+}
+
+const VARIANTS = {
+  display: {
+    fontFamily: (f) => f.displayBlack,
+    style: { fontSize: 36, lineHeight: 42, letterSpacing: -0.5 },
+  },
+  displaySm: {
+    fontFamily: (f) => f.display,
+    style: { fontSize: 28, lineHeight: 34, letterSpacing: -0.3 },
+  },
+  title: {
+    fontFamily: (f) => f.bodySemiBold,
+    style: { fontSize: 20, lineHeight: 26 },
+  },
+  subtitle: {
+    fontFamily: (f) => f.bodyMedium,
+    style: { fontSize: 16, lineHeight: 22 },
+  },
+  body: {
+    fontFamily: (f) => f.body,
+    style: { fontSize: 15, lineHeight: 21 },
+  },
+  small: {
+    fontFamily: (f) => f.body,
+    style: { fontSize: 13, lineHeight: 18 },
+  },
+  label: {
+    fontFamily: (f) => f.bodySemiBold,
+    style: {
+      fontSize: 12,
+      lineHeight: 16,
+      letterSpacing: 1.2,
+      textTransform: "uppercase",
+    },
+  },
+  muted: {
+    fontFamily: (f) => f.body,
+    style: { fontSize: 13, lineHeight: 18 },
+  },
+};
+
+const FAMILY_BY_WEIGHT = {
+  regular: "DMSans_400Regular",
+  medium: "DMSans_500Medium",
+  semibold: "DMSans_600SemiBold",
+  bold: "DMSans_700Bold",
+  display: "Syne_700Bold",
+  displayBlack: "Syne_800ExtraBold",
+};
+
+const TONE_COLOR = (tone, theme) => {
+  switch (tone) {
+    case "dim":     return theme.colors.textDim;
+    case "muted":   return theme.colors.textMuted;
+    case "brand":   return theme.colors.orange;
+    case "danger":  return theme.colors.red;
+    case "success": return theme.colors.green;
+    default:        return theme.colors.text;
+  }
+};
+
+const styles = StyleSheet.create({
+  base: {
+    // RN's default includeFontPadding on Android adds extra vertical space —
+    // disabling gives us pixel-accurate alignment with the web design.
+    includeFontPadding: false,
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/Avatar.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/Avatar.js
+import React from "react";
+import { View, Image, StyleSheet } from "react-native";
+import AppText from "./AppText";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * Avatar — circular user photo with initials fallback.
+ *
+ *   <Avatar uri={user.avatar} firstName={user.firstName} lastName={user.lastName} size={40} />
+ *
+ * Falls back to a colored circle with the user's initials when no avatar.
+ */
+export default function Avatar({
+  uri,
+  firstName = "",
+  lastName = "",
+  size = 40,
+  style,
+}) {
+  const { theme } = useTheme();
+  const initials =
+    `${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase() || "?";
+
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={[
+          styles.img,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: theme.colors.bgInput,
+          },
+          style,
+        ]}
+      />
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.fallback,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: theme.colors.orangeDim,
+          borderColor: theme.colors.border,
+        },
+        style,
+      ]}
+    >
+      <AppText
+        weight="bold"
+        style={{
+          color: theme.colors.orange,
+          fontSize: Math.max(11, Math.floor(size * 0.4)),
+        }}
+      >
+        {initials}
+      </AppText>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  img: {},
+  fallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/Badge.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/Badge.js
+import React from "react";
+import { View, StyleSheet } from "react-native";
+import AppText from "./AppText";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * Badge — themed status pill.
+ *
+ *   <Badge tone="success">Accepted</Badge>
+ *   <Badge tone="danger">Disputed</Badge>
+ *
+ * Tones: "success" | "warning" | "danger" | "info" | "neutral"
+ * Or pass `status` directly (PENDING / ACCEPTED / COMPLETED / etc.) and it
+ * auto-picks the right tone.
+ */
+export default function Badge({ children, tone, status, size = "sm" }) {
+  const { theme } = useTheme();
+  const effectiveTone = tone || toneFromStatus(status);
+  const palette = getPalette(effectiveTone, theme);
+  const label = String(children ?? status ?? "").toUpperCase();
+
+  return (
+    <View
+      style={[
+        styles.base,
+        size === "sm" ? styles.sm : styles.md,
+        { backgroundColor: palette.bg, borderColor: palette.border },
+      ]}
+    >
+      <AppText
+        weight="bold"
+        style={{
+          color: palette.fg,
+          fontSize: size === "sm" ? 10 : 11,
+          letterSpacing: 0.8,
+        }}
+      >
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
+function toneFromStatus(status) {
+  switch ((status || "").toUpperCase()) {
+    case "ACCEPTED":
+    case "COMPLETED":
+    case "RELEASED":
+    case "VERIFIED":
+    case "ACTIVE":
+      return "success";
+    case "PENDING":
+    case "IN_PROGRESS":
+    case "HELD":
+    case "PROCESSING":
+      return "warning";
+    case "REJECTED":
+    case "CANCELLED":
+    case "DISPUTED":
+    case "FAILED":
+    case "REFUNDED":
+      return "danger";
+    case "OPEN":
+      return "info";
+    default:
+      return "neutral";
+  }
+}
+
+function getPalette(tone, theme) {
+  switch (tone) {
+    case "success":
+      return {
+        fg: theme.colors.green,
+        bg: theme.colors.greenDim,
+        border: theme.colors.greenDim,
+      };
+    case "warning":
+      return {
+        fg: theme.colors.orange,
+        bg: theme.colors.orangeDim,
+        border: theme.colors.orangeDim,
+      };
+    case "danger":
+      return {
+        fg: theme.colors.red,
+        bg: theme.colors.redDim,
+        border: theme.colors.redDim,
+      };
+    case "info":
+      return {
+        fg: theme.colors.orange,
+        bg: theme.colors.orangeDim,
+        border: theme.colors.orangeDim,
+      };
+    case "neutral":
+    default:
+      return {
+        fg: theme.colors.textDim,
+        bg: theme.colors.bgCard,
+        border: theme.colors.border,
+      };
+  }
+}
+
+const styles = StyleSheet.create({
+  base: {
+    alignSelf: "flex-start",
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  sm: { paddingHorizontal: 8, paddingVertical: 4 },
+  md: { paddingHorizontal: 10, paddingVertical: 6 },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/BookingRow.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/BookingRow.js
+import React from "react";
+import { View, Pressable, StyleSheet } from "react-native";
+import AppText from "./AppText";
+import Avatar from "./Avatar";
+import Badge from "./Badge";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * BookingRow — one item in the Recent Bookings list (matches website screenshot).
+ *
+ *   <BookingRow booking={b} onPress={() => goTo(b.id)} showDivider />
+ *
+ * The booking payload from /hirer/me/dashboard looks like:
+ *   { id, title, worker: { firstName, lastName, avatar }, category: { name },
+ *     status, agreedRate, currency }
+ */
+export default function BookingRow({ booking, onPress, showDivider = true }) {
+  const { theme } = useTheme();
+
+  const workerName = booking.worker
+    ? `${booking.worker.firstName} ${booking.worker.lastName}`
+    : "Worker";
+  const categoryName = booking.category?.name || "—";
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        {
+          borderBottomColor: theme.colors.border,
+          borderBottomWidth: showDivider ? StyleSheet.hairlineWidth : 0,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <Avatar
+        uri={booking.worker?.avatar}
+        firstName={booking.worker?.firstName}
+        lastName={booking.worker?.lastName}
+        size={40}
+      />
+
+      <View style={styles.middle}>
+        <AppText weight="semibold" numberOfLines={1}>
+          {booking.title || "Untitled booking"}
+        </AppText>
+        <AppText
+          variant="small"
+          tone="dim"
+          numberOfLines={1}
+          style={{ marginTop: 2 }}
+        >
+          {workerName} · {categoryName}
+        </AppText>
+      </View>
+
+      <Badge status={booking.status} />
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    gap: 12,
+  },
+  middle: { flex: 1, minWidth: 0 },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/Card.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/Card.js
+import React from "react";
+import { View, StyleSheet } from "react-native";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * Card — themed panel used as a container for list sections.
+ * Matches the rounded bordered panels on the website dashboard.
+ */
+export default function Card({ children, padded = true, style }) {
+  const { theme } = useTheme();
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.colors.bgPanel,
+          borderColor: theme.colors.border,
+        },
+        padded && styles.padded,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  padded: {
+    padding: 16,
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/CurrencyPicker.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/CurrencyPicker.js
+import React, { useState, useMemo } from "react";
+import {
+  View,
+  Pressable,
+  Modal,
+  FlatList,
+  TextInput,
+  StyleSheet,
+  I18nManager,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+
+import AppText from "./AppText";
+import { useTheme } from "../contexts/ThemeContext";
+import { useCurrency } from "../contexts/CurrencyContext";
+import { CURRENCIES } from "../constants/currencies";
+
+/**
+ * CurrencyPicker — pill button + modal sheet matching the website's
+ * "Viewing in ₦ NGN ▾" control on the dashboard.
+ *
+ * Tap → modal slides up with a searchable list of all supported currencies.
+ * Tap a currency → updates the global currency context and persists.
+ */
+export default function CurrencyPicker({ label }) {
+  const { t } = useTranslation();
+  const { theme } = useTheme();
+  const { currency, setCurrencyCode } = useCurrency();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return CURRENCIES;
+    const q = query.trim().toLowerCase();
+    return CURRENCIES.filter(
+      (c) =>
+        c.code.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q) ||
+        c.symbol.toLowerCase().includes(q),
+    );
+  }, [query]);
+
+  const handleSelect = async (code) => {
+    await setCurrencyCode(code);
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        style={({ pressed }) => [
+          styles.pill,
+          {
+            backgroundColor: theme.colors.bgPanel,
+            borderColor: theme.colors.border,
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}
+      >
+        {label ? (
+          <AppText variant="small" tone="dim" style={{ marginRight: 6 }}>
+            {label}
+          </AppText>
+        ) : null}
+        <AppText weight="bold" style={{ color: theme.colors.orange }}>
+          {currency.symbol}
+        </AppText>
+        <AppText weight="semibold" tone="brand" style={{ marginLeft: 6 }}>
+          {currency.code}
+        </AppText>
+        <Ionicons
+          name="chevron-down"
+          size={14}
+          color={theme.colors.textDim}
+          style={{ marginLeft: 6 }}
+        />
+      </Pressable>
+
+      <Modal
+        visible={open}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setOpen(false)}
+      >
+        <Pressable
+          onPress={() => setOpen(false)}
+          style={[styles.backdrop, { backgroundColor: "rgba(0,0,0,0.5)" }]}
+        />
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: theme.colors.bgPanel,
+              borderTopColor: theme.colors.border,
+            },
+          ]}
+        >
+          <View style={styles.header}>
+            <AppText variant="title" weight="bold">
+              {t("common.currency")}
+            </AppText>
+            <Pressable onPress={() => setOpen(false)} hitSlop={10}>
+              <Ionicons name="close" size={22} color={theme.colors.text} />
+            </Pressable>
+          </View>
+
+          <View
+            style={[
+              styles.search,
+              {
+                backgroundColor: theme.colors.bgInput,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="search"
+              size={16}
+              color={theme.colors.textDim}
+              style={{ marginRight: 8 }}
+            />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t("common.search")}
+              placeholderTextColor={theme.colors.textMuted}
+              style={{
+                flex: 1,
+                color: theme.colors.text,
+                fontFamily: "DMSans_400Regular",
+                fontSize: 15,
+                textAlign: I18nManager.isRTL ? "right" : "left",
+              }}
+              autoCorrect={false}
+              autoCapitalize="characters"
+            />
+          </View>
+
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.code}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => {
+              const isActive = item.code === currency.code;
+              return (
+                <Pressable
+                  onPress={() => handleSelect(item.code)}
+                  style={({ pressed }) => [
+                    styles.item,
+                    {
+                      borderBottomColor: theme.colors.border,
+                      backgroundColor: pressed
+                        ? theme.colors.bgCard
+                        : "transparent",
+                    },
+                  ]}
+                >
+                  <AppText style={{ fontSize: 22, marginRight: 12 }}>
+                    {item.flag}
+                  </AppText>
+                  <View style={{ flex: 1 }}>
+                    <AppText weight="semibold">{item.code}</AppText>
+                    <AppText variant="small" tone="dim">
+                      {item.name}
+                    </AppText>
+                  </View>
+                  <AppText
+                    weight="bold"
+                    style={{ color: theme.colors.orange, marginRight: 12 }}
+                  >
+                    {item.symbol}
+                  </AppText>
+                  {isActive ? (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color={theme.colors.orange}
+                    />
+                  ) : null}
+                </Pressable>
+              );
+            }}
+            ListEmptyComponent={
+              <AppText tone="muted" align="center" style={{ marginTop: 40 }}>
+                No currencies match
+              </AppText>
+            }
+          />
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  backdrop: { flex: 1 },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: "75%",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderTopWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  search: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/DrawerContent.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/DrawerContent.js
+import React from "react";
+import { View, ScrollView, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DrawerContentScrollView } from "@react-navigation/drawer";
+
+import AppText from "./AppText";
+import Avatar from "./Avatar";
+import SkilledProzWordmark from "./SkilledProzWordmark";
+import { useTheme } from "../contexts/ThemeContext";
+import { useAuthStore } from "../store/authStore";
+import { useToast } from "../contexts/ToastContext";
+
+/**
+ * DrawerContent — the slide-out side menu shown in the screenshot.
+ *
+ *   ┌───────────────────────────┐
+ *   │ SkilledProz                │
+ *   │ HIRER PORTAL               │
+ *   │ ─────────────              │
+ *   │ [avatar] GesTech Com       │
+ *   │          • Hirer           │
+ *   │ ─────────────              │
+ *   │ OVERVIEW                   │
+ *   │ ◆ Dashboard       ← active │
+ *   │ 📋 My Bookings             │
+ *   │ 💎 Payment History         │
+ *   │ ＋ Post a Job              │
+ *   │ 📋 Jobs Management         │
+ *   │ ⚖  Disputes                │
+ *   │ 🖼  Community Feed         │
+ *   │ 💰 My Posts                │
+ *   │ ─────────────              │
+ *   │ WORKERS                    │
+ *   │ 🔖 Saved Workers           │
+ *   │ 🔍 Browse Workers          │
+ *   │                            │
+ *   │ ─────────────              │
+ *   │ Log out                    │
+ *   └───────────────────────────┘
+ *
+ * Navigates by route name. The Drawer Navigator owns the screens — this just
+ * fires `navigation.navigate(routeName)`.
+ */
+export default function DrawerContent(props) {
+  const { theme } = useTheme();
+  const { t } = useTranslation();
+  const { user, logout } = useAuthStore();
+  const { toast } = useToast();
+  const insets = useSafeAreaInsets();
+
+  const activeRoute = props.state?.routes?.[props.state.index]?.name;
+
+  const handleLogout = async () => {
+    await logout();
+    toast.info(t("auth.logoutSuccess"));
+  };
+
+  return (
+    <View style={[styles.root, { backgroundColor: theme.colors.bgPanel }]}>
+      <DrawerContentScrollView
+        {...props}
+        contentContainerStyle={{
+          paddingTop: insets.top + 12,
+          paddingBottom: 0,
+        }}
+        scrollEnabled
+      >
+        {/* Brand */}
+        <View style={styles.brand}>
+          <SkilledProzWordmark size="md" />
+          <AppText
+            variant="label"
+            tone="dim"
+            style={{ marginTop: 6, letterSpacing: 2 }}
+          >
+            {t("drawer.hirerPortal")}
+          </AppText>
+        </View>
+
+        <Divider />
+
+        {/* User card */}
+        <View style={styles.userCard}>
+          <Avatar
+            uri={user?.avatar}
+            firstName={user?.firstName}
+            lastName={user?.lastName}
+            size={44}
+          />
+          <View style={{ flex: 1 }}>
+            <AppText weight="bold" numberOfLines={1}>
+              {[user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+                "Hirer"}
+            </AppText>
+            <View style={styles.roleRow}>
+              <View
+                style={[styles.dot, { backgroundColor: theme.colors.orange }]}
+              />
+              <AppText variant="small" tone="brand" weight="semibold">
+                {t("drawer.hirer")}
+              </AppText>
+            </View>
+          </View>
+        </View>
+
+        <Divider />
+
+        {/* OVERVIEW section */}
+        <SectionLabel>{t("drawer.overview")}</SectionLabel>
+        <NavItem
+          icon="grid-outline"
+          label={t("drawer.dashboard")}
+          routeName="Dashboard"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+        <NavItem
+          icon="clipboard-outline"
+          label={t("drawer.myBookings")}
+          routeName="Bookings"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+        <NavItem
+          icon="card-outline"
+          label={t("drawer.paymentHistory")}
+          routeName="PaymentHistory"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+        <NavItem
+          icon="add-circle-outline"
+          label={t("drawer.postAJob")}
+          routeName="PostJob"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+        <NavItem
+          icon="briefcase-outline"
+          label={t("drawer.jobsManagement")}
+          routeName="JobsManagement"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+        <NavItem
+          icon="scale-outline"
+          label={t("drawer.disputes")}
+          routeName="Disputes"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+        <NavItem
+          icon="images-outline"
+          label={t("drawer.communityFeed")}
+          routeName="CommunityFeed"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+        <NavItem
+          icon="document-text-outline"
+          label={t("drawer.myPosts")}
+          routeName="MyPosts"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+
+        <Divider />
+
+        {/* WORKERS section */}
+        <SectionLabel>{t("drawer.workers")}</SectionLabel>
+        <NavItem
+          icon="bookmark-outline"
+          label={t("drawer.savedWorkers")}
+          routeName="SavedWorkers"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+        <NavItem
+          icon="search-outline"
+          label={t("drawer.browseWorkers")}
+          routeName="BrowseWorkers"
+          activeRoute={activeRoute}
+          navigation={props.navigation}
+        />
+
+        <View style={{ height: 16 }} />
+      </DrawerContentScrollView>
+
+      {/* Sticky logout */}
+      <View
+        style={[
+          styles.footer,
+          {
+            paddingBottom: Math.max(insets.bottom, 16),
+            borderTopColor: theme.colors.border,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={handleLogout}
+          style={({ pressed }) => [
+            styles.logoutRow,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Ionicons
+            name="log-out-outline"
+            size={20}
+            color={theme.colors.textDim}
+          />
+          <AppText style={{ color: theme.colors.textDim, marginLeft: 14 }}>
+            {t("drawer.logOut")}
+          </AppText>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function NavItem({ icon, label, routeName, activeRoute, navigation }) {
+  const { theme } = useTheme();
+  const isActive = activeRoute === routeName;
+
+  const colors = isActive
+    ? {
+        bg: theme.colors.orangeDim,
+        fg: theme.colors.orange,
+        borderLeft: theme.colors.orange,
+      }
+    : {
+        bg: "transparent",
+        fg: theme.colors.text,
+        borderLeft: "transparent",
+      };
+
+  return (
+    <Pressable
+      onPress={() => navigation.navigate(routeName)}
+      style={({ pressed }) => [
+        styles.navItem,
+        {
+          backgroundColor: pressed ? theme.colors.bgCard : colors.bg,
+          borderLeftColor: colors.borderLeft,
+        },
+      ]}
+    >
+      <Ionicons name={icon} size={20} color={colors.fg} />
+      <AppText
+        weight={isActive ? "bold" : "medium"}
+        style={{ color: colors.fg, marginLeft: 14, flex: 1 }}
+        numberOfLines={1}
+      >
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
+
+function Divider() {
+  const { theme } = useTheme();
+  return (
+    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <AppText
+      variant="label"
+      tone="dim"
+      style={{
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 6,
+        letterSpacing: 1.5,
+      }}
+    >
+      {children}
+    </AppText>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  brand: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
+  userCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  roleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  navItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderLeftWidth: 3,
+  },
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  logoutRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/SectionHeader.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/SectionHeader.js
+import React from "react";
+import { View, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AppText from "./AppText";
+import { useTheme } from "../contexts/ThemeContext";
+import { I18nManager } from "react-native";
+
+/**
+ * SectionHeader — title + optional "View all →" action.
+ *
+ *   <SectionHeader title="Recent Bookings" actionLabel="View all" onActionPress={fn} />
+ */
+export default function SectionHeader({
+  title,
+  subtitle,
+  actionLabel,
+  onActionPress,
+}) {
+  const { theme } = useTheme();
+  const arrow = I18nManager.isRTL ? "arrow-back" : "arrow-forward";
+
+  return (
+    <View style={styles.row}>
+      <View style={{ flex: 1 }}>
+        <AppText variant="title" weight="bold">
+          {title}
+        </AppText>
+        {subtitle ? (
+          <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
+            {subtitle}
+          </AppText>
+        ) : null}
+      </View>
+
+      {onActionPress ? (
+        <Pressable onPress={onActionPress} hitSlop={8} style={styles.action}>
+          <AppText variant="small" weight="semibold" tone="brand">
+            {actionLabel}
+          </AppText>
+          <Ionicons name={arrow} size={14} color={theme.colors.orange} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  action: { flexDirection: "row", alignItems: "center", gap: 4 },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/SkilledProzLogo.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/SkilledProzLogo.js
+import React from "react";
+import AppText from "./AppText";
+
+/**
+ * The "skilled proz" wordmark used at the top of auth screens.
+ * Uses the Syne display font - matches the bold treatment in screenshots.
+ */
+export default function SkilledProzLogo({ size = "lg", style }) {
+  const variant = size === "sm" ? "title" : "displaySm";
+  return (
+    <AppText
+      variant={variant}
+      weight="displayBlack"
+      style={[{ letterSpacing: -0.5 }, style]}
+    >
+      SkilledProz
+    </AppText>
+  );
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/SkilledProzWordmark.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/SkilledProzWordmark.js
+import React from "react";
+import { View, StyleSheet } from "react-native";
+import AppText from "./AppText";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * SkilledProzWordmark — matches the "Skilled" white + "Proz" orange treatment
+ * shown at the top of the drawer (and the marketing site). Use this anywhere
+ * the brand wordmark needs to appear.
+ *
+ *   <SkilledProzWordmark size="lg" />
+ */
+export default function SkilledProzWordmark({ size = "md", style }) {
+  const { theme } = useTheme();
+  const dims = SIZES[size] || SIZES.md;
+
+  return (
+    <View style={[styles.row, style]}>
+      <AppText
+        weight="displayBlack"
+        style={{
+          fontSize: dims.fontSize,
+          lineHeight: dims.lineHeight,
+          color: theme.colors.text,
+          letterSpacing: -0.5,
+        }}
+      >
+        Skilled
+      </AppText>
+      <AppText
+        weight="displayBlack"
+        style={{
+          fontSize: dims.fontSize,
+          lineHeight: dims.lineHeight,
+          color: theme.colors.orange,
+          letterSpacing: -0.5,
+        }}
+      >
+        Proz
+      </AppText>
+    </View>
+  );
+}
+
+const SIZES = {
+  sm: { fontSize: 18, lineHeight: 22 },
+  md: { fontSize: 24, lineHeight: 28 },
+  lg: { fontSize: 32, lineHeight: 36 },
+};
+
+const styles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "baseline" },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/StatCard.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/StatCard.js
+import React from "react";
+import { View, StyleSheet, Pressable } from "react-native";
+import AppText from "./AppText";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * StatCard — matches the website dashboard stat tiles exactly.
+ *
+ *   ┌────────────────────┐
+ *   │  📋                │   ← icon top-left in a rounded panel
+ *   │                    │
+ *   │                    │   ← flexible empty space
+ *   │  64                │   ← big display number, colored when tone applied
+ *   │  Total Bookings    │   ← muted label at bottom
+ *   └────────────────────┘
+ *
+ * Props:
+ *   icon  — emoji or short text rendered in the icon box
+ *   label — the small caption (e.g. "Total Bookings")
+ *   value — the big number; either a string/number or a React node
+ *           (use a node for AppCurrency in the "Total Spent" tile)
+ *   tone  — "neutral" | "warning" | "success"  — tints the background and value
+ */
+export default function StatCard({
+  icon,
+  label,
+  value,
+  tone = "neutral",
+  onPress,
+}) {
+  const { theme } = useTheme();
+  const palette = getPalette(tone, theme);
+  const Wrap = onPress ? Pressable : View;
+
+  return (
+    <Wrap
+      onPress={onPress}
+      style={({ pressed } = {}) => [
+        styles.card,
+        {
+          backgroundColor: palette.bg,
+          borderColor: palette.border,
+          opacity: pressed ? 0.85 : 1,
+        },
+      ]}
+    >
+      {/* Icon box top-left */}
+      <View
+        style={[
+          styles.iconWrap,
+          { backgroundColor: palette.iconBg, borderColor: palette.border },
+        ]}
+      >
+        <AppText style={styles.icon}>{icon}</AppText>
+      </View>
+
+      {/* Big value */}
+      <View style={styles.valueWrap}>
+        {typeof value === "string" || typeof value === "number" ? (
+          <AppText
+            weight="displayBlack"
+            style={[styles.value, { color: palette.valueColor }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
+            {value}
+          </AppText>
+        ) : (
+          value
+        )}
+
+        <AppText
+          variant="small"
+          tone="dim"
+          style={styles.label}
+          numberOfLines={1}
+        >
+          {label}
+        </AppText>
+      </View>
+    </Wrap>
+  );
+}
+
+function getPalette(tone, theme) {
+  switch (tone) {
+    case "warning":
+      return {
+        bg: theme.colors.orangeDim,
+        border: theme.colors.orange + "33",
+        iconBg: theme.colors.bgPanel,
+        valueColor: theme.colors.orange,
+      };
+    case "success":
+      return {
+        bg: theme.colors.greenDim,
+        border: theme.colors.green + "33",
+        iconBg: theme.colors.bgPanel,
+        valueColor: theme.colors.green,
+      };
+    case "neutral":
+    default:
+      return {
+        bg: theme.colors.bgPanel,
+        border: theme.colors.border,
+        iconBg: theme.colors.bgCard,
+        valueColor: theme.colors.text,
+      };
+  }
+}
+
+const styles = StyleSheet.create({
+  card: {
+    flex: 1,
+    aspectRatio: 1, // makes the card square — matches website
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  icon: { fontSize: 22, lineHeight: 26 },
+  valueWrap: {
+    flex: 1,
+    justifyContent: "flex-end",
+    marginTop: 12,
+  },
+  value: {
+    fontSize: 38,
+    lineHeight: 42,
+    letterSpacing: -1,
+  },
+  label: { marginTop: 4 },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/TopBar.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/TopBar.js
+import React, { useEffect, useState } from "react";
+import { View, Pressable, StyleSheet, Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation, useNavigationState } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import AppText from "./AppText";
+import Avatar from "./Avatar";
+import { useTheme } from "../contexts/ThemeContext";
+import { useAuthStore } from "../store/authStore";
+import { hirerApi } from "../api/hirer";
+
+/**
+ * TopBar — sticky app header shown above every Hirer screen.
+ *
+ *   ┌──────────────────────────────────────────────────────────────┐
+ *   │ ☰   Dashboard                              🔔 9+      [👤]   │
+ *   └──────────────────────────────────────────────────────────────┘
+ *
+ *  - Hamburger opens the SideDrawer (via navigation.openDrawer())
+ *  - Title is derived from the current route
+ *  - Bell shows unread notification count badge
+ *  - Avatar opens the profile screen
+ *
+ * Polls notifications every 30s so the badge stays fresh without sockets.
+ */
+export default function TopBar({ title: titleOverride }) {
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { user } = useAuthStore();
+  const [unread, setUnread] = useState(0);
+
+  // Derive the title from the current focused route name unless overridden.
+  const routeName = useNavigationState(
+    (state) => state?.routes?.[state.index]?.name,
+  );
+  const title = titleOverride || prettyTitle(routeName);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer;
+    const fetchUnread = async () => {
+      try {
+        const data = await hirerApi.getNotifications();
+        if (!cancelled) setUnread(data?.unread ?? 0);
+      } catch {
+        // silent — TopBar must never crash a screen
+      }
+    };
+    fetchUnread();
+    timer = setInterval(fetchUnread, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  const openMenu = () => {
+    // Works with the drawer navigator set up in HirerNavigator.
+    if (navigation.openDrawer) {
+      navigation.openDrawer();
+    } else {
+      navigation.getParent()?.openDrawer?.();
+    }
+  };
+
+  const openNotifications = () => navigation.navigate("Notifications");
+  const openProfile = () => navigation.navigate("Profile");
+
+  return (
+    <View
+      style={[
+        styles.wrap,
+        {
+          paddingTop: insets.top,
+          backgroundColor: theme.colors.bg,
+          borderBottomColor: theme.colors.border,
+        },
+      ]}
+    >
+      <View style={styles.row}>
+        <Pressable
+          onPress={openMenu}
+          hitSlop={10}
+          style={({ pressed }) => [
+            styles.iconBtn,
+            {
+              backgroundColor: theme.colors.bgPanel,
+              borderColor: theme.colors.border,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+        >
+          <Ionicons name="menu" size={20} color={theme.colors.text} />
+        </Pressable>
+
+        <AppText variant="title" weight="bold" style={styles.title}>
+          {title}
+        </AppText>
+
+        <View style={styles.rightCluster}>
+          <Pressable
+            onPress={openNotifications}
+            hitSlop={6}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              {
+                backgroundColor: theme.colors.bgPanel,
+                borderColor: theme.colors.border,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color={theme.colors.text}
+            />
+            {unread > 0 ? (
+              <View
+                style={[styles.badge, { backgroundColor: theme.colors.orange }]}
+              >
+                <AppText
+                  weight="bold"
+                  style={{
+                    color: "#0f0f1a",
+                    fontSize: 10,
+                    lineHeight: 12,
+                  }}
+                >
+                  {unread > 9 ? "9+" : String(unread)}
+                </AppText>
+              </View>
+            ) : null}
+          </Pressable>
+
+          <Pressable
+            onPress={openProfile}
+            hitSlop={6}
+            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Avatar
+              uri={user?.avatar}
+              firstName={user?.firstName}
+              lastName={user?.lastName}
+              size={40}
+            />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function prettyTitle(route) {
+  if (!route) return "Dashboard";
+  // CamelCase → "Camel Case"
+  return route.replace(/([A-Z])/g, " $1").trim();
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    ...Platform.select({
+      ios: {},
+      android: {},
+    }),
+  },
+  row: {
+    height: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  title: { flex: 1, marginLeft: 4 },
+  rightCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/components/WorkerRow.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/components/WorkerRow.js
+import React from "react";
+import { View, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AppText from "./AppText";
+import Avatar from "./Avatar";
+import AppCurrency from "./AppCurrency";
+import { useTheme } from "../contexts/ThemeContext";
+
+/**
+ * WorkerRow — one item in the Recent Workers list.
+ *
+ *   <WorkerRow worker={w} onPress={() => goToWorker(w.id)} showDivider />
+ *
+ * Expects the shape returned from /hirer/me/dashboard.recentWorkers[]:
+ *   { id, firstName, lastName, avatar, workerProfile: { title, avgRating } }
+ */
+export default function WorkerRow({ worker, onPress, showDivider = true }) {
+  const { theme } = useTheme();
+  const name = `${worker.firstName || ""} ${worker.lastName || ""}`.trim();
+  const title = worker.workerProfile?.title || "—";
+  const rating = worker.workerProfile?.avgRating || 0;
+  const rate = worker.workerProfile?.hourlyRate;
+  const rateCurrency = worker.workerProfile?.currency;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        {
+          borderBottomColor: theme.colors.border,
+          borderBottomWidth: showDivider ? StyleSheet.hairlineWidth : 0,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <Avatar
+        uri={worker.avatar}
+        firstName={worker.firstName}
+        lastName={worker.lastName}
+        size={40}
+      />
+
+      <View style={styles.middle}>
+        <AppText weight="semibold" numberOfLines={1}>
+          {name || "Worker"}
+        </AppText>
+        <AppText
+          variant="small"
+          tone="dim"
+          numberOfLines={1}
+          style={{ marginTop: 2 }}
+        >
+          {title}
+        </AppText>
+      </View>
+
+      <View style={styles.right}>
+        {rating > 0 ? (
+          <View style={styles.ratingRow}>
+            <Ionicons name="star" size={12} color={theme.colors.orange} />
+            <AppText variant="small" weight="semibold">
+              {Number(rating).toFixed(1)}
+            </AppText>
+          </View>
+        ) : null}
+        {rate ? (
+          <AppCurrency
+            amount={rate}
+            currencyCode={rateCurrency}
+            variant="small"
+            tone="dim"
+          />
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    gap: 12,
+  },
+  middle: { flex: 1, minWidth: 0 },
+  right: { alignItems: "flex-end", gap: 2 },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 CONSTANTS[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/constants/currencies.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/constants/currencies.js
+// Common world currencies with their symbols and minor unit info.
+// Components consume this through useCurrency() — never hardcode "$".
+
+export const CURRENCIES = [
+  { code: "USD", symbol: "$", name: "US Dollar", flag: "🇺🇸" },
+  { code: "EUR", symbol: "€", name: "Euro", flag: "🇪🇺" },
+  { code: "GBP", symbol: "£", name: "British Pound", flag: "🇬🇧" },
+  { code: "NGN", symbol: "₦", name: "Nigerian Naira", flag: "🇳🇬" },
+  { code: "KES", symbol: "KSh", name: "Kenyan Shilling", flag: "🇰🇪" },
+  { code: "GHS", symbol: "₵", name: "Ghanaian Cedi", flag: "🇬🇭" },
+  { code: "ZAR", symbol: "R", name: "South African Rand", flag: "🇿🇦" },
+  { code: "EGP", symbol: "E£", name: "Egyptian Pound", flag: "🇪🇬" },
+  { code: "MAD", symbol: "DH", name: "Moroccan Dirham", flag: "🇲🇦" },
+  { code: "INR", symbol: "₹", name: "Indian Rupee", flag: "🇮🇳" },
+  { code: "PKR", symbol: "₨", name: "Pakistani Rupee", flag: "🇵🇰" },
+  { code: "BDT", symbol: "৳", name: "Bangladeshi Taka", flag: "🇧🇩" },
+  { code: "PHP", symbol: "₱", name: "Philippine Peso", flag: "🇵🇭" },
+  { code: "IDR", symbol: "Rp", name: "Indonesian Rupiah", flag: "🇮🇩" },
+  { code: "VND", symbol: "₫", name: "Vietnamese Dong", flag: "🇻🇳" },
+  { code: "CNY", symbol: "¥", name: "Chinese Yuan", flag: "🇨🇳" },
+  { code: "JPY", symbol: "¥", name: "Japanese Yen", flag: "🇯🇵" },
+  { code: "KRW", symbol: "₩", name: "South Korean Won", flag: "🇰🇷" },
+  { code: "AED", symbol: "د.إ", name: "UAE Dirham", flag: "🇦🇪" },
+  { code: "SAR", symbol: "﷼", name: "Saudi Riyal", flag: "🇸🇦" },
+  { code: "TRY", symbol: "₺", name: "Turkish Lira", flag: "🇹🇷" },
+  { code: "BRL", symbol: "R$", name: "Brazilian Real", flag: "🇧🇷" },
+  { code: "MXN", symbol: "Mex$", name: "Mexican Peso", flag: "🇲🇽" },
+  { code: "ARS", symbol: "$", name: "Argentine Peso", flag: "🇦🇷" },
+  { code: "CAD", symbol: "C$", name: "Canadian Dollar", flag: "🇨🇦" },
+  { code: "AUD", symbol: "A$", name: "Australian Dollar", flag: "🇦🇺" },
+];
+
+export const getCurrency = (code) =>
+  CURRENCIES.find((c) => c.code === code) || CURRENCIES[0];
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/constants/languages.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/constants/languages.js
+// Languages supported across the SkilledProz ecosystem.
+// `rtl: true` flips layouts via I18nManager.
+
+export const LANGUAGES = [
+  { code: "en", name: "English", nativeName: "English", flag: "🇬🇧", rtl: false },
+  { code: "es", name: "Spanish", nativeName: "Español", flag: "🇪🇸", rtl: false },
+  { code: "fr", name: "French", nativeName: "Français", flag: "🇫🇷", rtl: false },
+  { code: "de", name: "German", nativeName: "Deutsch", flag: "🇩🇪", rtl: false },
+  { code: "pt", name: "Portuguese", nativeName: "Português", flag: "🇵🇹", rtl: false },
+  { code: "it", name: "Italian", nativeName: "Italiano", flag: "🇮🇹", rtl: false },
+  { code: "ar", name: "Arabic", nativeName: "العربية", flag: "🇸🇦", rtl: true },
+  { code: "he", name: "Hebrew", nativeName: "עברית", flag: "🇮🇱", rtl: true },
+  { code: "ur", name: "Urdu", nativeName: "اردو", flag: "🇵🇰", rtl: true },
+  { code: "hi", name: "Hindi", nativeName: "हिन्दी", flag: "🇮🇳", rtl: false },
+  { code: "bn", name: "Bengali", nativeName: "বাংলা", flag: "🇧🇩", rtl: false },
+  { code: "zh", name: "Chinese", nativeName: "中文", flag: "🇨🇳", rtl: false },
+  { code: "ja", name: "Japanese", nativeName: "日本語", flag: "🇯🇵", rtl: false },
+  { code: "ko", name: "Korean", nativeName: "한국어", flag: "🇰🇷", rtl: false },
+  { code: "ru", name: "Russian", nativeName: "Русский", flag: "🇷🇺", rtl: false },
+  { code: "tr", name: "Turkish", nativeName: "Türkçe", flag: "🇹🇷", rtl: false },
+  { code: "id", name: "Indonesian", nativeName: "Bahasa Indonesia", flag: "🇮🇩", rtl: false },
+  { code: "vi", name: "Vietnamese", nativeName: "Tiếng Việt", flag: "🇻🇳", rtl: false },
+  { code: "sw", name: "Swahili", nativeName: "Kiswahili", flag: "🇰🇪", rtl: false },
+  { code: "yo", name: "Yoruba", nativeName: "Yorùbá", flag: "🇳🇬", rtl: false },
+  { code: "ig", name: "Igbo", nativeName: "Igbo", flag: "🇳🇬", rtl: false },
+  { code: "ha", name: "Hausa", nativeName: "Hausa", flag: "🇳🇬", rtl: false },
+];
+
+export const getLanguage = (code) =>
+  LANGUAGES.find((l) => l.code === code) || LANGUAGES[0];
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/constants/theme.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/constants/theme.js
+// Mirrors the website's CSS variables in src/styles/global.css
+
+export const COLORS = {
+  // Brand
+  orange: "#f97316",
+  orangeHover: "#fb923c",
+  orangeDim: "rgba(249, 115, 22, 0.12)",
+  orangeGlow: "rgba(249, 115, 22, 0.25)",
+  red: "#ef4444",
+  green: "#22c55e",
+};
+
+export const FONTS = {
+  // We'll register these via expo-font.
+  // Display fonts used in headings (Sign in to SkilledProz, etc.)
+  display: "Syne_700Bold",
+  displayBlack: "Syne_800ExtraBold",
+  // Body
+  body: "DMSans_400Regular",
+  bodyMedium: "DMSans_500Medium",
+  bodySemiBold: "DMSans_600SemiBold",
+  bodyBold: "DMSans_700Bold",
+};
+
+export const RADII = {
+  xs: 6,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  pill: 9999,
+};
+
+export const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  "2xl": 32,
+  "3xl": 48,
+};
+
+// Themes - directly from web :root and [data-theme="light"]
+const dark = {
+  mode: "dark",
+  colors: {
+    ...COLORS,
+    bg: "#080810",
+    bgPanel: "#0c0c18",
+    bgCard: "rgba(255, 255, 255, 0.03)",
+    bgInput: "rgba(255, 255, 255, 0.04)",
+    text: "#ffffff",
+    textDim: "rgba(255, 255, 255, 0.55)",
+    textMuted: "rgba(255, 255, 255, 0.28)",
+    border: "rgba(255, 255, 255, 0.08)",
+    borderHover: "rgba(255, 255, 255, 0.16)",
+    borderFocus: COLORS.orange,
+    redDim: "rgba(239, 68, 68, 0.12)",
+    greenDim: "rgba(34, 197, 94, 0.10)",
+    shadow: "rgba(0, 0, 0, 0.40)",
+  },
+};
+
+const light = {
+  mode: "light",
+  colors: {
+    ...COLORS,
+    bg: "#f8f8fc",
+    bgPanel: "#ffffff",
+    bgCard: "rgba(0, 0, 0, 0.02)",
+    bgInput: "rgba(0, 0, 0, 0.03)",
+    text: "#0f0f1a",
+    textDim: "rgba(15, 15, 26, 0.60)",
+    textMuted: "rgba(15, 15, 26, 0.35)",
+    border: "rgba(0, 0, 0, 0.08)",
+    borderHover: "rgba(0, 0, 0, 0.16)",
+    borderFocus: COLORS.orange,
+    redDim: "rgba(239, 68, 68, 0.08)",
+    greenDim: "rgba(34, 197, 94, 0.08)",
+    shadow: "rgba(0, 0, 0, 0.08)",
+  },
+};
+
+export const THEMES = { dark, light };
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 CONTEXTS[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/contexts/CurrencyContext.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { CURRENCIES, getCurrency } from "../constants/currencies";
+
+const STORAGE_KEY = "@skilledproz:currency";
+const CurrencyContext = createContext({
+  currency: CURRENCIES[0],
+  setCurrencyCode: () => {},
+  format: () => "",
+});
+
+export function CurrencyProvider({ children, initialCode = "USD" }) {
+  const [code, setCode] = useState(initialCode);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved) setCode(saved);
+      } catch {}
+    })();
+  }, []);
+
+  const setCurrencyCode = async (next) => {
+    setCode(next);
+    try { await AsyncStorage.setItem(STORAGE_KEY, next); } catch {}
+  };
+
+  const currency = getCurrency(code);
+
+  const format = useMemo(
+    () => (amount, opts = {}) => {
+      const targetCode = opts.currencyCode || code;
+      const target = getCurrency(targetCode);
+      const num = Number(amount ?? 0);
+      try {
+        return new Intl.NumberFormat(opts.locale || undefined, {
+          style: "currency",
+          currency: targetCode,
+          minimumFractionDigits: opts.minimumFractionDigits ?? 0,
+          maximumFractionDigits: opts.maximumFractionDigits ?? 2,
+        }).format(num);
+      } catch {
+        const formatted = num.toLocaleString(undefined, {
+          minimumFractionDigits: opts.minimumFractionDigits ?? 0,
+          maximumFractionDigits: opts.maximumFractionDigits ?? 2,
+        });
+        return `${target.symbol}${formatted}`;
+      }
+    },
+    [code]
+  );
+
+  const value = useMemo(
+    () => ({ currency, currencyCode: code, setCurrencyCode, format, currencies: CURRENCIES }),
+    [currency, code, format]
+  );
+
+  return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
+}
+
+export const useCurrency = () => useContext(CurrencyContext);
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/contexts/ThemeContext.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
+import { Appearance } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { THEMES, FONTS, RADII, SPACING } from "../constants/theme";
+
+const STORAGE_KEY = "@skilledproz:theme";
+const ThemeContext = createContext({ theme: THEMES.dark, mode: "system", setMode: () => {} });
+
+export function ThemeProvider({ children }) {
+  const [mode, setModeState] = useState("system");
+  const [systemScheme, setSystemScheme] = useState(Appearance.getColorScheme() || "dark");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved === "light" || saved === "dark" || saved === "system") setModeState(saved);
+      } catch {}
+    })();
+  }, []);
+
+  useEffect(() => {
+    const sub = Appearance.addChangeListener(({ colorScheme }) => {
+      setSystemScheme(colorScheme || "dark");
+    });
+    return () => sub.remove();
+  }, []);
+
+  const setMode = async (next) => {
+    setModeState(next);
+    try { await AsyncStorage.setItem(STORAGE_KEY, next); } catch {}
+  };
+
+  const effectiveMode = mode === "system" ? systemScheme : mode;
+  const theme = effectiveMode === "light" ? THEMES.light : THEMES.dark;
+
+  const value = useMemo(
+    () => ({ theme, mode, effectiveMode, setMode, fonts: FONTS, radii: RADII, spacing: SPACING }),
+    [theme, mode, effectiveMode]
+  );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+export const useTheme = () => useContext(ThemeContext);
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/contexts/ToastContext.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/contexts/ToastContext.js
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+} from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  TouchableOpacity,
+  Platform,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "./ThemeContext";
+
+/**
+ * Toast types: "success" | "error" | "info" | "warning"
+ *
+ * Usage anywhere in the tree:
+ *   const { toast } = useToast();
+ *   toast.success("Logged in");
+ *   toast.error("Invalid credentials");
+ *   toast.info("Heads up");
+ *   toast.warning("Are you sure?");
+ *
+ * Always prefer this over Alert.alert.
+ */
+
+const ToastContext = createContext({
+  show: () => {},
+  toast: { success: () => {}, error: () => {}, info: () => {}, warning: () => {} },
+});
+
+const DURATION = 3500;
+
+export function ToastProvider({ children }) {
+  const [queue, setQueue] = useState([]);
+  const idRef = useRef(0);
+
+  const dismiss = useCallback((id) => {
+    setQueue((q) => q.filter((t) => t.id !== id));
+  }, []);
+
+  const show = useCallback(
+    (message, type = "info", opts = {}) => {
+      const id = ++idRef.current;
+      const toast = {
+        id,
+        message: String(message ?? ""),
+        type,
+        duration: opts.duration ?? DURATION,
+      };
+      setQueue((q) => [...q, toast]);
+      return id;
+    },
+    [],
+  );
+
+  const toast = {
+    success: (msg, opts) => show(msg, "success", opts),
+    error: (msg, opts) => show(msg, "error", opts),
+    info: (msg, opts) => show(msg, "info", opts),
+    warning: (msg, opts) => show(msg, "warning", opts),
+  };
+
+  return (
+    <ToastContext.Provider value={{ show, toast, dismiss }}>
+      {children}
+      <ToastViewport queue={queue} onDismiss={dismiss} />
+    </ToastContext.Provider>
+  );
+}
+
+function ToastViewport({ queue, onDismiss }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.viewport,
+        { top: insets.top + 8 },
+      ]}
+    >
+      {queue.map((t) => (
+        <ToastItem key={t.id} toast={t} onDismiss={onDismiss} />
+      ))}
+    </View>
+  );
+}
+
+function ToastItem({ toast, onDismiss }) {
+  const { theme } = useTheme();
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-12)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 240,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const timer = setTimeout(handleDismiss, toast.duration);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleDismiss = () => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: -8,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onDismiss(toast.id));
+  };
+
+  const palette = getPalette(toast.type, theme);
+
+  return (
+    <Animated.View
+      style={[
+        styles.toast,
+        {
+          backgroundColor: theme.colors.bgPanel,
+          borderColor: palette.border,
+          shadowColor: theme.colors.shadow,
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      <View
+        style={[styles.iconWrap, { backgroundColor: palette.bgIcon }]}
+      >
+        <Ionicons name={palette.icon} size={18} color={palette.iconColor} />
+      </View>
+      <Text
+        style={[styles.message, { color: theme.colors.text }]}
+        numberOfLines={3}
+      >
+        {toast.message}
+      </Text>
+      <TouchableOpacity
+        onPress={handleDismiss}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Ionicons name="close" size={18} color={theme.colors.textDim} />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function getPalette(type, theme) {
+  switch (type) {
+    case "success":
+      return {
+        icon: "checkmark-circle",
+        iconColor: theme.colors.green,
+        bgIcon: theme.colors.greenDim,
+        border: theme.colors.greenDim,
+      };
+    case "error":
+      return {
+        icon: "alert-circle",
+        iconColor: theme.colors.red,
+        bgIcon: theme.colors.redDim,
+        border: theme.colors.redDim,
+      };
+    case "warning":
+      return {
+        icon: "warning",
+        iconColor: theme.colors.orange,
+        bgIcon: theme.colors.orangeDim,
+        border: theme.colors.orangeDim,
+      };
+    case "info":
+    default:
+      return {
+        icon: "information-circle",
+        iconColor: theme.colors.orange,
+        bgIcon: theme.colors.orangeDim,
+        border: theme.colors.border,
+      };
+  }
+}
+
+const styles = StyleSheet.create({
+  viewport: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    zIndex: 9999,
+    elevation: 9999,
+    gap: 8,
+  },
+  toast: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 12,
+    ...Platform.select({
+      ios: {
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  message: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 19,
+  },
+});
+
+export const useToast = () => useContext(ToastContext);
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 i18n — LOCALES[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/i18n/index.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/i18n/index.js
+import i18n from "i18next";
+import { initReactI18next } from "react-i18next";
+import * as Localization from "expo-localization";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import en from "./locales/en.json";
+import es from "./locales/es.json";
+import fr from "./locales/fr.json";
+import ar from "./locales/ar.json";
+import pt from "./locales/pt.json";
+
+const resources = {
+  en: { translation: en },
+  es: { translation: es },
+  fr: { translation: fr },
+  ar: { translation: ar },
+  pt: { translation: pt },
+};
+
+const LANG_KEY = "@skilledproz:lang";
+
+export async function initI18n() {
+  let savedLang = null;
+  try {
+    savedLang = await AsyncStorage.getItem(LANG_KEY);
+  } catch {}
+
+  const deviceLang = Localization.getLocales()[0]?.languageCode || "en";
+  const lng = savedLang || deviceLang;
+
+  await i18n.use(initReactI18next).init({
+    resources,
+    lng,
+    fallbackLng: "en",
+    interpolation: { escapeValue: false },
+    react: { useSuspense: false },
+    compatibilityJSON: "v3",
+  });
+
+  return i18n;
+}
+
+export async function changeLanguage(code) {
+  await i18n.changeLanguage(code);
+  try {
+    await AsyncStorage.setItem(LANG_KEY, code);
+  } catch {}
+}
+
+export default i18n;
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/i18n/locales/en.json[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+{
+  "common": {
+    "back": "Back",
+    "next": "Next",
+    "continue": "Continue",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "submit": "Submit",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No",
+    "search": "Search",
+    "optional": "optional",
+    "required": "required",
+    "language": "Language",
+    "currency": "Currency",
+    "theme": "Theme",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode",
+    "systemMode": "Use system setting"
+  },
+  "toast": {
+    "success": "Success",
+    "error": "Error",
+    "info": "Info",
+    "warning": "Warning",
+    "networkError": "Network error. Check your connection.",
+    "unknownError": "Something went wrong. Please try again."
+  },
+  "auth": {
+    "welcomeBack": "WELCOME BACK",
+    "signInTitle": "Sign in to SkilledProz",
+    "noAccountYet": "No account yet?",
+    "createOneFree": "Create one free",
+    "emailAddress": "Email address",
+    "emailPlaceholder": "you@example.com",
+    "password": "Password",
+    "passwordMinChars": "Min 8 chars",
+    "forgot": "Forgot?",
+    "signIn": "Sign In",
+    "signingIn": "Signing in...",
+    "signOut": "Sign out",
+
+    "joinTitle": "Join SkilledProz",
+    "joinSubtitle": "How will you use the platform?",
+    "getStartedFree": "GET STARTED — IT'S FREE",
+    "imAHirer": "I'm a Hirer",
+    "imAWorker": "I'm a Worker",
+    "hirerDescription": "Find and book skilled professionals for any job.",
+    "workerDescription": "Offer your skills and get booked by clients.",
+    "continueAs": "Continue as",
+    "continueAsHirer": "Continue as Hirer",
+    "continueAsWorker": "Continue as Worker",
+    "alreadyHaveAccount": "Already have an account?",
+
+    "hirerAccount": "HIRER ACCOUNT",
+    "findNextProz": "Find your next skilled proz",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "firstNamePlaceholder": "John",
+    "lastNamePlaceholder": "Doe",
+    "phone": "Phone",
+    "phonePlaceholder": "+234 801 234 5678",
+    "country": "Country",
+    "countryPlaceholder": "Nigeria",
+    "city": "City",
+    "cityPlaceholder": "Lagos",
+    "confirm": "Confirm",
+    "confirmPlaceholder": "Repeat password",
+    "passwordsDontMatch": "Passwords don't match",
+    "agreeToTerms": "I agree to the",
+    "terms": "Terms",
+    "and": "and",
+    "privacyPolicy": "Privacy Policy",
+    "createHirerAccount": "Create Hirer Account",
+    "creating": "Creating...",
+    "mustAgreeTerms": "You must agree to the Terms and Privacy Policy",
+
+    "verifyEmailTitle": "Verify your email",
+    "verifyEmailBody": "We've sent a verification link to {{email}}. Please check your inbox to activate your account.",
+    "didntReceive": "Didn't receive it?",
+    "resend": "Resend email",
+    "resending": "Sending...",
+    "verificationResent": "Verification email sent. Check your inbox.",
+    "iVerified": "I've verified my email",
+    "checking": "Checking...",
+    "notVerifiedYet": "Not verified yet. Check your inbox and tap the link.",
+
+    "forgotPasswordTitle": "Forgot your password?",
+    "forgotPasswordBody": "Enter your email and we'll send you a link to reset it.",
+    "sendResetLink": "Send reset link",
+    "resetLinkSent": "If that email exists, a reset link has been sent.",
+    "rememberPassword": "Remember your password?",
+
+    "resetPasswordTitle": "Reset your password",
+    "newPassword": "New password",
+    "resetPassword": "Reset password",
+    "passwordResetSuccess": "Password reset. Please sign in.",
+
+    "loginSuccess": "Welcome back!",
+    "registerSuccess": "Account created. Please verify your email.",
+    "logoutSuccess": "You've been signed out.",
+    "invalidCredentials": "Invalid email or password",
+    "fillAllFields": "Please fill all required fields",
+    "emailRequired": "Email is required",
+    "validEmailRequired": "Please enter a valid email",
+    "passwordTooShort": "Password must be at least 8 characters"
+  },
+  "dashboard": {
+    "overview": "OVERVIEW",
+    "title": "Your Dashboard",
+    "welcomeBack": "Welcome back, {{name}}",
+    "viewingIn": "Viewing in",
+    "postAJob": "Post a Job",
+    "totalBookings": "Total Bookings",
+    "activeJobs": "Active Jobs",
+    "completed": "Completed",
+    "totalSpent": "Total Spent",
+    "recentBookings": "Recent Bookings",
+    "recentWorkers": "Recent Workers",
+    "viewAll": "View all",
+    "noBookingsYet": "No bookings yet. Post a job to get started.",
+    "noWorkersYet": "No workers yet. Browse and book your first pro."
+  }
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/i18n/locales/ar.json[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+{
+  "common": {
+    "back": "رجوع",
+    "next": "التالي",
+    "continue": "متابعة",
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "loading": "جارٍ التحميل...",
+    "submit": "إرسال",
+    "ok": "موافق",
+    "yes": "نعم",
+    "no": "لا",
+    "search": "بحث",
+    "optional": "اختياري",
+    "required": "مطلوب",
+    "language": "اللغة",
+    "currency": "العملة",
+    "theme": "المظهر",
+    "darkMode": "الوضع الداكن",
+    "lightMode": "الوضع الفاتح",
+    "systemMode": "استخدام إعدادات النظام"
+  },
+  "toast": {
+    "success": "نجاح",
+    "error": "خطأ",
+    "info": "معلومة",
+    "warning": "تحذير",
+    "networkError": "خطأ في الشبكة. تحقق من اتصالك.",
+    "unknownError": "حدث خطأ. حاول مرة أخرى."
+  },
+  "auth": {
+    "welcomeBack": "مرحبًا بعودتك",
+    "signInTitle": "تسجيل الدخول إلى SkilledProz",
+    "noAccountYet": "ليس لديك حساب؟",
+    "createOneFree": "أنشئ حسابًا مجانيًا",
+    "emailAddress": "البريد الإلكتروني",
+    "emailPlaceholder": "you@example.com",
+    "password": "كلمة المرور",
+    "passwordMinChars": "٨ أحرف على الأقل",
+    "forgot": "نسيت؟",
+    "signIn": "تسجيل الدخول",
+    "signingIn": "جارٍ الدخول...",
+    "signOut": "تسجيل الخروج",
+    "joinTitle": "انضم إلى SkilledProz",
+    "joinSubtitle": "كيف ستستخدم المنصة؟",
+    "getStartedFree": "ابدأ — مجانًا",
+    "imAHirer": "أنا صاحب عمل",
+    "imAWorker": "أنا عامل",
+    "hirerDescription": "ابحث واحجز محترفين مهرة لأي عمل.",
+    "workerDescription": "اعرض مهاراتك واحجز عملاء.",
+    "continueAs": "المتابعة كـ",
+    "continueAsHirer": "المتابعة كصاحب عمل",
+    "continueAsWorker": "المتابعة كعامل",
+    "alreadyHaveAccount": "لديك حساب بالفعل؟",
+    "hirerAccount": "حساب صاحب عمل",
+    "findNextProz": "اعثر على محترفك التالي",
+    "firstName": "الاسم الأول",
+    "lastName": "اسم العائلة",
+    "firstNamePlaceholder": "محمد",
+    "lastNamePlaceholder": "أحمد",
+    "phone": "الهاتف",
+    "phonePlaceholder": "+966 5X XXX XXXX",
+    "country": "الدولة",
+    "countryPlaceholder": "المملكة العربية السعودية",
+    "city": "المدينة",
+    "cityPlaceholder": "الرياض",
+    "confirm": "تأكيد",
+    "confirmPlaceholder": "أعد كلمة المرور",
+    "passwordsDontMatch": "كلمات المرور غير متطابقة",
+    "agreeToTerms": "أوافق على",
+    "terms": "الشروط",
+    "and": "و",
+    "privacyPolicy": "سياسة الخصوصية",
+    "createHirerAccount": "إنشاء حساب صاحب عمل",
+    "creating": "جارٍ الإنشاء...",
+    "mustAgreeTerms": "يجب الموافقة على الشروط وسياسة الخصوصية",
+    "verifyEmailTitle": "تحقق من بريدك",
+    "verifyEmailBody": "لقد أرسلنا رابط التحقق إلى {{email}}.",
+    "didntReceive": "لم تستلمه؟",
+    "resend": "إعادة الإرسال",
+    "resending": "جارٍ الإرسال...",
+    "verificationResent": "تم إرسال بريد التحقق.",
+    "iVerified": "لقد تحققت من بريدي",
+    "checking": "جارٍ التحقق...",
+    "notVerifiedYet": "لم يتم التحقق بعد. تحقق من بريدك واضغط على الرابط.",
+    "forgotPasswordTitle": "نسيت كلمة المرور؟",
+    "forgotPasswordBody": "أدخل بريدك وسنرسل لك رابطًا لإعادة التعيين.",
+    "sendResetLink": "إرسال الرابط",
+    "resetLinkSent": "إذا كان البريد موجودًا، فقد أُرسل الرابط.",
+    "rememberPassword": "تذكرت كلمة المرور؟",
+    "resetPasswordTitle": "إعادة تعيين كلمة المرور",
+    "newPassword": "كلمة مرور جديدة",
+    "resetPassword": "إعادة تعيين",
+    "passwordResetSuccess": "تم إعادة التعيين. سجّل الدخول.",
+    "loginSuccess": "مرحبًا بعودتك!",
+    "registerSuccess": "تم إنشاء الحساب. تحقق من بريدك.",
+    "logoutSuccess": "تم تسجيل الخروج.",
+    "invalidCredentials": "البريد أو كلمة المرور غير صحيحة",
+    "fillAllFields": "يرجى ملء جميع الحقول المطلوبة",
+    "emailRequired": "البريد مطلوب",
+    "validEmailRequired": "أدخل بريدًا صالحًا",
+    "passwordTooShort": "يجب ألا تقل كلمة المرور عن ٨ أحرف"
+  },
+  "dashboard": {
+    "overview": "نظرة عامة",
+    "title": "لوحة التحكم",
+    "welcomeBack": "مرحبًا بعودتك، {{name}}",
+    "viewingIn": "عرض بـ",
+    "postAJob": "نشر وظيفة",
+    "totalBookings": "إجمالي الحجوزات",
+    "activeJobs": "الوظائف النشطة",
+    "completed": "مكتملة",
+    "totalSpent": "إجمالي الإنفاق",
+    "recentBookings": "الحجوزات الأخيرة",
+    "recentWorkers": "العمال الأخيرون",
+    "viewAll": "عرض الكل",
+    "noBookingsYet": "لا توجد حجوزات بعد. انشر وظيفة للبدء.",
+    "noWorkersYet": "لا يوجد عمال بعد. تصفح واحجز أول محترف."
+  }
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/i18n/locales/es.json[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+{
+  "common": {
+    "back": "Atrás",
+    "next": "Siguiente",
+    "continue": "Continuar",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "loading": "Cargando...",
+    "submit": "Enviar",
+    "ok": "OK",
+    "yes": "Sí",
+    "no": "No",
+    "search": "Buscar",
+    "optional": "opcional",
+    "required": "requerido",
+    "language": "Idioma",
+    "currency": "Moneda",
+    "theme": "Tema",
+    "darkMode": "Modo oscuro",
+    "lightMode": "Modo claro",
+    "systemMode": "Usar configuración del sistema"
+  },
+  "toast": {
+    "success": "Éxito",
+    "error": "Error",
+    "info": "Info",
+    "warning": "Advertencia",
+    "networkError": "Error de red. Verifica tu conexión.",
+    "unknownError": "Algo salió mal. Inténtalo de nuevo."
+  },
+  "auth": {
+    "welcomeBack": "BIENVENIDO DE NUEVO",
+    "signInTitle": "Inicia sesión en SkilledProz",
+    "noAccountYet": "¿Aún no tienes cuenta?",
+    "createOneFree": "Crea una gratis",
+    "emailAddress": "Correo electrónico",
+    "emailPlaceholder": "tu@ejemplo.com",
+    "password": "Contraseña",
+    "passwordMinChars": "Mín. 8 caracteres",
+    "forgot": "¿Olvidaste?",
+    "signIn": "Iniciar sesión",
+    "signingIn": "Iniciando sesión...",
+    "signOut": "Cerrar sesión",
+    "joinTitle": "Únete a SkilledProz",
+    "joinSubtitle": "¿Cómo usarás la plataforma?",
+    "getStartedFree": "EMPIEZA — ES GRATIS",
+    "imAHirer": "Soy Contratante",
+    "imAWorker": "Soy Profesional",
+    "hirerDescription": "Encuentra y contrata profesionales para cualquier trabajo.",
+    "workerDescription": "Ofrece tus servicios y consigue clientes.",
+    "continueAs": "Continuar como",
+    "continueAsHirer": "Continuar como Contratante",
+    "continueAsWorker": "Continuar como Profesional",
+    "alreadyHaveAccount": "¿Ya tienes cuenta?",
+    "hirerAccount": "CUENTA DE CONTRATANTE",
+    "findNextProz": "Encuentra a tu próximo profesional",
+    "firstName": "Nombre",
+    "lastName": "Apellido",
+    "firstNamePlaceholder": "Juan",
+    "lastNamePlaceholder": "Pérez",
+    "phone": "Teléfono",
+    "phonePlaceholder": "+34 600 000 000",
+    "country": "País",
+    "countryPlaceholder": "España",
+    "city": "Ciudad",
+    "cityPlaceholder": "Madrid",
+    "confirm": "Confirmar",
+    "confirmPlaceholder": "Repetir contraseña",
+    "passwordsDontMatch": "Las contraseñas no coinciden",
+    "agreeToTerms": "Acepto los",
+    "terms": "Términos",
+    "and": "y",
+    "privacyPolicy": "Política de Privacidad",
+    "createHirerAccount": "Crear Cuenta de Contratante",
+    "creating": "Creando...",
+    "mustAgreeTerms": "Debes aceptar los Términos y la Política de Privacidad",
+    "verifyEmailTitle": "Verifica tu correo",
+    "verifyEmailBody": "Hemos enviado un enlace de verificación a {{email}}. Revisa tu bandeja de entrada para activar tu cuenta.",
+    "didntReceive": "¿No lo recibiste?",
+    "resend": "Reenviar correo",
+    "resending": "Enviando...",
+    "verificationResent": "Correo de verificación enviado.",
+    "iVerified": "He verificado mi correo",
+    "checking": "Verificando...",
+    "notVerifiedYet": "Aún no verificado. Revisa tu bandeja y toca el enlace.",
+    "forgotPasswordTitle": "¿Olvidaste tu contraseña?",
+    "forgotPasswordBody": "Ingresa tu correo y te enviaremos un enlace para restablecerla.",
+    "sendResetLink": "Enviar enlace",
+    "resetLinkSent": "Si ese correo existe, hemos enviado un enlace.",
+    "rememberPassword": "¿Recuerdas tu contraseña?",
+    "resetPasswordTitle": "Restablecer contraseña",
+    "newPassword": "Nueva contraseña",
+    "resetPassword": "Restablecer",
+    "passwordResetSuccess": "Contraseña restablecida. Inicia sesión.",
+    "loginSuccess": "¡Bienvenido de nuevo!",
+    "registerSuccess": "Cuenta creada. Verifica tu correo.",
+    "logoutSuccess": "Has cerrado sesión.",
+    "invalidCredentials": "Correo o contraseña inválidos",
+    "fillAllFields": "Por favor completa todos los campos requeridos",
+    "emailRequired": "El correo es obligatorio",
+    "validEmailRequired": "Ingresa un correo válido",
+    "passwordTooShort": "La contraseña debe tener al menos 8 caracteres"
+  },
+  "dashboard": {
+    "overview": "RESUMEN",
+    "title": "Tu Panel",
+    "welcomeBack": "Bienvenido de vuelta, {{name}}",
+    "viewingIn": "Viendo en",
+    "postAJob": "Publicar Trabajo",
+    "totalBookings": "Reservas Totales",
+    "activeJobs": "Trabajos Activos",
+    "completed": "Completados",
+    "totalSpent": "Total Gastado",
+    "recentBookings": "Reservas Recientes",
+    "recentWorkers": "Profesionales Recientes",
+    "viewAll": "Ver todo",
+    "noBookingsYet": "Aún no hay reservas. Publica un trabajo para empezar.",
+    "noWorkersYet": "Aún no hay profesionales. Explora y contrata tu primer pro."
+  }
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/i18n/locales/fr.json[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+{
+  "common": {
+    "back": "Retour",
+    "next": "Suivant",
+    "continue": "Continuer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "loading": "Chargement...",
+    "submit": "Envoyer",
+    "ok": "OK",
+    "yes": "Oui",
+    "no": "Non",
+    "search": "Rechercher",
+    "optional": "facultatif",
+    "required": "requis",
+    "language": "Langue",
+    "currency": "Devise",
+    "theme": "Thème",
+    "darkMode": "Mode sombre",
+    "lightMode": "Mode clair",
+    "systemMode": "Utiliser les paramètres système"
+  },
+  "toast": {
+    "success": "Succès",
+    "error": "Erreur",
+    "info": "Info",
+    "warning": "Avertissement",
+    "networkError": "Erreur réseau. Vérifiez votre connexion.",
+    "unknownError": "Une erreur s'est produite. Réessayez."
+  },
+  "auth": {
+    "welcomeBack": "BIENVENUE",
+    "signInTitle": "Connectez-vous à SkilledProz",
+    "noAccountYet": "Pas encore de compte ?",
+    "createOneFree": "Créez-en un gratuit",
+    "emailAddress": "Adresse e-mail",
+    "emailPlaceholder": "vous@exemple.com",
+    "password": "Mot de passe",
+    "passwordMinChars": "Min. 8 caractères",
+    "forgot": "Oublié ?",
+    "signIn": "Se connecter",
+    "signingIn": "Connexion...",
+    "signOut": "Se déconnecter",
+    "joinTitle": "Rejoignez SkilledProz",
+    "joinSubtitle": "Comment utiliserez-vous la plateforme ?",
+    "getStartedFree": "COMMENCEZ — C'EST GRATUIT",
+    "imAHirer": "Je suis Recruteur",
+    "imAWorker": "Je suis Travailleur",
+    "hirerDescription": "Trouvez et réservez des professionnels qualifiés.",
+    "workerDescription": "Proposez vos compétences et trouvez des clients.",
+    "continueAs": "Continuer en tant que",
+    "continueAsHirer": "Continuer en tant que Recruteur",
+    "continueAsWorker": "Continuer en tant que Travailleur",
+    "alreadyHaveAccount": "Vous avez déjà un compte ?",
+    "hirerAccount": "COMPTE RECRUTEUR",
+    "findNextProz": "Trouvez votre prochain pro qualifié",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "firstNamePlaceholder": "Jean",
+    "lastNamePlaceholder": "Dupont",
+    "phone": "Téléphone",
+    "phonePlaceholder": "+33 6 00 00 00 00",
+    "country": "Pays",
+    "countryPlaceholder": "France",
+    "city": "Ville",
+    "cityPlaceholder": "Paris",
+    "confirm": "Confirmer",
+    "confirmPlaceholder": "Répétez le mot de passe",
+    "passwordsDontMatch": "Les mots de passe ne correspondent pas",
+    "agreeToTerms": "J'accepte les",
+    "terms": "Conditions",
+    "and": "et",
+    "privacyPolicy": "Politique de Confidentialité",
+    "createHirerAccount": "Créer un Compte Recruteur",
+    "creating": "Création...",
+    "mustAgreeTerms": "Vous devez accepter les Conditions et la Politique de Confidentialité",
+    "verifyEmailTitle": "Vérifiez votre e-mail",
+    "verifyEmailBody": "Nous avons envoyé un lien de vérification à {{email}}. Consultez votre boîte de réception.",
+    "didntReceive": "Pas reçu ?",
+    "resend": "Renvoyer",
+    "resending": "Envoi...",
+    "verificationResent": "E-mail de vérification renvoyé.",
+    "iVerified": "J'ai vérifié mon e-mail",
+    "checking": "Vérification...",
+    "notVerifiedYet": "Pas encore vérifié. Consultez votre boîte et cliquez sur le lien.",
+    "forgotPasswordTitle": "Mot de passe oublié ?",
+    "forgotPasswordBody": "Entrez votre e-mail et nous vous enverrons un lien.",
+    "sendResetLink": "Envoyer le lien",
+    "resetLinkSent": "Si cet e-mail existe, un lien a été envoyé.",
+    "rememberPassword": "Vous vous souvenez ?",
+    "resetPasswordTitle": "Réinitialiser le mot de passe",
+    "newPassword": "Nouveau mot de passe",
+    "resetPassword": "Réinitialiser",
+    "passwordResetSuccess": "Mot de passe réinitialisé. Connectez-vous.",
+    "loginSuccess": "Bon retour !",
+    "registerSuccess": "Compte créé. Vérifiez votre e-mail.",
+    "logoutSuccess": "Vous êtes déconnecté.",
+    "invalidCredentials": "E-mail ou mot de passe invalide",
+    "fillAllFields": "Veuillez remplir tous les champs requis",
+    "emailRequired": "L'e-mail est requis",
+    "validEmailRequired": "Entrez un e-mail valide",
+    "passwordTooShort": "Le mot de passe doit faire au moins 8 caractères"
+  },
+  "dashboard": {
+    "overview": "APERÇU",
+    "title": "Votre Tableau",
+    "welcomeBack": "Bon retour, {{name}}",
+    "viewingIn": "Voir en",
+    "postAJob": "Publier un Travail",
+    "totalBookings": "Réservations Totales",
+    "activeJobs": "Travaux Actifs",
+    "completed": "Terminés",
+    "totalSpent": "Total Dépensé",
+    "recentBookings": "Réservations Récentes",
+    "recentWorkers": "Pros Récents",
+    "viewAll": "Voir tout",
+    "noBookingsYet": "Aucune réservation. Publiez un travail pour commencer.",
+    "noWorkersYet": "Aucun pro. Parcourez et réservez votre premier pro."
+  }
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/i18n/locales/pt.json[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+{
+  "common": {
+    "back": "Voltar",
+    "next": "Próximo",
+    "continue": "Continuar",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "loading": "Carregando...",
+    "submit": "Enviar",
+    "ok": "OK",
+    "yes": "Sim",
+    "no": "Não",
+    "search": "Pesquisar",
+    "optional": "opcional",
+    "required": "obrigatório",
+    "language": "Idioma",
+    "currency": "Moeda",
+    "theme": "Tema",
+    "darkMode": "Modo escuro",
+    "lightMode": "Modo claro",
+    "systemMode": "Usar configuração do sistema"
+  },
+  "toast": {
+    "success": "Sucesso",
+    "error": "Erro",
+    "info": "Info",
+    "warning": "Aviso",
+    "networkError": "Erro de rede. Verifique sua conexão.",
+    "unknownError": "Algo deu errado. Tente novamente."
+  },
+  "auth": {
+    "welcomeBack": "BEM-VINDO DE VOLTA",
+    "signInTitle": "Entre no SkilledProz",
+    "noAccountYet": "Ainda não tem conta?",
+    "createOneFree": "Crie uma grátis",
+    "emailAddress": "E-mail",
+    "emailPlaceholder": "voce@exemplo.com",
+    "password": "Senha",
+    "passwordMinChars": "Mín. 8 caracteres",
+    "forgot": "Esqueceu?",
+    "signIn": "Entrar",
+    "signingIn": "Entrando...",
+    "signOut": "Sair",
+    "joinTitle": "Junte-se ao SkilledProz",
+    "joinSubtitle": "Como você usará a plataforma?",
+    "getStartedFree": "COMECE — É GRÁTIS",
+    "imAHirer": "Sou Contratante",
+    "imAWorker": "Sou Profissional",
+    "hirerDescription": "Encontre e contrate profissionais qualificados.",
+    "workerDescription": "Ofereça seus serviços e ganhe clientes.",
+    "continueAs": "Continuar como",
+    "continueAsHirer": "Continuar como Contratante",
+    "continueAsWorker": "Continuar como Profissional",
+    "alreadyHaveAccount": "Já tem uma conta?",
+    "hirerAccount": "CONTA DE CONTRATANTE",
+    "findNextProz": "Encontre seu próximo profissional",
+    "firstName": "Nome",
+    "lastName": "Sobrenome",
+    "firstNamePlaceholder": "João",
+    "lastNamePlaceholder": "Silva",
+    "phone": "Telefone",
+    "phonePlaceholder": "+55 11 90000 0000",
+    "country": "País",
+    "countryPlaceholder": "Brasil",
+    "city": "Cidade",
+    "cityPlaceholder": "São Paulo",
+    "confirm": "Confirmar",
+    "confirmPlaceholder": "Repetir senha",
+    "passwordsDontMatch": "As senhas não coincidem",
+    "agreeToTerms": "Concordo com os",
+    "terms": "Termos",
+    "and": "e",
+    "privacyPolicy": "Política de Privacidade",
+    "createHirerAccount": "Criar Conta de Contratante",
+    "creating": "Criando...",
+    "mustAgreeTerms": "Você deve aceitar os Termos e a Política de Privacidade",
+    "verifyEmailTitle": "Verifique seu e-mail",
+    "verifyEmailBody": "Enviamos um link de verificação para {{email}}.",
+    "didntReceive": "Não recebeu?",
+    "resend": "Reenviar e-mail",
+    "resending": "Enviando...",
+    "verificationResent": "E-mail de verificação enviado.",
+    "iVerified": "Verifiquei meu e-mail",
+    "checking": "Verificando...",
+    "notVerifiedYet": "Ainda não verificado. Veja sua caixa e clique no link.",
+    "forgotPasswordTitle": "Esqueceu a senha?",
+    "forgotPasswordBody": "Digite seu e-mail e enviaremos um link para redefini-la.",
+    "sendResetLink": "Enviar link",
+    "resetLinkSent": "Se esse e-mail existir, um link foi enviado.",
+    "rememberPassword": "Lembrou sua senha?",
+    "resetPasswordTitle": "Redefinir senha",
+    "newPassword": "Nova senha",
+    "resetPassword": "Redefinir",
+    "passwordResetSuccess": "Senha redefinida. Faça login.",
+    "loginSuccess": "Bem-vindo de volta!",
+    "registerSuccess": "Conta criada. Verifique seu e-mail.",
+    "logoutSuccess": "Você saiu.",
+    "invalidCredentials": "E-mail ou senha inválidos",
+    "fillAllFields": "Preencha todos os campos obrigatórios",
+    "emailRequired": "E-mail é obrigatório",
+    "validEmailRequired": "Digite um e-mail válido",
+    "passwordTooShort": "A senha deve ter pelo menos 8 caracteres"
+  },
+  "dashboard": {
+    "overview": "VISÃO GERAL",
+    "title": "Seu Painel",
+    "welcomeBack": "Bem-vindo de volta, {{name}}",
+    "viewingIn": "Visualizando em",
+    "postAJob": "Publicar Trabalho",
+    "totalBookings": "Reservas Totais",
+    "activeJobs": "Trabalhos Ativos",
+    "completed": "Concluídos",
+    "totalSpent": "Total Gasto",
+    "recentBookings": "Reservas Recentes",
+    "recentWorkers": "Profissionais Recentes",
+    "viewAll": "Ver tudo",
+    "noBookingsYet": "Nenhuma reserva ainda. Publique um trabalho para começar.",
+    "noWorkersYet": "Nenhum profissional ainda. Procure e contrate seu primeiro pro."
+  }
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 NAVIGATION[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/navigation/RootNavigator.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/navigation/RootNavigator.js
+import React, { useEffect } from "react";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import {
+  NavigationContainer,
+  DarkTheme,
+  DefaultTheme,
+} from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
+import AuthNavigator from "./AuthNavigator";
+import HirerNavigator from "./HirerNavigator";
+import VerifyEmailScreen from "../screens/auth/VerifyEmailScreen";
+import { useAuthStore } from "../store/authStore";
+import { useTheme } from "../contexts/ThemeContext";
+
+const VerifyStack = createNativeStackNavigator();
+
+/**
+ * VerifyGate — a one-screen stack shown when the user is signed in but their
+ * email is not yet verified. Wrapping it in a stack (rather than rendering the
+ * screen bare) keeps useNavigation() working inside VerifyEmailScreen.
+ */
+function VerifyGate() {
+  return (
+    <VerifyStack.Navigator screenOptions={{ headerShown: false }}>
+      <VerifyStack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
+    </VerifyStack.Navigator>
+  );
+}
+
+export default function RootNavigator() {
+  const { user, isHydrated, hydrate } = useAuthStore();
+  const { theme, effectiveMode } = useTheme();
+
+  useEffect(() => {
+    hydrate();
+  }, []);
+
+  if (!isHydrated) {
+    return (
+      <View style={[styles.loading, { backgroundColor: theme.colors.bg }]}>
+        <ActivityIndicator size="large" color={theme.colors.orange} />
+      </View>
+    );
+  }
+
+  // Build a navigation theme that matches our colors so back gestures and
+  // page transitions don't show a white flash.
+  const navTheme = {
+    ...(effectiveMode === "light" ? DefaultTheme : DarkTheme),
+    colors: {
+      ...(effectiveMode === "light" ? DefaultTheme.colors : DarkTheme.colors),
+      background: theme.colors.bg,
+      card: theme.colors.bgPanel,
+      text: theme.colors.text,
+      border: theme.colors.border,
+      primary: theme.colors.orange,
+    },
+  };
+
+  // Three-way routing — no manual navigation needed. State drives which stack
+  // renders. After register, user is set but isEmailVerified is false, so we
+  // land on the VerifyGate automatically. Once /auth/me reports verified,
+  // we swap into HirerNavigator with no extra navigation code.
+  let stack;
+  if (!user) {
+    stack = <AuthNavigator />;
+  } else if (!user.isEmailVerified) {
+    stack = <VerifyGate />;
+  } else {
+    stack = <HirerNavigator />;
+  }
+
+  return <NavigationContainer theme={navTheme}>{stack}</NavigationContainer>;
+}
+
+const styles = StyleSheet.create({
+  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/navigation/AuthNavigator.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/navigation/AuthNavigator.js
+import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
+import LoginScreen from "../screens/auth/LoginScreen";
+import WelcomeScreen from "../screens/auth/WelcomeScreen";
+import RegisterScreen from "../screens/auth/RegisterScreen";
+import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
+
+const Stack = createNativeStackNavigator();
+
+export default function AuthNavigator() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: "transparent" },
+        animation: "slide_from_right",
+      }}
+      initialRouteName="Login"
+    >
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Welcome" component={WelcomeScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      {/* VerifyEmail is no longer here — RootNavigator routes the user to
+          VerifyGate automatically when they're signed in but unverified. */}
+    </Stack.Navigator>
+  );
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/navigation/HirerNavigator.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/navigation/HirerNavigator.js
+import React from "react";
+import { View, StyleSheet, Dimensions } from "react-native";
+import { createDrawerNavigator } from "@react-navigation/drawer";
+
+import TopBar from "../components/TopBar";
+import DrawerContent from "../components/DrawerContent";
+import { useTheme } from "../contexts/ThemeContext";
+
+import DashboardScreen from "../screens/main/DashboardScreen";
+import PlaceholderScreen from "../screens/main/PlaceholderScreen";
+
+const Drawer = createDrawerNavigator();
+
+/**
+ * HirerNavigator — wraps every Hirer screen in:
+ *   - the slide-out side drawer (the menu in screenshot 2)
+ *   - a sticky TopBar with hamburger, title, bell, avatar (screenshot 1)
+ *
+ * Each Drawer.Screen renders the actual screen inside a <ScreenWithChrome>
+ * shell so the chrome is consistent and the screen itself stays clean.
+ *
+ * Placeholder screens are stand-ins for routes whose real implementations
+ * haven't shipped yet — they render a friendly "coming soon" page so taps
+ * never crash.
+ */
+export default function HirerNavigator() {
+  const { theme } = useTheme();
+  const screenWidth = Dimensions.get("window").width;
+
+  return (
+    <Drawer.Navigator
+      initialRouteName="Dashboard"
+      drawerContent={(props) => <DrawerContent {...props} />}
+      screenOptions={{
+        headerShown: false, // we render our own TopBar
+        drawerType: "front",
+        drawerStyle: {
+          width: Math.min(320, screenWidth * 0.85),
+          backgroundColor: theme.colors.bgPanel,
+          borderRightColor: theme.colors.border,
+          borderRightWidth: StyleSheet.hairlineWidth,
+        },
+        sceneContainerStyle: { backgroundColor: theme.colors.bg },
+        overlayColor: "rgba(0,0,0,0.5)",
+        swipeEdgeWidth: 60,
+      }}
+    >
+      <Drawer.Screen name="Dashboard">
+        {() => <ScreenWithChrome Screen={DashboardScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="Bookings">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="PaymentHistory">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="PostJob">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="JobsManagement">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="Disputes">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="CommunityFeed">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="MyPosts">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="SavedWorkers">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="BrowseWorkers">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="Notifications">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="Profile">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      <Drawer.Screen name="Settings">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+
+      {/* These don't have drawer entries but the dashboard navigates to them */}
+      <Drawer.Screen name="BookingDetail">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen name="WorkerDetail">
+        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+      </Drawer.Screen>
+    </Drawer.Navigator>
+  );
+}
+
+function ScreenWithChrome({ Screen }) {
+  const { theme } = useTheme();
+  return (
+    <View style={[styles.shell, { backgroundColor: theme.colors.bg }]}>
+      <TopBar />
+      <View style={styles.body}>
+        <Screen />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  shell: { flex: 1 },
+  body: { flex: 1 },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 SCREENS / AUTH[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/screens/auth/WelcomeScreen.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/screens/auth/WelcomeScreen.js
+import React, { useState } from "react";
+import { View, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
+
+import AppScreen from "../../components/AppScreen";
+import AppText from "../../components/AppText";
+import AppButton from "../../components/AppButton";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useToast } from "../../contexts/ToastContext";
+
+/**
+ * Mirrors the website's "Join SkilledProz - How will you use the platform?"
+ * card picker. Hirer-only app currently routes only the Hirer role; Worker
+ * card shows a friendly notice that this is the Hirer app.
+ */
+export default function WelcomeScreen() {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
+  const { theme } = useTheme();
+  const { toast } = useToast();
+  const [selected, setSelected] = useState("HIRER");
+
+  const handleContinue = () => {
+    if (selected === "HIRER") {
+      navigation.navigate("Register", { role: "HIRER" });
+    } else {
+      // Worker registration lives in the Worker app
+      toast.info("This is the Hirer app. Please install the Worker app to register as a worker.");
+    }
+  };
+
+  return (
+    <AppScreen>
+      <View style={styles.container}>
+        <View style={styles.heroSpacer} />
+
+        <AppText variant="label" tone="brand">
+          {t("auth.getStartedFree")}
+        </AppText>
+
+        <AppText variant="display" weight="displayBlack" style={styles.title}>
+          {t("auth.joinTitle")}
+        </AppText>
+
+        <AppText variant="subtitle" tone="dim" style={{ marginBottom: 24 }}>
+          {t("auth.joinSubtitle")}
+        </AppText>
+
+        <View style={styles.cards}>
+          <RoleCard
+            theme={theme}
+            selected={selected === "HIRER"}
+            onPress={() => setSelected("HIRER")}
+            icon="briefcase-outline"
+            title={t("auth.imAHirer")}
+            description={t("auth.hirerDescription")}
+          />
+          <RoleCard
+            theme={theme}
+            selected={selected === "WORKER"}
+            onPress={() => setSelected("WORKER")}
+            icon="hammer-outline"
+            title={t("auth.imAWorker")}
+            description={t("auth.workerDescription")}
+          />
+        </View>
+
+        <AppButton
+          title={`${t("auth.continueAs")} ${
+            selected === "HIRER" ? t("auth.imAHirer") : t("auth.imAWorker")
+          }`}
+          onPress={handleContinue}
+          iconRight="arrow-forward"
+          style={styles.cta}
+        />
+
+        <View style={styles.bottomRow}>
+          <AppText variant="body" tone="dim">
+            {t("auth.alreadyHaveAccount")}{" "}
+          </AppText>
+          <Pressable onPress={() => navigation.navigate("Login")} hitSlop={6}>
+            <AppText variant="body" tone="brand" weight="semibold">
+              {t("auth.signIn")}
+            </AppText>
+          </Pressable>
+        </View>
+      </View>
+    </AppScreen>
+  );
+}
+
+function RoleCard({ theme, selected, onPress, icon, title, description }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.colors.bgPanel,
+          borderColor: selected ? theme.colors.orange : theme.colors.border,
+          borderWidth: selected ? 1.5 : 1,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.cardIconWrap,
+          { backgroundColor: theme.colors.orangeDim },
+        ]}
+      >
+        <Ionicons name={icon} size={22} color={theme.colors.orange} />
+      </View>
+      <AppText variant="title" weight="bold" style={{ marginTop: 16 }}>
+        {title}
+      </AppText>
+      <AppText variant="small" tone="dim" style={{ marginTop: 6 }}>
+        {description}
+      </AppText>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { gap: 8 },
+  heroSpacer: { height: 40 },
+  title: { marginTop: 8, marginBottom: 4 },
+  cards: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 24,
+  },
+  card: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 16,
+    minHeight: 160,
+  },
+  cardIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cta: { marginTop: 8 },
+  bottomRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 24,
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/screens/auth/LoginScreen.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/screens/auth/LoginScreen.js
+import React, { useState } from "react";
+import { View, Pressable, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
+
+import AppScreen from "../../components/AppScreen";
+import AppText from "../../components/AppText";
+import AppInput from "../../components/AppInput";
+import AppButton from "../../components/AppButton";
+import { useToast } from "../../contexts/ToastContext";
+import { useAuthStore } from "../../store/authStore";
+import { isEmail, isNonEmpty } from "../../utils/validators";
+
+export default function LoginScreen() {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
+  const { toast } = useToast();
+  const { login, isLoading } = useAuthStore();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState({});
+
+  const validate = () => {
+    const e = {};
+    if (!isNonEmpty(email)) e.email = t("auth.emailRequired");
+    else if (!isEmail(email)) e.email = t("auth.validEmailRequired");
+    if (!isNonEmpty(password)) e.password = t("auth.fillAllFields");
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    try {
+      const user = await login(email.trim().toLowerCase(), password);
+      toast.success(t("auth.loginSuccess"));
+      // Navigation is driven by RootNavigator listening to auth state
+      // No manual navigation needed.
+    } catch (err) {
+      toast.error(err.message || t("auth.invalidCredentials"));
+    }
+  };
+
+  return (
+    <AppScreen>
+      <View style={styles.container}>
+        <View style={styles.heroSpacer} />
+
+        <AppText variant="label" tone="brand">
+          {t("auth.welcomeBack")}
+        </AppText>
+
+        <AppText variant="display" weight="displayBlack" style={styles.title}>
+          {t("auth.signInTitle")}
+        </AppText>
+
+        <View style={styles.subRow}>
+          <AppText variant="body" tone="dim">
+            {t("auth.noAccountYet")}{" "}
+          </AppText>
+          <Pressable onPress={() => navigation.navigate("Welcome")} hitSlop={6}>
+            <AppText variant="body" tone="brand" weight="semibold">
+              {t("auth.createOneFree")} →
+            </AppText>
+          </Pressable>
+        </View>
+
+        <View style={styles.form}>
+          <AppInput
+            label={t("auth.emailAddress")}
+            iconLeft="mail-outline"
+            placeholder={t("auth.emailPlaceholder")}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
+            error={errors.email}
+          />
+
+          <AppInput
+            label={t("auth.password")}
+            iconLeft="lock-closed-outline"
+            placeholder={t("auth.passwordMinChars")}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoComplete="password"
+            textContentType="password"
+            rightActionLabel={t("auth.forgot")}
+            onRightActionPress={() => navigation.navigate("ForgotPassword")}
+            error={errors.password}
+          />
+
+          <AppButton
+            title={isLoading ? t("auth.signingIn") : t("auth.signIn")}
+            onPress={handleSubmit}
+            loading={isLoading}
+            style={styles.cta}
+          />
+        </View>
+      </View>
+    </AppScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { gap: 12, paddingTop: 8 },
+  heroSpacer: { height: 60 },
+  title: { marginTop: 8, marginBottom: 4 },
+  subRow: { flexDirection: "row", flexWrap: "wrap", marginBottom: 24 },
+  form: { gap: 16 },
+  cta: { marginTop: 8 },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/screens/auth/RegisterScreen.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/screens/auth/RegisterScreen.js
+import React, { useState } from "react";
+import { View, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { useNavigation, useRoute } from "@react-navigation/native";
+
+import AppScreen from "../../components/AppScreen";
+import AppText from "../../components/AppText";
+import AppInput from "../../components/AppInput";
+import AppButton from "../../components/AppButton";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useToast } from "../../contexts/ToastContext";
+import { useAuthStore } from "../../store/authStore";
+import {
+  isEmail,
+  isNonEmpty,
+  isStrongEnoughPassword,
+} from "../../utils/validators";
+
+export default function RegisterScreen() {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { theme } = useTheme();
+  const { toast } = useToast();
+  const { register, isLoading } = useAuthStore();
+
+  const role = route.params?.role || "HIRER";
+
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    country: "",
+    city: "",
+    password: "",
+    confirm: "",
+  });
+  const [agree, setAgree] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const update = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
+
+  const validate = () => {
+    const e = {};
+    if (!isNonEmpty(form.firstName)) e.firstName = t("auth.fillAllFields");
+    if (!isNonEmpty(form.lastName)) e.lastName = t("auth.fillAllFields");
+    if (!isNonEmpty(form.email)) e.email = t("auth.emailRequired");
+    else if (!isEmail(form.email)) e.email = t("auth.validEmailRequired");
+    if (!isStrongEnoughPassword(form.password))
+      e.password = t("auth.passwordTooShort");
+    if (form.password !== form.confirm)
+      e.confirm = t("auth.passwordsDontMatch");
+    setErrors(e);
+
+    if (!agree) {
+      toast.warning(t("auth.mustAgreeTerms"));
+      return false;
+    }
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    try {
+      await register({
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim().toLowerCase(),
+        phone: form.phone.trim() || undefined,
+        country: form.country.trim() || undefined,
+        city: form.city.trim() || undefined,
+        password: form.password,
+        role, // "HIRER"
+      });
+      toast.success(t("auth.registerSuccess"));
+      // No manual navigation — RootNavigator sees the new (unverified) user
+      // and swaps to the VerifyGate automatically.
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  return (
+    <AppScreen>
+      <View style={styles.container}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={styles.backRow}
+          hitSlop={6}
+        >
+          <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
+          <AppText variant="body" weight="medium" style={{ marginLeft: 8 }}>
+            {t("common.back")}
+          </AppText>
+        </Pressable>
+
+        <AppText variant="label" tone="brand" style={{ marginTop: 8 }}>
+          {t("auth.hirerAccount")}
+        </AppText>
+
+        <AppText variant="display" weight="displayBlack" style={styles.title}>
+          {t("auth.findNextProz")}
+        </AppText>
+
+        <View style={styles.form}>
+          <View style={styles.row2}>
+            <View style={styles.col}>
+              <AppInput
+                label={t("auth.firstName")}
+                iconLeft="person-outline"
+                placeholder={t("auth.firstNamePlaceholder")}
+                value={form.firstName}
+                onChangeText={update("firstName")}
+                autoCapitalize="words"
+                textContentType="givenName"
+                error={errors.firstName}
+              />
+            </View>
+            <View style={styles.col}>
+              <AppInput
+                label={t("auth.lastName")}
+                placeholder={t("auth.lastNamePlaceholder")}
+                value={form.lastName}
+                onChangeText={update("lastName")}
+                autoCapitalize="words"
+                textContentType="familyName"
+                error={errors.lastName}
+              />
+            </View>
+          </View>
+
+          <AppInput
+            label={t("auth.emailAddress")}
+            iconLeft="mail-outline"
+            placeholder={t("auth.emailPlaceholder")}
+            value={form.email}
+            onChangeText={update("email")}
+            keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
+            error={errors.email}
+          />
+
+          <AppInput
+            label={`${t("auth.phone")} (${t("common.optional")})`}
+            iconLeft="call-outline"
+            placeholder={t("auth.phonePlaceholder")}
+            value={form.phone}
+            onChangeText={update("phone")}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            textContentType="telephoneNumber"
+          />
+
+          <View style={styles.row2}>
+            <View style={styles.col}>
+              <AppInput
+                label={t("auth.country")}
+                iconLeft="globe-outline"
+                placeholder={t("auth.countryPlaceholder")}
+                value={form.country}
+                onChangeText={update("country")}
+                autoCapitalize="words"
+              />
+            </View>
+            <View style={styles.col}>
+              <AppInput
+                label={t("auth.city")}
+                iconLeft="location-outline"
+                placeholder={t("auth.cityPlaceholder")}
+                value={form.city}
+                onChangeText={update("city")}
+                autoCapitalize="words"
+              />
+            </View>
+          </View>
+
+          <View style={styles.row2}>
+            <View style={styles.col}>
+              <AppInput
+                label={t("auth.password")}
+                iconLeft="lock-closed-outline"
+                placeholder={t("auth.passwordMinChars")}
+                value={form.password}
+                onChangeText={update("password")}
+                secureTextEntry
+                textContentType="newPassword"
+                error={errors.password}
+              />
+            </View>
+            <View style={styles.col}>
+              <AppInput
+                label={t("auth.confirm")}
+                placeholder={t("auth.confirmPlaceholder")}
+                value={form.confirm}
+                onChangeText={update("confirm")}
+                secureTextEntry
+                error={errors.confirm}
+              />
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => setAgree((a) => !a)}
+            style={styles.agreeRow}
+            hitSlop={6}
+          >
+            <View
+              style={[
+                styles.checkbox,
+                {
+                  borderColor: agree
+                    ? theme.colors.orange
+                    : theme.colors.border,
+                  backgroundColor: agree ? theme.colors.orange : "transparent",
+                },
+              ]}
+            >
+              {agree ? (
+                <Ionicons name="checkmark" size={14} color="#0f0f1a" />
+              ) : null}
+            </View>
+            <AppText variant="small" tone="dim" style={{ flex: 1 }}>
+              {t("auth.agreeToTerms")}{" "}
+              <AppText variant="small" tone="brand" weight="semibold">
+                {t("auth.terms")}
+              </AppText>
+              {"  "}
+              {t("auth.and")}{" "}
+              <AppText variant="small" tone="brand" weight="semibold">
+                {t("auth.privacyPolicy")}
+              </AppText>
+            </AppText>
+          </Pressable>
+
+          <AppButton
+            title={
+              isLoading ? t("auth.creating") : t("auth.createHirerAccount")
+            }
+            iconRight={isLoading ? undefined : "arrow-forward"}
+            onPress={handleSubmit}
+            loading={isLoading}
+            style={{ marginTop: 8 }}
+          />
+
+          <View style={styles.bottomRow}>
+            <AppText variant="body" tone="dim">
+              {t("auth.alreadyHaveAccount")}{" "}
+            </AppText>
+            <Pressable onPress={() => navigation.navigate("Login")} hitSlop={6}>
+              <AppText variant="body" tone="brand" weight="semibold">
+                {t("auth.signIn")}
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </AppScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { gap: 8 },
+  backRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  title: { marginTop: 8, marginBottom: 16 },
+  form: { gap: 14 },
+  row2: { flexDirection: "row", gap: 12 },
+  col: { flex: 1 },
+  agreeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 1.5,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bottomRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 16,
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/screens/auth/ForgotPasswordScreen.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/screens/auth/ForgotPasswordScreen.js
+import React, { useState } from "react";
+import { View, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
+
+import AppScreen from "../../components/AppScreen";
+import AppText from "../../components/AppText";
+import AppInput from "../../components/AppInput";
+import AppButton from "../../components/AppButton";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useToast } from "../../contexts/ToastContext";
+import { useAuthStore } from "../../store/authStore";
+import { isEmail } from "../../utils/validators";
+
+export default function ForgotPasswordScreen() {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
+  const { theme } = useTheme();
+  const { toast } = useToast();
+  const { forgotPassword } = useAuthStore();
+
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async () => {
+    setError("");
+    if (!isEmail(email)) {
+      setError(t("auth.validEmailRequired"));
+      return;
+    }
+    setLoading(true);
+    try {
+      await forgotPassword(email.trim().toLowerCase());
+      toast.success(t("auth.resetLinkSent"));
+      navigation.navigate("Login");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AppScreen>
+      <View style={styles.container}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backRow} hitSlop={6}>
+          <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
+          <AppText variant="body" weight="medium" style={{ marginLeft: 8 }}>
+            {t("common.back")}
+          </AppText>
+        </Pressable>
+
+        <View style={{ height: 40 }} />
+
+        <AppText variant="display" weight="displayBlack">
+          {t("auth.forgotPasswordTitle")}
+        </AppText>
+        <AppText variant="subtitle" tone="dim" style={{ marginTop: 8, marginBottom: 24 }}>
+          {t("auth.forgotPasswordBody")}
+        </AppText>
+
+        <AppInput
+          label={t("auth.emailAddress")}
+          iconLeft="mail-outline"
+          placeholder={t("auth.emailPlaceholder")}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoComplete="email"
+          textContentType="emailAddress"
+          error={error}
+        />
+
+        <AppButton
+          title={t("auth.sendResetLink")}
+          onPress={handleSubmit}
+          loading={loading}
+          style={{ marginTop: 16 }}
+        />
+
+        <View style={styles.bottomRow}>
+          <AppText variant="body" tone="dim">
+            {t("auth.rememberPassword")}{" "}
+          </AppText>
+          <Pressable onPress={() => navigation.navigate("Login")} hitSlop={6}>
+            <AppText variant="body" tone="brand" weight="semibold">
+              {t("auth.signIn")}
+            </AppText>
+          </Pressable>
+        </View>
+      </View>
+    </AppScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { gap: 12 },
+  backRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  bottomRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 24,
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/screens/auth/VerifyEmailScreen.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/screens/auth/VerifyEmailScreen.js
+import React, { useEffect, useRef, useState } from "react";
+import { View, StyleSheet, AppState } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+
+import AppScreen from "../../components/AppScreen";
+import AppText from "../../components/AppText";
+import AppButton from "../../components/AppButton";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useToast } from "../../contexts/ToastContext";
+import { useAuthStore } from "../../store/authStore";
+
+/**
+ * Mounted by RootNavigator when user is signed in but isEmailVerified === false.
+ *
+ *  - "Resend email" calls /auth/resend-verification
+ *  - "I've verified" calls /auth/me; once the server flips the flag,
+ *    RootNavigator auto-swaps to HirerNavigator (no navigation.navigate needed).
+ *  - Also polls every 8s while the screen is focused, and fires fetchMe
+ *    whenever the app returns to foreground (typical post-email-tap flow).
+ */
+export default function VerifyEmailScreen() {
+  const { t } = useTranslation();
+  const { theme } = useTheme();
+  const { toast } = useToast();
+  const { user, resendVerification, fetchMe, logout } = useAuthStore();
+
+  const email = user?.email || "";
+  const [sending, setSending] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const pollRef = useRef(null);
+
+  // Poll every 8s while mounted
+  useEffect(() => {
+    pollRef.current = setInterval(() => {
+      fetchMe().catch(() => {});
+    }, 8000);
+    return () => clearInterval(pollRef.current);
+  }, [fetchMe]);
+
+  // Re-check immediately when the app comes back to foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") fetchMe().catch(() => {});
+    });
+    return () => sub.remove();
+  }, [fetchMe]);
+
+  const handleResend = async () => {
+    if (!email) {
+      toast.error(t("auth.emailRequired"));
+      return;
+    }
+    setSending(true);
+    try {
+      await resendVerification(email);
+      toast.success(t("auth.verificationResent"));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleCheck = async () => {
+    setChecking(true);
+    try {
+      const u = await fetchMe();
+      if (!u?.isEmailVerified) {
+        toast.info(t("auth.notVerifiedYet"));
+      }
+      // If verified, RootNavigator unmounts this screen automatically.
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <AppScreen>
+      <View style={styles.container}>
+        <View style={{ height: 40 }} />
+
+        <View
+          style={[
+            styles.iconBubble,
+            { backgroundColor: theme.colors.orangeDim },
+          ]}
+        >
+          <Ionicons
+            name="mail-open-outline"
+            size={36}
+            color={theme.colors.orange}
+          />
+        </View>
+
+        <AppText
+          variant="displaySm"
+          weight="displayBlack"
+          style={{ marginTop: 24 }}
+        >
+          {t("auth.verifyEmailTitle")}
+        </AppText>
+
+        <AppText variant="subtitle" tone="dim" style={{ marginTop: 12 }}>
+          {t("auth.verifyEmailBody", { email: email || "your inbox" })}
+        </AppText>
+
+        <View style={styles.actions}>
+          <AppButton
+            title={checking ? t("auth.checking") : t("auth.iVerified")}
+            iconLeft={checking ? undefined : "checkmark-circle-outline"}
+            onPress={handleCheck}
+            loading={checking}
+          />
+
+          <AppButton
+            title={sending ? t("auth.resending") : t("auth.resend")}
+            variant="secondary"
+            iconLeft={sending ? undefined : "refresh"}
+            onPress={handleResend}
+            loading={sending}
+          />
+
+          <AppButton
+            title={t("auth.signOut")}
+            variant="ghost"
+            onPress={async () => {
+              await logout();
+              toast.info(t("auth.logoutSuccess"));
+            }}
+          />
+        </View>
+      </View>
+    </AppScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { gap: 8, alignItems: "flex-start" },
+  iconBubble: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actions: { width: "100%", gap: 12, marginTop: 32 },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 SCREENS / MAIN[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/screens/main/DashboardScreen.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/screens/main/DashboardScreen.js
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View,
+  StyleSheet,
+  RefreshControl,
+  ActivityIndicator,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
+
+import AppScreen from "../../components/AppScreen";
+import AppText from "../../components/AppText";
+import AppButton from "../../components/AppButton";
+import AppCurrency from "../../components/AppCurrency";
+import StatCard from "../../components/StatCard";
+import SectionHeader from "../../components/SectionHeader";
+import Card from "../../components/Card";
+import BookingRow from "../../components/BookingRow";
+import WorkerRow from "../../components/WorkerRow";
+import CurrencyPicker from "../../components/CurrencyPicker";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useToast } from "../../contexts/ToastContext";
+import { hirerApi } from "../../api/hirer";
+import { useAuthStore } from "../../store/authStore";
+
+// DashboardScreen — Hirer-facing landing screen.
+//
+// Mirrors the website dashboard one-to-one:
+//   - "OVERVIEW" eyebrow + "Your Dashboard" display heading
+//   - Currency picker + "Post a Job" CTA
+//   - 4 stat cards: Total Bookings / Active Jobs / Completed / Total Spent
+//   - Recent Bookings list (5 items + View all)
+//   - Recent Workers list (5 items + View all)
+//
+// Backend: GET /api/hirer/me/dashboard
+export default function DashboardScreen() {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
+  const { theme } = useTheme();
+  const { toast } = useToast();
+  const { user } = useAuthStore();
+
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Stable load function — empty dep array means same identity across renders,
+  // which keeps the mount-effect below from re-firing in a loop. `t` and
+  // `toast` are looked up via closure at call time, which is fine here
+  // because we don't want to refetch on language or theme change anyway.
+  const load = useCallback(async () => {
+    try {
+      const result = await hirerApi.getDashboard();
+      setData(result);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t("toast.networkError"));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load();
+  }, [load]);
+
+  if (loading) {
+    return (
+      <AppScreen scroll={false}>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={theme.colors.orange} />
+        </View>
+      </AppScreen>
+    );
+  }
+
+  const stats = data?.stats || {};
+  const recentBookings = data?.recentBookings || [];
+  const recentWorkers = data?.recentWorkers || [];
+
+  const goPostJob = () => navigation.navigate("PostJob");
+  const goAllBookings = () => navigation.navigate("Bookings");
+  const goAllWorkers = () => navigation.navigate("SavedWorkers");
+
+  return (
+    <AppScreen
+      contentContainerStyle={{ paddingBottom: 40 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={theme.colors.orange}
+          colors={[theme.colors.orange]}
+        />
+      }
+    >
+      {/* Header */}
+      <AppText variant="label" tone="brand">
+        {t("dashboard.overview")}
+      </AppText>
+      <AppText variant="display" weight="displayBlack" style={styles.title}>
+        {t("dashboard.title")}
+      </AppText>
+
+      {/* Controls row */}
+      <View style={styles.controlsRow}>
+        <CurrencyPicker label={t("dashboard.viewingIn")} />
+        <AppButton
+          title={t("dashboard.postAJob")}
+          iconLeft="add"
+          fullWidth={false}
+          onPress={goPostJob}
+          style={styles.postBtn}
+        />
+      </View>
+
+      {/* 4 stat cards */}
+      <View style={styles.statsGrid}>
+        <View style={styles.statsRow}>
+          <View style={styles.statCol}>
+            <StatCard
+              icon="📋"
+              label={t("dashboard.totalBookings")}
+              value={String(stats.totalBookings ?? 0)}
+            />
+          </View>
+          <View style={styles.statCol}>
+            <StatCard
+              icon="⚡"
+              label={t("dashboard.activeJobs")}
+              value={String(stats.activeBookings ?? 0)}
+              tone="warning"
+            />
+          </View>
+        </View>
+        <View style={styles.statsRow}>
+          <View style={styles.statCol}>
+            <StatCard
+              icon="✅"
+              label={t("dashboard.completed")}
+              value={String(stats.completedBookings ?? 0)}
+              tone="success"
+            />
+          </View>
+          <View style={styles.statCol}>
+            <StatCard
+              icon="💳"
+              label={t("dashboard.totalSpent")}
+              value={
+                <AppCurrency
+                  amount={stats.totalSpent ?? 0}
+                  variant="display"
+                  weight="displayBlack"
+                  style={{
+                    fontSize: 32,
+                    lineHeight: 36,
+                    letterSpacing: -0.5,
+                  }}
+                />
+              }
+            />
+          </View>
+        </View>
+      </View>
+
+      {/* Recent Bookings */}
+      <View style={{ marginTop: 24 }}>
+        <Card padded>
+          <SectionHeader
+            title={t("dashboard.recentBookings")}
+            actionLabel={t("dashboard.viewAll")}
+            onActionPress={
+              recentBookings.length > 0 ? goAllBookings : undefined
+            }
+          />
+          {recentBookings.length === 0 ? (
+            <EmptyState
+              icon="briefcase-outline"
+              text={t("dashboard.noBookingsYet")}
+            />
+          ) : (
+            recentBookings.map((booking, idx) => (
+              <BookingRow
+                key={booking.id}
+                booking={booking}
+                showDivider={idx < recentBookings.length - 1}
+                onPress={() =>
+                  navigation.navigate("BookingDetail", { id: booking.id })
+                }
+              />
+            ))
+          )}
+        </Card>
+      </View>
+
+      {/* Recent Workers */}
+      <View style={{ marginTop: 16 }}>
+        <Card padded>
+          <SectionHeader
+            title={t("dashboard.recentWorkers")}
+            actionLabel={t("dashboard.viewAll")}
+            onActionPress={recentWorkers.length > 0 ? goAllWorkers : undefined}
+          />
+          {recentWorkers.length === 0 ? (
+            <EmptyState
+              icon="people-outline"
+              text={t("dashboard.noWorkersYet")}
+            />
+          ) : (
+            recentWorkers.map((worker, idx) => (
+              <WorkerRow
+                key={worker.id}
+                worker={worker}
+                showDivider={idx < recentWorkers.length - 1}
+                onPress={() =>
+                  navigation.navigate("WorkerDetail", { id: worker.id })
+                }
+              />
+            ))
+          )}
+        </Card>
+      </View>
+    </AppScreen>
+  );
+}
+
+function EmptyState({ icon, text }) {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.empty}>
+      <Ionicons name={icon} size={32} color={theme.colors.textMuted} />
+      <AppText variant="small" tone="muted" style={{ marginTop: 8 }}>
+        {text}
+      </AppText>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  title: { marginTop: 8, lineHeight: 42 },
+  subtitle: { marginTop: 6 },
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 20,
+    flexWrap: "wrap",
+  },
+  postBtn: { flex: 1, minWidth: 140 },
+  statsGrid: { marginTop: 20 },
+  statsRow: {
+    flexDirection: "row",
+    marginBottom: 12,
+    marginHorizontal: -6, // counteract child col margin to avoid edge gaps
+  },
+  statCol: {
+    flex: 1,
+    paddingHorizontal: 6, // creates the 12px gutter between cards
+  },
+  empty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 32,
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 src/screens/main/PlaceholderScreen.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/screens/main/PlaceholderScreen.js
+import React from "react";
+import { View, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation, useRoute } from "@react-navigation/native";
+
+import AppScreen from "../../components/AppScreen";
+import AppText from "../../components/AppText";
+import AppButton from "../../components/AppButton";
+import { useTheme } from "../../contexts/ThemeContext";
+
+/**
+ * PlaceholderScreen — used for drawer items whose real screens haven't been
+ * built yet (Bookings, PostJob, Disputes, etc.). It shows a friendly
+ * "coming soon" with the route name so the user always lands somewhere
+ * coherent instead of seeing a crash.
+ *
+ * As we ship each real screen, swap it in via HirerNavigator and this one
+ * stops being referenced.
+ */
+export default function PlaceholderScreen() {
+  const { theme } = useTheme();
+  const route = useRoute();
+  const navigation = useNavigation();
+
+  return (
+    <AppScreen scroll={false}>
+      <View style={styles.center}>
+        <View
+          style={[styles.icon, { backgroundColor: theme.colors.orangeDim }]}
+        >
+          <Ionicons
+            name="construct-outline"
+            size={32}
+            color={theme.colors.orange}
+          />
+        </View>
+
+        <AppText
+          variant="displaySm"
+          weight="displayBlack"
+          style={{ marginTop: 20, textAlign: "center" }}
+        >
+          {prettify(route.name)}
+        </AppText>
+
+        <AppText
+          variant="subtitle"
+          tone="dim"
+          style={{ marginTop: 8, textAlign: "center" }}
+        >
+          This screen is coming soon.
+        </AppText>
+
+        <AppButton
+          title="Back to Dashboard"
+          variant="primary"
+          fullWidth={false}
+          style={{ marginTop: 24 }}
+          onPress={() => navigation.navigate("Dashboard")}
+        />
+      </View>
+    </AppScreen>
+  );
+}
+
+function prettify(name) {
+  return (name || "Screen").replace(/([A-Z])/g, " $1").trim();
+}
+
+const styles = StyleSheet.create({
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  icon: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 STORE[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/store/authStore.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/store/authStore.js
+// Mirror of the website's `useAuthStore` adapted for React Native:
+//   - tokens live in SecureStore (via tokenStore)
+//   - user lives in AsyncStorage so we can rehydrate quickly on app open
+
+import { create } from "zustand";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import api, { tokenStore, getErrorMessage } from "../api/client";
+
+const USER_KEY = "@skilledproz:user";
+
+export const useAuthStore = create((set, get) => ({
+  user: null,
+  isLoading: false,
+  isHydrated: false,
+
+  // Rehydrate user + decide auth state on app launch
+  hydrate: async () => {
+    try {
+      const [rawUser, access] = await Promise.all([
+        AsyncStorage.getItem(USER_KEY),
+        tokenStore.getAccess(),
+      ]);
+      const cachedUser = rawUser ? JSON.parse(rawUser) : null;
+      // Show cached user immediately for snappy UX
+      set({ user: cachedUser });
+
+      if (access) {
+        // Validate by fetching /auth/me - this also picks up server-side updates
+        try {
+          const { data } = await api.get("/auth/me");
+          set({ user: data.data });
+          await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.data));
+        } catch {
+          // Token invalid or refresh failed - clear
+          await get().clearAuth();
+        }
+      }
+    } finally {
+      set({ isHydrated: true });
+    }
+  },
+
+  setAuth: async (user, accessToken, refreshToken) => {
+    await tokenStore.setTokens(accessToken, refreshToken);
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+    set({ user });
+  },
+
+  updateUser: async (patch) => {
+    const next = { ...(get().user || {}), ...patch };
+    set({ user: next });
+    try {
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(next));
+    } catch {}
+  },
+
+  clearAuth: async () => {
+    await tokenStore.clear();
+    await AsyncStorage.removeItem(USER_KEY);
+    set({ user: null });
+  },
+
+  fetchMe: async () => {
+    try {
+      const { data } = await api.get("/auth/me");
+      set({ user: data.data });
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.data));
+      return data.data;
+    } catch {
+      await get().clearAuth();
+      return null;
+    }
+  },
+
+  login: async (email, password) => {
+    set({ isLoading: true });
+    try {
+      const { data } = await api.post("/auth/login", { email, password });
+      const { user, accessToken, refreshToken } = data.data;
+      await get().setAuth(user, accessToken, refreshToken);
+      return user;
+    } catch (err) {
+      throw new Error(getErrorMessage(err, "Login failed"));
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  register: async (payload) => {
+    set({ isLoading: true });
+    try {
+      const { data } = await api.post("/auth/register", payload);
+      const { user, accessToken, refreshToken } = data.data;
+      await get().setAuth(user, accessToken, refreshToken);
+      return user;
+    } catch (err) {
+      throw new Error(getErrorMessage(err, "Registration failed"));
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  logout: async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch {}
+    await get().clearAuth();
+  },
+
+  forgotPassword: async (email) => {
+    try {
+      const { data } = await api.post("/auth/forgot-password", { email });
+      return data;
+    } catch (err) {
+      throw new Error(getErrorMessage(err, "Could not send reset link"));
+    }
+  },
+
+  resetPassword: async (token, password) => {
+    try {
+      const { data } = await api.post("/auth/reset-password", {
+        token,
+        password,
+      });
+      return data;
+    } catch (err) {
+      throw new Error(getErrorMessage(err, "Could not reset password"));
+    }
+  },
+
+  resendVerification: async (email) => {
+    try {
+      const { data } = await api.post("/auth/resend-verification", { email });
+      return data;
+    } catch (err) {
+      throw new Error(getErrorMessage(err, "Could not resend verification"));
+    }
+  },
+}));
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 UTILS[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[0;32m┌─ 📄 src/utils/validators.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+// src/utils/validators.js
+export const isEmail = (v = "") =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim());
+
+export const isStrongEnoughPassword = (v = "") => String(v).length >= 8;
+
+export const isNonEmpty = (v) => v !== undefined && v !== null && String(v).trim().length > 0;
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[1;33m[1m  📁 ROOT FILES[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+[0;31m  ⚠️  File not found: src/App.js[0m
+
+[0;32m┌─ 📄 app.json[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+{
+  "expo": {
+    "name": "SkilledProz Hirer",
+    "slug": "skilledproz-hirer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "skilledproz",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.skilledproz.hirer"
+    },
+    "android": {
+      "package": "com.skilledproz.hirer",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-secure-store",
+      "expo-localization"
+    ],
+    "extra": {
+      "API_URL": "https://skilledpro-backend-production.up.railway.app/api"
+    }
+  }
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 package.json[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+{
+  "name": "skilledproz-hirer",
+  "version": "1.0.0",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "fix": "npx expo install --fix"
+  },
+  "dependencies": {
+    "@expo-google-fonts/dm-sans": "^0.4.1",
+    "@expo-google-fonts/syne": "^0.4.1",
+    "@expo/metro-runtime": "~6.1.2",
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-navigation/bottom-tabs": "^7.4.7",
+    "@react-navigation/drawer": "^7.10.2",
+    "@react-navigation/native": "^7.1.21",
+    "@react-navigation/native-stack": "^7.3.31",
+    "axios": "^1.7.7",
+    "expo": "~54.0.0",
+    "expo-constants": "~18.0.4",
+    "expo-font": "~14.0.4",
+    "expo-linking": "~8.0.4",
+    "expo-localization": "~17.0.4",
+    "expo-secure-store": "~15.0.4",
+    "expo-splash-screen": "~31.0.6",
+    "expo-status-bar": "~3.0.4",
+    "expo-system-ui": "~6.0.4",
+    "i18next": "^23.15.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-i18next": "^15.0.2",
+    "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-reanimated": "~4.1.2",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-web": "^0.21.0",
+    "react-native-worklets": "0.5.1",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2"
+  },
+  "private": true
+}
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;32m┌─ 📄 babel.config.js[0m
+[0;32m└──────────────────────────────────────────────────────[0m
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ["babel-preset-expo"],
+    // Note: react-native-reanimated/plugin and react-native-worklets/plugin
+    // are no longer added manually - babel-preset-expo handles them in SDK 54+.
+  };
+};
+
+[0;32m──────────────────────────────────────────────────────[0m
+
+[0;36m══════════════════════════════════════════════════════════[0m
+[0;35m[1m  ✅  Read complete — you are now up to speed on SkilledProz Hirer App[0m
+[0;36m══════════════════════════════════════════════════════════[0m
+
+[1mQuick reference — key entry points:[0m
+  [0;36mNavigation root  [0m → src/navigation/RootNavigator.js
+  [0;36mAuth flow        [0m → src/navigation/AuthNavigator.js
+  [0;36mHirer tabs       [0m → src/navigation/HirerNavigator.js
+  [0;36mAPI client       [0m → src/api/client.js
+  [0;36mHirer endpoints  [0m → src/api/hirer.js
+  [0;36mAuth state       [0m → src/store/authStore.js
+  [0;36mTheme tokens     [0m → src/constants/theme.js
+  [0;36mDashboard        [0m → src/screens/main/DashboardScreen.js
+

@@ -1,0 +1,549 @@
+═══════════════════════════════════════════════════════════
+  SKILLEDPROZHIRER — PROJECT AUDIT
+  Generated: 2026-05-22T03:06:21.739Z
+  Root: /Users/onwukwennamdi/Desktop/SkilledProzHirer
+═══════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────
+  NAVIGATOR
+────────────────────────────────────────────────────────────
+
+  📄 src/navigation/AuthNavigator.js  (33 lines)
+     default export : AuthNavigator
+     local imports  : ../screens/auth/LoginScreen, ../screens/auth/WelcomeScreen, ../screens/auth/RegisterScreen, ../screens/auth/ForgotPasswordScreen, ../screens/auth/WorkerRegisterScreen
+
+  📄 src/navigation/HirerNavigator.js  (208 lines)
+     default export : HirerNavigator
+     API calls      : GET window
+     local imports  : ../components/TopBar, ../components/DrawerContent, ../contexts/ThemeContext, ../screens/main/DashboardScreen, ../screens/main/PostJobScreen, ../screens/main/SettingsScreen, ../screens/main/PlaceholderScreen, ../screens/main/ProfileScreen, ../screens/main/JobsManagementScreen, ../screens/main/JobDetailScreen, ../screens/main/JobApplicationsScreen, ../screens/main/BookingDetailScreen, ../screens/main/BookingsScreen, ../screens/main/CreateBookingScreen, ../screens/main/PaymentHistoryScreen, ../screens/main/DisputesScreen, ../screens/main/MyPostsScreen, ../screens/main/CommunityFeedScreen, ../screens/main/SavedWorkersScreen, ../screens/main/ReviewsReceivedScreen, ../screens/main/ReviewsGivenScreen, ../screens/main/NotificationsScreen, ../screens/main/BrowseWorkersScreen, ../screens/main/WorkerPublicProfileScreen, ../screens/main/BrowseByCategoriesScreen, ../screens/main/CategoryDetailScreen, ../screens/main/VerificationScreen, ../screens/main/SubscriptionsScreen, ../screens/main/FeaturedBoostScreen, ../screens/main/ChatScreen, ../screens/main/MessagesScreen
+
+  📄 src/navigation/RootNavigator.js  (80 lines)
+     default export : RootNavigator
+     local imports  : ./AuthNavigator, ./HirerNavigator, ./WorkerNavigator, ../screens/auth/VerifyEmailScreen, ../store/authStore, ../contexts/ThemeContext
+
+  📄 src/navigation/WorkerNavigator.js  (98 lines)
+     default export : WorkerNavigator
+     local imports  : ../components/DrawerContent, ../screens/main/worker/WorkerDashboardScreen, ../screens/main/BookingDetailScreen, ../screens/main/NotificationsScreen, ../screens/main/MessagesScreen, ../screens/main/ChatScreen, ../screens/main/SettingsScreen
+
+────────────────────────────────────────────────────────────
+  SCREEN:AUTH
+────────────────────────────────────────────────────────────
+
+  📄 src/screens/auth/ForgotPasswordScreen.js  (108 lines)
+     default export : ForgotPasswordScreen
+     navigates to   : Login
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppInput, ../../components/AppButton, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../utils/validators
+
+  📄 src/screens/auth/LoginScreen.js  (117 lines)
+     default export : LoginScreen
+     navigates to   : Welcome, ForgotPassword
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppInput, ../../components/AppButton, ../../contexts/ToastContext, ../../store/authStore, ../../utils/validators
+
+  📄 src/screens/auth/RegisterScreen.js  (293 lines)
+     default export : RegisterScreen
+     navigates to   : Login
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppInput, ../../components/AppButton, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore
+
+  📄 src/screens/auth/VerifyEmailScreen.js  (150 lines)
+     default export : VerifyEmailScreen
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppButton, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore
+
+  📄 src/screens/auth/WelcomeScreen.js  (154 lines)
+     default export : WelcomeScreen
+     navigates to   : Register, WorkerRegister, Login
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppButton, ../../contexts/ThemeContext, ../../contexts/ToastContext
+
+  📄 src/screens/auth/WorkerRegisterScreen.js  (1564 lines)
+     default export : WorkerRegisterScreen
+     API calls      : GET /categories | POST /categories/suggest
+     navigates to   : Login, Register
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppInput, ../../components/AppButton, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../api/client
+
+────────────────────────────────────────────────────────────
+  SCREEN:HIRER
+────────────────────────────────────────────────────────────
+
+  📄 src/screens/main/BookingDetailScreen.js  (2197 lines)
+     default export : BookingDetailScreen
+     navigates to   : Bookings, WorkerProfile
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppButton, ../../components/Card, ../../components/ConfirmModal, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../api/bookings, ./DisputesScreen
+
+  📄 src/screens/main/BookingsScreen.js  (513 lines)
+     default export : BookingsScreen
+     navigates to   : BookingDetail, CreateBooking
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppButton, ../../components/Card, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../api/bookings
+
+  📄 src/screens/main/BrowseByCategoriesScreen.js  (578 lines)
+     default export : BrowseByCategoriesScreen
+     navigates to   : CategoryDetail
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../api/categories
+
+  📄 src/screens/main/BrowseWorkersScreen.js  (1212 lines)
+     default export : BrowseWorkersScreen
+     navigates to   : WorkerProfile
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText
+
+  📄 src/screens/main/CategoryDetailScreen.js  (416 lines)
+     default export : CategoryDetailScreen
+     API calls      : GET /search | GET /workers
+     navigates to   : WorkerProfile, BrowseByCategories
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../api/categories, ../../api/client
+
+  📄 src/screens/main/ChatScreen.js  (696 lines)
+     default export : ChatScreen
+     navigates to   : Messages, WorkerProfile
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../components/AppText
+
+  📄 src/screens/main/CommunityFeedScreen.js  (751 lines)
+     default export : CommunityFeedScreen
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../components/AppText, ../../components/ConfirmModal, ../../components/PostCard, ../../api/posts
+
+  📄 src/screens/main/CreateBookingScreen.js  (1770 lines)
+     default export : CreateBookingScreen
+     navigates to   : BrowseWorkers
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppInput, ../../components/AppButton, ../../components/Card, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../api/bookings, ../../api/workers
+
+  📄 src/screens/main/DashboardScreen.js  (274 lines)
+     default export : DashboardScreen
+     navigates to   : PostJob, Bookings, SavedWorkers, BookingDetail, WorkerProfile
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppButton, ../../components/AppCurrency, ../../components/StatCard, ../../components/SectionHeader, ../../components/Card, ../../components/BookingRow, ../../components/WorkerRow, ../../components/CurrencyPicker, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../api/hirer, ../../store/authStore
+
+  📄 src/screens/main/DisputesScreen.js  (1042 lines)
+     default export : DisputesScreen
+     named exports  : RaiseDisputeSheet
+     navigates to   : BookingDetail
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../components/ConfirmModal, ../../api/disputes
+
+  📄 src/screens/main/FeaturedBoostScreen.js  (568 lines)
+     default export : FeaturedBoostScreen
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../api/categories
+
+  📄 src/screens/main/JobApplicationsScreen.js  (638 lines)
+     default export : JobApplicationsScreen
+     navigates to   : Profile, Bookings, JobsManagement
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/Card, ../../components/ConfirmModal, ../../contexts/ThemeContext, ../../contexts/ToastContext
+
+  📄 src/screens/main/JobDetailScreen.js  (905 lines)
+     default export : JobDetailScreen
+     navigates to   : JobApplications, Profile
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/Card, ../../components/ConfirmModal, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../api/jobs
+
+  📄 src/screens/main/JobsManagementScreen.js  (906 lines)
+     default export : JobsManagementScreen
+     navigates to   : JobApplications, JobDetail, PostJob
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppButton, ../../components/Card, ../../components/ConfirmModal, ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../api/jobs
+
+  📄 src/screens/main/MessagesScreen.js  (322 lines)
+     default export : MessagesScreen
+     navigates to   : Chat
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../components/AppText, ../../api/messages
+
+  📄 src/screens/main/MyPostsScreen.js  (526 lines)
+     default export : MyPostsScreen
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../components/AppText, ../../components/ConfirmModal, ../../components/PostCard, ../../api/posts
+
+  📄 src/screens/main/NotificationsScreen.js  (686 lines)
+     default export : NotificationsScreen
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../components/ConfirmModal
+
+  📄 src/screens/main/PaymentHistoryScreen.js  (1234 lines)
+     default export : PaymentHistoryScreen
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../components/Card, ../../components/TopBar, ../../components/ConfirmModal, ../../api/payments
+
+  📄 src/screens/main/PlaceholderScreen.js  (81 lines)
+     default export : PlaceholderScreen
+     navigates to   : Dashboard
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppButton, ../../contexts/ThemeContext
+
+  📄 src/screens/main/PostJobScreen.js  (1637 lines)
+     default export : PostJobScreen
+     navigates to   : MyPosts
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppInput, ../../components/AppButton, ../../components/Card, ../../components/CurrencyPicker, ../../components/SectionHeader, ../../contexts/ThemeContext, ../../contexts/CurrencyContext, ../../contexts/ToastContext, ../../api/hirer, ../../api/categories
+
+  📄 src/screens/main/ProfileScreen.js  (1087 lines)
+     default export : ProfileScreen
+     navigates to   : Settings, BookingDetail
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/Card, ../../contexts/ThemeContext, ../../store/authStore, ../../contexts/ToastContext
+
+  📄 src/screens/main/ReviewsGivenScreen.js  (447 lines)
+     default export : ReviewsGivenScreen
+     navigates to   : ReviewsReceived, WorkerProfile
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../api/reviews
+
+  📄 src/screens/main/ReviewsReceivedScreen.js  (455 lines)
+     default export : ReviewsReceivedScreen
+     navigates to   : WorkerProfile, ReviewsGiven
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../api/reviews
+
+  📄 src/screens/main/SavedWorkersScreen.js  (363 lines)
+     default export : SavedWorkersScreen
+     navigates to   : WorkerProfile
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../api/hirer
+
+  📄 src/screens/main/SettingsScreen.js  (2083 lines)
+     default export : SettingsScreen
+     local imports  : ../../components/AppScreen, ../../components/AppText, ../../components/AppButton, ../../components/AppInput, ../../components/Card, ../../components/CurrencyPicker, ../../contexts/ThemeContext, ../../contexts/CurrencyContext, ../../contexts/ToastContext, ../../store/authStore, ../../api/settings, ../../i18n, ../../constants/currencies, ../../constants/languages
+
+  📄 src/screens/main/SubscriptionsScreen.js  (461 lines)
+     default export : SubscriptionsScreen
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../store/authStore, ../../components/AppText, ../../api/client
+
+  📄 src/screens/main/VerificationScreen.js  (899 lines)
+     default export : VerificationScreen
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText
+
+  📄 src/screens/main/WorkerPublicProfileScreen.js  (1419 lines)
+     default export : WorkerPublicProfileScreen
+     API calls      : GET window
+     navigates to   : CreateBooking
+     local imports  : ../../contexts/ThemeContext, ../../contexts/ToastContext, ../../components/AppText, ../../components/TopBar
+
+────────────────────────────────────────────────────────────
+  SCREEN:WORKER
+────────────────────────────────────────────────────────────
+
+  📄 src/screens/main/worker/WorkerDashboardScreen.js  (899 lines)
+     default export : WorkerDashboardScreen
+     API calls      : GET /workers/dashboard
+     navigates to   : WorkerProfile, WorkerBookings, BookingDetail, WorkerReviews
+     local imports  : ../../../components/AppScreen, ../../../components/AppText, ../../../components/Card, ../../../components/TopBar, ../../../contexts/ThemeContext, ../../../contexts/ToastContext, ../../../store/authStore, ../../../api/client
+
+────────────────────────────────────────────────────────────
+  COMPONENT
+────────────────────────────────────────────────────────────
+
+  📄 src/components/AppButton.js  (152 lines)
+     default export : AppButton
+     local imports  : ./AppText, ../contexts/ThemeContext
+
+  📄 src/components/AppCurrency.js  (39 lines)
+     default export : AppCurrency
+     local imports  : ./AppText, ../contexts/CurrencyContext
+
+  📄 src/components/AppInput.js  (197 lines)
+     default export : AppInput
+     local imports  : ./AppText, ../contexts/ThemeContext
+
+  📄 src/components/AppScreen.js  (91 lines)
+     default export : AppScreen
+     local imports  : ../contexts/ThemeContext
+
+  📄 src/components/AppText.js  (133 lines)
+     default export : AppText
+     local imports  : ../contexts/ThemeContext
+
+  📄 src/components/Avatar.js  (78 lines)
+     default export : Avatar
+     local imports  : ./AppText, ../contexts/ThemeContext
+
+  📄 src/components/Badge.js  (116 lines)
+     default export : Badge
+     local imports  : ./AppText, ../contexts/ThemeContext
+
+  📄 src/components/BookingRow.js  (73 lines)
+     default export : BookingRow
+     local imports  : ./AppText, ./Avatar, ./Badge, ../contexts/ThemeContext
+
+  📄 src/components/Card.js  (38 lines)
+     default export : Card
+     local imports  : ../contexts/ThemeContext
+
+  📄 src/components/ConfirmModal.js  (162 lines)
+     default export : ConfirmModal
+     local imports  : ./AppText, ../contexts/ThemeContext
+
+  📄 src/components/CurrencyPicker.js  (245 lines)
+     default export : CurrencyPicker
+     local imports  : ./AppText, ../contexts/ThemeContext, ../contexts/CurrencyContext, ../constants/currencies
+
+  📄 src/components/DrawerContent.js  (364 lines)
+     default export : DrawerContent
+     local imports  : ./AppText, ./SkilledProzWordmark, ../contexts/ThemeContext, ../contexts/ToastContext, ../store/authStore
+
+  📄 src/components/PostCard.js  (790 lines)
+     default export : PostCard
+     named exports  : POST_TYPES
+     local imports  : ./AppText
+
+  📄 src/components/SectionHeader.js  (57 lines)
+     default export : SectionHeader
+     local imports  : ./AppText, ../contexts/ThemeContext
+
+  📄 src/components/SkilledProzLogo.js  (21 lines)
+     default export : SkilledProzLogo
+     local imports  : ./AppText
+
+  📄 src/components/SkilledProzWordmark.js  (55 lines)
+     default export : SkilledProzWordmark
+     local imports  : ./AppText, ../contexts/ThemeContext
+
+  📄 src/components/StatCard.js  (122 lines)
+     default export : StatCard
+     local imports  : ./AppText, ../contexts/ThemeContext
+
+  📄 src/components/TopBar.js  (204 lines)
+     default export : TopBar
+     navigates to   : Notifications, Profile
+     local imports  : ./AppText, ./Avatar, ../contexts/ThemeContext, ../store/authStore, ../api/hirer
+
+  📄 src/components/WorkerRow.js  (92 lines)
+     default export : WorkerRow
+     local imports  : ./AppText, ./Avatar, ./AppCurrency, ../contexts/ThemeContext
+
+────────────────────────────────────────────────────────────
+  API
+────────────────────────────────────────────────────────────
+
+  📄 src/api/bookings.js  (27 lines)
+     named exports  : getBookings, getBooking, createBooking, updateBookingStatus, getWorkerProfile
+     API calls      : GET /bookings | GET /bookings/${id} | POST /bookings | PATCH /bookings/${id}/status | GET /workers/${workerId}
+     local imports  : ./client
+
+  📄 src/api/categories.js  (47 lines)
+     named exports  : categoriesApi
+     API calls      : GET /categories | GET /categories/${slug} | POST /categories/suggest
+     local imports  : ./client
+
+  📄 src/api/client.js  (118 lines)
+     default export : api
+     named exports  : tokenStore, getErrorMessage
+     API calls      : POST ${API_URL}/auth/refresh
+
+  📄 src/api/disputes.js  (23 lines)
+     named exports  : getMyDisputes, getDisputeDetail, raiseDispute, cancelDispute
+     API calls      : GET /disputes/my | GET /disputes/${bookingId} | POST /disputes | PATCH /disputes/${bookingId}/cancel
+     local imports  : ./client
+
+  📄 src/api/featured.js  (25 lines)
+     named exports  : getPackages, getMyFeatured, createFeaturedCheckout, verifyFeaturedCheckout, getFeaturedInvoice
+     API calls      : GET /featured/packages | GET /featured/my | POST /featured/checkout | POST /featured/verify | GET /featured/invoice/${sessionId}
+     local imports  : ./client
+
+  📄 src/api/hirer.js  (76 lines)
+     named exports  : getHirerDashboard, getDashboard, getSavedWorkers, getMyHirerProfile, updateHirerProfile, getHirerBookings, getHirerReviews, getHirerNotifications, getNotifications, createJobPost, hirerApi
+     API calls      : GET /hirers/me/dashboard | GET /hirers/me/saved-workers | GET /hirers/me/profile | PUT /hirers/me/profile | GET /hirers/me/bookings | GET /hirers/me/reviews/received | GET /hirers/me/notifications | POST /jobs
+     local imports  : ./client
+
+  📄 src/api/insurance.js  (24 lines)
+     named exports  : getInsurancePlans, createInsuranceCheckout, verifyInsuranceCheckout, getMyInsurance
+     API calls      : GET /insurance/plans | POST /insurance/checkout | POST /insurance/verify | GET /insurance/my
+     local imports  : ./client
+
+  📄 src/api/jobs.js  (27 lines)
+     named exports  : getMyJobPosts, getJobPost, updateJobStatus, getJobApplications, updateApplicationStatus
+     API calls      : GET /jobs/hirer/me | GET /jobs/${id} | PATCH /jobs/${id}/status | GET /jobs/${id}/applications | PATCH /jobs/${jobId}/applications/${applicationId}
+     local imports  : ./client
+
+  📄 src/api/messages.js  (48 lines)
+     named exports  : getConversations, getMessages, sendMessage, markConversationRead
+     API calls      : GET /messages/conversations | GET /messages/${conversationId} | POST /messages | POST /messages | PATCH /messages/${conversationId}/read
+     local imports  : ./client
+
+  📄 src/api/notifications.js  (24 lines)
+     named exports  : getNotifications, markAsRead, markAllAsRead, deleteNotification, clearAllNotifications
+     API calls      : GET /notifications | PATCH /notifications/${id}/read | PATCH /notifications/read-all | DELETE /notifications/${id} | DELETE /notifications/clear-all
+     local imports  : ./client
+
+  📄 src/api/payments.js  (97 lines)
+     named exports  : initiatePayment, initiateStripeCheckout, verifyPaystackPayment, initiateBankTransfer, confirmBankTransfer, initiateCrypto, confirmCrypto, releasePayment, getPaymentForBooking, getHirerPayments
+     API calls      : POST /payments/initiate/${bookingId} | POST /payments/initiate-checkout/${bookingId} | GET /payments/verify/paystack | POST /payments/bank-transfer/${bookingId} | PATCH /payments/bank-transfer/${bookingId}/confirm | POST /payments/crypto/${bookingId} | PATCH /payments/crypto/${bookingId}/confirm | POST /payments/release/${bookingId} | GET /payments/${bookingId} | GET /payments/hirer
+     local imports  : ./client
+
+  📄 src/api/posts.js  (74 lines)
+     named exports  : getFeed, getMyPosts, getUserPosts, getPost, createPost, updatePost, deletePost, repost, reactToPost, getComments, addComment, deleteComment
+     API calls      : GET /posts/feed | GET /posts/my | GET /posts/user/${userId} | GET /posts/${postId} | POST /posts | PUT /posts/${postId} | DELETE /posts/${postId} | POST /posts/${postId}/repost | POST /posts/${postId}/react | GET /posts/${postId}/comments | POST /posts/${postId}/comments | DELETE /posts/comments/${commentId}
+     local imports  : ./client
+
+  📄 src/api/profile.js  (29 lines)
+     named exports  : getUser, getMe, getHirerReviews, getWorkerReviews, updateAvatar
+     API calls      : GET /users/${userId} | GET /auth/me | GET /reviews/hirer/${userId} | GET /reviews/worker/${userId} | PUT /users/me/avatar
+     local imports  : ./client
+
+  📄 src/api/reviews.js  (15 lines)
+     named exports  : getReviewsReceived, getReviewsGiven
+     API calls      : GET /hirers/me/reviews/received | GET /hirers/me/reviews/given
+     local imports  : ./client
+
+  📄 src/api/settings.js  (56 lines)
+     named exports  : settingsApi
+     API calls      : GET /settings/profile | PATCH /settings/profile | POST /settings/avatar | PATCH /settings/hirer-profile | PATCH /settings/password | GET /settings/notifications | PATCH /settings/notifications | GET /settings/privacy | PATCH /settings/privacy | GET /settings/security | GET /settings/activity | DELETE /settings/account
+     local imports  : ./client
+
+  📄 src/api/subscriptions.js  (29 lines)
+     named exports  : getPlans, getMySubscription, createCheckout, verifyCheckout, cancelSubscription, getInvoice
+     API calls      : GET /subscriptions/plans?role=${role} | GET /subscriptions/my | POST /subscriptions/checkout | POST /subscriptions/verify | POST /subscriptions/cancel | GET /subscriptions/invoice/${sessionId}
+     local imports  : ./client
+
+  📄 src/api/verification.js  (25 lines)
+     named exports  : getHirerVerificationStatus, submitHirerVerification
+     API calls      : GET /verification/hirer/status | POST /verification/hirer/submit
+     local imports  : ./client
+
+  📄 src/api/workers.js  (32 lines)
+     named exports  : searchWorkers, getTrending, getNearbyWorkers, getFilterOptions, getWorkerPublicProfile, getWorkerPublicReviews
+     API calls      : GET /search | GET /search/trending | GET /search/nearby | GET /search/filters | GET /workers/${userId} | GET /reviews/worker/${userId}
+     local imports  : ./client
+
+────────────────────────────────────────────────────────────
+  STORE
+────────────────────────────────────────────────────────────
+
+  📄 src/store/authStore.js  (141 lines)
+     named exports  : useAuthStore
+     API calls      : GET /auth/me | GET /auth/me | POST /auth/login | POST /auth/register | POST /auth/logout | POST /auth/forgot-password | POST /auth/reset-password | POST /auth/resend-verification
+     local imports  : ../api/client
+
+────────────────────────────────────────────────────────────
+  CONTEXT
+────────────────────────────────────────────────────────────
+
+  📄 src/contexts/CurrencyContext.js  (63 lines)
+     named exports  : CurrencyProvider, useCurrency
+     local imports  : ../constants/currencies
+
+  📄 src/contexts/ThemeContext.js  (71 lines)
+     named exports  : ThemeProvider, useTheme
+     local imports  : ../constants/theme
+
+  📄 src/contexts/ToastContext.js  (247 lines)
+     named exports  : ToastProvider, useToast
+     local imports  : ./ThemeContext
+
+────────────────────────────────────────────────────────────
+  UTIL
+────────────────────────────────────────────────────────────
+
+  📄 src/utils/validators.js  (8 lines)
+     named exports  : isEmail, isStrongEnoughPassword, isNonEmpty
+
+────────────────────────────────────────────────────────────
+  CONSTANT
+────────────────────────────────────────────────────────────
+
+  📄 src/constants/currencies.js  (200 lines)
+     named exports  : CURRENCIES, getCurrency
+
+  📄 src/constants/languages.js  (62 lines)
+     named exports  : LANGUAGES, getLanguage
+
+  📄 src/constants/theme.js  (91 lines)
+     named exports  : COLORS, FONTS, RADII, SPACING, THEMES
+
+────────────────────────────────────────────────────────────
+  LOCALE
+────────────────────────────────────────────────────────────
+
+  📄 src/i18n/index.js  (67 lines)
+     default export : i18n
+     named exports  : initI18n, changeLanguage
+     local imports  : ./locales/en.json, ./locales/es.json, ./locales/fr.json, ./locales/ar.json, ./locales/pt.json, ./locales/zh.json, ./locales/ha.json, ./locales/yo.json, ./locales/ig.json
+
+═══════════════════════════════════════════════════════════
+  SUMMARY
+═══════════════════════════════════════════════════════════
+  navigator              4 files
+  screen:auth            6 files
+  screen:hirer           28 files
+  screen:worker          1 files
+  component              19 files
+  api                    18 files
+  store                  1 files
+  context                3 files
+  util                   1 files
+  constant               3 files
+  locale                 1 files
+
+  TOTAL: 85 files
+═══════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────
+  INSTALLED PACKAGES
+────────────────────────────────────────────────────────────
+  dependencies (36):
+    • @expo-google-fonts/dm-sans
+    • @expo-google-fonts/syne
+    • @expo/metro-runtime
+    • @expo/vector-icons
+    • @react-native-async-storage/async-storage
+    • @react-native-community/datetimepicker
+    • @react-navigation/bottom-tabs
+    • @react-navigation/drawer
+    • @react-navigation/native
+    • @react-navigation/native-stack
+    • axios
+    • expo
+    • expo-constants
+    • expo-document-picker
+    • expo-font
+    • expo-image-picker
+    • expo-linking
+    • expo-localization
+    • expo-location
+    • expo-secure-store
+    • expo-splash-screen
+    • expo-status-bar
+    • expo-system-ui
+    • i18next
+    • react
+    • react-dom
+    • react-i18next
+    • react-native
+    • react-native-gesture-handler
+    • react-native-reanimated
+    • react-native-safe-area-context
+    • react-native-screens
+    • react-native-web
+    • react-native-worklets
+    • stack
+    • zustand
+
+  devDependencies (1):
+    • @babel/core
+
+────────────────────────────────────────────────────────────
+  NAVIGATOR AUDIT
+────────────────────────────────────────────────────────────
+  Registered routes (40):
+    ✓ BookingDetail
+    ✓ Bookings
+    ✓ BrowseByCategories
+    ✓ BrowseWorkers
+    ✓ CategoryDetail
+    ✓ Chat
+    ✓ CommunityFeed
+    ✓ CreateBooking
+    ✓ Dashboard
+    ✓ Disputes
+    ✓ FeaturedBoost
+    ✓ ForgotPassword
+    ✓ JobApplications
+    ✓ JobDetail
+    ✓ JobsManagement
+    ✓ Login
+    ✓ Messages
+    ✓ MyPosts
+    ✓ Notifications
+    ✓ PaymentHistory
+    ✓ PostJob
+    ✓ Profile
+    ✓ Register
+    ✓ ReviewsGiven
+    ✓ ReviewsReceived
+    ✓ SavedWorkers
+    ✓ Settings
+    ✓ Subscriptions
+    ✓ Verification
+    ✓ VerifyEmail
+    ✓ Welcome
+    ✓ WorkerApplications
+    ✓ WorkerBookings
+    ✓ WorkerDetail
+    ✓ WorkerEarnings
+    ✓ WorkerHome
+    ✓ WorkerJobs
+    ✓ WorkerProfile
+    ✓ WorkerRegister
+    ✓ WorkerReviews
+
+  Navigate() calls that have NO registered screen (0):
+    (none — all navigation targets are registered)

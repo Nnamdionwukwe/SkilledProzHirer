@@ -1,0 +1,170 @@
+[
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 31,
+    "pattern": "nav_title",
+    "raw": "Dashboard",
+    "key": "dashboard"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 33,
+    "pattern": "nav_title",
+    "raw": "Bookings",
+    "key": "bookings"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 38,
+    "pattern": "nav_title",
+    "raw": "PostJob",
+    "key": "postjob"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 43,
+    "pattern": "nav_title",
+    "raw": "JobsManagement",
+    "key": "jobsmanagement"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 47,
+    "pattern": "nav_title",
+    "raw": "MyPosts",
+    "key": "myposts"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 49,
+    "pattern": "nav_title",
+    "raw": "PaymentHistory",
+    "key": "paymenthistory"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 54,
+    "pattern": "nav_title",
+    "raw": "Disputes",
+    "key": "disputes"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 64,
+    "pattern": "nav_title",
+    "raw": "SavedWorkers",
+    "key": "savedworkers"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 69,
+    "pattern": "nav_title",
+    "raw": "BrowseWorkers",
+    "key": "browseworkers"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 74,
+    "pattern": "nav_title",
+    "raw": "BrowseByCategories",
+    "key": "browsebycategories"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 79,
+    "pattern": "nav_title",
+    "raw": "Messages",
+    "key": "messages"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 89,
+    "pattern": "nav_title",
+    "raw": "ReviewsReceived",
+    "key": "reviewsreceived"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 94,
+    "pattern": "nav_title",
+    "raw": "ReviewsGiven",
+    "key": "reviewsgiven"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 104,
+    "pattern": "nav_title",
+    "raw": "CommunityFeed",
+    "key": "communityfeed"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 114,
+    "pattern": "nav_title",
+    "raw": "Notifications",
+    "key": "notifications"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 119,
+    "pattern": "nav_title",
+    "raw": "Verification",
+    "key": "verification"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 124,
+    "pattern": "nav_title",
+    "raw": "ReferralDashboard",
+    "key": "referraldashboard"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 128,
+    "pattern": "nav_title",
+    "raw": "Campaign",
+    "key": "campaign"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 130,
+    "pattern": "nav_title",
+    "raw": "MyReports",
+    "key": "myreports"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 140,
+    "pattern": "nav_title",
+    "raw": "Subscriptions",
+    "key": "subscriptions"
+  },
+  {
+    "file": "src/components/DrawerContent.js",
+    "line": 145,
+    "pattern": "nav_title",
+    "raw": "FeaturedBoost",
+    "key": "featuredboost"
+  },
+  {
+    "file": "src/screens/main/SettingsScreen.js",
+    "line": 949,
+    "pattern": "prop",
+    "raw": "Company Size",
+    "key": "company_size"
+  },
+  {
+    "file": "src/screens/main/SettingsScreen.js",
+    "line": 1014,
+    "pattern": "prop",
+    "raw": "Dashboard Currency",
+    "key": "dashboard_currency"
+  },
+  {
+    "file": "src/screens/main/SettingsScreen.js",
+    "line": 1024,
+    "pattern": "prop",
+    "raw": "Payment Currency",
+    "key": "payment_currency"
+  }
+]
