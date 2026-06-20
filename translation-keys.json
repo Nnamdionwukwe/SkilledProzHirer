@@ -1,0 +1,2874 @@
+{
+  "generated": "2026-06-20T15:26:01.970Z",
+  "totalKeys": 676,
+  "keys": [
+    ",",
+    "../../api/client",
+    "/",
+    "/auth/forgot-password",
+    "/auth/login",
+    "/auth/logout",
+    "/auth/me",
+    "/auth/resend-verification",
+    "/auth/reset-password",
+    "/bookings",
+    "/campaign/my-tasks",
+    "/campaign/my-tasks/social",
+    "/campaign/referrals?limit=50",
+    "/campaign/status",
+    "/campaign/submissions?limit=30",
+    "/campaign/submit",
+    "/categories",
+    "/categories/suggest",
+    "/disputes/my",
+    "/featured/checkout",
+    "/featured/my",
+    "/featured/packages",
+    "/featured/verify",
+    "/hirers/me/bookings",
+    "/hirers/me/dashboard",
+    "/hirers/me/notifications",
+    "/hirers/me/profile",
+    "/hirers/me/reviews/given",
+    "/hirers/me/reviews/received",
+    "/hirers/me/saved-workers",
+    "/insurance/checkout",
+    "/insurance/my",
+    "/insurance/plans",
+    "/insurance/verify",
+    "/jobs",
+    "/jobs/hirer/me",
+    "/jobs/worker/my-applications",
+    "/messages",
+    "/messages/conversations",
+    "/notifications",
+    "/payments/banks?country=NG",
+    "/payments/earnings",
+    "/payments/earnings?limit=1",
+    "/payments/hirer",
+    "/payments/pin/change",
+    "/payments/pin/set",
+    "/payments/pin/status",
+    "/payments/verify-account",
+    "/payments/verify/paystack",
+    "/payments/withdrawals",
+    "/posts/feed",
+    "/posts/my",
+    "/referral/dashboard",
+    "/referral/leaderboard?limit=20",
+    "/referral/withdraw",
+    "/reports",
+    "/reports/my",
+    "/reviews/my/given",
+    "/reviews/my/received",
+    "/search",
+    "/search/filters",
+    "/search/nearby",
+    "/search/trending",
+    "/settings/activity",
+    "/settings/notifications",
+    "/settings/privacy",
+    "/settings/profile",
+    "/settings/security",
+    "/subscriptions/cancel",
+    "/subscriptions/checkout",
+    "/subscriptions/my",
+    "/subscriptions/verify",
+    "/verification/hirer/status",
+    "/verification/status",
+    "/workers",
+    "/workers/availability",
+    "/workers/categories",
+    "/workers/dashboard",
+    "/workers/dashboard/earnings",
+    "/workers/dashboard/notifications",
+    "/workers/dashboard/reviews",
+    "/workers/my-applications",
+    "/workers/profile",
+    ":",
+    "LIKE",
+    "T",
+    "\\n",
+    "address",
+    "auth.agreeToTerms",
+    "auth.alreadyHaveAccount",
+    "auth.and",
+    "auth.checking",
+    "auth.city",
+    "auth.cityPlaceholder",
+    "auth.confirm",
+    "auth.confirmPlaceholder",
+    "auth.continueAs",
+    "auth.country",
+    "auth.countryPlaceholder",
+    "auth.createHirerAccount",
+    "auth.createOneFree",
+    "auth.creating",
+    "auth.emailAddress",
+    "auth.emailPlaceholder",
+    "auth.emailRequired",
+    "auth.fillAllFields",
+    "auth.findNextProz",
+    "auth.firstName",
+    "auth.firstNamePlaceholder",
+    "auth.forgot",
+    "auth.forgotPasswordBody",
+    "auth.forgotPasswordTitle",
+    "auth.getStartedFree",
+    "auth.hirerAccount",
+    "auth.hirerDescription",
+    "auth.iVerified",
+    "auth.imAHirer",
+    "auth.imAWorker",
+    "auth.invalidCredentials",
+    "auth.joinSubtitle",
+    "auth.joinTitle",
+    "auth.lastName",
+    "auth.lastNamePlaceholder",
+    "auth.loginSuccess",
+    "auth.logoutSuccess",
+    "auth.mustAgreeTerms",
+    "auth.noAccountYet",
+    "auth.notVerifiedYet",
+    "auth.password",
+    "auth.passwordMinChars",
+    "auth.passwordTooShort",
+    "auth.passwordsDontMatch",
+    "auth.phone",
+    "auth.phonePlaceholder",
+    "auth.privacyPolicy",
+    "auth.registerSuccess",
+    "auth.rememberPassword",
+    "auth.resend",
+    "auth.resending",
+    "auth.resetLinkSent",
+    "auth.sendResetLink",
+    "auth.signIn",
+    "auth.signInTitle",
+    "auth.signOut",
+    "auth.signingIn",
+    "auth.terms",
+    "auth.validEmailRequired",
+    "auth.verificationResent",
+    "auth.verifyEmailBody",
+    "auth.verifyEmailTitle",
+    "auth.welcomeBack",
+    "auth.workerDescription",
+    "bio",
+    "bookings.accept",
+    "bookings.addressRequired",
+    "bookings.agreedRate",
+    "bookings.all",
+    "bookings.backToBookings",
+    "bookings.bankTransfer",
+    "bookings.breakdown",
+    "bookings.cancelBooking",
+    "bookings.cancelReason",
+    "bookings.cancelReasonPlaceholder",
+    "bookings.cancelReasonRequired",
+    "bookings.category",
+    "bookings.categoryRequired",
+    "bookings.confirmCancel",
+    "bookings.createBookingBtn",
+    "bookings.createSubtitle",
+    "bookings.created",
+    "bookings.cryptoPay",
+    "bookings.dateRequired",
+    "bookings.descriptionRequired",
+    "bookings.detail",
+    "bookings.disclaimer",
+    "bookings.engagementType",
+    "bookings.estimatedTotal",
+    "bookings.inProgress",
+    "bookings.jobInformation",
+    "bookings.keepBooking",
+    "bookings.loadingWorker",
+    "bookings.location",
+    "bookings.myJobs",
+    "bookings.newBooking",
+    "bookings.newJob",
+    "bookings.noBookings",
+    "bookings.noBookingsFiltered",
+    "bookings.noBookingsHirer",
+    "bookings.noBookingsWorker",
+    "bookings.notFound",
+    "bookings.of",
+    "bookings.payWithCard",
+    "bookings.pricingDuration",
+    "bookings.raiseDispute",
+    "bookings.release",
+    "bookings.releaseConfirm",
+    "bookings.releasePayment",
+    "bookings.schedule",
+    "bookings.serviceAddress",
+    "bookings.summaryNote",
+    "bookings.titleRequired",
+    "bookings.videoCall",
+    "bookings.worker",
+    "bookings.workerId",
+    "bookings.workerIdPlaceholder",
+    "bookings.workerNotFound",
+    "bookings.workerRequired",
+    "bookings.youPay",
+    "browse.available",
+    "browse.filters",
+    "browse.jobs",
+    "browse.nearby",
+    "browse.nearbyWorkers",
+    "browse.new",
+    "browse.newOnPlatform",
+    "browse.noResults",
+    "browse.noResultsSub",
+    "browse.results",
+    "browse.search",
+    "browse.searchPlaceholder",
+    "browse.searchResults",
+    "browse.topRated",
+    "browse.trending",
+    "browse.unavailable",
+    "categories.addCategory",
+    "categories.addModal.alreadyExists",
+    "categories.addModal.cancel",
+    "categories.addModal.descriptionPlaceholder",
+    "categories.addModal.namePlaceholder",
+    "categories.addModal.nameRequired",
+    "categories.addModal.submit",
+    "categories.addModal.subtitle",
+    "categories.addModal.successMessage",
+    "categories.addModal.title",
+    "categories.noResults",
+    "categories.noResultsSub",
+    "categories.searchPlaceholder",
+    "categories.subtitle",
+    "categories.worker",
+    "categories.workers",
+    "city",
+    "common.back",
+    "common.cancel",
+    "common.currency",
+    "common.delete",
+    "common.no",
+    "common.optional",
+    "common.search",
+    "common.yes",
+    "companyName",
+    "companySize",
+    "confirm",
+    "country",
+    "createBooking.addressPlaceholder",
+    "currency",
+    "customRate",
+    "customRateLabel",
+    "dailyRate",
+    "dashboard.activeJobs",
+    "dashboard.completed",
+    "dashboard.noBookingsYet",
+    "dashboard.noWorkersYet",
+    "dashboard.overview",
+    "dashboard.postAJob",
+    "dashboard.recentBookings",
+    "dashboard.recentWorkers",
+    "dashboard.totalBookings",
+    "dashboard.totalSpent",
+    "dashboard.viewAll",
+    "dashboard.viewingIn",
+    "description",
+    "disputes.description",
+    "disputes.raiseTitle",
+    "disputes.submitDispute",
+    "disputes.support",
+    "email",
+    "en-US",
+    "firstName",
+    "gender",
+    "hourlyRate",
+    "isAvailable",
+    "jobs.allJobs",
+    "jobs.applicant",
+    "jobs.applicants",
+    "jobs.applications.title",
+    "jobs.apply.accept",
+    "jobs.apply.acceptConfirm",
+    "jobs.apply.acceptSuccess",
+    "jobs.apply.accepted",
+    "jobs.apply.applied",
+    "jobs.apply.at",
+    "jobs.apply.coverNote",
+    "jobs.apply.createBooking",
+    "jobs.apply.decline",
+    "jobs.apply.declineConfirm",
+    "jobs.apply.declineSuccess",
+    "jobs.apply.jobsDone",
+    "jobs.apply.noApps",
+    "jobs.apply.noAppsText",
+    "jobs.apply.pending",
+    "jobs.apply.pendingReview",
+    "jobs.apply.reviewed",
+    "jobs.apply.totalApps",
+    "jobs.apply.viewProfile",
+    "jobs.apply.yrsExp",
+    "jobs.cancelConfirm",
+    "jobs.cancelJob",
+    "jobs.cancelled",
+    "jobs.detail.budget",
+    "jobs.detail.category",
+    "jobs.detail.details",
+    "jobs.detail.duration",
+    "jobs.detail.jobDesc",
+    "jobs.detail.location",
+    "jobs.detail.manageJob",
+    "jobs.detail.postedAgo",
+    "jobs.detail.postedBy",
+    "jobs.detail.quickFacts",
+    "jobs.detail.scheduled",
+    "jobs.detail.skills",
+    "jobs.detail.status",
+    "jobs.detail.viewApps",
+    "jobs.filled",
+    "jobs.jobUpdated",
+    "jobs.markFilled",
+    "jobs.markFilledConfirm",
+    "jobs.myJobs",
+    "jobs.noJobs",
+    "jobs.noJobsFiltered",
+    "jobs.notFound",
+    "jobs.open",
+    "jobs.postFirstJob",
+    "jobs.postNewJob",
+    "jobs.reopenConfirm",
+    "jobs.reopenJob",
+    "jobs.total",
+    "jobs.viewDetails",
+    "language",
+    "lastName",
+    "messages.directMessage",
+    "messages.noConversations",
+    "messages.noConversationsSub",
+    "messages.noMessages",
+    "messages.noMessagesSub",
+    "messages.searchPlaceholder",
+    "messages.typeMessage",
+    "messages.viewProfile",
+    "monthlyRate",
+    "nav.*",
+    "nav.activeWorker",
+    "nav.available",
+    "nav.boostListing",
+    "nav.browseJobs",
+    "nav.campaign",
+    "nav.categories",
+    "nav.dashboard",
+    "nav.disputes",
+    "nav.earnings",
+    "nav.failedAvailability",
+    "nav.hirerPortal",
+    "nav.inbox",
+    "nav.logout",
+    "nav.messages",
+    "nav.myApplications",
+    "nav.myBookings",
+    "nav.myPosts",
+    "nav.myreports",
+    "nav.notifications",
+    "nav.overview",
+    "nav.payouts",
+    "nav.profileSection",
+    "nav.referralDashboard",
+    "nav.settings",
+    "nav.subscriptions",
+    "nav.subscriptionsFeatures",
+    "nav.verification",
+    "nav.wallet",
+    "nav.workerPortal",
+    "notifications.all",
+    "notifications.clearAll",
+    "notifications.clearMessage",
+    "notifications.clearTitle",
+    "notifications.cleared",
+    "notifications.deleteMessage",
+    "notifications.deleteTitle",
+    "notifications.details",
+    "notifications.device",
+    "notifications.empty",
+    "notifications.emptySub",
+    "notifications.ip",
+    "notifications.markAllRead",
+    "notifications.markedAll",
+    "notifications.unread",
+    "notifications.unreadCount",
+    "password",
+    "phone",
+    "postJob.addedCategory",
+    "postJob.additionalNotes",
+    "postJob.agreedAmount",
+    "postJob.budgetRequired",
+    "postJob.budgetType",
+    "postJob.category",
+    "postJob.categoryAlreadyExists",
+    "postJob.categoryInputPlaceholder",
+    "postJob.categoryRequired",
+    "postJob.continue",
+    "postJob.cryptoNote",
+    "postJob.customOther",
+    "postJob.dailyRate",
+    "postJob.describeDuration",
+    "postJob.describeDurationPlaceholder",
+    "postJob.description",
+    "postJob.descriptionPlaceholder",
+    "postJob.descriptionTooShort",
+    "postJob.done",
+    "postJob.durationCustomRequired",
+    "postJob.durationRequired",
+    "postJob.fixedPrice",
+    "postJob.hourlyRate",
+    "postJob.howMany",
+    "postJob.jobDuration",
+    "postJob.jobTitle",
+    "postJob.jobTitlePlaceholder",
+    "postJob.jobType",
+    "postJob.locationAddress",
+    "postJob.locationAddressPlaceholder",
+    "postJob.locationRequired",
+    "postJob.locationType",
+    "postJob.maxSkills",
+    "postJob.minChars",
+    "postJob.monthlyRate",
+    "postJob.noMatch",
+    "postJob.notesPlaceholder",
+    "postJob.optional",
+    "postJob.payIn",
+    "postJob.paymentCurrency",
+    "postJob.postJob",
+    "postJob.posting",
+    "postJob.review.address",
+    "postJob.review.category",
+    "postJob.review.duration",
+    "postJob.review.jobType",
+    "postJob.review.location",
+    "postJob.review.notes",
+    "postJob.review.payment",
+    "postJob.review.skills",
+    "postJob.review.startDate",
+    "postJob.review.title",
+    "postJob.reviewTitle",
+    "postJob.searchCategories",
+    "postJob.selectStartDate",
+    "postJob.skillPlaceholder",
+    "postJob.skills",
+    "postJob.skillsHint",
+    "postJob.startDate",
+    "postJob.startDateRequired",
+    "postJob.successMessage",
+    "postJob.suggestCategory",
+    "postJob.tapToChooseDate",
+    "postJob.titleRequired",
+    "postJob.weeklyRate",
+    "postJob.yourTitleNote",
+    "pricingNote",
+    "profile.addBio",
+    "profile.backgroundChecked",
+    "profile.book",
+    "profile.daysAgo",
+    "profile.emailVerified",
+    "profile.hirer",
+    "profile.hoursAgo",
+    "profile.idVerified",
+    "profile.jobsDone",
+    "profile.joined",
+    "profile.justNow",
+    "profile.lastSeen",
+    "profile.loadingProfile",
+    "profile.minutesAgo",
+    "profile.myProfile",
+    "profile.never",
+    "profile.noBio",
+    "profile.noReviews",
+    "profile.perHour",
+    "profile.radius",
+    "profile.rating",
+    "profile.review",
+    "profile.reviews",
+    "profile.specialities",
+    "profile.tabAbout",
+    "profile.tabReviews",
+    "profile.totalHires",
+    "profile.totalSpent",
+    "profile.userNotFound",
+    "profile.worker",
+    "profile.yourPublicProfile",
+    "reviews.avgGiven",
+    "reviews.feedbackEyebrow",
+    "reviews.givenSubtitle",
+    "reviews.hirer",
+    "reviews.noGivenSub",
+    "reviews.noReceivedSub",
+    "reviews.noReviewsYet",
+    "reviews.receivedSubtitle",
+    "reviews.reputationEyebrow",
+    "reviews.reviewsCount",
+    "reviews.seeGiven",
+    "reviews.seeReceived",
+    "reviews.submitted",
+    "reviews.viewProfile",
+    "reviews.worker",
+    "savedWorkers.available",
+    "savedWorkers.emptySub",
+    "savedWorkers.emptyTitle",
+    "savedWorkers.lastHiredFor",
+    "savedWorkers.perHour",
+    "savedWorkers.subtitle",
+    "savedWorkers.unavailable",
+    "savedWorkers.viewProfile",
+    "screenSub.applications",
+    "screenSub.availability",
+    "screenSub.bookingDetail",
+    "screenSub.boostListing",
+    "screenSub.browseJobs",
+    "screenSub.categories",
+    "screenSub.certifications",
+    "screenSub.community",
+    "screenSub.dashboard",
+    "screenSub.directMessage",
+    "screenSub.disputes",
+    "screenSub.earnings",
+    "screenSub.hirerProfile",
+    "screenSub.jobDetails",
+    "screenSub.messages",
+    "screenSub.myBookings",
+    "screenSub.myProfile",
+    "screenSub.notifications",
+    "screenSub.portfolio",
+    "screenSub.reviews",
+    "screenSub.settings",
+    "screenSub.subscriptions",
+    "screenSub.verification",
+    "screenSub.wallet",
+    "serviceRadius",
+    "settings.profile.permissionRequired",
+    "settings.profile.photoFailed",
+    "settings.profile.photoUpdated",
+    "state",
+    "title",
+    "toast.messagingComingSoon",
+    "toast.networkError",
+    "toast.unknownError",
+    "website",
+    "weeklyRate",
+    "window",
+    "workerCat.addFail",
+    "workerCat.addNew",
+    "workerCat.addSub",
+    "workerCat.addSuccess",
+    "workerCat.addTitle",
+    "workerCat.alreadyAdded",
+    "workerCat.cantFind",
+    "workerCat.customPlaceholder",
+    "workerCat.customPrompt",
+    "workerCat.myCategories",
+    "workerCat.noCategoriesSub",
+    "workerCat.noCategoriesTitle",
+    "workerCat.popularLabel",
+    "workerCat.primary",
+    "workerCat.primaryFail",
+    "workerCat.removeConfirm",
+    "workerCat.removeConfirmTitle",
+    "workerCat.removeFail",
+    "workerCat.removeSuccess",
+    "workerCat.searchPlaceholder",
+    "workerCat.setPrimary",
+    "workerCat.subtitle",
+    "workerCat.title",
+    "workerDash.*",
+    "workerDash.activeJobs",
+    "workerDash.available",
+    "workerDash.awaitingRelease",
+    "workerDash.earningsTrend",
+    "workerDash.fromReviews",
+    "workerDash.fullReport",
+    "workerDash.inEscrow",
+    "workerDash.jobsDone",
+    "workerDash.lastMonth",
+    "workerDash.newWorker",
+    "workerDash.noBookings",
+    "workerDash.noReviews",
+    "workerDash.noUpcomingJobs",
+    "workerDash.pendingRequests",
+    "workerDash.profileCompletion",
+    "workerDash.qaApplications",
+    "workerDash.qaEarnings",
+    "workerDash.qaProfile",
+    "workerDash.quickActions",
+    "workerDash.rating",
+    "workerDash.recentBookings",
+    "workerDash.recentReviews",
+    "workerDash.responseRate",
+    "workerDash.seeAll",
+    "workerDash.thisMonth",
+    "workerDash.unavailable",
+    "workerDash.unreadConversations",
+    "workerDash.unreadMessages",
+    "workerDash.upcomingJobs",
+    "workerDash.viewAll",
+    "workerDash.welcomeBack",
+    "workerEarnings.allCurrencies",
+    "workerEarnings.from",
+    "workerEarnings.loadFail",
+    "workerEarnings.noEarnings",
+    "workerEarnings.noEarningsSub",
+    "workerEarnings.platformFees",
+    "workerEarnings.to",
+    "workerEarnings.totalEarned",
+    "workerEarnings.totalJobValue",
+    "workerEarnings.transactions",
+    "workerProfile.about",
+    "workerProfile.availability",
+    "workerProfile.available",
+    "workerProfile.bookNow",
+    "workerProfile.certifications",
+    "workerProfile.noCerts",
+    "workerProfile.noPortfolio",
+    "workerProfile.portfolio",
+    "workerProfile.pricesNegotiable",
+    "workerProfile.unavailable",
+    "workerProfile.weeklyAvailability",
+    "workerReg.addCategory",
+    "workerReg.addCategoryFailed",
+    "workerReg.addCustomCategory",
+    "workerReg.categoriesHint",
+    "workerReg.categoriesRequired",
+    "workerReg.continue",
+    "workerReg.createAccount",
+    "workerReg.currency",
+    "workerReg.customCategoryPlaceholder",
+    "workerReg.customRate",
+    "workerReg.customRateAmount",
+    "workerReg.customRateLabel",
+    "workerReg.customRateLabelPlaceholder",
+    "workerReg.dailyRate",
+    "workerReg.description",
+    "workerReg.descriptionPlaceholder",
+    "workerReg.descriptionRequired",
+    "workerReg.hiringSomeone",
+    "workerReg.hourlyRate",
+    "workerReg.maxCategories",
+    "workerReg.min8",
+    "workerReg.monthlyRate",
+    "workerReg.pricingNote",
+    "workerReg.pricingNotePlaceholder",
+    "workerReg.professionalTitle",
+    "workerReg.professionalTitlePlaceholder",
+    "workerReg.rateRequired",
+    "workerReg.ratesNote",
+    "workerReg.ratesPreview",
+    "workerReg.registerAsHirer",
+    "workerReg.searchCategories",
+    "workerReg.serviceRadius",
+    "workerReg.setYourRates",
+    "workerReg.startEarning",
+    "workerReg.startEarningSubtitle",
+    "workerReg.titleRequired",
+    "workerReg.weeklyRate",
+    "workerReg.workerAccount",
+    "workerReg.yearsExperience",
+    "workerReg.yourCategories",
+    "workerReg.yourProfile",
+    "workerReviews.loadFail",
+    "workerReviews.noReviews",
+    "workerReviews.noReviewsSub",
+    "workerReviews.subtitle",
+    "workerReviews.title",
+    "yearsExperience"
+  ],
+  "sources": {
+    "/bookings": [
+      "src/api/bookings.js"
+    ],
+    "/categories": [
+      "src/api/categories.js",
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/worker/WorkerCategoriesScreen.js",
+      "src/screens/main/worker/WorkerJobsScreen.js"
+    ],
+    "/categories/suggest": [
+      "src/api/categories.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "/disputes/my": [
+      "src/api/disputes.js"
+    ],
+    "/featured/packages": [
+      "src/api/featured.js"
+    ],
+    "/featured/my": [
+      "src/api/featured.js"
+    ],
+    "/featured/checkout": [
+      "src/api/featured.js"
+    ],
+    "/featured/verify": [
+      "src/api/featured.js"
+    ],
+    "/hirers/me/dashboard": [
+      "src/api/hirer.js"
+    ],
+    "/hirers/me/saved-workers": [
+      "src/api/hirer.js"
+    ],
+    "/hirers/me/profile": [
+      "src/api/hirer.js"
+    ],
+    "/hirers/me/notifications": [
+      "src/api/hirer.js"
+    ],
+    "/hirers/me/bookings": [
+      "src/api/hirer.js"
+    ],
+    "/hirers/me/reviews/received": [
+      "src/api/hirer.js",
+      "src/api/reviews.js"
+    ],
+    "/insurance/plans": [
+      "src/api/insurance.js"
+    ],
+    "/insurance/my": [
+      "src/api/insurance.js"
+    ],
+    "/insurance/checkout": [
+      "src/api/insurance.js"
+    ],
+    "/insurance/verify": [
+      "src/api/insurance.js"
+    ],
+    "/jobs/hirer/me": [
+      "src/api/jobs.js"
+    ],
+    "/messages/conversations": [
+      "src/api/messages.js"
+    ],
+    "/messages": [
+      "src/api/messages.js"
+    ],
+    "/notifications": [
+      "src/api/notifications.js"
+    ],
+    "/payments/verify/paystack": [
+      "src/api/payments.js"
+    ],
+    "/payments/hirer": [
+      "src/api/payments.js"
+    ],
+    "/posts/feed": [
+      "src/api/posts.js"
+    ],
+    "/posts/my": [
+      "src/api/posts.js"
+    ],
+    "/auth/me": [
+      "src/api/profile.js",
+      "src/store/authStore.js"
+    ],
+    "/hirers/me/reviews/given": [
+      "src/api/reviews.js"
+    ],
+    "/reviews/my/received": [
+      "src/api/reviews.js"
+    ],
+    "/reviews/my/given": [
+      "src/api/reviews.js"
+    ],
+    "/settings/profile": [
+      "src/api/settings.js"
+    ],
+    "/": [
+      "src/api/settings.js",
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "/settings/notifications": [
+      "src/api/settings.js"
+    ],
+    "/settings/privacy": [
+      "src/api/settings.js"
+    ],
+    "/settings/security": [
+      "src/api/settings.js"
+    ],
+    "/payments/pin/status": [
+      "src/api/settings.js",
+      "src/screens/main/worker/WorkerWithdrawalsScreen.js"
+    ],
+    "/settings/activity": [
+      "src/api/settings.js"
+    ],
+    "/payments/pin/set": [
+      "src/api/settings.js",
+      "src/screens/main/worker/WorkerWithdrawalsScreen.js"
+    ],
+    "/payments/pin/change": [
+      "src/api/settings.js"
+    ],
+    "/subscriptions/my": [
+      "src/api/subscriptions.js"
+    ],
+    "/subscriptions/cancel": [
+      "src/api/subscriptions.js"
+    ],
+    "/subscriptions/checkout": [
+      "src/api/subscriptions.js"
+    ],
+    "/subscriptions/verify": [
+      "src/api/subscriptions.js"
+    ],
+    "/verification/hirer/status": [
+      "src/api/verification.js"
+    ],
+    "/verification/status": [
+      "src/api/verification.js"
+    ],
+    "/workers/dashboard": [
+      "src/api/workerAuth.js",
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "/workers/dashboard/earnings": [
+      "src/api/workerAuth.js"
+    ],
+    "/workers/dashboard/reviews": [
+      "src/api/workerAuth.js"
+    ],
+    "/workers/dashboard/notifications": [
+      "src/api/workerAuth.js",
+      "src/components/TopBar.js"
+    ],
+    "/workers/availability": [
+      "src/api/workerAuth.js",
+      "src/screens/main/worker/WorkerAvailabilityScreen.js"
+    ],
+    "/workers/categories": [
+      "src/api/workerAuth.js",
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "/workers/my-applications": [
+      "src/api/workerAuth.js"
+    ],
+    "/search/trending": [
+      "src/api/workers.js"
+    ],
+    "/search/filters": [
+      "src/api/workers.js"
+    ],
+    "/search": [
+      "src/api/workers.js",
+      "src/screens/main/CategoryDetailScreen.js"
+    ],
+    "/search/nearby": [
+      "src/api/workers.js"
+    ],
+    "common.currency": [
+      "src/components/CurrencyPicker.js"
+    ],
+    "common.search": [
+      "src/components/CurrencyPicker.js"
+    ],
+    "nav.*": [
+      "src/components/DrawerContent.js"
+    ],
+    "toast.unknownError": [
+      "src/components/DrawerContent.js",
+      "src/screens/main/BookingDetailScreen.js",
+      "src/screens/main/BrowseByCategoriesScreen.js",
+      "src/screens/main/BrowseWorkersScreen.js",
+      "src/screens/main/CategoryDetailScreen.js",
+      "src/screens/main/ChatScreen.js",
+      "src/screens/main/CreateBookingScreen.js",
+      "src/screens/main/JobApplicationsScreen.js",
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js",
+      "src/screens/main/MessagesScreen.js",
+      "src/screens/main/NotificationsScreen.js",
+      "src/screens/main/PaymentHistoryScreen.js",
+      "src/screens/main/PostJobScreen.js",
+      "src/screens/main/ReviewsGivenScreen.js",
+      "src/screens/main/ReviewsReceivedScreen.js",
+      "src/screens/main/SavedWorkersScreen.js",
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "nav.hirerPortal": [
+      "src/components/DrawerContent.js"
+    ],
+    "nav.settings": [
+      "src/components/DrawerContent.js",
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js",
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "nav.logout": [
+      "src/components/DrawerContent.js",
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "LIKE": [
+      "src/components/PostCard.js"
+    ],
+    "nav.failedAvailability": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "nav.workerPortal": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "nav.activeWorker": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "nav.overview": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "nav.dashboard": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.myBookings": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.categories": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.browseJobs": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js",
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "nav.myApplications": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.myPosts": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.disputes": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.payouts": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "nav.earnings": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.wallet": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.referralDashboard": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "nav.campaign": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "nav.myreports": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "nav.profileSection": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "profile.myProfile": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js",
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "workerProfile.portfolio": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js",
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "workerProfile.certifications": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js",
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "workerProfile.availability": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js",
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "nav.verification": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.inbox": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "workerReviews.title": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js",
+      "src/screens/main/worker/WorkerReviewsScreen.js"
+    ],
+    "nav.notifications": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.messages": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.subscriptionsFeatures": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "nav.subscriptions": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.boostListing": [
+      "src/components/WorkerDrawerContent.js",
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "nav.available": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "/workers/profile": [
+      "src/components/WorkerDrawerContent.js"
+    ],
+    "window": [
+      "src/navigation/HirerNavigator.js",
+      "src/screens/main/WorkerPublicProfileScreen.js",
+      "src/screens/main/worker/WorkerBookingsScreen.js",
+      "src/screens/main/worker/WorkerCertificationsScreen.js",
+      "src/screens/main/worker/WorkerJobsScreen.js",
+      "src/screens/main/worker/WorkerPortfolioScreen.js",
+      "src/screens/main/worker/WorkerWithdrawalsScreen.js"
+    ],
+    "screenSub.dashboard": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.myBookings": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.categories": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.browseJobs": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.applications": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.community": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.disputes": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.earnings": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.wallet": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.myProfile": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.portfolio": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.certifications": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.availability": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.verification": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.reviews": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.notifications": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.messages": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.subscriptions": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.boostListing": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.settings": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "bookings.detail": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.bookingDetail": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.hirerProfile": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "jobs.detail.details": [
+      "src/navigation/WorkerNavigator.js",
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "screenSub.jobDetails": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "screenSub.directMessage": [
+      "src/navigation/WorkerNavigator.js"
+    ],
+    "auth.validEmailRequired": [
+      "src/screens/auth/ForgotPasswordScreen.js",
+      "src/screens/auth/LoginScreen.js",
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.resetLinkSent": [
+      "src/screens/auth/ForgotPasswordScreen.js"
+    ],
+    "common.back": [
+      "src/screens/auth/ForgotPasswordScreen.js",
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/JobApplicationsScreen.js",
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/PostJobScreen.js",
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "auth.forgotPasswordTitle": [
+      "src/screens/auth/ForgotPasswordScreen.js"
+    ],
+    "auth.forgotPasswordBody": [
+      "src/screens/auth/ForgotPasswordScreen.js"
+    ],
+    "auth.emailAddress": [
+      "src/screens/auth/ForgotPasswordScreen.js",
+      "src/screens/auth/LoginScreen.js",
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.emailPlaceholder": [
+      "src/screens/auth/ForgotPasswordScreen.js",
+      "src/screens/auth/LoginScreen.js",
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.sendResetLink": [
+      "src/screens/auth/ForgotPasswordScreen.js"
+    ],
+    "auth.rememberPassword": [
+      "src/screens/auth/ForgotPasswordScreen.js"
+    ],
+    "auth.signIn": [
+      "src/screens/auth/ForgotPasswordScreen.js",
+      "src/screens/auth/LoginScreen.js",
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WelcomeScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.emailRequired": [
+      "src/screens/auth/LoginScreen.js",
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/VerifyEmailScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.fillAllFields": [
+      "src/screens/auth/LoginScreen.js",
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.loginSuccess": [
+      "src/screens/auth/LoginScreen.js"
+    ],
+    "auth.invalidCredentials": [
+      "src/screens/auth/LoginScreen.js"
+    ],
+    "auth.welcomeBack": [
+      "src/screens/auth/LoginScreen.js"
+    ],
+    "auth.signInTitle": [
+      "src/screens/auth/LoginScreen.js"
+    ],
+    "auth.noAccountYet": [
+      "src/screens/auth/LoginScreen.js"
+    ],
+    "auth.createOneFree": [
+      "src/screens/auth/LoginScreen.js"
+    ],
+    "auth.password": [
+      "src/screens/auth/LoginScreen.js",
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.passwordMinChars": [
+      "src/screens/auth/LoginScreen.js",
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.forgot": [
+      "src/screens/auth/LoginScreen.js"
+    ],
+    "auth.signingIn": [
+      "src/screens/auth/LoginScreen.js"
+    ],
+    "auth.passwordTooShort": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.passwordsDontMatch": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.mustAgreeTerms": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.registerSuccess": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.hirerAccount": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.findNextProz": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.firstName": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.firstNamePlaceholder": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.lastName": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.lastNamePlaceholder": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.phone": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "common.optional": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.phonePlaceholder": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.country": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.countryPlaceholder": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.city": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.cityPlaceholder": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.confirm": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.confirmPlaceholder": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.agreeToTerms": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.terms": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.and": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.privacyPolicy": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.creating": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.createHirerAccount": [
+      "src/screens/auth/RegisterScreen.js"
+    ],
+    "auth.alreadyHaveAccount": [
+      "src/screens/auth/RegisterScreen.js",
+      "src/screens/auth/WelcomeScreen.js",
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "auth.verificationResent": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.notVerifiedYet": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.verifyEmailTitle": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.checking": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.iVerified": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.resending": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.resend": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.signOut": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.logoutSuccess": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.verifyEmailBody": [
+      "src/screens/auth/VerifyEmailScreen.js"
+    ],
+    "auth.getStartedFree": [
+      "src/screens/auth/WelcomeScreen.js"
+    ],
+    "auth.joinTitle": [
+      "src/screens/auth/WelcomeScreen.js"
+    ],
+    "auth.joinSubtitle": [
+      "src/screens/auth/WelcomeScreen.js"
+    ],
+    "auth.imAHirer": [
+      "src/screens/auth/WelcomeScreen.js"
+    ],
+    "auth.hirerDescription": [
+      "src/screens/auth/WelcomeScreen.js"
+    ],
+    "auth.imAWorker": [
+      "src/screens/auth/WelcomeScreen.js"
+    ],
+    "auth.workerDescription": [
+      "src/screens/auth/WelcomeScreen.js"
+    ],
+    "auth.continueAs": [
+      "src/screens/auth/WelcomeScreen.js"
+    ],
+    "workerReg.createAccount": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "firstName": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "lastName": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "email": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "phone": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "country": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "city": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.min8": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "password": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "confirm": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.yourProfile": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.professionalTitle": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.professionalTitlePlaceholder": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "title": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.description": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.descriptionPlaceholder": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "description": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.yearsExperience": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "yearsExperience": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.serviceRadius": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "serviceRadius": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.yourCategories": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.categoriesHint": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.searchCategories": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.addCustomCategory": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.customCategoryPlaceholder": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.addCategory": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "common.cancel": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/DisputesScreen.js",
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "workerReg.setYourRates": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.ratesNote": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.currency": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.hourlyRate": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "hourlyRate": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.dailyRate": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "dailyRate": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.weeklyRate": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "weeklyRate": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.monthlyRate": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "monthlyRate": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.customRate": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.customRateAmount": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "customRate": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.customRateLabel": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.customRateLabelPlaceholder": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "customRateLabel": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.pricingNote": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.pricingNotePlaceholder": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "pricingNote": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.ratesPreview": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "currency": [
+      "src/screens/auth/WorkerRegisterScreen.js",
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerReg.maxCategories": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.addCategoryFailed": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.titleRequired": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.descriptionRequired": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.categoriesRequired": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.rateRequired": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.workerAccount": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.startEarning": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.startEarningSubtitle": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.continue": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.hiringSomeone": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "workerReg.registerAsHirer": [
+      "src/screens/auth/WorkerRegisterScreen.js"
+    ],
+    "toast.networkError": [
+      "src/screens/main/BookingDetailScreen.js",
+      "src/screens/main/BookingsScreen.js",
+      "src/screens/main/DashboardScreen.js",
+      "src/screens/main/JobsManagementScreen.js",
+      "src/screens/main/PostJobScreen.js",
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "bookings.notFound": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.cancelReasonRequired": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "../../api/client": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.backToBookings": [
+      "src/screens/main/BookingDetailScreen.js",
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.breakdown": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.youPay": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.payWithCard": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.bankTransfer": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.cryptoPay": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.accept": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.releaseConfirm": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.release": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.releasePayment": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.cancelBooking": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.cancelReason": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.cancelReasonPlaceholder": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.confirmCancel": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.keepBooking": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.videoCall": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "bookings.raiseDispute": [
+      "src/screens/main/BookingDetailScreen.js"
+    ],
+    "common.yes": [
+      "src/screens/main/BookingDetailScreen.js",
+      "src/screens/main/JobApplicationsScreen.js",
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "common.no": [
+      "src/screens/main/BookingDetailScreen.js",
+      "src/screens/main/JobApplicationsScreen.js",
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "bookings.myJobs": [
+      "src/screens/main/BookingsScreen.js"
+    ],
+    "bookings.newBooking": [
+      "src/screens/main/BookingsScreen.js"
+    ],
+    "bookings.all": [
+      "src/screens/main/BookingsScreen.js"
+    ],
+    "bookings.inProgress": [
+      "src/screens/main/BookingsScreen.js"
+    ],
+    "bookings.noBookings": [
+      "src/screens/main/BookingsScreen.js"
+    ],
+    "bookings.noBookingsHirer": [
+      "src/screens/main/BookingsScreen.js"
+    ],
+    "bookings.noBookingsWorker": [
+      "src/screens/main/BookingsScreen.js"
+    ],
+    "bookings.of": [
+      "src/screens/main/BookingsScreen.js"
+    ],
+    "bookings.noBookingsFiltered": [
+      "src/screens/main/BookingsScreen.js"
+    ],
+    "categories.addModal.nameRequired": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.addModal.alreadyExists": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.addModal.successMessage": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.addModal.title": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.addModal.subtitle": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.addModal.namePlaceholder": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.addModal.descriptionPlaceholder": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.addModal.cancel": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.addModal.submit": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.searchPlaceholder": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.addCategory": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.noResults": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.noResultsSub": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.worker": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.workers": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "categories.subtitle": [
+      "src/screens/main/BrowseByCategoriesScreen.js"
+    ],
+    "browse.new": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.jobs": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.available": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.unavailable": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.filters": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.searchPlaceholder": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.search": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.trending": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.results": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.nearby": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.topRated": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.newOnPlatform": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.searchResults": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.nearbyWorkers": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.noResults": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "browse.noResultsSub": [
+      "src/screens/main/BrowseWorkersScreen.js"
+    ],
+    "/campaign/status": [
+      "src/screens/main/CampaignDashboardScreen.js"
+    ],
+    "/campaign/referrals?limit=50": [
+      "src/screens/main/CampaignDashboardScreen.js"
+    ],
+    "/campaign/submissions?limit=30": [
+      "src/screens/main/CampaignDashboardScreen.js"
+    ],
+    "/campaign/my-tasks": [
+      "src/screens/main/CampaignDashboardScreen.js"
+    ],
+    "/campaign/submit": [
+      "src/screens/main/CampaignDashboardScreen.js"
+    ],
+    "/campaign/my-tasks/social": [
+      "src/screens/main/CampaignDashboardScreen.js"
+    ],
+    "/workers": [
+      "src/screens/main/CategoryDetailScreen.js"
+    ],
+    "messages.directMessage": [
+      "src/screens/main/ChatScreen.js"
+    ],
+    "messages.viewProfile": [
+      "src/screens/main/ChatScreen.js"
+    ],
+    "messages.noMessages": [
+      "src/screens/main/ChatScreen.js"
+    ],
+    "messages.noMessagesSub": [
+      "src/screens/main/ChatScreen.js"
+    ],
+    "messages.typeMessage": [
+      "src/screens/main/ChatScreen.js"
+    ],
+    "bookings.workerNotFound": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.workerRequired": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.titleRequired": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.descriptionRequired": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.addressRequired": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.dateRequired": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.categoryRequired": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.created": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.newJob": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.createSubtitle": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.worker": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.workerId": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.workerIdPlaceholder": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.loadingWorker": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.pricingDuration": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.engagementType": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.estimatedTotal": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.category": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.jobInformation": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.location": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.serviceAddress": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "createBooking.addressPlaceholder": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.schedule": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.agreedRate": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.summaryNote": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.createBookingBtn": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "bookings.disclaimer": [
+      "src/screens/main/CreateBookingScreen.js"
+    ],
+    "dashboard.overview": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.viewingIn": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.postAJob": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.totalBookings": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.activeJobs": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.completed": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.totalSpent": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.recentBookings": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.viewAll": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.noBookingsYet": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.recentWorkers": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "dashboard.noWorkersYet": [
+      "src/screens/main/DashboardScreen.js"
+    ],
+    "disputes.raiseTitle": [
+      "src/screens/main/DisputesScreen.js"
+    ],
+    "disputes.description": [
+      "src/screens/main/DisputesScreen.js"
+    ],
+    "disputes.support": [
+      "src/screens/main/DisputesScreen.js"
+    ],
+    "disputes.submitDispute": [
+      "src/screens/main/DisputesScreen.js"
+    ],
+    ",": [
+      "src/screens/main/HirerPublicProfileScreen.js"
+    ],
+    "jobs.apply.jobsDone": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.yrsExp": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.coverNote": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.applied": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.at": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.viewProfile": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.decline": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.accept": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.accepted": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.createBooking": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.notFound": [
+      "src/screens/main/JobApplicationsScreen.js",
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.apply.acceptConfirm": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.declineConfirm": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.acceptSuccess": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.declineSuccess": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.totalApps": [
+      "src/screens/main/JobApplicationsScreen.js",
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.apply.pending": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.noApps": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.noAppsText": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.pendingReview": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.apply.reviewed": [
+      "src/screens/main/JobApplicationsScreen.js"
+    ],
+    "jobs.markFilledConfirm": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.cancelConfirm": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.reopenConfirm": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.detail.budget": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.applicant": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.applicants": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.detail.jobDesc": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.detail.skills": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.detail.category": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.detail.scheduled": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.detail.duration": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.detail.location": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.detail.status": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "postJob.jobType": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.locationType": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.budgetType": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.jobDuration": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "jobs.detail.manageJob": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.detail.viewApps": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.markFilled": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.cancelJob": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.reopenJob": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.detail.postedBy": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "profile.totalHires": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "jobs.detail.quickFacts": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.jobUpdated": [
+      "src/screens/main/JobDetailScreen.js",
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.detail.postedAgo": [
+      "src/screens/main/JobDetailScreen.js"
+    ],
+    "jobs.viewDetails": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.applications.title": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.myJobs": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.postNewJob": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.open": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.filled": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.cancelled": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.total": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.allJobs": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.noJobs": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.postFirstJob": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "jobs.noJobsFiltered": [
+      "src/screens/main/JobsManagementScreen.js"
+    ],
+    "messages.searchPlaceholder": [
+      "src/screens/main/MessagesScreen.js"
+    ],
+    "messages.noConversations": [
+      "src/screens/main/MessagesScreen.js"
+    ],
+    "messages.noConversationsSub": [
+      "src/screens/main/MessagesScreen.js"
+    ],
+    "\\n": [
+      "src/screens/main/MyReportsScreen.js"
+    ],
+    "/reports": [
+      "src/screens/main/MyReportsScreen.js"
+    ],
+    "/reports/my": [
+      "src/screens/main/MyReportsScreen.js"
+    ],
+    "notifications.details": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.ip": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.device": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.deleteTitle": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.deleteMessage": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "common.delete": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.markedAll": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.clearTitle": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.clearMessage": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.clearAll": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.cleared": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.markAllRead": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.all": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.unread": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.empty": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.emptySub": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "notifications.unreadCount": [
+      "src/screens/main/NotificationsScreen.js"
+    ],
+    "postJob.maxSkills": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "T": [
+      "src/screens/main/PostJobScreen.js",
+      "src/screens/main/worker/WorkerCertificationsScreen.js",
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "postJob.titleRequired": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.categoryRequired": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.locationRequired": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.descriptionTooShort": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.startDateRequired": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.budgetRequired": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.durationCustomRequired": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.successMessage": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.hourlyRate": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.dailyRate": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.weeklyRate": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.monthlyRate": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.agreedAmount": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.fixedPrice": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.category": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.searchCategories": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.customOther": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.suggestCategory": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.categoryInputPlaceholder": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.jobTitle": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.jobTitlePlaceholder": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.yourTitleNote": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.locationAddress": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.locationAddressPlaceholder": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.description": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.descriptionPlaceholder": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.skills": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.optional": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.skillPlaceholder": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.startDate": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.tapToChooseDate": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.selectStartDate": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.done": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.describeDuration": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.describeDurationPlaceholder": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.paymentCurrency": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.payIn": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.cryptoNote": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.additionalNotes": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.notesPlaceholder": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.reviewTitle": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.title": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.category": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.jobType": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.location": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.address": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.startDate": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.payment": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.duration": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.skills": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.review.notes": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.posting": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.continue": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.postJob": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.categoryAlreadyExists": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.addedCategory": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.durationRequired": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.noMatch": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.minChars": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.skillsHint": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "postJob.howMany": [
+      "src/screens/main/PostJobScreen.js"
+    ],
+    "profile.never": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.justNow": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.userNotFound": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "settings.profile.permissionRequired": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "settings.profile.photoUpdated": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "settings.profile.photoFailed": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.loadingProfile": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.tabAbout": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.tabReviews": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.yourPublicProfile": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.worker": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.hirer": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.reviews": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.totalSpent": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.rating": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.perHour": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.jobsDone": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.radius": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.lastSeen": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.joined": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.noBio": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.addBio": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.specialities": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.emailVerified": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.idVerified": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.backgroundChecked": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.noReviews": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.review": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.book": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.minutesAgo": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.hoursAgo": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "profile.daysAgo": [
+      "src/screens/main/ProfileScreen.js"
+    ],
+    "/referral/dashboard": [
+      "src/screens/main/ReferralDashboardScreen.js"
+    ],
+    "/referral/leaderboard?limit=20": [
+      "src/screens/main/ReferralDashboardScreen.js"
+    ],
+    "/referral/withdraw": [
+      "src/screens/main/ReferralDashboardScreen.js"
+    ],
+    "reviews.submitted": [
+      "src/screens/main/ReviewsGivenScreen.js"
+    ],
+    "reviews.avgGiven": [
+      "src/screens/main/ReviewsGivenScreen.js"
+    ],
+    "reviews.worker": [
+      "src/screens/main/ReviewsGivenScreen.js",
+      "src/screens/main/ReviewsReceivedScreen.js"
+    ],
+    "reviews.hirer": [
+      "src/screens/main/ReviewsGivenScreen.js",
+      "src/screens/main/ReviewsReceivedScreen.js"
+    ],
+    "reviews.viewProfile": [
+      "src/screens/main/ReviewsGivenScreen.js"
+    ],
+    "reviews.feedbackEyebrow": [
+      "src/screens/main/ReviewsGivenScreen.js"
+    ],
+    "reviews.givenSubtitle": [
+      "src/screens/main/ReviewsGivenScreen.js"
+    ],
+    "reviews.seeReceived": [
+      "src/screens/main/ReviewsGivenScreen.js"
+    ],
+    "reviews.noReviewsYet": [
+      "src/screens/main/ReviewsGivenScreen.js",
+      "src/screens/main/ReviewsReceivedScreen.js"
+    ],
+    "reviews.noGivenSub": [
+      "src/screens/main/ReviewsGivenScreen.js"
+    ],
+    "reviews.reputationEyebrow": [
+      "src/screens/main/ReviewsReceivedScreen.js"
+    ],
+    "reviews.receivedSubtitle": [
+      "src/screens/main/ReviewsReceivedScreen.js"
+    ],
+    "reviews.seeGiven": [
+      "src/screens/main/ReviewsReceivedScreen.js"
+    ],
+    "reviews.noReceivedSub": [
+      "src/screens/main/ReviewsReceivedScreen.js"
+    ],
+    "reviews.reviewsCount": [
+      "src/screens/main/ReviewsReceivedScreen.js",
+      "src/screens/main/worker/WorkerReviewsScreen.js"
+    ],
+    "savedWorkers.available": [
+      "src/screens/main/SavedWorkersScreen.js"
+    ],
+    "savedWorkers.unavailable": [
+      "src/screens/main/SavedWorkersScreen.js"
+    ],
+    "savedWorkers.perHour": [
+      "src/screens/main/SavedWorkersScreen.js"
+    ],
+    "savedWorkers.viewProfile": [
+      "src/screens/main/SavedWorkersScreen.js"
+    ],
+    "savedWorkers.emptyTitle": [
+      "src/screens/main/SavedWorkersScreen.js"
+    ],
+    "savedWorkers.emptySub": [
+      "src/screens/main/SavedWorkersScreen.js"
+    ],
+    "savedWorkers.subtitle": [
+      "src/screens/main/SavedWorkersScreen.js"
+    ],
+    "savedWorkers.lastHiredFor": [
+      "src/screens/main/SavedWorkersScreen.js"
+    ],
+    "bio": [
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "state": [
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "address": [
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "gender": [
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "language": [
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "isAvailable": [
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "companyName": [
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "website": [
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "companySize": [
+      "src/screens/main/SettingsScreen.js"
+    ],
+    "workerProfile.about": [
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "workerProfile.weeklyAvailability": [
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "workerProfile.noPortfolio": [
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "workerProfile.noCerts": [
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "workerProfile.unavailable": [
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "workerProfile.available": [
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "workerProfile.pricesNegotiable": [
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "workerProfile.bookNow": [
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "toast.messagingComingSoon": [
+      "src/screens/main/WorkerPublicProfileScreen.js"
+    ],
+    "/jobs/worker/my-applications": [
+      "src/screens/main/worker/WorkerApplicationsScreen.js"
+    ],
+    ":": [
+      "src/screens/main/worker/WorkerAvailabilityScreen.js"
+    ],
+    "workerCat.primary": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.setPrimary": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.addFail": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.removeConfirmTitle": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.removeFail": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.primaryFail": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.title": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.addTitle": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.addSub": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.searchPlaceholder": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.popularLabel": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.cantFind": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.customPrompt": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.customPlaceholder": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.myCategories": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.noCategoriesTitle": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.noCategoriesSub": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.alreadyAdded": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.addSuccess": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.removeConfirm": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.removeSuccess": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.subtitle": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerCat.addNew": [
+      "src/screens/main/worker/WorkerCategoriesScreen.js"
+    ],
+    "workerDash.*": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.thisMonth": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.inEscrow": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.awaitingRelease": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.earningsTrend": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.fullReport": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.profileCompletion": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.qaProfile": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.qaEarnings": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.qaApplications": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.welcomeBack": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.available": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.unavailable": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.activeJobs": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.rating": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.newWorker": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.jobsDone": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.unreadMessages": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.unreadConversations": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.upcomingJobs": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.seeAll": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.noUpcomingJobs": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.recentBookings": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.viewAll": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.noBookings": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.recentReviews": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.noReviews": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.quickActions": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.lastMonth": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.pendingRequests": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.fromReviews": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerDash.responseRate": [
+      "src/screens/main/worker/WorkerDashboardScreen.js"
+    ],
+    "workerEarnings.allCurrencies": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "workerEarnings.loadFail": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "workerEarnings.totalEarned": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "workerEarnings.totalJobValue": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "workerEarnings.platformFees": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "workerEarnings.transactions": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "workerEarnings.from": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "workerEarnings.to": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "workerEarnings.noEarnings": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "workerEarnings.noEarningsSub": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "/payments/earnings": [
+      "src/screens/main/worker/WorkerEarningsScreen.js"
+    ],
+    "/jobs": [
+      "src/screens/main/worker/WorkerJobsScreen.js"
+    ],
+    "workerReviews.loadFail": [
+      "src/screens/main/worker/WorkerReviewsScreen.js"
+    ],
+    "workerReviews.subtitle": [
+      "src/screens/main/worker/WorkerReviewsScreen.js"
+    ],
+    "workerReviews.noReviews": [
+      "src/screens/main/worker/WorkerReviewsScreen.js"
+    ],
+    "workerReviews.noReviewsSub": [
+      "src/screens/main/worker/WorkerReviewsScreen.js"
+    ],
+    "/payments/banks?country=NG": [
+      "src/screens/main/worker/WorkerWithdrawalsScreen.js"
+    ],
+    "/payments/earnings?limit=1": [
+      "src/screens/main/worker/WorkerWithdrawalsScreen.js"
+    ],
+    "en-US": [
+      "src/screens/main/worker/WorkerWithdrawalsScreen.js"
+    ],
+    "/payments/verify-account": [
+      "src/screens/main/worker/WorkerWithdrawalsScreen.js"
+    ],
+    "/payments/withdrawals": [
+      "src/screens/main/worker/WorkerWithdrawalsScreen.js"
+    ],
+    "/auth/logout": [
+      "src/store/authStore.js"
+    ],
+    "/auth/login": [
+      "src/store/authStore.js"
+    ],
+    "/auth/forgot-password": [
+      "src/store/authStore.js"
+    ],
+    "/auth/reset-password": [
+      "src/store/authStore.js"
+    ],
+    "/auth/resend-verification": [
+      "src/store/authStore.js"
+    ]
+  }
+}

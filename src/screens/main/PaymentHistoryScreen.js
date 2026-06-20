@@ -19,10 +19,10 @@ import { useTranslation } from "react-i18next";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import AppText from "../../components/AppText";
-import Card from "../../components/Card";
-import TopBar from "../../components/TopBar";
 import ConfirmModal from "../../components/ConfirmModal";
+import CurrencyPicker from "../../components/CurrencyPicker";
 import { getHirerPayments, releasePayment } from "../../api/payments";
+import { useCurrency } from "../../contexts/CurrencyContext";
 
 // ── Currency symbol lookup ────────────────────────────────────────────────────
 const CURRENCY_SYMBOL = {
@@ -44,12 +44,19 @@ const CURRENCY_SYMBOL = {
   USDC: "◈",
   USDT: "₮",
 };
-const sym = (c) => CURRENCY_SYMBOL[c] ?? c ?? "";
 
-function fmtAmount(amount, currency) {
-  const n = Number(amount ?? 0);
-  const s = sym(currency);
-  return `${s}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function getCurrencySymbol(currencyCode) {
+  if (!currencyCode) return "DH"; // Fix: Return default symbol for undefined
+  return CURRENCY_SYMBOL[currencyCode] || currencyCode;
+}
+
+// Helper function to format amount with symbol only
+function formatWithSymbol(amount, currencyCode) {
+  const symbol = getCurrencySymbol(currencyCode);
+  return `${symbol}${Number(amount ?? 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function fmtDate(d) {
@@ -116,12 +123,20 @@ function ReceiptModal({ payment, onClose, c, modalBg }) {
     color: "#888",
   };
 
-  const platformFeePercent =
-    payment.amount > 0
-      ? ((payment.platformFee / payment.amount) * 100).toFixed(1)
-      : "0.0";
+  // Platform fee is 5% - worker gets 100%
+  const platformFeePercent = 5;
+  const workerPayout = payment.workerPayout ?? payment.amount * 0.95;
+  const platformFee = payment.platformFee ?? payment.amount * 0.05;
 
   const isCrypto = ["USDC", "USDT"].includes(payment.currency);
+
+  const formatAmount = (amount, currency) => {
+    const symbol = getCurrencySymbol(currency);
+    return `${symbol}${Number(amount ?? 0).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  };
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -318,47 +333,65 @@ function ReceiptModal({ payment, onClose, c, modalBg }) {
 
             {/* Breakdown */}
             <View style={[styles.breakdown, { borderColor: c.border }]}>
-              {[
-                {
-                  label: "Job total",
-                  value: fmtAmount(payment.amount, payment.currency),
-                },
-                {
-                  label: `Platform fee (${platformFeePercent}%)`,
-                  value: `− ${fmtAmount(payment.platformFee, payment.currency)}`,
-                  accent: true,
-                },
-                {
-                  label: "Worker payout",
-                  value: fmtAmount(payment.workerPayout, payment.currency),
-                },
-              ].map((row) => (
-                <View key={row.label} style={styles.breakdownRow}>
-                  <AppText variant="body" tone={row.accent ? "dim" : "default"}>
-                    {row.label}
-                  </AppText>
-                  <AppText
-                    variant="body"
-                    style={{ color: row.accent ? "#ef4444" : c.text }}
-                  >
-                    {row.value}
-                  </AppText>
-                </View>
-              ))}
+              <View style={styles.breakdownRow}>
+                <AppText
+                  variant="body"
+                  weight="semibold"
+                  style={{ color: "#22c55e" }}
+                >
+                  Worker's earnings (100%)
+                </AppText>
+                <AppText
+                  variant="body"
+                  weight="semibold"
+                  style={{ color: "#22c55e" }}
+                >
+                  {formatAmount(workerPayout, payment.currency)}
+                </AppText>
+              </View>
+              <View style={styles.breakdownRow}>
+                <AppText variant="body" tone="dim">
+                  Platform fee (5%)
+                </AppText>
+                <AppText variant="body" style={{ color: "#f97316" }}>
+                  + {formatAmount(platformFee, payment.currency)}
+                </AppText>
+              </View>
               <View
                 style={[styles.breakdownTotal, { borderTopColor: c.border }]}
               >
                 <AppText variant="body" weight="semibold">
-                  You paid
+                  Total you paid
                 </AppText>
                 <AppText
                   variant="display"
                   weight="displayBlack"
                   style={{ color: c.orange, fontSize: 26 }}
                 >
-                  {fmtAmount(payment.amount, payment.currency)}
+                  {formatAmount(payment.amount, payment.currency)}
                 </AppText>
               </View>
+            </View>
+
+            {/* Worker gets 100% note */}
+            <View
+              style={[
+                styles.workerNote,
+                {
+                  backgroundColor: "rgba(34,197,94,0.08)",
+                  borderColor: "rgba(34,197,94,0.2)",
+                },
+              ]}
+            >
+              <AppText style={{ fontSize: 16, marginRight: 8 }}>✅</AppText>
+              <AppText variant="small" tone="dim" style={{ flex: 1 }}>
+                Worker receives{" "}
+                <AppText weight="semibold" style={{ color: "#22c55e" }}>
+                  100%
+                </AppText>{" "}
+                of the job amount (
+                {formatAmount(workerPayout, payment.currency)})
+              </AppText>
             </View>
 
             {/* Currency badge */}
@@ -398,9 +431,13 @@ function ReceiptModal({ payment, onClose, c, modalBg }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Summary Card
+// Summary Card - Shows currency symbol only, changes with viewing currency
 // ─────────────────────────────────────────────────────────────────────────────
-function SummaryCard({ label, value, sub, accent, c }) {
+function SummaryCard({ label, value, sub, accent, c, viewingCurrency }) {
+  // Fix: Use a fallback currency if viewingCurrency is undefined
+  const safeCurrency = viewingCurrency || "DH";
+  const formattedValue = formatWithSymbol(value, safeCurrency);
+
   return (
     <View
       style={[
@@ -427,7 +464,7 @@ function SummaryCard({ label, value, sub, accent, c }) {
         numberOfLines={1}
         adjustsFontSizeToFit
       >
-        {value}
+        {formattedValue}
       </AppText>
       {sub && (
         <AppText variant="small" tone="dim">
@@ -439,7 +476,7 @@ function SummaryCard({ label, value, sub, accent, c }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Payment Card (list row)
+// Payment Card (list row) - Shows in original payment currency with symbol
 // ─────────────────────────────────────────────────────────────────────────────
 function PaymentCard({ payment, onReceipt, onRelease, releasing, c }) {
   const payMeta = STATUS_META[payment.status] ?? {
@@ -448,6 +485,14 @@ function PaymentCard({ payment, onReceipt, onRelease, releasing, c }) {
   };
   const bookingMeta = BOOKING_STATUS_META[payment.booking?.status] ?? null;
   const worker = payment.booking?.worker ?? {};
+
+  const formatAmount = (amount) => {
+    const symbol = getCurrencySymbol(payment.currency);
+    return `${symbol}${Number(amount ?? 0).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  };
 
   return (
     <View
@@ -553,14 +598,18 @@ function PaymentCard({ payment, onReceipt, onRelease, releasing, c }) {
         </AppText>
       </View>
 
-      {/* Amount row */}
+      {/* Amount row - Shows in original payment currency with symbol */}
       <View style={[styles.amountRow, { borderTopColor: c.border }]}>
         <View>
-          <AppText variant="title" weight="semibold">
-            {fmtAmount(payment.amount, payment.currency)}
+          <AppText variant="title" weight="semibold" style={styles.amountText}>
+            {formatAmount(payment.amount)}
           </AppText>
-          <AppText variant="small" tone="dim">
-            Worker gets {fmtAmount(payment.workerPayout, payment.currency)}
+          <AppText variant="small" style={{ color: "#22c55e" }}>
+            Worker gets <AppText weight="semibold">100%</AppText> (
+            {formatAmount(payment.workerPayout)})
+          </AppText>
+          <AppText variant="small" style={{ color: "#f97316", fontSize: 11 }}>
+            Platform fee: 5%
           </AppText>
         </View>
 
@@ -632,9 +681,10 @@ function Skeleton({ c }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PaymentHistoryScreen({ navigation }) {
   const { t } = useTranslation();
-  const { theme: th } = useTheme(); // same pattern as BookingDetailScreen
-  const c = th.colors; // c.bgCard, c.orange etc. all resolve correctly
+  const { theme: th } = useTheme();
+  const c = th.colors;
   const toast = useToast();
+  const { dashboardCurrency } = useCurrency();
 
   const [payments, setPayments] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -650,6 +700,22 @@ export default function PaymentHistoryScreen({ navigation }) {
   const [receipt, setReceipt] = useState(null);
   const [releasing, setReleasing] = useState(null);
   const [modal, setModal] = useState(null);
+  const [viewingCurrency, setViewingCurrency] = useState(
+    dashboardCurrency || "DH",
+  );
+
+  // ── Log viewingCurrency changes ──────────────────────────────────────────
+  useEffect(() => {
+    console.log("viewingCurrency changed to:", viewingCurrency);
+  }, [viewingCurrency]);
+
+  // ── Sync with dashboardCurrency changes ──────────────────────────────────
+  useEffect(() => {
+    if (dashboardCurrency) {
+      console.log("dashboardCurrency from context:", dashboardCurrency);
+      setViewingCurrency(dashboardCurrency);
+    }
+  }, [dashboardCurrency]);
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchPayments = useCallback(
@@ -730,7 +796,18 @@ export default function PaymentHistoryScreen({ navigation }) {
   const inEscrow = summary?.inEscrow ?? 0;
   const totalRefunds = summary?.totalRefunds ?? 0;
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Handle currency change ──────────────────────────────────────────────────
+  const handleCurrencyChange = (currencyCode) => {
+    console.log("Currency selected in PaymentHistory:", currencyCode);
+    console.log("Type of currencyCode:", typeof currencyCode);
+    if (currencyCode) {
+      setViewingCurrency(currencyCode);
+    } else {
+      // If currencyCode is null/undefined, try to get it from the picker differently
+      console.warn("CurrencyPicker returned null/undefined");
+    }
+  };
+
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
       <FlatList
@@ -745,25 +822,46 @@ export default function PaymentHistoryScreen({ navigation }) {
         }
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            {/* Summary cards */}
+            {/* Page Header with Currency Picker */}
+            <View style={styles.pageHeader}>
+              <View>
+                <AppText variant="title" weight="bold" style={styles.pageTitle}>
+                  Payment History
+                </AppText>
+                <AppText variant="small" tone="dim" style={styles.pageSubtitle}>
+                  All transactions and receipts
+                </AppText>
+              </View>
+              <View style={styles.headerRight}>
+                <CurrencyPicker
+                  label="Viewing in"
+                  onCurrencyChange={handleCurrencyChange}
+                />
+              </View>
+            </View>
+
+            {/* Summary cards - formatted with viewing currency */}
             <SummaryCard
               label="Total Spent"
-              value={fmtAmount(totalSpent, currencies[0] ?? "USD")}
+              value={totalSpent}
               sub={`${total} transaction${total !== 1 ? "s" : ""}`}
               accent
               c={c}
+              viewingCurrency={viewingCurrency}
             />
             <SummaryCard
               label="In Escrow"
-              value={fmtAmount(inEscrow, currencies[0] ?? "USD")}
+              value={inEscrow}
               sub="Awaiting release"
               c={c}
+              viewingCurrency={viewingCurrency}
             />
             <SummaryCard
               label="Refunded"
-              value={fmtAmount(totalRefunds, currencies[0] ?? "USD")}
+              value={totalRefunds}
               sub="Returned to you"
               c={c}
+              viewingCurrency={viewingCurrency}
             />
 
             {/* Search */}
@@ -841,7 +939,8 @@ export default function PaymentHistoryScreen({ navigation }) {
                 >
                   {["ALL", ...currencies].map((cur) => {
                     const active = currFilter === cur;
-                    const label = cur === "ALL" ? "All" : `${sym(cur)} ${cur}`;
+                    const symbol = getCurrencySymbol(cur);
+                    const label = cur === "ALL" ? "All" : `${symbol} ${cur}`;
                     return (
                       <Pressable
                         key={cur}
@@ -986,6 +1085,24 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, paddingBottom: 40 },
   listHeader: { gap: 12, marginBottom: 16 },
 
+  // Page Header
+  pageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  pageTitle: {
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  pageSubtitle: {
+    fontSize: 13,
+  },
+  headerRight: {
+    flexShrink: 0,
+  },
+
   // Summary cards
   summaryCard: {
     borderRadius: 14,
@@ -994,7 +1111,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   summaryLabel: { letterSpacing: 0.8, marginBottom: 2 },
-  summaryValue: { fontSize: 28, lineHeight: 34 },
+  summaryValue: {
+    fontSize: 28,
+    lineHeight: 34,
+  },
 
   // Search
   searchRow: {
@@ -1068,6 +1188,9 @@ const styles = StyleSheet.create({
     padding: 14,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  amountText: {
+    fontSize: 18,
   },
   actionsRow: { flexDirection: "row", gap: 8 },
   actionBtn: {
@@ -1209,6 +1332,15 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
     marginTop: 4,
+  },
+  workerNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 20,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
   },
   currencyBadgeRow: {
     flexDirection: "row",

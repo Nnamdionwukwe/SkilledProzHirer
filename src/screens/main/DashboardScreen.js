@@ -158,7 +158,7 @@ export default function DashboardScreen() {
                   variant="display"
                   weight="displayBlack"
                   style={{
-                    fontSize: 32,
+                    fontSize: 25,
                     lineHeight: 36,
                     letterSpacing: -0.5,
                   }}

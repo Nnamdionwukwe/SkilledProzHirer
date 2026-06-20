@@ -1,5 +1,5 @@
 // src/components/DrawerContent.js
-import React from "react";
+import React, { useMemo } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -12,131 +12,134 @@ import { useToast } from "../contexts/ToastContext";
 import { useAuthStore } from "../store/authStore";
 
 // ─── Nav groups (label keys reference t("nav.*")) ────────────────────────────
-const NAV_GROUPS = [
-  {
-    labelKey: "nav.main",
-    items: [
-      { name: "Dashboard", labelKey: "nav.dashboard", icon: "grid-outline" },
-      { name: "Bookings", labelKey: "nav.bookings", icon: "briefcase-outline" },
-      {
-        name: "PostJob",
-        labelKey: "Post Job",
-        icon: "add-circle-outline",
-      },
-      {
-        name: "JobsManagement",
-        labelKey: "nav.jobsManagement",
-        icon: "document-text-outline",
-      },
-      { name: "MyPosts", labelKey: "nav.myPosts", icon: "newspaper-outline" },
-      {
-        name: "PaymentHistory",
-        labelKey: "nav.paymentHistory",
-        icon: "card-outline",
-      },
-      {
-        name: "Disputes",
-        labelKey: "nav.disputes",
-        icon: "shield-half-outline",
-      },
-    ],
-  },
-  {
-    labelKey: "nav.workers",
-    items: [
-      {
-        name: "SavedWorkers",
-        labelKey: "nav.savedWorkers",
-        icon: "bookmark-outline",
-      },
-      {
-        name: "BrowseWorkers",
-        labelKey: "nav.browseWorkers",
-        icon: "search-outline",
-      },
-      {
-        name: "BrowseByCategories",
-        labelKey: "nav.browseByCategories",
-        icon: "construct-outline",
-      },
-      {
-        name: "Messages",
-        labelKey: "nav.messages",
-        icon: "chatbubbles-outline",
-      },
-    ],
-  },
-  {
-    labelKey: "nav.reviews",
-    items: [
-      {
-        name: "ReviewsReceived",
-        labelKey: "nav.reviewsReceived",
-        icon: "star-outline",
-      },
-      {
-        name: "ReviewsGiven",
-        labelKey: "nav.reviewsGiven",
-        icon: "pencil-outline",
-      },
-    ],
-  },
-  {
-    labelKey: "nav.community",
-    items: [
-      {
-        name: "CommunityFeed",
-        labelKey: "nav.communityFeed",
-        icon: "people-outline",
-      },
-    ],
-  },
-  {
-    labelKey: "nav.account",
-    items: [
-      {
-        name: "Notifications",
-        labelKey: "nav.notifications",
-        icon: "notifications-outline",
-      },
-      {
-        name: "Verification",
-        labelKey: "nav.verification",
-        icon: "shield-checkmark-outline",
-      },
-      {
-        name: "ReferralDashboard",
-        labelKey: "nav.referralDashboard",
-        icon: "share-outline",
-      },
-      {
-        name: "Campaign",
-        labelKey: "nav.Campaign",
-        icon: "ribbon-outline",
-      },
-      {
-        name: "MyReports",
-        labelKey: "nav.MyReports",
-        icon: "document-text-outline",
-      },
-    ],
-  },
-  {
-    labelKey: "nav.subscriptionsFeatures",
-    items: [
-      {
-        name: "Subscriptions",
-        labelKey: "nav.subscriptions",
-        icon: "diamond-outline",
-      },
-      {
-        name: "FeaturedBoost",
-        labelKey: "nav.boostListing",
-        icon: "rocket-outline",
-      },
-    ],
-  },
-];
+// Moved inside component to avoid hook violations
+function getNavGroups(t) {
+  return [
+    {
+      labelKey: "nav.main",
+      items: [
+        { name: "Dashboard", labelKey: "nav.dashboard", icon: "grid-outline" },
+        { name: "Bookings", labelKey: "nav.bookings", icon: "briefcase-outline" },
+        {
+          name: "PostJob",
+          labelKey: "Post Job",
+          icon: "add-circle-outline",
+        },
+        {
+          name: "JobsManagement",
+          labelKey: "nav.jobsManagement",
+          icon: "document-text-outline",
+        },
+        { name: "MyPosts", labelKey: "nav.myPosts", icon: "newspaper-outline" },
+        {
+          name: "PaymentHistory",
+          labelKey: "nav.paymentHistory",
+          icon: "card-outline",
+        },
+        {
+          name: "Disputes",
+          labelKey: "nav.disputes",
+          icon: "shield-half-outline",
+        },
+      ],
+    },
+    {
+      labelKey: "nav.workers",
+      items: [
+        {
+          name: "SavedWorkers",
+          labelKey: "nav.savedWorkers",
+          icon: "bookmark-outline",
+        },
+        {
+          name: "BrowseWorkers",
+          labelKey: "nav.browseWorkers",
+          icon: "search-outline",
+        },
+        {
+          name: "BrowseByCategories",
+          labelKey: "nav.browseByCategories",
+          icon: "construct-outline",
+        },
+        {
+          name: "Messages",
+          labelKey: "nav.messages",
+          icon: "chatbubbles-outline",
+        },
+      ],
+    },
+    {
+      labelKey: "nav.reviews",
+      items: [
+        {
+          name: "ReviewsReceived",
+          labelKey: "nav.reviewsReceived",
+          icon: "star-outline",
+        },
+        {
+          name: "ReviewsGiven",
+          labelKey: "nav.reviewsGiven",
+          icon: "pencil-outline",
+        },
+      ],
+    },
+    {
+      labelKey: "nav.community",
+      items: [
+        {
+          name: "CommunityFeed",
+          labelKey: "nav.communityFeed",
+          icon: "people-outline",
+        },
+      ],
+    },
+    {
+      labelKey: "nav.account",
+      items: [
+        {
+          name: "Notifications",
+          labelKey: "nav.notifications",
+          icon: "notifications-outline",
+        },
+        {
+          name: "Verification",
+          labelKey: "nav.verification",
+          icon: "shield-checkmark-outline",
+        },
+        {
+          name: "ReferralDashboard",
+          labelKey: "nav.referralDashboard",
+          icon: "share-outline",
+        },
+        {
+          name: "Campaign",
+          labelKey: "nav.Campaign",
+          icon: "ribbon-outline",
+        },
+        {
+          name: "MyReports",
+          labelKey: "nav.MyReports",
+          icon: "document-text-outline",
+        },
+      ],
+    },
+    {
+      labelKey: "nav.subscriptionsFeatures",
+      items: [
+        {
+          name: "Subscriptions",
+          labelKey: "nav.subscriptions",
+          icon: "diamond-outline",
+        },
+        {
+          name: "FeaturedBoost",
+          labelKey: "nav.boostListing",
+          icon: "rocket-outline",
+        },
+      ],
+    },
+  ];
+}
 
 export default function DrawerContent({ state }) {
   const navigation = useNavigation();
@@ -146,6 +149,9 @@ export default function DrawerContent({ state }) {
   const { user, logout } = useAuthStore();
   const c = th.colors;
   const activeRouteName = state?.routes?.[state.index]?.name;
+
+  // Get nav groups with t() inside component
+  const NAV_GROUPS = useMemo(() => getNavGroups(t), [t]);
 
   const goTo = (name) => navigation.navigate(name);
 

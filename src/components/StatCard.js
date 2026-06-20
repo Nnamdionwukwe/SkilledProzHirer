@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
   value: {
-    fontSize: 34,
+    fontSize: 25,
     lineHeight: 40,
     letterSpacing: -1,
     marginBottom: 2,
