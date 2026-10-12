@@ -3,19 +3,27 @@ import axios from "axios";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 
+// Update to use new DigitalOcean backend
 const API_URL =
-  Constants.expoConfig?.extra?.API_URL ||
-  "https://skilledpro-backend-production.up.railway.app/api";
+  Constants.expoConfig?.extra?.API_URL || "https://api.skilledproz.com/api";
 
 const ACCESS_KEY = "skp_access";
 const REFRESH_KEY = "skp_refresh";
 
 export const tokenStore = {
   async getAccess() {
-    try { return await SecureStore.getItemAsync(ACCESS_KEY); } catch { return null; }
+    try {
+      return await SecureStore.getItemAsync(ACCESS_KEY);
+    } catch {
+      return null;
+    }
   },
   async getRefresh() {
-    try { return await SecureStore.getItemAsync(REFRESH_KEY); } catch { return null; }
+    try {
+      return await SecureStore.getItemAsync(REFRESH_KEY);
+    } catch {
+      return null;
+    }
   },
   async setTokens(access, refresh) {
     try {
@@ -34,8 +42,38 @@ export const tokenStore = {
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  },
 });
+
+// Logging interceptor for debugging (optional - remove in production)
+if (__DEV__) {
+  api.interceptors.request.use(
+    (config) => {
+      console.log(
+        `🚀 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`,
+      );
+      if (config.data) console.log("📤 Request Data:", config.data);
+      return config;
+    },
+    (error) => Promise.reject(error),
+  );
+
+  api.interceptors.response.use(
+    (response) => {
+      console.log(`✅ ${response.status} ${response.config.url}`);
+      return response;
+    },
+    (error) => {
+      console.error(
+        `❌ ${error.response?.status || "Network Error"} ${error.config?.url}`,
+      );
+      return Promise.reject(error);
+    },
+  );
+}
 
 // Attach access token
 api.interceptors.request.use(async (config) => {
@@ -95,6 +133,7 @@ api.interceptors.response.use(
       } catch (err) {
         flush(err, null);
         await tokenStore.clear();
+        // Optionally trigger logout event
         return Promise.reject(err);
       } finally {
         isRefreshing = false;

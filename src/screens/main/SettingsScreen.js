@@ -44,38 +44,7 @@ import { CURRENCIES } from "../../constants/currencies";
 import { LANGUAGES } from "../../constants/languages";
 import WithdrawalPinSection from "./worker/WithdrawalPinSection";
 
-// ─── Tab definitions ──────────────────────────────────────────────────────────
-const TABS_HIRER = [
-  { id: "profile", label: "Profile", icon: "person-outline" },
-  { id: "company", label: "Company", icon: "business-outline" },
-  { id: "currencies", label: "Currencies", icon: "cash-outline" },
-  { id: "appearance", label: "Appearance", icon: "color-palette-outline" },
-  {
-    id: "notifications",
-    label: "Notifications",
-    icon: "notifications-outline",
-  },
-  { id: "privacy", label: "Privacy", icon: "lock-closed-outline" },
-  { id: "security", label: "Security", icon: "shield-outline" },
-  { id: "activity", label: "Activity", icon: "bar-chart-outline" },
-];
-
-const TABS_WORKER = [
-  { id: "profile", label: "Profile", icon: "person-outline" },
-  { id: "workProfile", label: "Work Profile", icon: "construct-outline" },
-  { id: "pricing", label: "Pricing", icon: "cash-outline" },
-  { id: "currencies", label: "Currencies", icon: "swap-horizontal-outline" },
-  { id: "appearance", label: "Appearance", icon: "color-palette-outline" },
-  {
-    id: "notifications",
-    label: "Notifications",
-    icon: "notifications-outline",
-  },
-  { id: "privacy", label: "Privacy", icon: "lock-closed-outline" },
-  { id: "security", label: "Security", icon: "shield-outline" },
-  { id: "activity", label: "Activity", icon: "bar-chart-outline" },
-];
-
+// ─── Constants (no t() calls here - they're used inside components) ──────────
 const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say"];
 const THEMES = [
   { value: "light", label: "Light", emoji: "☀️" },
@@ -100,7 +69,81 @@ const ALL_LANGS = LANGUAGES.map
     }))
   : [];
 
-// ─── Reusable Modal selector (replaces all inline dropdowns) ──────────────────
+// ─── Get tabs with t() inside component ──────────────────────────────────────
+function getTabs(t, isWorker) {
+  // Define base tabs that are common to both roles
+  const commonTabs = [
+    {
+      id: "currencies",
+      label: t("settings.tabs.currencies"),
+      icon: "cash-outline",
+    },
+    {
+      id: "appearance",
+      label: t("settings.tabs.appearance"),
+      icon: "color-palette-outline",
+    },
+    {
+      id: "notifications",
+      label: t("settings.tabs.notifications"),
+      icon: "notifications-outline",
+    },
+    {
+      id: "privacy",
+      label: t("settings.tabs.privacy"),
+      icon: "lock-closed-outline",
+    },
+    {
+      id: "security",
+      label: t("settings.tabs.security"),
+      icon: "shield-outline",
+    },
+    {
+      id: "activity",
+      label: t("settings.tabs.activity"),
+      icon: "bar-chart-outline",
+    },
+  ];
+
+  if (isWorker) {
+    // Worker tabs - includes workProfile and pricing instead of company
+    return [
+      {
+        id: "profile",
+        label: t("settings.tabs.profile"),
+        icon: "person-outline",
+      },
+      {
+        id: "workProfile",
+        label: t("settings.tabs.workProfile"),
+        icon: "construct-outline",
+      },
+      {
+        id: "pricing",
+        label: t("settings.tabs.pricing"),
+        icon: "cash-outline",
+      },
+      ...commonTabs,
+    ];
+  }
+
+  // Hirer tabs - includes company instead of workProfile and pricing
+  return [
+    {
+      id: "profile",
+      label: t("settings.tabs.profile"),
+      icon: "person-outline",
+    },
+    {
+      id: "company",
+      label: t("settings.tabs.company"),
+      icon: "business-outline",
+    },
+    ...commonTabs,
+  ];
+}
+
+// ─── Reusable Modal selector ──────────────────────────────────────────────────
 function SelectModal({
   visible,
   title,
@@ -344,6 +387,7 @@ function RateInput({ label, suffix, value, onChange, c }) {
 
 // ─── SECTION: Profile ─────────────────────────────────────────────────────────
 function ProfileSection({ user, reload, c, modalBg, toast }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({
     firstName: user.firstName ?? "",
     lastName: user.lastName ?? "",
@@ -367,10 +411,10 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
     setSaving(true);
     try {
       await settingsApi.updateProfile(form);
-      toast.success("Profile saved");
+      toast.success(t("settings.profile.saved"));
       reload();
     } catch {
-      toast.error("Failed to save profile");
+      toast.error(t("settings.profile.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -379,7 +423,7 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
   const pickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      toast.error("Permission required");
+      toast.error(t("settings.profile.permissionRequired"));
       return;
     }
     const r = await ImagePicker.launchImageLibraryAsync({
@@ -400,10 +444,10 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
         await client.post("/settings/avatar", fd, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-        toast.success("Avatar updated");
+        toast.success(t("settings.profile.avatarUpdated"));
         reload();
       } catch {
-        toast.error("Failed to upload avatar");
+        toast.error(t("settings.profile.avatarFailed"));
       }
     }
   };
@@ -417,8 +461,8 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
     <View>
       <SectionHeader
         icon="👤"
-        title="Profile"
-        sub="Personal details and contact info"
+        title={t("settings.profile.title")}
+        sub={t("settings.profile.subtitle")}
         c={c}
       />
 
@@ -456,50 +500,53 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
             weight="semibold"
             style={{ color: c.orange }}
           >
-            Change Photo
+            {t("settings.profile.changePhoto")}
           </AppText>
         </Pressable>
         <AppText variant="small" tone="dim" style={{ marginTop: 6 }}>
-          JPG, PNG or WebP · max 5MB
+          {t("settings.profile.photoHint")}
         </AppText>
       </View>
 
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="FIRST NAME" c={c} />
+          <FieldLabel label={t("settings.profile.firstName")} c={c} />
           <FieldInput
             value={form.firstName}
             onChangeText={set("firstName")}
-            placeholder="John"
+            placeholder={t("settings.profile.firstNamePlaceholder") || "John"}
             c={c}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="LAST NAME" c={c} />
+          <FieldLabel label={t("settings.profile.lastName")} c={c} />
           <FieldInput
             value={form.lastName}
             onChangeText={set("lastName")}
-            placeholder="Doe"
+            placeholder={t("settings.profile.lastNamePlaceholder") || "Doe"}
             c={c}
           />
         </View>
       </View>
 
-      <FieldLabel label="PHONE" c={c} />
+      <FieldLabel label={t("settings.profile.phone")} c={c} />
       <FieldInput
         value={form.phone}
         onChangeText={set("phone")}
-        placeholder="+234..."
+        placeholder={t("settings.profile.phonePlaceholder") || "+234..."}
         keyboardType="phone-pad"
         c={c}
       />
       <View style={{ marginBottom: 16 }} />
 
-      <FieldLabel label="BIO" c={c} />
+      <FieldLabel label={t("settings.profile.bio")} c={c} />
       <FieldInput
         value={form.bio}
         onChangeText={set("bio")}
-        placeholder="Tell hirers about yourself..."
+        placeholder={
+          t("settings.profile.bioPlaceholder") ||
+          "Tell hirers about yourself..."
+        }
         multiline
         c={c}
       />
@@ -507,20 +554,20 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
 
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="COUNTRY" c={c} />
+          <FieldLabel label={t("settings.profile.country")} c={c} />
           <FieldInput
             value={form.country}
             onChangeText={set("country")}
-            placeholder="Nigeria"
+            placeholder={t("settings.profile.countryPlaceholder") || "Nigeria"}
             c={c}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="STATE" c={c} />
+          <FieldLabel label={t("settings.profile.state")} c={c} />
           <FieldInput
             value={form.state}
             onChangeText={set("state")}
-            placeholder="Lagos"
+            placeholder={t("settings.profile.statePlaceholder") || "Lagos"}
             c={c}
           />
         </View>
@@ -528,63 +575,67 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
 
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="CITY" c={c} />
+          <FieldLabel label={t("settings.profile.city")} c={c} />
           <FieldInput
             value={form.city}
             onChangeText={set("city")}
-            placeholder="Ikeja"
+            placeholder={t("settings.profile.cityPlaceholder") || "Ikeja"}
             c={c}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="ADDRESS" c={c} />
+          <FieldLabel label={t("settings.profile.address")} c={c} />
           <FieldInput
             value={form.address}
             onChangeText={set("address")}
-            placeholder="123 Main St"
+            placeholder={
+              t("settings.profile.addressPlaceholder") || "123 Main St"
+            }
             c={c}
           />
         </View>
       </View>
 
       <View style={s.row2}>
-        {/* Currency — Modal picker */}
         <View style={{ flex: 1 }}>
           <SelectField
-            label="CURRENCY"
+            label={t("settings.profile.currency")}
             value={form.currency}
             displayLabel={currLabel}
             onPress={() => setShowCurrency(true)}
             c={c}
           />
         </View>
-        {/* Gender — Modal picker */}
         <View style={{ flex: 1 }}>
           <SelectField
-            label="GENDER"
+            label={t("settings.profile.gender")}
             value={form.gender}
-            displayLabel={form.gender || "Select..."}
+            displayLabel={form.gender || t("common.select")}
             onPress={() => setShowGender(true)}
             c={c}
           />
         </View>
       </View>
 
-      {/* Language — Modal picker */}
       <SelectField
-        label="LANGUAGE"
+        label={t("settings.profile.language")}
         value={form.language}
         displayLabel={langLabel}
         onPress={() => setShowLanguage(true)}
         c={c}
       />
 
-      <SaveBtn label="Save Profile" onPress={save} loading={saving} c={c} />
+      <SaveBtn
+        label={t("settings.profile.save")}
+        onPress={save}
+        loading={saving}
+        c={c}
+      />
 
       {/* Modals */}
       <SelectModal
         visible={showCurrency}
-        title="Select Currency"
+        title={t("settings.select.currency")}
         options={ALL_CURR}
         selected={form.currency}
         onSelect={set("currency")}
@@ -594,8 +645,11 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
       />
       <SelectModal
         visible={showGender}
-        title="Select Gender"
-        options={GENDERS.map((g) => ({ value: g, label: g }))}
+        title={t("settings.select.gender")}
+        options={GENDERS.map((g) => ({
+          value: g,
+          label: t(`settings.gender.${g.toLowerCase()}`) || g,
+        }))}
         selected={form.gender}
         onSelect={set("gender")}
         onClose={() => setShowGender(false)}
@@ -604,7 +658,7 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
       />
       <SelectModal
         visible={showLanguage}
-        title="Select Language"
+        title={t("settings.select.language")}
         options={ALL_LANGS}
         selected={form.language}
         onSelect={set("language")}
@@ -618,6 +672,7 @@ function ProfileSection({ user, reload, c, modalBg, toast }) {
 
 // ─── SECTION: Work Profile (WORKER) ──────────────────────────────────────────
 function WorkProfileSection({ workerProfile, reload, c, toast }) {
+  const { t } = useTranslation();
   const wp = workerProfile ?? {};
   const [form, setForm] = useState({
     title: wp.title ?? "",
@@ -631,7 +686,7 @@ function WorkProfileSection({ workerProfile, reload, c, toast }) {
 
   const save = async () => {
     if (!form.title.trim()) {
-      toast.error("Professional title is required");
+      toast.error(t("settings.workProfile.titleRequired"));
       return;
     }
     setSaving(true);
@@ -643,10 +698,10 @@ function WorkProfileSection({ workerProfile, reload, c, toast }) {
         serviceRadius: parseInt(form.serviceRadius) || 25,
         isAvailable: form.isAvailable,
       });
-      toast.success("Work profile saved");
+      toast.success(t("settings.workProfile.saved"));
       reload();
     } catch {
-      toast.error("Failed to save work profile");
+      toast.error(t("settings.workProfile.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -656,25 +711,31 @@ function WorkProfileSection({ workerProfile, reload, c, toast }) {
     <View>
       <SectionHeader
         icon="👷"
-        title="Work Profile"
-        sub="Professional details hirers see on your profile"
+        title={t("settings.workProfile.title")}
+        sub={t("settings.workProfile.subtitle")}
         c={c}
       />
 
-      <FieldLabel label="PROFESSIONAL TITLE" c={c} />
+      <FieldLabel label={t("settings.workProfile.titleLabel")} c={c} />
       <FieldInput
         value={form.title}
         onChangeText={set("title")}
-        placeholder="e.g. Certified Electrician"
+        placeholder={
+          t("settings.workProfile.titlePlaceholder") ||
+          "e.g. Certified Electrician"
+        }
         c={c}
       />
       <View style={{ marginBottom: 16 }} />
 
-      <FieldLabel label="DESCRIPTION" c={c} />
+      <FieldLabel label={t("settings.workProfile.description")} c={c} />
       <FieldInput
         value={form.description}
         onChangeText={set("description")}
-        placeholder="Describe your skills, experience, specializations..."
+        placeholder={
+          t("settings.workProfile.descriptionPlaceholder") ||
+          "Describe your skills, experience, specializations..."
+        }
         multiline
         c={c}
       />
@@ -682,21 +743,21 @@ function WorkProfileSection({ workerProfile, reload, c, toast }) {
 
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="YEARS OF EXPERIENCE" c={c} />
+          <FieldLabel label={t("settings.workProfile.yearsExperience")} c={c} />
           <FieldInput
             value={form.yearsExperience}
             onChangeText={set("yearsExperience")}
-            placeholder="0"
+            placeholder={t("settings.workProfile.yearsPlaceholder") || "0"}
             keyboardType="number-pad"
             c={c}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="SERVICE RADIUS (KM)" c={c} />
+          <FieldLabel label={t("settings.workProfile.serviceRadius")} c={c} />
           <FieldInput
             value={form.serviceRadius}
             onChangeText={set("serviceRadius")}
-            placeholder="25"
+            placeholder={t("settings.workProfile.radiusPlaceholder") || "25"}
             keyboardType="number-pad"
             c={c}
           />
@@ -705,8 +766,8 @@ function WorkProfileSection({ workerProfile, reload, c, toast }) {
 
       <View style={{ marginBottom: 8 }} />
       <ToggleRow
-        label="Available for Bookings"
-        sub="Turn off to pause new booking requests"
+        label={t("settings.workProfile.availableLabel")}
+        sub={t("settings.workProfile.availableSub")}
         value={form.isAvailable}
         onChange={set("isAvailable")}
         c={c}
@@ -714,7 +775,7 @@ function WorkProfileSection({ workerProfile, reload, c, toast }) {
 
       <View style={{ marginTop: 20 }} />
       <SaveBtn
-        label="Save Work Profile"
+        label={t("settings.workProfile.save")}
         onPress={save}
         loading={saving}
         c={c}
@@ -725,6 +786,7 @@ function WorkProfileSection({ workerProfile, reload, c, toast }) {
 
 // ─── SECTION: Pricing (WORKER) ────────────────────────────────────────────────
 function PricingSection({ workerProfile, reload, c, modalBg, toast }) {
+  const { t } = useTranslation();
   const wp = workerProfile ?? {};
   const [form, setForm] = useState({
     currency: wp.currency ?? "USD",
@@ -753,10 +815,10 @@ function PricingSection({ workerProfile, reload, c, modalBg, toast }) {
         customRateLabel: form.customRateLabel.trim() || null,
         pricingNote: form.pricingNote.trim() || null,
       });
-      toast.success("Pricing saved");
+      toast.success(t("settings.pricing.saved"));
       reload();
     } catch {
-      toast.error("Failed to save pricing");
+      toast.error(t("settings.pricing.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -769,36 +831,33 @@ function PricingSection({ workerProfile, reload, c, modalBg, toast }) {
     <View>
       <SectionHeader
         icon="💰"
-        title="Pricing"
-        sub="Set your rates for different engagement types"
+        title={t("settings.pricing.title")}
+        sub={t("settings.pricing.subtitle")}
         c={c}
       />
 
       <AppText variant="small" tone="dim" style={{ marginBottom: 16 }}>
-        Set rates for each duration type. Leave blank to hide that option from
-        your profile.
+        {t("settings.pricing.hint")}
       </AppText>
 
-      {/* Pricing currency */}
       <SelectField
-        label="PRICING CURRENCY"
+        label={t("settings.pricing.currency")}
         value={form.currency}
         displayLabel={currLabel}
         onPress={() => setShowCurrency(true)}
         c={c}
       />
 
-      {/* Rate grid */}
       <View style={s.row2}>
         <RateInput
-          label="⏱ HOURLY RATE"
+          label={t("settings.pricing.hourly")}
           suffix="/hr"
           value={form.hourlyRate}
           onChange={set("hourlyRate")}
           c={c}
         />
         <RateInput
-          label="📅 DAILY RATE"
+          label={t("settings.pricing.daily")}
           suffix="/day"
           value={form.dailyRate}
           onChange={set("dailyRate")}
@@ -808,14 +867,14 @@ function PricingSection({ workerProfile, reload, c, modalBg, toast }) {
       <View style={{ marginBottom: 12 }} />
       <View style={s.row2}>
         <RateInput
-          label="📆 WEEKLY RATE"
+          label={t("settings.pricing.weekly")}
           suffix="/wk"
           value={form.weeklyRate}
           onChange={set("weeklyRate")}
           c={c}
         />
         <RateInput
-          label="🗓 MONTHLY RATE"
+          label={t("settings.pricing.monthly")}
           suffix="/mo"
           value={form.monthlyRate}
           onChange={set("monthlyRate")}
@@ -823,54 +882,63 @@ function PricingSection({ workerProfile, reload, c, modalBg, toast }) {
         />
       </View>
 
-      {/* Custom rate divider */}
       <View style={[s.divider, { borderTopColor: c.border }]}>
         <AppText
           variant="small"
           weight="semibold"
           style={{ color: c.textMuted, letterSpacing: 0.8, fontSize: 10 }}
         >
-          CUSTOM RATE
+          {t("settings.pricing.custom")}
         </AppText>
       </View>
 
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="CUSTOM RATE AMOUNT" c={c} />
+          <FieldLabel label={t("settings.pricing.customAmount")} c={c} />
           <FieldInput
             value={form.customRate}
             onChangeText={set("customRate")}
-            placeholder="0.00"
+            placeholder={t("settings.pricing.amountPlaceholder") || "0.00"}
             keyboardType="decimal-pad"
             c={c}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="CUSTOM LABEL" c={c} />
+          <FieldLabel label={t("settings.pricing.customLabel")} c={c} />
           <FieldInput
             value={form.customRateLabel}
             onChangeText={set("customRateLabel")}
-            placeholder="e.g. per project"
+            placeholder={
+              t("settings.pricing.customLabelPlaceholder") || "e.g. per project"
+            }
             c={c}
           />
         </View>
       </View>
 
-      <FieldLabel label="PRICING NOTES (OPTIONAL)" c={c} />
+      <FieldLabel label={t("settings.pricing.notes")} c={c} />
       <FieldInput
         value={form.pricingNote}
         onChangeText={set("pricingNote")}
-        placeholder="Discounts, terms, travel fees..."
+        placeholder={
+          t("settings.pricing.notesPlaceholder") ||
+          "Discounts, terms, travel fees..."
+        }
         multiline
         c={c}
       />
       <View style={{ marginBottom: 16 }} />
 
-      <SaveBtn label="Save Pricing" onPress={save} loading={saving} c={c} />
+      <SaveBtn
+        label={t("settings.pricing.save")}
+        onPress={save}
+        loading={saving}
+        c={c}
+      />
 
       <SelectModal
         visible={showCurrency}
-        title="Select Pricing Currency"
+        title={t("settings.select.pricingCurrency")}
         options={ALL_CURR}
         selected={form.currency}
         onSelect={set("currency")}
@@ -884,6 +952,7 @@ function PricingSection({ workerProfile, reload, c, modalBg, toast }) {
 
 // ─── SECTION: Company (HIRER) ─────────────────────────────────────────────────
 function CompanySection({ hirerProfile, reload, c, modalBg, toast }) {
+  const { t } = useTranslation();
   const hp = hirerProfile ?? {};
   const [form, setForm] = useState({
     companyName: hp.companyName ?? "",
@@ -898,10 +967,10 @@ function CompanySection({ hirerProfile, reload, c, modalBg, toast }) {
     setSaving(true);
     try {
       await settingsApi.updateHirerProfile(form);
-      toast.success("Company profile saved");
+      toast.success(t("settings.company.saved"));
       reload();
     } catch {
-      toast.error("Failed to save company profile");
+      toast.error(t("settings.company.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -911,43 +980,50 @@ function CompanySection({ hirerProfile, reload, c, modalBg, toast }) {
     <View>
       <SectionHeader
         icon="🏢"
-        title="Company"
-        sub="Business details shown on your hirer profile"
+        title={t("settings.company.title")}
+        sub={t("settings.company.subtitle")}
         c={c}
       />
 
-      <FieldLabel label="COMPANY NAME" c={c} />
+      <FieldLabel label={t("settings.company.name")} c={c} />
       <FieldInput
         value={form.companyName}
         onChangeText={set("companyName")}
-        placeholder="Acme Ltd"
+        placeholder={t("settings.company.namePlaceholder") || "Acme Ltd"}
         c={c}
       />
       <View style={{ marginBottom: 16 }} />
 
       <SelectField
-        label="COMPANY SIZE"
+        label={t("settings.company.size")}
         value={form.companySize}
-        displayLabel={form.companySize || "Select size..."}
+        displayLabel={form.companySize || t("common.select")}
         onPress={() => setShowSize(true)}
         c={c}
       />
 
-      <FieldLabel label="WEBSITE" c={c} />
+      <FieldLabel label={t("settings.company.website")} c={c} />
       <FieldInput
         value={form.website}
         onChangeText={set("website")}
-        placeholder="https://yourcompany.com"
+        placeholder={
+          t("settings.company.websitePlaceholder") || "https://yourcompany.com"
+        }
         keyboardType="url"
         c={c}
       />
       <View style={{ marginBottom: 16 }} />
 
-      <SaveBtn label="Save Company" onPress={save} loading={saving} c={c} />
+      <SaveBtn
+        label={t("settings.company.save")}
+        onPress={save}
+        loading={saving}
+        c={c}
+      />
 
       <SelectModal
         visible={showSize}
-        title="Company Size"
+        title={t("settings.select.companySize")}
         options={CO_SIZES.map((s) => ({ value: s, label: s + " employees" }))}
         selected={form.companySize}
         onSelect={set("companySize")}
@@ -961,6 +1037,7 @@ function CompanySection({ hirerProfile, reload, c, modalBg, toast }) {
 
 // ─── SECTION: Currencies ──────────────────────────────────────────────────────
 function CurrenciesSection({ user, reload, c, modalBg, toast }) {
+  const { t } = useTranslation();
   const [dashCurr, setDashCurr] = useState(user.dashboardCurrency ?? "USD");
   const [payCurr, setPayCurr] = useState(user.paymentCurrency ?? "USD");
   const [saving, setSaving] = useState(false);
@@ -974,10 +1051,10 @@ function CurrenciesSection({ user, reload, c, modalBg, toast }) {
         dashboardCurrency: dashCurr,
         paymentCurrency: payCurr,
       });
-      toast.success("Currency preferences saved");
+      toast.success(t("settings.currencies.saved"));
       reload();
     } catch {
-      toast.error("Failed to save currencies");
+      toast.error(t("settings.currencies.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -991,28 +1068,33 @@ function CurrenciesSection({ user, reload, c, modalBg, toast }) {
     <View>
       <SectionHeader
         icon="💱"
-        title="Currencies"
-        sub="How amounts are displayed and processed"
+        title={t("settings.currencies.title")}
+        sub={t("settings.currencies.subtitle")}
         c={c}
       />
       <SelectField
-        label="DASHBOARD CURRENCY"
+        label={t("settings.currencies.dashboard")}
         value={dashCurr}
         displayLabel={dashLabel}
         onPress={() => setShowDash(true)}
         c={c}
       />
       <SelectField
-        label="PAYMENT CURRENCY"
+        label={t("settings.currencies.payment")}
         value={payCurr}
         displayLabel={payLabel}
         onPress={() => setShowPay(true)}
         c={c}
       />
-      <SaveBtn label="Save Currencies" onPress={save} loading={saving} c={c} />
+      <SaveBtn
+        label={t("settings.currencies.save")}
+        onPress={save}
+        loading={saving}
+        c={c}
+      />
       <SelectModal
         visible={showDash}
-        title="Dashboard Currency"
+        title={t("settings.select.dashboardCurrency")}
         options={ALL_CURR}
         selected={dashCurr}
         onSelect={setDashCurr}
@@ -1022,7 +1104,7 @@ function CurrenciesSection({ user, reload, c, modalBg, toast }) {
       />
       <SelectModal
         visible={showPay}
-        title="Payment Currency"
+        title={t("settings.select.paymentCurrency")}
         options={ALL_CURR}
         selected={payCurr}
         onSelect={setPayCurr}
@@ -1036,43 +1118,47 @@ function CurrenciesSection({ user, reload, c, modalBg, toast }) {
 
 // ─── SECTION: Appearance ──────────────────────────────────────────────────────
 function AppearanceSection({ user, reload, c, modalBg, toast }) {
-  const { mode, setMode } = useTheme(); // immediate theme apply
-  const { i18n } = useTranslation(); // current active language
+  const { t } = useTranslation();
+  const { mode, setMode } = useTheme();
+  const { i18n } = useTranslation();
   const [theme, setThemeState] = useState(mode ?? user.theme ?? "dark");
   const [langSearch, setLangSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
 
-  // Save theme — applies immediately via setMode, then persists to API
+  // Get translated themes
+  const translatedThemes = [
+    { value: "light", label: t("settings.theme.light"), emoji: "☀️" },
+    { value: "dark", label: t("settings.theme.dark"), emoji: "🌙" },
+    { value: "system", label: t("settings.theme.system"), emoji: "💻" },
+  ];
+
   const saveTheme = async () => {
-    setMode(theme); // instant re-render of entire app
+    setMode(theme);
     setSaving(true);
     try {
       await settingsApi.updateProfile({ theme });
-      toast.success("Appearance saved");
+      toast.success(t("settings.appearance.saved"));
       reload();
     } catch {
-      setMode(mode); // revert context on failure
+      setMode(mode);
       setThemeState(mode);
-      toast.error("Failed to save appearance");
+      toast.error(t("settings.appearance.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
-  // Language change — applies instantly via i18n + persists to AsyncStorage + API
   const handleLangSelect = async (code) => {
     try {
-      await changeLanguage(code); // 1) calls i18n.changeLanguage → re-renders all screens
-      // 2) saves to AsyncStorage → persists across restarts
+      await changeLanguage(code);
       toast.success("Language updated");
     } catch {
       toast.error("Could not change language");
     }
-    settingsApi.updateProfile({ language: code }).catch(() => {}); // background save
+    settingsApi.updateProfile({ language: code }).catch(() => {});
   };
 
-  const themeLabel = THEMES.find((t) => t.value === theme)?.label ?? theme;
   const filteredLangs = ALL_LANGS.filter(
     (l) =>
       !langSearch || l.label.toLowerCase().includes(langSearch.toLowerCase()),
@@ -1082,20 +1168,18 @@ function AppearanceSection({ user, reload, c, modalBg, toast }) {
     <View>
       <SectionHeader
         icon="🎨"
-        title="Appearance"
-        sub="Theme and language preferences"
+        title={t("settings.appearance.title")}
+        sub={t("settings.appearance.subtitle")}
         c={c}
       />
 
-      {/* ── Theme ── */}
-      <FieldLabel label="🌓 THEME" c={c} />
+      <FieldLabel label={t("settings.appearance.theme")} c={c} />
       <AppText variant="small" tone="dim" style={{ marginBottom: 10 }}>
-        Choose how SkilledProz looks on your device.
+        {t("settings.appearance.themeHint")}
       </AppText>
 
-      {/* Theme chips matching old screen style */}
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
-        {THEMES.map((t) => {
+        {translatedThemes.map((t) => {
           const sel = theme === t.value;
           return (
             <Pressable
@@ -1138,25 +1222,21 @@ function AppearanceSection({ user, reload, c, modalBg, toast }) {
       </View>
 
       <SaveBtn
-        label="Save Appearance"
+        label={t("settings.appearance.save")}
         onPress={saveTheme}
         loading={saving}
         c={c}
       />
 
-      {/* ── Divider ── */}
       <View
         style={[s.divider, { borderTopColor: c.border, marginVertical: 20 }]}
       />
 
-      {/* ── Language ── */}
-      <FieldLabel label="🌐 LANGUAGE" c={c} />
+      <FieldLabel label={t("settings.appearance.language")} c={c} />
       <AppText variant="small" tone="dim" style={{ marginBottom: 10 }}>
-        Select your preferred language. Changes apply immediately across the
-        app.
+        {t("settings.appearance.languageHint")}
       </AppText>
 
-      {/* Search */}
       <View
         style={[
           ap.searchBox,
@@ -1172,7 +1252,7 @@ function AppearanceSection({ user, reload, c, modalBg, toast }) {
         <TextInput
           value={langSearch}
           onChangeText={setLangSearch}
-          placeholder="Search language..."
+          placeholder={t("settings.appearance.searchLanguage")}
           placeholderTextColor={c.textMuted}
           style={{ flex: 1, color: c.text, fontSize: 15 }}
         />
@@ -1183,7 +1263,6 @@ function AppearanceSection({ user, reload, c, modalBg, toast }) {
         ) : null}
       </View>
 
-      {/* Language list */}
       <View style={[ap.langList, { borderColor: c.border }]}>
         {filteredLangs.map((lang, idx) => {
           const sel = i18n.language === lang.value;
@@ -1221,13 +1300,12 @@ function AppearanceSection({ user, reload, c, modalBg, toast }) {
         {filteredLangs.length === 0 && (
           <View style={{ padding: 20, alignItems: "center" }}>
             <AppText variant="small" tone="dim">
-              No languages found
+              {t("settings.appearance.noLanguages")}
             </AppText>
           </View>
         )}
       </View>
 
-      {/* Active language indicator */}
       {(() => {
         const active = ALL_LANGS.find((l) => l.value === i18n.language);
         return active ? (
@@ -1248,7 +1326,7 @@ function AppearanceSection({ user, reload, c, modalBg, toast }) {
               }}
             />
             <AppText variant="small" tone="dim">
-              Active:{" "}
+              {t("settings.appearance.active")}{" "}
               <AppText variant="small" weight="semibold">
                 {active.flag} {active.label}
               </AppText>
@@ -1256,24 +1334,13 @@ function AppearanceSection({ user, reload, c, modalBg, toast }) {
           </View>
         ) : null;
       })()}
-
-      {/* Theme modal */}
-      <SelectModal
-        visible={showTheme}
-        title="Select Theme"
-        options={THEMES}
-        selected={theme}
-        onSelect={setThemeState}
-        onClose={() => setShowTheme(false)}
-        c={c}
-        modalBg={modalBg}
-      />
     </View>
   );
 }
 
 // ─── SECTION: Notifications ───────────────────────────────────────────────────
 function NotificationsSection({ c, toast }) {
+  const { t } = useTranslation();
   const [prefs, setPrefs] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -1290,9 +1357,9 @@ function NotificationsSection({ c, toast }) {
     setSaving(true);
     try {
       await settingsApi.updateNotificationPrefs(prefs);
-      toast.success("Notification preferences saved");
+      toast.success(t("settings.notifications.saved"));
     } catch {
-      toast.error("Failed to save preferences");
+      toast.error(t("settings.notifications.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -1301,33 +1368,43 @@ function NotificationsSection({ c, toast }) {
   if (!prefs)
     return <ActivityIndicator color={c.orange} style={{ marginTop: 40 }} />;
 
+  const items = [
+    {
+      key: "notifBookings",
+      label: t("settings.notifications.bookings"),
+      sub: t("settings.notifications.bookingsSub"),
+    },
+    {
+      key: "notifMessages",
+      label: t("settings.notifications.messages"),
+      sub: t("settings.notifications.messagesSub"),
+    },
+    {
+      key: "notifPayments",
+      label: t("settings.notifications.payments"),
+      sub: t("settings.notifications.paymentsSub"),
+    },
+    {
+      key: "notifReviews",
+      label: t("settings.notifications.reviews"),
+      sub: t("settings.notifications.reviewsSub"),
+    },
+    {
+      key: "notifMarketing",
+      label: t("settings.notifications.marketing"),
+      sub: t("settings.notifications.marketingSub"),
+    },
+  ];
+
   return (
     <View>
       <SectionHeader
         icon="🔔"
-        title="Notifications"
-        sub="Choose what you want to be notified about"
+        title={t("settings.notifications.title")}
+        sub={t("settings.notifications.subtitle")}
         c={c}
       />
-      {[
-        {
-          key: "notifBookings",
-          label: "Bookings",
-          sub: "New bookings and status updates",
-        },
-        { key: "notifMessages", label: "Messages", sub: "New chat messages" },
-        {
-          key: "notifPayments",
-          label: "Payments",
-          sub: "Payment receipts and releases",
-        },
-        { key: "notifReviews", label: "Reviews", sub: "New reviews received" },
-        {
-          key: "notifMarketing",
-          label: "Marketing",
-          sub: "Tips, features, and offers",
-        },
-      ].map((item) => (
+      {items.map((item) => (
         <ToggleRow
           key={item.key}
           label={item.label}
@@ -1338,13 +1415,19 @@ function NotificationsSection({ c, toast }) {
         />
       ))}
       <View style={{ marginTop: 20 }} />
-      <SaveBtn label="Save Preferences" onPress={save} loading={saving} c={c} />
+      <SaveBtn
+        label={t("settings.notifications.save")}
+        onPress={save}
+        loading={saving}
+        c={c}
+      />
     </View>
   );
 }
 
 // ─── SECTION: Privacy ─────────────────────────────────────────────────────────
 function PrivacySection({ c, toast }) {
+  const { t } = useTranslation();
   const [prefs, setPrefs] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -1361,9 +1444,9 @@ function PrivacySection({ c, toast }) {
     setSaving(true);
     try {
       await settingsApi.updatePrivacySettings(prefs);
-      toast.success("Privacy settings saved");
+      toast.success(t("settings.privacy.saved"));
     } catch {
-      toast.error("Failed to save privacy settings");
+      toast.error(t("settings.privacy.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -1372,41 +1455,43 @@ function PrivacySection({ c, toast }) {
   if (!prefs)
     return <ActivityIndicator color={c.orange} style={{ marginTop: 40 }} />;
 
+  const items = [
+    {
+      key: "profileVisible",
+      label: t("settings.privacy.publicProfile"),
+      sub: t("settings.privacy.publicProfileSub"),
+    },
+    {
+      key: "showPhone",
+      label: t("settings.privacy.showPhone"),
+      sub: t("settings.privacy.showPhoneSub"),
+    },
+    {
+      key: "showLocation",
+      label: t("settings.privacy.showLocation"),
+      sub: t("settings.privacy.showLocationSub"),
+    },
+    {
+      key: "showEmail",
+      label: t("settings.privacy.showEmail"),
+      sub: t("settings.privacy.showEmailSub"),
+    },
+    {
+      key: "showGender",
+      label: t("settings.privacy.showGender"),
+      sub: t("settings.privacy.showGenderSub"),
+    },
+  ];
+
   return (
     <View>
       <SectionHeader
         icon="🔒"
-        title="Privacy"
-        sub="Control what others can see on your profile"
+        title={t("settings.privacy.title")}
+        sub={t("settings.privacy.subtitle")}
         c={c}
       />
-      {[
-        {
-          key: "profileVisible",
-          label: "Public Profile",
-          sub: "Allow others to view your profile",
-        },
-        {
-          key: "showPhone",
-          label: "Show Phone",
-          sub: "Display phone number on profile",
-        },
-        {
-          key: "showLocation",
-          label: "Show Location",
-          sub: "Display city and country",
-        },
-        {
-          key: "showEmail",
-          label: "Show Email",
-          sub: "Display email on profile",
-        },
-        {
-          key: "showGender",
-          label: "Show Gender",
-          sub: "Display gender on profile",
-        },
-      ].map((item) => (
+      {items.map((item) => (
         <ToggleRow
           key={item.key}
           label={item.label}
@@ -1417,13 +1502,19 @@ function PrivacySection({ c, toast }) {
         />
       ))}
       <View style={{ marginTop: 20 }} />
-      <SaveBtn label="Save Privacy" onPress={save} loading={saving} c={c} />
+      <SaveBtn
+        label={t("settings.privacy.save")}
+        onPress={save}
+        loading={saving}
+        c={c}
+      />
     </View>
   );
 }
 
 // ─── SECTION: Security ────────────────────────────────────────────────────────
 function SecuritySection({ c, toast }) {
+  const { t } = useTranslation();
   const [info, setInfo] = useState(null);
   const [current, setCurrent] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -1439,15 +1530,15 @@ function SecuritySection({ c, toast }) {
 
   const changePassword = async () => {
     if (!current.trim()) {
-      toast.error("Enter your current password");
+      toast.error(t("settings.security.enterCurrent"));
       return;
     }
     if (newPw.length < 8) {
-      toast.error("New password must be at least 8 characters");
+      toast.error(t("settings.security.passwordTooShort"));
       return;
     }
     if (newPw !== confirm) {
-      toast.error("Passwords don't match");
+      toast.error(t("settings.security.passwordsDontMatch"));
       return;
     }
     setSaving(true);
@@ -1456,12 +1547,14 @@ function SecuritySection({ c, toast }) {
         currentPassword: current,
         newPassword: newPw,
       });
-      toast.success("Password changed successfully");
+      toast.success(t("settings.security.passwordChanged"));
       setCurrent("");
       setNewPw("");
       setConfirm("");
     } catch (err) {
-      toast.error(err?.response?.data?.message ?? "Failed to change password");
+      toast.error(
+        err?.response?.data?.message ?? t("settings.security.passwordFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -1471,8 +1564,8 @@ function SecuritySection({ c, toast }) {
     <View>
       <SectionHeader
         icon="🛡️"
-        title="Security"
-        sub="Password and account security"
+        title={t("settings.security.title")}
+        sub={t("settings.security.subtitle")}
         c={c}
       />
       {info && (
@@ -1484,11 +1577,14 @@ function SecuritySection({ c, toast }) {
         >
           {[
             {
-              label: "Email",
+              label: t("settings.security.email"),
               value: info.email,
               verified: info.isEmailVerified,
             },
-            { label: "Phone", value: info.phone ?? "Not set" },
+            {
+              label: t("settings.security.phone"),
+              value: info.phone ?? "Not set",
+            },
           ].map((row) => (
             <View
               key={row.label}
@@ -1525,9 +1621,9 @@ function SecuritySection({ c, toast }) {
         weight="bold"
         style={{ color: c.text, marginBottom: 16, marginTop: 8 }}
       >
-        Change Password
+        {t("settings.security.changePassword")}
       </AppText>
-      <FieldLabel label="CURRENT PASSWORD" c={c} />
+      <FieldLabel label={t("settings.security.currentPassword")} c={c} />
       <FieldInput
         value={current}
         onChangeText={setCurrent}
@@ -1538,17 +1634,17 @@ function SecuritySection({ c, toast }) {
       <View style={{ marginBottom: 16 }} />
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="NEW PASSWORD" c={c} />
+          <FieldLabel label={t("settings.security.newPassword")} c={c} />
           <FieldInput
             value={newPw}
             onChangeText={setNewPw}
-            placeholder="min 8 chars"
+            placeholder={t("settings.security.minChars")}
             secureTextEntry
             c={c}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <FieldLabel label="CONFIRM PASSWORD" c={c} />
+          <FieldLabel label={t("settings.security.confirmPassword")} c={c} />
           <FieldInput
             value={confirm}
             onChangeText={setConfirm}
@@ -1560,7 +1656,7 @@ function SecuritySection({ c, toast }) {
       </View>
       <View style={{ marginBottom: 8 }} />
       <SaveBtn
-        label="Change Password"
+        label={t("settings.security.changePassword")}
         onPress={changePassword}
         loading={saving}
         c={c}
@@ -1571,6 +1667,7 @@ function SecuritySection({ c, toast }) {
 
 // ─── SECTION: Activity ────────────────────────────────────────────────────────
 function ActivitySection({ c }) {
+  const { t } = useTranslation();
   const [data, setData] = useState(null);
 
   useEffect(() => {
@@ -1585,20 +1682,25 @@ function ActivitySection({ c }) {
 
   const { summary, recentActivity } = data;
 
+  const stats = [
+    { label: t("settings.activity.bookings"), value: summary.totalBookings },
+    { label: t("settings.activity.reviews"), value: summary.totalReviews },
+    {
+      label: t("settings.activity.unreadNotifs"),
+      value: summary.unreadNotifications,
+    },
+  ];
+
   return (
     <View>
       <SectionHeader
         icon="📊"
-        title="Activity"
-        sub="Your recent account activity"
+        title={t("settings.activity.title")}
+        sub={t("settings.activity.subtitle")}
         c={c}
       />
       <View style={s.row2}>
-        {[
-          { label: "Bookings", value: summary.totalBookings },
-          { label: "Reviews", value: summary.totalReviews },
-          { label: "Unread Notifs", value: summary.unreadNotifications },
-        ].map((stat) => (
+        {stats.map((stat) => (
           <View
             key={stat.label}
             style={[
@@ -1652,18 +1754,21 @@ function ActivitySection({ c }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
+  const { t } = useTranslation();
   const { theme: th } = useTheme();
   const { toast } = useToast();
   const { user } = useAuthStore();
   const c = th.colors;
   const modalBg = th.mode === "dark" ? "#111118" : "#ffffff";
   const isWorker = user?.role === "WORKER";
-  const TABS = isWorker ? TABS_WORKER : TABS_HIRER;
 
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
+
+  // Get tabs with t() inside component
+  const TABS = getTabs(t, isWorker);
 
   const load = useCallback(async () => {
     try {

@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../../components/AppText";
 import Avatar from "../../../components/Avatar";
@@ -22,37 +23,68 @@ import client from "../../../api/client";
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ITEMS_PER_PAGE = 8;
 
-const APP_STATUS_META = {
-  PENDING: { label: "Pending", color: "#f97316", bg: "rgba(249,115,22,0.15)" },
-  ACCEPTED: {
-    label: "🎉 Accepted",
-    color: "#22c55e",
-    bg: "rgba(34,197,94,0.15)",
-  },
-  REJECTED: { label: "Rejected", color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
-};
+// ─── Status meta - now functions that accept t ──────────────────────────────
+function getAppStatusMeta(t) {
+  return {
+    PENDING: {
+      label: t("workerApplications.status.pending"),
+      color: "#f97316",
+      bg: "rgba(249,115,22,0.15)",
+    },
+    ACCEPTED: {
+      label: t("workerApplications.status.accepted"),
+      color: "#22c55e",
+      bg: "rgba(34,197,94,0.15)",
+    },
+    REJECTED: {
+      label: t("workerApplications.status.rejected"),
+      color: "#ef4444",
+      bg: "rgba(239,68,68,0.15)",
+    },
+  };
+}
 
-const JOB_STATUS_META = {
-  OPEN: { label: "Open", color: "#22c55e", bg: "rgba(34,197,94,0.15)" },
-  FILLED: { label: "Filled", color: "#3b82f6", bg: "rgba(59,130,246,0.15)" },
-  CANCELLED: {
-    label: "Cancelled",
-    color: "#ef4444",
-    bg: "rgba(239,68,68,0.15)",
-  },
-};
+function getJobStatusMeta(t) {
+  return {
+    OPEN: {
+      label: t("workerApplications.jobStatus.open"),
+      color: "#22c55e",
+      bg: "rgba(34,197,94,0.15)",
+    },
+    FILLED: {
+      label: t("workerApplications.jobStatus.filled"),
+      color: "#3b82f6",
+      bg: "rgba(59,130,246,0.15)",
+    },
+    CANCELLED: {
+      label: t("workerApplications.jobStatus.cancelled"),
+      color: "#ef4444",
+      bg: "rgba(239,68,68,0.15)",
+    },
+  };
+}
+
+function getFilterTabs(t) {
+  return [
+    { key: null, label: t("workerApplications.filter.all") },
+    { key: "PENDING", label: t("workerApplications.filter.pending") },
+    { key: "ACCEPTED", label: t("workerApplications.filter.accepted") },
+    { key: "REJECTED", label: t("workerApplications.filter.rejected") },
+  ];
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function timeAgo(date) {
+function timeAgo(date, t) {
   if (!date) return "";
   const diff = Date.now() - new Date(date).getTime();
   const d = Math.floor(diff / 86_400_000);
-  if (d < 1) return "Today";
-  if (d < 7) return `${d}d ago`;
-  if (d < 30) return `${Math.floor(d / 7)}w ago`;
+  if (d < 1) return t("workerApplications.time.today");
+  if (d < 7) return t("workerApplications.time.daysAgo", { d });
+  if (d < 30)
+    return t("workerApplications.time.weeksAgo", { w: Math.floor(d / 7) });
   const m = Math.floor(d / 30);
-  if (m < 12) return `${m}mo ago`;
-  return `${Math.floor(m / 12)}y ago`;
+  if (m < 12) return t("workerApplications.time.monthsAgo", { m });
+  return t("workerApplications.time.yearsAgo", { y: Math.floor(m / 12) });
 }
 
 function fmtDate(d) {
@@ -66,6 +98,10 @@ function fmtDate(d) {
 
 // ─── Application card ─────────────────────────────────────────────────────────
 function ApplicationCard({ app, onViewJob, onMessage, onHirerProfile, c }) {
+  const { t } = useTranslation();
+  const APP_STATUS_META = getAppStatusMeta(t);
+  const JOB_STATUS_META = getJobStatusMeta(t);
+
   const job = app.jobPost ?? {};
   const hirer = job.hirer ?? {};
   const profile = hirer.hirerProfile ?? {};
@@ -182,7 +218,7 @@ function ApplicationCard({ app, onViewJob, onMessage, onHirerProfile, c }) {
               marginBottom: 6,
             }}
           >
-            YOUR MESSAGE
+            {t("workerApplications.message.yourMessage")}
           </AppText>
           <AppText
             variant="body"
@@ -210,7 +246,7 @@ function ApplicationCard({ app, onViewJob, onMessage, onHirerProfile, c }) {
           </AppText>
         </View>
         <AppText variant="small" tone="dim" style={{ marginLeft: 10 }}>
-          Applied {timeAgo(app.createdAt)}
+          {t("workerApplications.message.applied")} {timeAgo(app.createdAt, t)}
         </AppText>
       </View>
 
@@ -225,7 +261,7 @@ function ApplicationCard({ app, onViewJob, onMessage, onHirerProfile, c }) {
           ]}
         >
           <AppText variant="small" weight="semibold" style={{ color: c.text }}>
-            View Job →
+            {t("workerApplications.button.viewJob")} →
           </AppText>
         </Pressable>
 
@@ -247,7 +283,7 @@ function ApplicationCard({ app, onViewJob, onMessage, onHirerProfile, c }) {
                 weight="semibold"
                 style={{ color: "#22c55e" }}
               >
-                💬 Message Hirer
+                💬 {t("workerApplications.button.messageHirer")}
               </AppText>
             </Pressable>
             <Pressable
@@ -265,7 +301,7 @@ function ApplicationCard({ app, onViewJob, onMessage, onHirerProfile, c }) {
                 weight="semibold"
                 style={{ color: c.orange }}
               >
-                Hirer Profile
+                {t("workerApplications.button.hirerProfile")}
               </AppText>
             </Pressable>
           </>
@@ -393,6 +429,7 @@ const ft = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WorkerApplicationsScreen({ navigation }) {
+  const { t } = useTranslation();
   const { theme: th } = useTheme();
   const { toast } = useToast();
   const c = th.colors;
@@ -402,6 +439,9 @@ export default function WorkerApplicationsScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(null); // null = All
   const [page, setPage] = useState(1);
+
+  // Get FILTER_TABS inside component with t()
+  const FILTER_TABS = getFilterTabs(t);
 
   // ── Load ────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -413,7 +453,8 @@ export default function WorkerApplicationsScreen({ navigation }) {
       setAllApps(d.applications ?? []);
     } catch (err) {
       toast.error(
-        err?.response?.data?.message ?? "Could not load applications",
+        err?.response?.data?.message ??
+          t("workerApplications.error.loadFailed"),
       );
     } finally {
       setLoading(false);
@@ -491,8 +532,10 @@ export default function WorkerApplicationsScreen({ navigation }) {
       <View style={s.pageHeader}>
         <View style={{ flex: 1 }}>
           <AppText variant="body" tone="dim" style={{ marginTop: 4 }}>
-            {allApps.length} application{allApps.length !== 1 ? "s" : ""}{" "}
-            submitted
+            {t("workerApplications.header.submitted", {
+              count: allApps.length,
+              s: allApps.length !== 1 ? "s" : "",
+            })}
           </AppText>
         </View>
         <Pressable
@@ -507,7 +550,7 @@ export default function WorkerApplicationsScreen({ navigation }) {
             weight="semibold"
             style={{ color: c.orange }}
           >
-            Browse Jobs →
+            {t("workerApplications.header.browseJobs")} →
           </AppText>
         </Pressable>
       </View>
@@ -519,34 +562,19 @@ export default function WorkerApplicationsScreen({ navigation }) {
         style={{ marginBottom: 20 }}
         contentContainerStyle={{ gap: 8 }}
       >
-        <FilterTab
-          label="All"
-          count={allApps.length}
-          active={activeTab === null}
-          onPress={() => handleTabChange(null)}
-          c={c}
-        />
-        <FilterTab
-          label="Pending"
-          count={counts.PENDING}
-          active={activeTab === "PENDING"}
-          onPress={() => handleTabChange("PENDING")}
-          c={c}
-        />
-        <FilterTab
-          label="Accepted"
-          count={counts.ACCEPTED}
-          active={activeTab === "ACCEPTED"}
-          onPress={() => handleTabChange("ACCEPTED")}
-          c={c}
-        />
-        <FilterTab
-          label="Rejected"
-          count={counts.REJECTED}
-          active={activeTab === "REJECTED"}
-          onPress={() => handleTabChange("REJECTED")}
-          c={c}
-        />
+        {FILTER_TABS.map((tab) => {
+          const count = tab.key ? counts[tab.key] || 0 : allApps.length;
+          return (
+            <FilterTab
+              key={String(tab.key)}
+              label={tab.label}
+              count={count}
+              active={activeTab === tab.key}
+              onPress={() => handleTabChange(tab.key)}
+              c={c}
+            />
+          );
+        })}
       </ScrollView>
 
       {/* ── Empty state ── */}
@@ -559,8 +587,10 @@ export default function WorkerApplicationsScreen({ navigation }) {
             style={{ color: c.text, marginBottom: 8 }}
           >
             {activeTab
-              ? `No ${activeTab.toLowerCase()} applications`
-              : "No applications yet"}
+              ? t("workerApplications.empty.noFiltered", {
+                  status: activeTab.toLowerCase(),
+                })
+              : t("workerApplications.empty.noApplications")}
           </AppText>
           <AppText
             variant="body"
@@ -568,8 +598,8 @@ export default function WorkerApplicationsScreen({ navigation }) {
             style={{ textAlign: "center", marginBottom: 20 }}
           >
             {activeTab
-              ? "Try selecting a different filter above."
-              : "Start browsing jobs and apply to the ones that match your skills."}
+              ? t("workerApplications.empty.tryDifferentFilter")
+              : t("workerApplications.empty.startBrowsing")}
           </AppText>
           {!activeTab && (
             <Pressable
@@ -581,7 +611,7 @@ export default function WorkerApplicationsScreen({ navigation }) {
                 weight="semibold"
                 style={{ color: "#fff" }}
               >
-                Browse Jobs →
+                {t("workerApplications.header.browseJobs")} →
               </AppText>
             </Pressable>
           )}
@@ -620,7 +650,7 @@ export default function WorkerApplicationsScreen({ navigation }) {
               weight="semibold"
               style={{ color: c.text }}
             >
-              ← Prev
+              {t("workerApplications.pagination.prev")}
             </AppText>
           </Pressable>
 
@@ -635,7 +665,7 @@ export default function WorkerApplicationsScreen({ navigation }) {
               weight="semibold"
               style={{ color: c.text }}
             >
-              {page} of {totalPages}
+              {page} {t("workerApplications.pagination.of")} {totalPages}
             </AppText>
           </View>
 
@@ -656,7 +686,7 @@ export default function WorkerApplicationsScreen({ navigation }) {
               weight="semibold"
               style={{ color: c.text }}
             >
-              Next →
+              {t("workerApplications.pagination.next")} →
             </AppText>
           </Pressable>
         </View>

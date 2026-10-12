@@ -13,6 +13,9 @@ import zh from "./locales/zh.json";
 import ha from "./locales/ha.json";
 import yo from "./locales/yo.json";
 import ig from "./locales/ig.json";
+import de from "./locales/de.json";
+import it from "./locales/it.json";
+import hi from "./locales/hi.json";
 
 const resources = {
   en: { translation: en },
@@ -24,6 +27,9 @@ const resources = {
   ha: { translation: ha },
   yo: { translation: yo },
   ig: { translation: ig },
+  de: { translation: de },
+  it: { translation: it },
+  hi: { translation: hi },
 };
 
 const LANG_KEY = "@skilledproz:lang";

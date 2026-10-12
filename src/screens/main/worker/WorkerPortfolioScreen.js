@@ -23,6 +23,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 
 import AppScreen from "../../../components/AppScreen";
@@ -75,12 +76,13 @@ const iv = StyleSheet.create({
 
 // ─── Video Intro card ─────────────────────────────────────────────────────────
 function VideoIntroCard({ videoUrl, onReload, c, toast }) {
+  const { t } = useTranslation();
   const [uploading, setUploading] = useState(false);
 
   const pickAndUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      toast.error("Permission required");
+      toast.error(t("workerPortfolio.permissionRequired"));
       return;
     }
     const r = await ImagePicker.launchImageLibraryAsync({
@@ -90,7 +92,7 @@ function VideoIntroCard({ videoUrl, onReload, c, toast }) {
     if (r.canceled || !r.assets?.[0]) return;
     const a = r.assets[0];
     if (a.fileSize && a.fileSize > 100 * 1024 * 1024) {
-      toast.error("Video must be under 100MB");
+      toast.error(t("workerPortfolio.video.tooLarge"));
       return;
     }
     const formData = new FormData();
@@ -104,32 +106,36 @@ function VideoIntroCard({ videoUrl, onReload, c, toast }) {
       await client.post("/workers/video-intro", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      toast.success("Video intro uploaded!");
+      toast.success(t("workerPortfolio.video.uploadSuccess"));
       onReload();
     } catch {
-      toast.error("Upload failed. Please try again.");
+      toast.error(t("workerPortfolio.video.uploadFailed"));
     } finally {
       setUploading(false);
     }
   };
 
   const handleDelete = () => {
-    Alert.alert("Remove Video", "Remove your video introduction?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await client.delete("/workers/video-intro");
-            toast.success("Video intro removed");
-            onReload();
-          } catch {
-            toast.error("Failed to remove");
-          }
+    Alert.alert(
+      t("workerPortfolio.video.removeTitle"),
+      t("workerPortfolio.video.removeMessage"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("common.remove"),
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await client.delete("/workers/video-intro");
+              toast.success(t("workerPortfolio.video.removeSuccess"));
+              onReload();
+            } catch {
+              toast.error(t("workerPortfolio.video.removeFailed"));
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   return (
@@ -141,10 +147,10 @@ function VideoIntroCard({ videoUrl, onReload, c, toast }) {
         weight="semibold"
         style={{ color: c.text, marginBottom: 4 }}
       >
-        🎬 Video Introduction
+        🎬 {t("workerPortfolio.video.title")}
       </AppText>
       <AppText variant="small" tone="dim" style={{ marginBottom: 16 }}>
-        Record a 60-second intro to stand out. Hirers love it.
+        {t("workerPortfolio.video.subtitle")}
       </AppText>
 
       {videoUrl ? (
@@ -168,7 +174,7 @@ function VideoIntroCard({ videoUrl, onReload, c, toast }) {
               </View>
             </View>
             <AppText variant="small" tone="dim" style={{ marginTop: 12 }}>
-              Tap to play · 0:05
+              {t("workerPortfolio.video.tapToPlay")}
             </AppText>
           </Pressable>
 
@@ -189,7 +195,7 @@ function VideoIntroCard({ videoUrl, onReload, c, toast }) {
                   weight="semibold"
                   style={{ color: c.orange }}
                 >
-                  Replace Video
+                  {t("workerPortfolio.video.replace")}
                 </AppText>
               )}
             </Pressable>
@@ -202,7 +208,7 @@ function VideoIntroCard({ videoUrl, onReload, c, toast }) {
                 weight="semibold"
                 style={{ color: "#ef4444" }}
               >
-                Remove
+                {t("workerPortfolio.video.remove")}
               </AppText>
             </Pressable>
           </View>
@@ -226,10 +232,10 @@ function VideoIntroCard({ videoUrl, onReload, c, toast }) {
                 weight="semibold"
                 style={{ color: c.text, marginBottom: 4 }}
               >
-                Upload your intro video
+                {t("workerPortfolio.video.upload")}
               </AppText>
               <AppText variant="small" tone="dim">
-                MP4, MOV, WebM · Max 100MB · Under 60s
+                {t("workerPortfolio.video.requirements")}
               </AppText>
             </>
           )}
@@ -241,6 +247,7 @@ function VideoIntroCard({ videoUrl, onReload, c, toast }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WorkerPortfolioScreen() {
+  const { t } = useTranslation();
   const { theme: th } = useTheme();
   const { toast } = useToast();
   const { user } = useAuthStore();
@@ -265,7 +272,7 @@ export default function WorkerPortfolioScreen() {
       const res = await client.get(`/workers/${user.id}`);
       setWorker(res.data.data?.worker ?? null);
     } catch {
-      toast.error("Could not load portfolio");
+      toast.error(t("workerPortfolio.error.loadFailed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -283,7 +290,7 @@ export default function WorkerPortfolioScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      toast.error("Permission required");
+      toast.error(t("workerPortfolio.permissionRequired"));
       return;
     }
     const r = await ImagePicker.launchImageLibraryAsync({
@@ -304,11 +311,11 @@ export default function WorkerPortfolioScreen() {
   // ── Upload portfolio item ───────────────────────────────────────────────────
   const handleUpload = async () => {
     if (!title.trim()) {
-      toast.error("Please enter a title");
+      toast.error(t("workerPortfolio.error.titleRequired"));
       return;
     }
     if (!imageFile) {
-      toast.error("Please select an image");
+      toast.error(t("workerPortfolio.error.imageRequired"));
       return;
     }
     const formData = new FormData();
@@ -323,10 +330,12 @@ export default function WorkerPortfolioScreen() {
       setTitle("");
       setDescription("");
       setImageFile(null);
-      toast.success("Portfolio item added!");
+      toast.success(t("workerPortfolio.add.success"));
       load();
     } catch (err) {
-      toast.error(err?.response?.data?.message ?? "Upload failed");
+      toast.error(
+        err?.response?.data?.message ?? t("workerPortfolio.add.failed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -334,24 +343,29 @@ export default function WorkerPortfolioScreen() {
 
   // ── Delete portfolio item ───────────────────────────────────────────────────
   const handleDelete = (id) => {
-    Alert.alert("Remove Item", "Delete this portfolio item?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          setDeletingId(id);
-          try {
-            await client.delete(`/workers/portfolio/${id}`);
-            load();
-          } catch {
-            toast.error("Delete failed");
-          } finally {
-            setDeletingId(null);
-          }
+    Alert.alert(
+      t("workerPortfolio.remove.title"),
+      t("workerPortfolio.remove.message"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("common.delete"),
+          style: "destructive",
+          onPress: async () => {
+            setDeletingId(id);
+            try {
+              await client.delete(`/workers/portfolio/${id}`);
+              toast.success(t("workerPortfolio.remove.success"));
+              load();
+            } catch {
+              toast.error(t("workerPortfolio.remove.failed"));
+            } finally {
+              setDeletingId(null);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   if (loading) {
@@ -395,16 +409,16 @@ export default function WorkerPortfolioScreen() {
           weight="semibold"
           style={{ color: c.text, marginBottom: 16 }}
         >
-          Add Portfolio Item
+          {t("workerPortfolio.add.title")}
         </AppText>
 
         <AppText variant="small" weight="semibold" style={p.label}>
-          Title *
+          {t("workerPortfolio.add.titleLabel")} *
         </AppText>
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="e.g. Kitchen rewiring job"
+          placeholder={t("workerPortfolio.add.titlePlaceholder")}
           placeholderTextColor={c.textMuted}
           style={[
             p.input,
@@ -421,7 +435,7 @@ export default function WorkerPortfolioScreen() {
           weight="semibold"
           style={[p.label, { marginTop: 14 }]}
         >
-          Photo *
+          {t("workerPortfolio.add.photo")} *
         </AppText>
         <Pressable
           onPress={pickImage}
@@ -441,7 +455,7 @@ export default function WorkerPortfolioScreen() {
                 weight="semibold"
                 style={{ color: c.orange }}
               >
-                Tap to change
+                {t("workerPortfolio.add.changePhoto")}
               </AppText>
             </View>
           ) : (
@@ -452,10 +466,10 @@ export default function WorkerPortfolioScreen() {
                 weight="semibold"
                 style={{ color: c.text }}
               >
-                Tap to select photo
+                {t("workerPortfolio.add.selectPhoto")}
               </AppText>
               <AppText variant="small" tone="dim">
-                JPG, PNG · max 10MB
+                {t("workerPortfolio.add.photoRequirements")}
               </AppText>
             </View>
           )}
@@ -466,12 +480,12 @@ export default function WorkerPortfolioScreen() {
           weight="semibold"
           style={[p.label, { marginTop: 14 }]}
         >
-          Description (optional)
+          {t("workerPortfolio.add.description")}
         </AppText>
         <TextInput
           value={description}
           onChangeText={setDescription}
-          placeholder="Describe the work done..."
+          placeholder={t("workerPortfolio.add.descriptionPlaceholder")}
           placeholderTextColor={c.textMuted}
           style={[
             p.input,
@@ -499,7 +513,7 @@ export default function WorkerPortfolioScreen() {
             <ActivityIndicator color="#fff" />
           ) : (
             <AppText variant="body" weight="semibold" style={{ color: "#fff" }}>
-              + Add to Portfolio
+              + {t("workerPortfolio.add.button")}
             </AppText>
           )}
         </Pressable>
@@ -514,7 +528,7 @@ export default function WorkerPortfolioScreen() {
           weight="semibold"
           style={{ color: c.text, marginBottom: 16 }}
         >
-          My Portfolio{" "}
+          {t("workerPortfolio.list.title")}{" "}
           <AppText variant="body" tone="dim">
             ({portfolio.length})
           </AppText>
@@ -528,10 +542,10 @@ export default function WorkerPortfolioScreen() {
               weight="semibold"
               style={{ color: c.text, marginBottom: 4 }}
             >
-              No portfolio items yet
+              {t("workerPortfolio.list.emptyTitle")}
             </AppText>
             <AppText variant="small" tone="dim" style={{ textAlign: "center" }}>
-              Upload photos of your completed work to attract more clients
+              {t("workerPortfolio.list.emptySub")}
             </AppText>
           </View>
         ) : (
@@ -591,7 +605,7 @@ export default function WorkerPortfolioScreen() {
                           weight="semibold"
                           style={{ color: "#ef4444" }}
                         >
-                          Remove
+                          {t("workerPortfolio.list.remove")}
                         </AppText>
                       </>
                     )}

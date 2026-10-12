@@ -145,7 +145,7 @@ function Step0Account({ form, setForm, errors, c, t }) {
         <View style={{ flex: 1 }}>
           <AppInput
             label={`${t("auth.firstName")} *`}
-            placeholder="John"
+            placeholder={t("auth.firstNamePlaceholder") || "John"}
             value={form.firstName}
             onChangeText={set("firstName")}
             autoCapitalize="words"
@@ -156,7 +156,7 @@ function Step0Account({ form, setForm, errors, c, t }) {
         <View style={{ flex: 1 }}>
           <AppInput
             label={`${t("auth.lastName")} *`}
-            placeholder="Doe"
+            placeholder={t("auth.lastNamePlaceholder") || "Doe"}
             value={form.lastName}
             onChangeText={set("lastName")}
             autoCapitalize="words"
@@ -167,7 +167,7 @@ function Step0Account({ form, setForm, errors, c, t }) {
 
       <AppInput
         label={`${t("auth.emailAddress")} *`}
-        placeholder="you@example.com"
+        placeholder={t("auth.emailPlaceholder") || "you@example.com"}
         value={form.email}
         onChangeText={set("email")}
         keyboardType="email-address"
@@ -178,7 +178,7 @@ function Step0Account({ form, setForm, errors, c, t }) {
 
       <AppInput
         label={t("auth.phone")}
-        placeholder="+234..."
+        placeholder={t("auth.phonePlaceholder") || "+234..."}
         value={form.phone}
         onChangeText={set("phone")}
         keyboardType="phone-pad"
@@ -189,7 +189,7 @@ function Step0Account({ form, setForm, errors, c, t }) {
         <View style={{ flex: 1 }}>
           <AppInput
             label={t("auth.country")}
-            placeholder="Nigeria"
+            placeholder={t("auth.countryPlaceholder") || "Nigeria"}
             value={form.country}
             onChangeText={set("country")}
             autoCapitalize="words"
@@ -199,7 +199,7 @@ function Step0Account({ form, setForm, errors, c, t }) {
         <View style={{ flex: 1 }}>
           <AppInput
             label={t("auth.city")}
-            placeholder="Lagos"
+            placeholder={t("auth.cityPlaceholder") || "Lagos"}
             value={form.city}
             onChangeText={set("city")}
             autoCapitalize="words"
@@ -289,7 +289,7 @@ function Step1Profile({ form, setForm, errors, c, t }) {
         <View style={{ flex: 1 }}>
           <AppInput
             label={t("workerReg.yearsExperience")}
-            placeholder="0"
+            placeholder={t("workerReg.placeholderZero") || "0"}
             value={form.yearsExperience}
             onChangeText={set("yearsExperience")}
             keyboardType="number-pad"
@@ -299,7 +299,7 @@ function Step1Profile({ form, setForm, errors, c, t }) {
         <View style={{ flex: 1 }}>
           <AppInput
             label={t("workerReg.serviceRadius")}
-            placeholder="25"
+            placeholder={t("workerReg.placeholderRadius") || "25"}
             value={form.serviceRadius}
             onChangeText={set("serviceRadius")}
             keyboardType="number-pad"
@@ -607,7 +607,7 @@ function CurrencyModal({ visible, selected, onSelect, onClose, c, modalBg }) {
             weight="semibold"
             style={{ paddingHorizontal: 20, marginBottom: 12, color: c.text }}
           >
-            Select Currency
+            {t("workerReg.selectCurrency") || "Select Currency"}
           </AppText>
           <FlatList
             data={CURRENCIES}
@@ -680,7 +680,7 @@ function RateInput({ label, suffix, value, onChange, c }) {
         <TextInput
           value={value}
           onChangeText={onChange}
-          placeholder="0.00"
+          placeholder={t("workerReg.placeholderAmount") || "0.00"}
           placeholderTextColor={c.textMuted}
           keyboardType="decimal-pad"
           style={{ flex: 1, color: c.text, fontSize: 15 }}
@@ -746,14 +746,14 @@ function Step3Pricing({ form, setForm, agreed, setAgreed, errors, c, t }) {
       <View style={[s.row2, { marginTop: 14 }]}>
         <RateInput
           label={`⏱ ${t("workerReg.hourlyRate")}`}
-          suffix="/hr"
+          suffix={t("workerReg.perHour") || "/hr"}
           value={form.hourlyRate}
           onChange={set("hourlyRate")}
           c={c}
         />
         <RateInput
           label={`📅 ${t("workerReg.dailyRate")}`}
-          suffix="/day"
+          suffix={t("workerReg.perDay") || "/day"}
           value={form.dailyRate}
           onChange={set("dailyRate")}
           c={c}
@@ -762,14 +762,14 @@ function Step3Pricing({ form, setForm, agreed, setAgreed, errors, c, t }) {
       <View style={[s.row2, { marginTop: 10 }]}>
         <RateInput
           label={`📆 ${t("workerReg.weeklyRate")}`}
-          suffix="/wk"
+          suffix={t("workerReg.perWeek") || "/wk"}
           value={form.weeklyRate}
           onChange={set("weeklyRate")}
           c={c}
         />
         <RateInput
           label={`🗓 ${t("workerReg.monthlyRate")}`}
-          suffix="/mo"
+          suffix={t("workerReg.perMonth") || "/mo"}
           value={form.monthlyRate}
           onChange={set("monthlyRate")}
           c={c}
@@ -791,7 +791,7 @@ function Step3Pricing({ form, setForm, agreed, setAgreed, errors, c, t }) {
         <View style={{ flex: 1 }}>
           <AppInput
             label={t("workerReg.customRateAmount")}
-            placeholder="0.00"
+            placeholder={t("workerReg.placeholderAmount") || "0.00"}
             value={form.customRate}
             onChangeText={set("customRate")}
             keyboardType="decimal-pad"

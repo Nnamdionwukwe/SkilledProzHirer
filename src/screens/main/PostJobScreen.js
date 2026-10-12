@@ -1288,7 +1288,7 @@ export default function PostJobScreen() {
           {/* Budget Amount */}
           <AppInput
             label={budgetLabel()}
-            placeholder="0.00"
+            placeholder={t("postJob.amountPlaceholder") || "0.00"}
             iconLeft="cash-outline"
             value={budgetAmount}
             onChangeText={(v) => {

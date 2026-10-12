@@ -22,6 +22,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import * as DocumentPicker from "expo-document-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -36,6 +37,7 @@ const SCREEN_W = Dimensions.get("window").width;
 
 // ─── Date picker field ────────────────────────────────────────────────────────
 function DateField({ label, value, onChange, c }) {
+  const { t } = useTranslation();
   const [show, setShow] = useState(false);
 
   const dateValue = value ? new Date(value) : new Date();
@@ -45,7 +47,7 @@ function DateField({ label, value, onChange, c }) {
         month: "short",
         year: "numeric",
       })
-    : "dd/mm/yyyy";
+    : t("workerCertifications.date.placeholder");
 
   const handleChange = (event, selected) => {
     if (Platform.OS === "android") setShow(false);
@@ -94,7 +96,7 @@ function DateField({ label, value, onChange, c }) {
                   weight="semibold"
                   style={{ color: c.orange }}
                 >
-                  Done
+                  {t("workerCertifications.common.done")}
                 </AppText>
               </Pressable>
               <DateTimePicker
@@ -125,6 +127,7 @@ function DateField({ label, value, onChange, c }) {
 
 // ─── Cert row ─────────────────────────────────────────────────────────────────
 function CertRow({ cert: c2, onDelete, c }) {
+  const { t } = useTranslation();
   const isExpired = c2.expiryDate && new Date(c2.expiryDate) < new Date();
 
   const fmtDate = (d) =>
@@ -167,8 +170,11 @@ function CertRow({ cert: c2, onDelete, c }) {
           {c2.name}
         </AppText>
         <AppText variant="small" tone="dim">
-          Issued by {c2.issuedBy} · {fmtDate(c2.issueDate)}
-          {c2.expiryDate ? ` · Expires ${fmtDate(c2.expiryDate)}` : ""}
+          {t("workerCertifications.cert.issuedBy", { issuer: c2.issuedBy })} ·{" "}
+          {fmtDate(c2.issueDate)}
+          {c2.expiryDate
+            ? ` · ${t("workerCertifications.cert.expires", { date: fmtDate(c2.expiryDate) })}`
+            : ""}
         </AppText>
       </View>
 
@@ -189,7 +195,7 @@ function CertRow({ cert: c2, onDelete, c }) {
               weight="semibold"
               style={{ color: "#ef4444", fontSize: 10 }}
             >
-              EXPIRED
+              {t("workerCertifications.cert.expired")}
             </AppText>
           </View>
         )}
@@ -203,7 +209,7 @@ function CertRow({ cert: c2, onDelete, c }) {
               weight="semibold"
               style={{ color: c.text }}
             >
-              View
+              {t("workerCertifications.cert.view")}
             </AppText>
           </Pressable>
         )}
@@ -214,6 +220,7 @@ function CertRow({ cert: c2, onDelete, c }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WorkerCertificationsScreen() {
+  const { t } = useTranslation();
   const { theme: th } = useTheme();
   const { toast } = useToast();
   const { user } = useAuthStore();
@@ -238,7 +245,7 @@ export default function WorkerCertificationsScreen() {
       const res = await client.get(`/workers/${user.id}`);
       setCerts(res.data.data?.worker?.certifications ?? []);
     } catch {
-      toast.error("Could not load certifications");
+      toast.error(t("workerCertifications.error.loadFailed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -261,11 +268,11 @@ export default function WorkerCertificationsScreen() {
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!name.trim()) {
-      toast.error("Certification name is required");
+      toast.error(t("workerCertifications.error.nameRequired"));
       return;
     }
     if (!issuedBy.trim()) {
-      toast.error("Issuing body is required");
+      toast.error(t("workerCertifications.error.issuerRequired"));
       return;
     }
 
@@ -291,11 +298,12 @@ export default function WorkerCertificationsScreen() {
       setIssueDate("");
       setExpiryDate("");
       setDocFile(null);
-      toast.success("Certification added!");
+      toast.success(t("workerCertifications.success.added"));
       load();
     } catch (err) {
       toast.error(
-        err?.response?.data?.message ?? "Failed to add certification",
+        err?.response?.data?.message ??
+          t("workerCertifications.error.addFailed"),
       );
     } finally {
       setSaving(false);
@@ -343,19 +351,19 @@ export default function WorkerCertificationsScreen() {
           weight="semibold"
           style={{ color: c.text, marginBottom: 16 }}
         >
-          Add Certification
+          {t("workerCertifications.add.title")}
         </AppText>
 
         {/* Name + Issued By */}
         <View style={cert.row2}>
           <View style={{ flex: 1 }}>
             <AppText variant="small" weight="semibold" style={cert.label}>
-              Certification Name *
+              {t("workerCertifications.add.name")} *
             </AppText>
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="e.g. City & Guilds Electrical"
+              placeholder={t("workerCertifications.add.namePlaceholder")}
               placeholderTextColor={c.textMuted}
               style={[
                 cert.input,
@@ -369,12 +377,12 @@ export default function WorkerCertificationsScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <AppText variant="small" weight="semibold" style={cert.label}>
-              Issued By *
+              {t("workerCertifications.add.issuedBy")} *
             </AppText>
             <TextInput
               value={issuedBy}
               onChangeText={setIssuedBy}
-              placeholder="e.g. City & Guilds UK"
+              placeholder={t("workerCertifications.add.issuedByPlaceholder")}
               placeholderTextColor={c.textMuted}
               style={[
                 cert.input,
@@ -391,13 +399,13 @@ export default function WorkerCertificationsScreen() {
         {/* Issue Date + Expiry Date */}
         <View style={[cert.row2, { marginTop: 14 }]}>
           <DateField
-            label="Issue Date"
+            label={t("workerCertifications.add.issueDate")}
             value={issueDate}
             onChange={setIssueDate}
             c={c}
           />
           <DateField
-            label="Expiry Date"
+            label={t("workerCertifications.add.expiryDate")}
             value={expiryDate}
             onChange={setExpiryDate}
             c={c}
@@ -410,7 +418,7 @@ export default function WorkerCertificationsScreen() {
           weight="semibold"
           style={[cert.label, { marginTop: 14 }]}
         >
-          Certificate Document (optional)
+          {t("workerCertifications.add.document")}
         </AppText>
         <Pressable
           onPress={pickDocument}
@@ -433,7 +441,9 @@ export default function WorkerCertificationsScreen() {
             style={{ flex: 1, color: docFile ? c.orange : c.textMuted }}
             numberOfLines={1}
           >
-            {docFile ? docFile.name : "Choose file — PDF, JPG, PNG"}
+            {docFile
+              ? docFile.name
+              : t("workerCertifications.add.documentPlaceholder")}
           </AppText>
           {docFile && (
             <Pressable onPress={() => setDocFile(null)} hitSlop={8}>
@@ -459,7 +469,7 @@ export default function WorkerCertificationsScreen() {
             <ActivityIndicator color="#fff" />
           ) : (
             <AppText variant="body" weight="semibold" style={{ color: "#fff" }}>
-              + Add Certification
+              + {t("workerCertifications.add.button")}
             </AppText>
           )}
         </Pressable>
@@ -477,7 +487,7 @@ export default function WorkerCertificationsScreen() {
           weight="semibold"
           style={{ color: c.text, marginBottom: 16 }}
         >
-          My Certifications ({certs.length})
+          {t("workerCertifications.list.title", { count: certs.length })}
         </AppText>
 
         {certs.length === 0 ? (
@@ -488,10 +498,10 @@ export default function WorkerCertificationsScreen() {
               weight="semibold"
               style={{ color: c.text, marginBottom: 4 }}
             >
-              No certifications added
+              {t("workerCertifications.list.emptyTitle")}
             </AppText>
             <AppText variant="small" tone="dim" style={{ textAlign: "center" }}>
-              Add your trade certifications to build trust with clients
+              {t("workerCertifications.list.emptySub")}
             </AppText>
           </View>
         ) : (

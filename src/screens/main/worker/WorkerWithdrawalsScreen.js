@@ -218,25 +218,36 @@ const BANK_TYPE_COLORS = {
   merchant: "#a78bfa",
 };
 
-const STATUS_META = {
-  PENDING: { label: "Pending", color: "#f59e0b", bg: "rgba(245,158,11,0.15)" },
-  PROCESSING: {
-    label: "Processing",
-    color: "#60a5fa",
-    bg: "rgba(96,165,250,0.15)",
-  },
-  COMPLETED: {
-    label: "Paid Out",
-    color: "#22c55e",
-    bg: "rgba(34,197,94,0.15)",
-  },
-  FAILED: { label: "Failed", color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
-  CANCELLED: {
-    label: "Cancelled",
-    color: "#6b7280",
-    bg: "rgba(107,114,128,0.15)",
-  },
-};
+// ─── STATUS_META - now a function that takes t ──────────────────────────────
+function getStatusMeta(t) {
+  return {
+    PENDING: {
+      label: t("workerWithdrawals.status.pending"),
+      color: "#f59e0b",
+      bg: "rgba(245,158,11,0.15)",
+    },
+    PROCESSING: {
+      label: t("workerWithdrawals.status.processing"),
+      color: "#60a5fa",
+      bg: "rgba(96,165,250,0.15)",
+    },
+    COMPLETED: {
+      label: t("workerWithdrawals.status.completed"),
+      color: "#22c55e",
+      bg: "rgba(34,197,94,0.15)",
+    },
+    FAILED: {
+      label: t("workerWithdrawals.status.failed"),
+      color: "#ef4444",
+      bg: "rgba(239,68,68,0.15)",
+    },
+    CANCELLED: {
+      label: t("workerWithdrawals.status.cancelled"),
+      color: "#6b7280",
+      bg: "rgba(107,114,128,0.15)",
+    },
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -253,18 +264,19 @@ function fmt(amount, currency = "NGN") {
   }
 }
 
-function timeAgo(d) {
+// timeAgo now accepts t as a parameter
+function timeAgo(d, t) {
   if (!d) return "—";
   const diff = Date.now() - new Date(d).getTime();
   const m = Math.floor(diff / 60000);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return t("workerWithdrawals.time.minutesAgo", { m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return new Date(d).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  if (h < 24) return t("workerWithdrawals.time.hoursAgo", { h });
+  const days = Math.floor(h / 24);
+  if (days < 30) return t("workerWithdrawals.time.daysAgo", { d: days });
+  const months = Math.floor(days / 30);
+  if (months < 12) return t("workerWithdrawals.time.monthsAgo", { m: months });
+  return t("workerWithdrawals.time.yearsAgo", { y: Math.floor(months / 12) });
 }
 
 function getMethodsForCurrency(currency) {
@@ -379,6 +391,7 @@ const pinSt = StyleSheet.create({
 // PIN SETUP SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 function PinSetupScreen({ onDone, c }) {
+  const { t } = useTranslation();
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [loading, setLoading] = useState(false);
@@ -387,15 +400,20 @@ function PinSetupScreen({ onDone, c }) {
 
   async function handleSet() {
     setError("");
-    if (newPin.length < 4) return setError("Enter a 4-digit PIN.");
-    if (newPin !== confirmPin) return setError("PINs don't match.");
+    if (newPin.length < 4)
+      return setError(t("workerWithdrawals.pin.setup.error.short"));
+    if (newPin !== confirmPin)
+      return setError(t("workerWithdrawals.pin.setup.error.match"));
     setLoading(true);
     try {
       await client.post("/payments/pin/set", { pin: newPin });
       setSuccess(true);
       setTimeout(onDone, 1200);
     } catch (err) {
-      setError(err.response?.data?.message ?? "Failed to set PIN.");
+      setError(
+        err.response?.data?.message ??
+          t("workerWithdrawals.pin.setup.error.failed"),
+      );
     } finally {
       setLoading(false);
     }
@@ -406,10 +424,10 @@ function PinSetupScreen({ onDone, c }) {
       <View style={{ alignItems: "center", padding: 32, gap: 10 }}>
         <AppText style={{ fontSize: 52 }}>✅</AppText>
         <AppText weight="displayBlack" style={{ fontSize: 20, color: c.text }}>
-          PIN Set!
+          {t("workerWithdrawals.pin.setup.success")}
         </AppText>
         <AppText style={{ color: c.textMuted }}>
-          Returning to withdrawal form…
+          {t("workerWithdrawals.pin.setup.returning")}
         </AppText>
       </View>
     );
@@ -422,23 +440,23 @@ function PinSetupScreen({ onDone, c }) {
         weight="displayBlack"
         style={{ fontSize: 20, color: c.text, textAlign: "center" }}
       >
-        Set a Withdrawal PIN
+        {t("workerWithdrawals.pin.setup.title")}
       </AppText>
       <AppText
         style={{ color: c.textMuted, textAlign: "center", lineHeight: 22 }}
       >
-        You need a 4-digit PIN to authorise every withdrawal.
+        {t("workerWithdrawals.pin.setup.subtitle")}
       </AppText>
       <View style={{ width: "100%", gap: 16 }}>
         <PinInput
-          label="Choose 4-digit PIN"
+          label={t("workerWithdrawals.pin.setup.choose")}
           value={newPin}
           onChange={setNewPin}
           disabled={loading}
           c={c}
         />
         <PinInput
-          label="Confirm PIN"
+          label={t("workerWithdrawals.pin.setup.confirm")}
           value={confirmPin}
           onChange={setConfirmPin}
           disabled={loading}
@@ -466,7 +484,7 @@ function PinSetupScreen({ onDone, c }) {
           <ActivityIndicator color="#fff" />
         ) : (
           <AppText weight="semibold" style={{ color: "#fff", fontSize: 15 }}>
-            Set PIN & Continue
+            {t("workerWithdrawals.pin.setup.button")}
           </AppText>
         )}
       </Pressable>
@@ -486,6 +504,7 @@ function BankPickerModal({
   c,
   modalBg,
 }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const filtered = banks.filter(
     (b) =>
@@ -532,7 +551,7 @@ function BankPickerModal({
               weight="displayBlack"
               style={{ fontSize: 18, color: c.text }}
             >
-              Select Bank
+              {t("workerWithdrawals.bankPicker.title")}
             </AppText>
             <Pressable
               onPress={onClose}
@@ -571,7 +590,9 @@ function BankPickerModal({
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder={`Search ${banks.length} banks…`}
+              placeholder={t("workerWithdrawals.bankPicker.search", {
+                count: banks.length,
+              })}
               placeholderTextColor={c.textMuted}
               style={{
                 flex: 1,
@@ -596,7 +617,9 @@ function BankPickerModal({
                 marginBottom: 4,
               }}
             >
-              {filtered.length} result{filtered.length !== 1 ? "s" : ""}
+              {t("workerWithdrawals.bankPicker.resultsPlural", {
+                count: filtered.length,
+              })}
             </AppText>
           ) : null}
           <FlatList
@@ -673,6 +696,8 @@ function BankPickerModal({
 // RECEIPT MODAL — mirrors website ReceiptModal
 // ─────────────────────────────────────────────────────────────────────────────
 function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
+  const { t } = useTranslation();
+  const STATUS_META = getStatusMeta(t);
   if (!withdrawal) return null;
   const sm = STATUS_META[withdrawal.status] ?? STATUS_META.PENDING;
   const amount = Number(withdrawal.amount ?? 0);
@@ -755,7 +780,7 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
               weight="displayBlack"
               style={{ fontSize: 20, color: c.text }}
             >
-              Withdrawal Receipt
+              {t("workerWithdrawals.receipt.title")}
             </AppText>
             <View
               style={{
@@ -778,13 +803,13 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
           <View style={{ flexDirection: "row", gap: 24, marginBottom: 14 }}>
             {[
               {
-                label: "REFERENCE",
+                label: t("workerWithdrawals.receipt.reference"),
                 value: `#${String(withdrawal.reference ?? withdrawal.id ?? "")
                   .slice(-8)
                   .toUpperCase()}`,
               },
               {
-                label: "METHOD",
+                label: t("workerWithdrawals.receipt.method"),
                 value: withdrawal.method?.replace(/_/g, " ") ?? "—",
               },
             ].map((m) => (
@@ -825,7 +850,7 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
                 marginBottom: 3,
               }}
             >
-              PAID TO
+              {t("workerWithdrawals.receipt.paidTo")}
             </AppText>
             <AppText style={{ color: c.text, fontSize: 14 }}>
               {withdrawal.destination ?? withdrawal.accountName ?? "—"}
@@ -841,13 +866,15 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
           {/* Breakdown */}
           {[
             {
-              label: "Withdrawal amount",
+              label: t("workerWithdrawals.receipt.amount"),
               value: fmt(amount, cur),
               color: c.text,
             },
             {
-              label: "Withdrawal fee",
-              value: isFree ? "Free 🎉" : `− ${fmt(feeAmt, cur)}`,
+              label: t("workerWithdrawals.receipt.fee"),
+              value: isFree
+                ? t("workerWithdrawals.receipt.free")
+                : `− ${fmt(feeAmt, cur)}`,
               color: isFree ? "#22c55e" : "#ef4444",
             },
           ].map((row) => (
@@ -885,7 +912,7 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
             }}
           >
             <AppText weight="semibold" style={{ color: c.text, fontSize: 14 }}>
-              You receive
+              {t("workerWithdrawals.receipt.receive")}
             </AppText>
             <AppText
               weight="displayBlack"
@@ -907,7 +934,7 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
             }}
           >
             <AppText style={{ fontSize: 10, color: c.textMuted }}>
-              SkilledProz · Global Skills Marketplace
+              {t("workerWithdrawals.receipt.footer")}
             </AppText>
             <Pressable
               onPress={onClose}
@@ -921,7 +948,7 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
               <AppText
                 style={{ color: c.orange, fontSize: 12, fontWeight: "700" }}
               >
-                Close
+                {t("workerWithdrawals.receipt.close")}
               </AppText>
             </Pressable>
           </View>
@@ -944,6 +971,9 @@ function WithdrawalModal({
   c,
   modalBg,
 }) {
+  const { t } = useTranslation();
+  const STATUS_META = getStatusMeta(t);
+
   const [currency, setCurrency] = useState(defaultCurrency ?? "NGN");
   const [selMethod, setSelMethod] = useState(null);
   const [form, setForm] = useState({});
@@ -1037,7 +1067,7 @@ function WithdrawalModal({
 
   async function verifyAccount() {
     if (!form.accountNumber || !form.bankCode) {
-      setVerifyErr("Select bank and enter account number first.");
+      setVerifyErr(t("workerWithdrawals.error.selectBankAccount"));
       return;
     }
     setVerifying(true);
@@ -1051,7 +1081,10 @@ function WithdrawalModal({
       });
       setVerifiedName(r.data.data.accountName);
     } catch (e) {
-      setVerifyErr(e.response?.data?.message ?? "Account not found.");
+      setVerifyErr(
+        e.response?.data?.message ??
+          t("workerWithdrawals.error.accountNotFound"),
+      );
     } finally {
       setVerifying(false);
     }
@@ -1070,34 +1103,46 @@ function WithdrawalModal({
     setError("");
     setPinError("");
     const amt = parseFloat(amount);
-    if (!amt || amt <= 0) return setError("Enter a valid amount.");
+    if (!amt || amt <= 0)
+      return setError(t("workerWithdrawals.error.validAmount"));
     if (amt > availableForCurrency)
       return setError(
-        `Exceeds available balance (${fmt(availableForCurrency, currency)}).`,
+        t("workerWithdrawals.error.exceedsBalance", {
+          balance: fmt(availableForCurrency, currency),
+        }),
       );
-    if (!selMethod) return setError("Select a payout method.");
+    if (!selMethod) return setError(t("workerWithdrawals.error.selectMethod"));
     if (!pin || pin.length < 4)
-      return setPinError("Enter your 4-digit withdrawal PIN.");
+      return setPinError(t("workerWithdrawals.modal.pinRequired"));
     if (pinStatus?.isLocked)
-      return setPinError("PIN is locked. Try again later.");
+      return setPinError(t("workerWithdrawals.modal.pinLocked"));
 
     const m = selMethod.method;
     if (m === "bank_transfer" && !selMethod.isInternational) {
-      if (!form.bankCode) return setError("Select a bank.");
-      if (!form.accountNumber) return setError("Enter account number.");
-      if (!verifiedName) return setError("Verify your account name first.");
+      if (!form.bankCode)
+        return setError(t("workerWithdrawals.error.selectBank"));
+      if (!form.accountNumber)
+        return setError(t("workerWithdrawals.error.enterAccount"));
+      if (!verifiedName)
+        return setError(t("workerWithdrawals.error.verifyAccount"));
     }
     if (m === "bank_transfer" && selMethod.isInternational) {
-      if (!form.accountNumber) return setError("Enter account / IBAN.");
-      if (!form.swiftBic) return setError("Enter SWIFT / BIC code.");
-      if (!form.accountName) return setError("Enter account holder name.");
+      if (!form.accountNumber)
+        return setError(t("workerWithdrawals.error.enterIban"));
+      if (!form.swiftBic)
+        return setError(t("workerWithdrawals.error.enterSwift"));
+      if (!form.accountName)
+        return setError(t("workerWithdrawals.error.enterHolderName"));
     }
     if (m === "mobile_money" && !form.mobileNumber)
-      return setError("Enter mobile number.");
+      return setError(t("workerWithdrawals.error.enterMobile"));
     if (m === "crypto") {
-      if (!form.cryptoAddress) return setError("Enter wallet address.");
-      if (!form.cryptoToken) return setError("Select crypto token.");
-      if (!form.cryptoNetwork) return setError("Select network.");
+      if (!form.cryptoAddress)
+        return setError(t("workerWithdrawals.error.enterAddress"));
+      if (!form.cryptoToken)
+        return setError(t("workerWithdrawals.error.selectToken"));
+      if (!form.cryptoNetwork)
+        return setError(t("workerWithdrawals.error.selectNetwork"));
     }
 
     const payload = {
@@ -1141,11 +1186,13 @@ function WithdrawalModal({
     try {
       await client.post("/payments/withdraw", payload);
       setSuccess(
-        `Withdrawal of ${fmt(amt, currency)} submitted. Processing within 1–3 business days.`,
+        t("workerWithdrawals.withdraw.success", { amount: fmt(amt, currency) }),
       );
       onSuccess();
     } catch (err) {
-      const msg = err.response?.data?.message ?? "Withdrawal failed.";
+      const msg =
+        err.response?.data?.message ??
+        t("workerWithdrawals.error.withdrawFailed");
       if (err.response?.status === 401 || msg.toLowerCase().includes("pin")) {
         setPinError(msg);
         setPin("");
@@ -1226,7 +1273,7 @@ function WithdrawalModal({
                 weight="displayBlack"
                 style={{ fontSize: 20, color: c.text }}
               >
-                Request Payout
+                {t("workerWithdrawals.modal.title")}
               </AppText>
               <Pressable
                 onPress={onClose}
@@ -1256,7 +1303,7 @@ function WithdrawalModal({
               >
                 <ActivityIndicator size="small" color={c.orange} />
                 <AppText style={{ color: c.textMuted }}>
-                  Checking PIN status…
+                  {t("workerWithdrawals.pin.status.checking")}
                 </AppText>
               </View>
             )}
@@ -1282,7 +1329,7 @@ function WithdrawalModal({
                   weight="displayBlack"
                   style={{ fontSize: 20, color: "#ef4444" }}
                 >
-                  PIN Locked
+                  {t("workerWithdrawals.pin.status.locked")}
                 </AppText>
                 <AppText
                   style={{
@@ -1291,7 +1338,7 @@ function WithdrawalModal({
                     lineHeight: 22,
                   }}
                 >
-                  Too many wrong PIN attempts. Wait 30 minutes then try again.
+                  {t("workerWithdrawals.pin.status.lockedMessage")}
                 </AppText>
                 <Pressable
                   onPress={onClose}
@@ -1305,7 +1352,9 @@ function WithdrawalModal({
                     borderColor: c.border,
                   }}
                 >
-                  <AppText style={{ color: c.textMuted }}>Close</AppText>
+                  <AppText style={{ color: c.textMuted }}>
+                    {t("workerWithdrawals.modal.close")}
+                  </AppText>
                 </Pressable>
               </View>
             )}
@@ -1318,7 +1367,7 @@ function WithdrawalModal({
                   weight="displayBlack"
                   style={{ fontSize: 20, color: c.text }}
                 >
-                  Withdrawal Submitted!
+                  {t("workerWithdrawals.modal.success")}
                 </AppText>
                 <AppText
                   style={{
@@ -1343,7 +1392,7 @@ function WithdrawalModal({
                     weight="semibold"
                     style={{ color: "#fff", fontSize: 15 }}
                   >
-                    Done
+                    {t("workerWithdrawals.modal.done")}
                   </AppText>
                 </Pressable>
               </View>
@@ -1360,7 +1409,10 @@ function WithdrawalModal({
                   contentContainerStyle={{ padding: 18, gap: 20 }}
                 >
                   {/* ── Currency wallet tabs ── */}
-                  <SectionLabel label="Withdraw from Wallet" c={c} />
+                  <SectionLabel
+                    label={t("workerWithdrawals.modal.wallet")}
+                    c={c}
+                  />
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -1460,7 +1512,9 @@ function WithdrawalModal({
                           fontWeight: "700",
                         }}
                       >
-                        AVAILABLE
+                        {t(
+                          "workerWithdrawals.main.totalAvailable",
+                        ).toUpperCase()}
                       </AppText>
                       <AppText
                         weight="displayBlack"
@@ -1472,7 +1526,10 @@ function WithdrawalModal({
                   </View>
 
                   {/* ── Method selector ── */}
-                  <SectionLabel label="Payout Method" c={c} />
+                  <SectionLabel
+                    label={t("workerWithdrawals.modal.method")}
+                    c={c}
+                  />
                   <View
                     style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
                   >
@@ -1527,7 +1584,10 @@ function WithdrawalModal({
                   {/* ── Dynamic fields ── */}
                   {selMethod && (
                     <>
-                      <SectionLabel label="Payout Details" c={c} />
+                      <SectionLabel
+                        label={t("workerWithdrawals.modal.details")}
+                        c={c}
+                      />
 
                       {/* Local bank transfer */}
                       {selMethod.method === "bank_transfer" &&
@@ -1542,7 +1602,7 @@ function WithdrawalModal({
                                   marginBottom: 6,
                                 }}
                               >
-                                Bank / Fintech *
+                                {t("workerWithdrawals.field.bank")}
                               </AppText>
                               <Pressable
                                 onPress={() => setShowBankPick(true)}
@@ -1565,8 +1625,12 @@ function WithdrawalModal({
                                 >
                                   {form.bankName ??
                                     (banksLoading
-                                      ? "Loading banks…"
-                                      : "Select bank…")}
+                                      ? t(
+                                          "workerWithdrawals.modal.loadingBanks",
+                                        )
+                                      : t(
+                                          "workerWithdrawals.modal.selectBank",
+                                        ))}
                                 </AppText>
                                 <Ionicons
                                   name="chevron-down"
@@ -1589,8 +1653,10 @@ function WithdrawalModal({
                             </View>
 
                             <FormField
-                              label="Account Number *"
-                              placeholder="0123456789"
+                              label={t("workerWithdrawals.field.accountNumber")}
+                              placeholder={t(
+                                "workerWithdrawals.field.accountNumberPlaceholder",
+                              )}
                               value={form.accountNumber ?? ""}
                               onChange={(v) => setF("accountNumber", v)}
                               keyboard="number-pad"
@@ -1646,7 +1712,7 @@ function WithdrawalModal({
                                   <AppText
                                     style={{ fontSize: 12, color: c.textMuted }}
                                   >
-                                    Verify account holder name
+                                    {t("workerWithdrawals.modal.verifyAccount")}
                                   </AppText>
                                 )}
                               </View>
@@ -1683,7 +1749,7 @@ function WithdrawalModal({
                                       fontSize: 13,
                                     }}
                                   >
-                                    Verify
+                                    {t("workerWithdrawals.modal.verify")}
                                   </AppText>
                                 )}
                               </Pressable>
@@ -1698,33 +1764,47 @@ function WithdrawalModal({
                             {[
                               {
                                 key: "bankName",
-                                label: "Bank Name *",
-                                placeholder: "e.g. Bank of America",
+                                label: t("workerWithdrawals.field.bankName"),
+                                placeholder: t(
+                                  "workerWithdrawals.field.bankNamePlaceholder",
+                                ),
                               },
                               {
                                 key: "accountNumber",
-                                label: "Account / IBAN *",
-                                placeholder: "IBAN or account number",
+                                label: t("workerWithdrawals.field.iban"),
+                                placeholder: t(
+                                  "workerWithdrawals.field.ibanPlaceholder",
+                                ),
                               },
                               {
                                 key: "swiftBic",
-                                label: "SWIFT / BIC *",
-                                placeholder: "e.g. BOFAUS3N",
+                                label: t("workerWithdrawals.field.swift"),
+                                placeholder: t(
+                                  "workerWithdrawals.field.swiftPlaceholder",
+                                ),
                               },
                               {
                                 key: "routingNumber",
-                                label: "Routing Number (US/CA)",
-                                placeholder: "9-digit routing",
+                                label: t("workerWithdrawals.field.routing"),
+                                placeholder: t(
+                                  "workerWithdrawals.field.routingPlaceholder",
+                                ),
                               },
                               {
                                 key: "accountName",
-                                label: "Account Holder Name *",
-                                placeholder: "Full name on account",
+                                label: t(
+                                  "workerWithdrawals.field.accountHolder",
+                                ),
+                                placeholder: t(
+                                  "workerWithdrawals.field.accountHolderPlaceholder",
+                                ),
                               },
                               {
                                 key: "bankCountry",
-                                label: "Bank Country *",
-                                placeholder: "e.g. United States",
+                                label: t("workerWithdrawals.field.bankCountry"),
+                                placeholder: t(
+                                  "workerWithdrawals.field.bankCountryPlaceholder",
+                                ),
                               },
                             ].map(({ key, label, placeholder }) => (
                               <FormField
@@ -1743,16 +1823,20 @@ function WithdrawalModal({
                       {selMethod.method === "mobile_money" && (
                         <View style={{ gap: 12 }}>
                           <FormField
-                            label="Mobile Number *"
-                            placeholder="+234 800 000 0000"
+                            label={t("workerWithdrawals.field.mobileNumber")}
+                            placeholder={t(
+                              "workerWithdrawals.field.mobileNumberPlaceholder",
+                            )}
                             value={form.mobileNumber ?? ""}
                             onChange={(v) => setF("mobileNumber", v)}
                             keyboard="phone-pad"
                             c={c}
                           />
                           <FormField
-                            label="Account Name (optional)"
-                            placeholder="Name on mobile account"
+                            label={t("workerWithdrawals.field.mobileName")}
+                            placeholder={t(
+                              "workerWithdrawals.field.mobileNamePlaceholder",
+                            )}
                             value={form.mobileName ?? ""}
                             onChange={(v) => setF("mobileName", v)}
                             c={c}
@@ -1776,10 +1860,9 @@ function WithdrawalModal({
                               <AppText
                                 style={{ fontSize: 13, color: c.orange }}
                               >
-                                Provider:{" "}
-                                <AppText style={{ fontWeight: "700" }}>
-                                  {selMethod.provider}
-                                </AppText>
+                                {t("workerWithdrawals.modal.provider", {
+                                  provider: selMethod.provider,
+                                })}
                               </AppText>
                             </View>
                           )}
@@ -1798,7 +1881,7 @@ function WithdrawalModal({
                                 marginBottom: 8,
                               }}
                             >
-                              Token *
+                              {t("workerWithdrawals.field.token")}
                             </AppText>
                             <View
                               style={{
@@ -1847,7 +1930,7 @@ function WithdrawalModal({
                                 marginBottom: 8,
                               }}
                             >
-                              Network *
+                              {t("workerWithdrawals.field.network")}
                             </AppText>
                             <View style={{ gap: 6 }}>
                               {CRYPTO_NETWORKS.map((n) => {
@@ -1883,8 +1966,10 @@ function WithdrawalModal({
                             </View>
                           </View>
                           <FormField
-                            label="Wallet Address *"
-                            placeholder="0x… or TRC20 address"
+                            label={t("workerWithdrawals.field.walletAddress")}
+                            placeholder={t(
+                              "workerWithdrawals.field.walletAddressPlaceholder",
+                            )}
                             value={form.cryptoAddress ?? ""}
                             onChange={(v) => setF("cryptoAddress", v)}
                             mono
@@ -1910,8 +1995,7 @@ function WithdrawalModal({
                                 lineHeight: 18,
                               }}
                             >
-                              Double-check the network matches your wallet.
-                              Wrong network = permanent loss of funds.
+                              {t("workerWithdrawals.field.cryptoWarning")}
                             </AppText>
                           </View>
                         </View>
@@ -1920,7 +2004,10 @@ function WithdrawalModal({
                   )}
 
                   {/* ── Amount ── */}
-                  <SectionLabel label={`Amount (${currency})`} c={c} />
+                  <SectionLabel
+                    label={t("workerWithdrawals.modal.amount", { currency })}
+                    c={c}
+                  />
                   <View
                     style={{
                       flexDirection: "row",
@@ -2030,12 +2117,16 @@ function WithdrawalModal({
                         marginBottom: 12,
                       }}
                     >
-                      <SectionLabel label="Withdrawal PIN" c={c} noMargin />
+                      <SectionLabel
+                        label={t("workerWithdrawals.modal.pin")}
+                        c={c}
+                        noMargin
+                      />
                       {pinStatus && !pinStatus.isLocked && (
                         <AppText style={{ fontSize: 10, color: c.textMuted }}>
-                          {pinStatus.attemptsRemaining} attempt
-                          {pinStatus.attemptsRemaining !== 1 ? "s" : ""}{" "}
-                          remaining
+                          {t("workerWithdrawals.pin.status.attemptsPlural", {
+                            count: pinStatus.attemptsRemaining,
+                          })}
                         </AppText>
                       )}
                     </View>
@@ -2060,7 +2151,7 @@ function WithdrawalModal({
                           textDecorationLine: "underline",
                         }}
                       >
-                        Forgot PIN? Reset it
+                        {t("workerWithdrawals.pin.status.forgot")}
                       </AppText>
                     </Pressable>
                   </View>
@@ -2103,8 +2194,7 @@ function WithdrawalModal({
                         lineHeight: 18,
                       }}
                     >
-                      Payouts processed within 1–3 business days · No withdrawal
-                      fee — you keep 100% 🎉
+                      {t("workerWithdrawals.modal.info")}
                     </AppText>
                   </View>
 
@@ -2138,8 +2228,11 @@ function WithdrawalModal({
                         weight="displayBlack"
                         style={{ color: "#fff", fontSize: 16 }}
                       >
-                        ↑ Withdraw{" "}
-                        {amount ? fmt(parseFloat(amount) || 0, currency) : ""}
+                        {t("workerWithdrawals.modal.submit", {
+                          amount: amount
+                            ? fmt(parseFloat(amount) || 0, currency)
+                            : "",
+                        })}
                       </AppText>
                     )}
                   </Pressable>
@@ -2257,6 +2350,8 @@ function StatCard({ label, value, sub, orange, c }) {
 }
 
 function WithdrawalCard({ w, onReceipt, c }) {
+  const { t } = useTranslation();
+  const STATUS_META = getStatusMeta(t);
   const sm = STATUS_META[w.status] ?? STATUS_META.PENDING;
   const cur = w.currency ?? "NGN";
   const cm = CURRENCY_META[cur] ?? { flag: "💱" };
@@ -2292,7 +2387,7 @@ function WithdrawalCard({ w, onReceipt, c }) {
               .toUpperCase()}
           </AppText>
           <AppText style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}>
-            {timeAgo(w.createdAt)}
+            {timeAgo(w.createdAt, t)}
           </AppText>
         </View>
         <View
@@ -2336,7 +2431,7 @@ function WithdrawalCard({ w, onReceipt, c }) {
         }}
       >
         <AppText style={{ fontSize: 12, fontWeight: "600", color: c.text }}>
-          Receipt
+          {t("workerWithdrawals.card.receipt")}
         </AppText>
       </Pressable>
     </View>
@@ -2404,7 +2499,7 @@ export default function WorkerWithdrawalsScreen() {
       if (topCur) setSelectedCurrency(topCur);
     } catch (err) {
       toast.error(
-        err?.response?.data?.message ?? "Failed to load wallet data.",
+        err?.response?.data?.message ?? t("workerWithdrawals.main.loadFailed"),
       );
     } finally {
       setLoading(false);
@@ -2469,7 +2564,7 @@ export default function WorkerWithdrawalsScreen() {
               letterSpacing: 0.8,
             }}
           >
-            EARNINGS & PAYOUTS
+            {t("workerWithdrawals.main.earningsPayouts")}
           </AppText>
           <AppText
             weight="displayBlack"
@@ -2480,10 +2575,10 @@ export default function WorkerWithdrawalsScreen() {
               letterSpacing: -0.5,
             }}
           >
-            Your Wallet
+            {t("workerWithdrawals.main.title")}
           </AppText>
           <AppText style={{ color: c.textMuted, fontSize: 13 }}>
-            Multi-currency earnings & payout history
+            {t("workerWithdrawals.main.subtitle")}
           </AppText>
         </View>
         <Pressable
@@ -2502,7 +2597,7 @@ export default function WorkerWithdrawalsScreen() {
         >
           <Ionicons name="arrow-up" size={14} color="#fff" />
           <AppText weight="semibold" style={{ color: "#fff", fontSize: 13 }}>
-            Withdraw
+            {t("workerWithdrawals.main.withdraw")}
           </AppText>
         </Pressable>
       </View>
@@ -2519,7 +2614,7 @@ export default function WorkerWithdrawalsScreen() {
               marginBottom: 10,
             }}
           >
-            💳 YOUR CURRENCY WALLETS
+            {t("workerWithdrawals.main.wallets")}
           </AppText>
           <ScrollView
             horizontal
@@ -2603,7 +2698,7 @@ export default function WorkerWithdrawalsScreen() {
                         color: c.textMuted,
                       }}
                     >
-                      Withdraw
+                      {t("workerWithdrawals.main.withdraw")}
                     </AppText>
                   </Pressable>
                 </Pressable>
@@ -2616,30 +2711,34 @@ export default function WorkerWithdrawalsScreen() {
       {/* ── Balance summary cards ── */}
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
         <StatCard
-          label="TOTAL AVAILABLE"
+          label={t("workerWithdrawals.main.totalAvailable")}
           value={fmt(balance?.available ?? 0)}
-          sub="Across all currencies"
+          sub={t("workerWithdrawals.main.acrossCurrencies")}
           orange
           c={c}
         />
         <StatCard
-          label="IN ESCROW"
+          label={t("workerWithdrawals.main.inEscrow")}
           value={fmt(balance?.inEscrow ?? 0)}
-          sub="Awaiting completion"
+          sub={t("workerWithdrawals.main.awaitingCompletion")}
           c={c}
         />
       </View>
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
         <StatCard
-          label="PENDING PAYOUTS"
+          label={t("workerWithdrawals.main.pendingPayouts")}
           value={fmt(balance?.pendingPayout ?? 0)}
-          sub={`${withdrawals.filter((w) => ["PENDING", "PROCESSING"].includes(w.status)).length} request(s)`}
+          sub={t("workerWithdrawals.main.requestPlural", {
+            count: withdrawals.filter((w) =>
+              ["PENDING", "PROCESSING"].includes(w.status),
+            ).length,
+          })}
           c={c}
         />
         <StatCard
-          label="ACTIVE WALLETS"
+          label={t("workerWithdrawals.main.activeWallets")}
           value={String(currenciesWithBalance.length)}
-          sub="Currencies"
+          sub={t("workerWithdrawals.main.currencies")}
           c={c}
         />
       </View>
@@ -2669,10 +2768,10 @@ export default function WorkerWithdrawalsScreen() {
             weight="displayBlack"
             style={{ fontSize: 17, color: c.text }}
           >
-            Withdrawal History
+            {t("workerWithdrawals.main.history")}
           </AppText>
           <AppText style={{ fontSize: 12, color: c.textMuted }}>
-            {total} records
+            {total} {t("workerWithdrawals.main.records")}
           </AppText>
         </View>
         {withdrawals.length === 0 ? (
@@ -2682,12 +2781,12 @@ export default function WorkerWithdrawalsScreen() {
               weight="semibold"
               style={{ color: c.text, marginBottom: 4 }}
             >
-              No withdrawals yet
+              {t("workerWithdrawals.main.noWithdrawals")}
             </AppText>
             <AppText
               style={{ color: c.textMuted, textAlign: "center", fontSize: 13 }}
             >
-              Request your first payout when you have available balance.
+              {t("workerWithdrawals.main.noWithdrawalsSub")}
             </AppText>
           </View>
         ) : (
@@ -2707,7 +2806,7 @@ export default function WorkerWithdrawalsScreen() {
         onSuccess={() => {
           setShowPayout(false);
           load();
-          toast.success("Withdrawal submitted!");
+          toast.success(t("workerWithdrawals.main.withdrawSuccess"));
         }}
         c={c}
         modalBg={modalBg}

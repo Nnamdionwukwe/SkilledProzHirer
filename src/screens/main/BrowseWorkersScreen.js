@@ -296,7 +296,7 @@ function FilterPanel({
 
           <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
             {/* Availability */}
-            <SectionLabel label="AVAILABILITY" c={c} />
+            <SectionLabel label={t("browse.filter.availability")} c={c} />
             <View style={fp.row}>
               <Switch
                 value={local.available !== "false"}
@@ -310,7 +310,7 @@ function FilterPanel({
             </View>
 
             {/* Category */}
-            <SectionLabel label="CATEGORY" c={c} />
+            <SectionLabel label={t("browse.filter.category")} c={c} />
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -320,42 +320,42 @@ function FilterPanel({
                 paddingBottom: 4,
               }}
             >
-              {[{ id: null, name: "All categories" }, ...categories].map(
-                (cat) => {
-                  const active =
-                    (local.category ?? null) === (cat.slug ?? null);
-                  return (
-                    <Pressable
-                      key={cat.id ?? "all"}
-                      onPress={() => set("category", cat.slug ?? null)}
-                      style={[
-                        fp.chip,
-                        {
-                          backgroundColor: active ? c.orange : c.bgInput,
-                          borderColor: active ? c.orange : c.border,
-                        },
-                      ]}
+              {[
+                { id: null, name: t("browse.filter.allCategories") },
+                ...categories,
+              ].map((cat) => {
+                const active = (local.category ?? null) === (cat.slug ?? null);
+                return (
+                  <Pressable
+                    key={cat.id ?? "all"}
+                    onPress={() => set("category", cat.slug ?? null)}
+                    style={[
+                      fp.chip,
+                      {
+                        backgroundColor: active ? c.orange : c.bgInput,
+                        borderColor: active ? c.orange : c.border,
+                      },
+                    ]}
+                  >
+                    <AppText
+                      variant="small"
+                      weight="semibold"
+                      style={{ color: active ? "#fff" : c.text }}
                     >
-                      <AppText
-                        variant="small"
-                        weight="semibold"
-                        style={{ color: active ? "#fff" : c.text }}
-                      >
-                        {cat.icon ? `${cat.icon} ` : ""}
-                        {cat.name}
-                      </AppText>
-                    </Pressable>
-                  );
-                },
-              )}
+                      {cat.icon ? `${cat.icon} ` : ""}
+                      {cat.name}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
 
             {/* City */}
-            <SectionLabel label="CITY" c={c} />
+            <SectionLabel label={t("browse.filter.city")} c={c} />
             <TextInput
               value={local.city ?? ""}
               onChangeText={(v) => set("city", v)}
-              placeholder="e.g. Lagos"
+              placeholder={t("browse.filter.cityPlaceholder") || "e.g. Lagos"}
               placeholderTextColor={c.textMuted}
               style={[
                 fp.input,
@@ -368,14 +368,14 @@ function FilterPanel({
             />
 
             {/* Hourly Rate */}
-            <SectionLabel label="HOURLY RATE" c={c} />
+            <SectionLabel label={t("browse.filter.hourlyRate")} c={c} />
             <View
               style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
             >
               <TextInput
                 value={local.minRate ?? ""}
                 onChangeText={(v) => set("minRate", v)}
-                placeholder="Min"
+                placeholder={t("browse.filter.min")}
                 placeholderTextColor={c.textMuted}
                 keyboardType="numeric"
                 style={[
@@ -392,7 +392,7 @@ function FilterPanel({
               <TextInput
                 value={local.maxRate ?? ""}
                 onChangeText={(v) => set("maxRate", v)}
-                placeholder="Max"
+                placeholder={t("browse.filter.max")}
                 placeholderTextColor={c.textMuted}
                 keyboardType="numeric"
                 style={[
@@ -408,11 +408,11 @@ function FilterPanel({
             </View>
 
             {/* Min Rating */}
-            <SectionLabel label="MINIMUM RATING" c={c} />
+            <SectionLabel label={t("browse.filter.minRating")} c={c} />
             {[
-              { label: "4★ & above", val: "4" },
-              { label: "3★ & above", val: "3" },
-              { label: "Any rating", val: null },
+              { label: t("browse.filter.rating4"), val: "4" },
+              { label: t("browse.filter.rating3"), val: "3" },
+              { label: t("browse.filter.anyRating"), val: null },
             ].map((r) => {
               const active = (local.rating ?? null) === r.val;
               return (
@@ -438,7 +438,7 @@ function FilterPanel({
             })}
 
             {/* Max Distance */}
-            <SectionLabel label="MAX DISTANCE" c={c} />
+            <SectionLabel label={t("browse.filter.maxDistance")} c={c} />
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -449,7 +449,7 @@ function FilterPanel({
               }}
             >
               {[
-                { label: "Any distance", val: null },
+                { label: t("browse.filter.anyDistance"), val: null },
                 ...distances.map((d) => ({ label: `${d}km`, val: String(d) })),
               ].map((d) => {
                 const active = (local.radius ?? null) === d.val;
@@ -478,7 +478,7 @@ function FilterPanel({
             </ScrollView>
 
             {/* Language */}
-            <SectionLabel label="LANGUAGE" c={c} />
+            <SectionLabel label={t("browse.filter.language")} c={c} />
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -488,8 +488,9 @@ function FilterPanel({
                 paddingBottom: 4,
               }}
             >
-              {["Any language", ...languages].map((lang) => {
-                const val = lang === "Any language" ? null : lang;
+              {[t("browse.filter.anyLanguage"), ...languages].map((lang) => {
+                const val =
+                  lang === t("browse.filter.anyLanguage") ? null : lang;
                 const active = (local.language ?? null) === val;
                 return (
                   <Pressable
@@ -516,12 +517,18 @@ function FilterPanel({
             </ScrollView>
 
             {/* Gender */}
-            <SectionLabel label="GENDER PREFERENCE" c={c} />
+            <SectionLabel label={t("browse.filter.gender")} c={c} />
             {[
-              { label: "Any", val: null },
-              { label: "Male", val: "Male" },
-              { label: "Female", val: "Female" },
-              { label: "Non-binary", val: "Non-binary" },
+              { label: t("browse.filter.any"), val: null },
+              { label: t("browse.filter.male"), val: t("browse.filter.male") },
+              {
+                label: t("browse.filter.female"),
+                val: t("browse.filter.female"),
+              },
+              {
+                label: t("browse.filter.nonBinary"),
+                val: t("browse.filter.nonBinary"),
+              },
             ].map((g) => {
               const active = (local.gender ?? null) === g.val;
               return (
@@ -547,10 +554,10 @@ function FilterPanel({
             })}
 
             {/* Verification */}
-            <SectionLabel label="VERIFICATION" c={c} />
+            <SectionLabel label={t("browse.filter.verification")} c={c} />
             {[
-              { label: "Any", val: null },
-              { label: "Verified ✅", val: "VERIFIED" },
+              { label: t("browse.filter.any"), val: null },
+              { label: t("browse.filter.verified"), val: "VERIFIED" },
             ].map((v) => {
               const active = (local.verification ?? null) === v.val;
               return (
@@ -684,7 +691,7 @@ export default function BrowseWorkersScreen({ navigation }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        toast.error("Location permission denied");
+        toast.error(t("browse.filter.locationDenied"));
         return;
       }
       const loc = await Location.getCurrentPositionAsync({});
@@ -730,7 +737,7 @@ export default function BrowseWorkersScreen({ navigation }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        toast.error("Location permission denied");
+        toast.error(t("browse.filter.locationDenied"));
         return;
       }
       const loc = await Location.getCurrentPositionAsync({});
@@ -828,7 +835,7 @@ export default function BrowseWorkersScreen({ navigation }) {
                   { backgroundColor: c.bgInput, borderColor: c.border },
                 ]}
                 // In the mic button onPress:
-                onPress={() => toast.error("Voice search coming soon")}
+                onPress={() => toast.error(t("browse.filter.voiceSearch"))}
               >
                 <AppText>🎤</AppText>
               </Pressable>

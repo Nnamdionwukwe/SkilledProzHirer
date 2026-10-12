@@ -20,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../../components/AppText";
 import Avatar from "../../../components/Avatar";
@@ -35,20 +36,21 @@ const COL_GAP = 10; // gap between the 2 columns
 const CARD_W = (SCREEN_W - H_PAD * 2 - COL_GAP) / 2;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function timeAgo(date) {
+// timeAgo now takes t as a parameter since it's called inside components
+function timeAgo(date, t) {
   if (!date) return "";
   const diff = Date.now() - new Date(date).getTime();
   const d = Math.floor(diff / 86_400_000);
-  if (d < 1) return "Today";
-  if (d < 7) return `${d}d ago`;
-  if (d < 30) return `${Math.floor(d / 7)}w ago`;
+  if (d < 1) return t("workerJobs.job.today");
+  if (d < 7) return t("workerJobs.job.daysAgo", { d });
+  if (d < 30) return t("workerJobs.job.weeksAgo", { w: Math.floor(d / 7) });
   const m = Math.floor(d / 30);
-  if (m < 12) return `${m}mo ago`;
-  return `${Math.floor(m / 12)}y ago`;
+  if (m < 12) return t("workerJobs.job.monthsAgo", { m });
+  return t("workerJobs.job.yearsAgo", { y: Math.floor(m / 12) });
 }
 
 // Format estimated duration exactly as website: "80 hours (≈10 days)"
-function formatDuration(value, unit) {
+function formatDuration(value, unit, t) {
   if (!value || !unit) return null;
   const v = parseFloat(value);
   if (!v) return null;
@@ -57,13 +59,16 @@ function formatDuration(value, unit) {
     if (v >= 8) {
       const days = v / 8;
       const daysStr = Number.isInteger(days) ? days : days.toFixed(1);
-      return `${v} hours (≈${daysStr} days)`;
+      return t("workerJobs.job.durationFormat", { value: v, days: daysStr });
     }
-    return `${v} hour${v !== 1 ? "s" : ""}`;
+    return `${v} ${v !== 1 ? t("workerJobs.job.hoursPlural") : t("workerJobs.job.hours")}`;
   }
-  if (u === "days" || u === "day") return `${v} day${v !== 1 ? "s" : ""}`;
-  if (u === "weeks" || u === "week") return `${v} week${v !== 1 ? "s" : ""}`;
-  if (u === "months" || u === "month") return `${v} month${v !== 1 ? "s" : ""}`;
+  if (u === "days" || u === "day")
+    return `${v} ${v !== 1 ? t("workerJobs.job.daysPlural") : t("workerJobs.job.days")}`;
+  if (u === "weeks" || u === "week")
+    return `${v} ${v !== 1 ? t("workerJobs.job.weeksPlural") : t("workerJobs.job.weeks")}`;
+  if (u === "months" || u === "month")
+    return `${v} ${v !== 1 ? t("workerJobs.job.monthsPlural") : t("workerJobs.job.months")}`;
   return `${v} ${unit}`;
 }
 
@@ -82,9 +87,10 @@ function CategoryModal({
   c,
   modalBg,
 }) {
+  const { t } = useTranslation();
   const [q, setQ] = useState("");
   const filtered = [
-    { id: null, slug: null, name: "All Categories", icon: "🔍" },
+    { id: null, slug: null, name: t("workerJobs.category.all"), icon: "🔍" },
     ...categories,
   ].filter((cat) => !q || cat.name.toLowerCase().includes(q.toLowerCase()));
 
@@ -109,7 +115,7 @@ function CategoryModal({
             weight="semibold"
             style={{ color: c.text, paddingHorizontal: 20, marginBottom: 12 }}
           >
-            Select Category
+            {t("workerJobs.category.select")}
           </AppText>
 
           {/* Search */}
@@ -132,7 +138,7 @@ function CategoryModal({
             <TextInput
               value={q}
               onChangeText={setQ}
-              placeholder="Search categories..."
+              placeholder={t("workerJobs.category.search")}
               placeholderTextColor={c.textMuted}
               style={{ flex: 1, color: c.text, fontSize: 14 }}
             />
@@ -232,6 +238,7 @@ const cm = StyleSheet.create({
 
 // ─── Apply bottom-sheet Modal ─────────────────────────────────────────────────
 function ApplyModal({ visible, job, onClose, c, modalBg, toast }) {
+  const { t } = useTranslation();
   const [msg, setMsg] = useState("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
@@ -250,12 +257,12 @@ function ApplyModal({ visible, job, onClose, c, modalBg, toast }) {
       await client.post(`/jobs/${job.id}/apply`, { message: msg.trim() });
       setResult({
         success: true,
-        msg: "Application sent! The hirer will be notified.",
+        msg: t("workerJobs.apply.success"),
       });
     } catch (err) {
       setResult({
         success: false,
-        msg: err?.response?.data?.message ?? "Failed to apply.",
+        msg: err?.response?.data?.message ?? t("workerJobs.apply.failed"),
       });
     } finally {
       setSending(false);
@@ -347,7 +354,7 @@ function ApplyModal({ visible, job, onClose, c, modalBg, toast }) {
                   weight="semibold"
                   style={{ color: c.text }}
                 >
-                  Close
+                  {t("workerJobs.apply.close")}
                 </AppText>
               </Pressable>
             </View>
@@ -363,12 +370,12 @@ function ApplyModal({ visible, job, onClose, c, modalBg, toast }) {
                   fontSize: 11,
                 }}
               >
-                MESSAGE (OPTIONAL)
+                {t("workerJobs.apply.message")}
               </AppText>
               <TextInput
                 value={msg}
                 onChangeText={setMsg}
-                placeholder="Add a message to your application..."
+                placeholder={t("workerJobs.apply.messagePlaceholder")}
                 placeholderTextColor={c.textMuted}
                 multiline
                 numberOfLines={3}
@@ -423,13 +430,13 @@ function ApplyModal({ visible, job, onClose, c, modalBg, toast }) {
                     weight="semibold"
                     style={{ color: "#fff" }}
                   >
-                    ✋ Apply Now
+                    {t("workerJobs.apply.button")}
                   </AppText>
                 )}
               </Pressable>
               <Pressable onPress={onClose} style={am.cancelBtn}>
                 <AppText variant="small" tone="dim">
-                  Cancel
+                  {t("workerJobs.apply.cancel")}
                 </AppText>
               </Pressable>
             </View>
@@ -536,9 +543,11 @@ const mc = StyleSheet.create({
 
 // ─── Job card ─────────────────────────────────────────────────────────────────
 function JobCard({ job, onApply, onHirerProfile, onViewDetail, c }) {
+  const { t } = useTranslation();
   const duration = formatDuration(
     job.estimatedValue ?? job.estValue ?? job.defaultEstValue,
     job.estimatedUnit ?? job.estUnit ?? job.defaultEstUnit,
+    t,
   );
   const applied = job._count?.applications ?? 0;
   const budgetStr = fmtBudget(job.currency, job.budget);
@@ -569,7 +578,7 @@ function JobCard({ job, onApply, onHirerProfile, onViewDetail, c }) {
           tone="dim"
           style={{ fontSize: 11, flexShrink: 0, marginLeft: 4 }}
         >
-          {timeAgo(job.createdAt)}
+          {timeAgo(job.createdAt, t)}
         </AppText>
       </View>
 
@@ -625,7 +634,7 @@ function JobCard({ job, onApply, onHirerProfile, onViewDetail, c }) {
           tone="dim"
           style={{ fontSize: 11, flexShrink: 0 }}
         >
-          {applied} applied
+          {t("workerJobs.job.applied", { count: applied })}
         </AppText>
       </View>
 
@@ -636,7 +645,7 @@ function JobCard({ job, onApply, onHirerProfile, onViewDetail, c }) {
           style={[jc.applyBtn, { backgroundColor: c.orange }]}
         >
           <AppText weight="semibold" style={{ color: "#fff", fontSize: 13 }}>
-            View & Apply →
+            {t("workerJobs.job.viewApply")}
           </AppText>
         </Pressable>
         <Pressable
@@ -647,7 +656,7 @@ function JobCard({ job, onApply, onHirerProfile, onViewDetail, c }) {
           ]}
         >
           <AppText weight="semibold" style={{ color: c.text, fontSize: 13 }}>
-            Hirer Profile
+            {t("workerJobs.job.hirerProfile")}
           </AppText>
         </Pressable>
       </View>
@@ -718,6 +727,7 @@ const jc = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WorkerJobsScreen({ navigation }) {
+  const { t } = useTranslation();
   const { theme: th } = useTheme();
   const { toast } = useToast();
   const { user } = useAuthStore();
@@ -767,7 +777,7 @@ export default function WorkerJobsScreen({ navigation }) {
       setJobs(d.jobPosts ?? d.jobs ?? []);
       setTotal(d.total ?? d.jobPosts?.length ?? 0);
     } catch (err) {
-      toast.error("Could not load jobs");
+      toast.error(t("workerJobs.toast.loadError"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -782,7 +792,7 @@ export default function WorkerJobsScreen({ navigation }) {
   const selectedCat = categories.find((c) => c.slug === catSlug);
   const catLabel = selectedCat
     ? `${selectedCat.icon} ${selectedCat.name}`
-    : "All Categories";
+    : t("workerJobs.category.all");
 
   // Group jobs into rows of 2 for the 2-column grid
   const rows = [];
@@ -848,7 +858,7 @@ export default function WorkerJobsScreen({ navigation }) {
             onChangeText={setSearchText}
             onSubmitEditing={handleSearch}
             returnKeyType="search"
-            placeholder="Search jobs by title or description..."
+            placeholder={t("workerJobs.search.placeholder")}
             placeholderTextColor={c.textMuted}
             style={{ flex: 1, color: c.text, fontSize: 14 }}
           />
@@ -896,7 +906,7 @@ export default function WorkerJobsScreen({ navigation }) {
         style={[s.searchBtn, { backgroundColor: c.orange }]}
       >
         <AppText weight="semibold" style={{ color: "#fff", fontSize: 15 }}>
-          Search
+          {t("workerJobs.search.button")}
         </AppText>
       </Pressable>
 
@@ -907,7 +917,10 @@ export default function WorkerJobsScreen({ navigation }) {
           tone="dim"
           style={{ marginTop: 16, marginBottom: 14 }}
         >
-          {total} open job{total !== 1 ? "s" : ""} found
+          {t("workerJobs.search.resultsFound", {
+            count: total,
+            s: total !== 1 ? "s" : "",
+          })}
         </AppText>
       )}
 
@@ -927,10 +940,10 @@ export default function WorkerJobsScreen({ navigation }) {
             weight="semibold"
             style={{ color: c.text, marginBottom: 6 }}
           >
-            No jobs found
+            {t("workerJobs.empty.title")}
           </AppText>
           <AppText variant="body" tone="dim" style={{ textAlign: "center" }}>
-            Try adjusting your search or clearing the category filter.
+            {t("workerJobs.empty.subtitle")}
           </AppText>
           {(committed || catSlug) && (
             <Pressable
@@ -946,7 +959,7 @@ export default function WorkerJobsScreen({ navigation }) {
                 weight="semibold"
                 style={{ color: c.text }}
               >
-                Clear filters
+                {t("workerJobs.empty.clearFilters")}
               </AppText>
             </Pressable>
           )}

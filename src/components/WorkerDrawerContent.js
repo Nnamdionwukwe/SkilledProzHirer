@@ -1,7 +1,7 @@
 // src/components/WorkerDrawerContent.js
 // All strings via t() — no hardcoded English.
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Image,
   Pressable,

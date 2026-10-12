@@ -79,6 +79,7 @@ const pl = StyleSheet.create({
 
 // ─── Search result row ────────────────────────────────────────────────────────
 function ResultRow({ cat, isAdded, onPress, c }) {
+  const { t } = useTranslation();
   return (
     <Pressable
       onPress={onPress}
@@ -99,7 +100,7 @@ function ResultRow({ cat, isAdded, onPress, c }) {
         </AppText>
         {cat._count?.workers != null && (
           <AppText variant="small" tone="dim">
-            {cat._count.workers} workers
+            {t("workerCategory.workerCount", { count: cat._count.workers })}
           </AppText>
         )}
       </View>
@@ -162,7 +163,7 @@ function CatRow({ wc, onSetPrimary, onRemove, removing, settingPrimary, c }) {
               weight="semibold"
               style={{ color: "#fff", marginLeft: 4 }}
             >
-              {t("workerCat.primary")}
+              {t("workerCategory.primary")}
             </AppText>
           </View>
         ) : (
@@ -175,7 +176,7 @@ function CatRow({ wc, onSetPrimary, onRemove, removing, settingPrimary, c }) {
               <ActivityIndicator size="small" color={c.orange} />
             ) : (
               <AppText variant="small" style={{ color: c.text }}>
-                {t("workerCat.setPrimary")}
+                {t("workerCategory.setPrimary")}
               </AppText>
             )}
           </Pressable>
@@ -268,7 +269,7 @@ export default function WorkerCategoriesScreen() {
       const worker = res.data.data?.worker ?? res.data.data ?? {};
       setMyCategories(worker.categories ?? []);
     } catch {
-      toast.error(t("workerCat.addFail"));
+      toast.error(t("workerCategory.error.loadFailed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -341,7 +342,7 @@ export default function WorkerCategoriesScreen() {
       (wc) => (wc.category?.id ?? wc.categoryId) === cat.id,
     );
     if (alreadyAdded) {
-      toast.error(t("workerCat.alreadyAdded", { name: cat.name }));
+      toast.info(t("workerCategory.alreadyAdded", { name: cat.name }));
       return;
     }
     setAdding(cat.id);
@@ -351,9 +352,11 @@ export default function WorkerCategoriesScreen() {
         isPrimary: myCategories.length === 0,
       });
       await loadMyCategories();
-      toast.success(t("workerCat.addSuccess", { name: cat.name }));
+      toast.success(t("workerCategory.addSuccess", { name: cat.name }));
     } catch (err) {
-      toast.error(err?.response?.data?.message ?? t("workerCat.addFail"));
+      toast.error(
+        err?.response?.data?.message ?? t("workerCategory.error.addFailed"),
+      );
     } finally {
       setAdding(null);
     }
@@ -370,12 +373,14 @@ export default function WorkerCategoriesScreen() {
         isPrimary: myCategories.length === 0,
       });
       await loadMyCategories();
-      toast.success(`${cat.name} added!`);
+      toast.success(t("workerCategory.addNewSuccess", { name: cat.name }));
       setCustomName("");
       setShowCustom(false);
       closeDropdown();
     } catch (err) {
-      toast.error(err?.response?.data?.message ?? "Failed to add category.");
+      toast.error(
+        err?.response?.data?.message ?? t("workerCategory.error.addNewFailed"),
+      );
     } finally {
       setAddingCustom(false);
     }
@@ -384,21 +389,21 @@ export default function WorkerCategoriesScreen() {
   // ── Remove ──────────────────────────────────────────────────────────────────
   const handleRemove = (catId, name) => {
     Alert.alert(
-      t("workerCat.removeConfirmTitle"),
-      t("workerCat.removeConfirm", { name }),
+      t("workerCategory.removeConfirmTitle"),
+      t("workerCategory.removeConfirm", { name }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Remove",
+          text: t("common.remove"),
           style: "destructive",
           onPress: async () => {
             setRemoving(catId);
             try {
               await client.delete(`/workers/categories/${catId}`);
               await loadMyCategories();
-              toast.success(t("workerCat.removeSuccess", { name }));
+              toast.success(t("workerCategory.removeSuccess", { name }));
             } catch {
-              toast.error(t("workerCat.removeFail"));
+              toast.error(t("workerCategory.error.removeFailed"));
             } finally {
               setRemoving(null);
             }
@@ -418,7 +423,7 @@ export default function WorkerCategoriesScreen() {
       });
       await loadMyCategories();
     } catch {
-      toast.error(t("workerCat.primaryFail"));
+      toast.error(t("workerCategory.error.primaryFailed"));
     } finally {
       setSettingPrim(null);
     }
@@ -450,14 +455,14 @@ export default function WorkerCategoriesScreen() {
     >
       {/* ── Page header ── */}
       <AppText weight="displayBlack" style={[s.pageTitle, { color: c.text }]}>
-        {t("workerCat.title")}
+        {t("workerCategory.title")}
       </AppText>
       <AppText
         variant="body"
         tone="dim"
         style={{ marginBottom: 20, lineHeight: 22 }}
       >
-        {t("workerCat.subtitle", { count: "800" })}
+        {t("workerCategory.subtitle")}
       </AppText>
 
       {/* ═══ ADD CATEGORY CARD ═══ */}
@@ -469,10 +474,10 @@ export default function WorkerCategoriesScreen() {
           weight="semibold"
           style={{ color: c.text, marginBottom: 4 }}
         >
-          {t("workerCat.addTitle")}
+          {t("workerCategory.addTitle")}
         </AppText>
         <AppText variant="small" tone="dim" style={{ marginBottom: 14 }}>
-          {t("workerCat.addSub")}
+          {t("workerCategory.addSub")}
         </AppText>
 
         {/* Search input */}
@@ -497,7 +502,7 @@ export default function WorkerCategoriesScreen() {
             value={searchText}
             onChangeText={setSearchText}
             onFocus={openDropdown}
-            placeholder={t("workerCat.searchPlaceholder")}
+            placeholder={t("workerCategory.searchPlaceholder")}
             placeholderTextColor={c.textMuted}
             style={{ flex: 1, color: c.text, fontSize: 15 }}
             returnKeyType="search"
@@ -553,7 +558,7 @@ export default function WorkerCategoriesScreen() {
                     fontSize: 11,
                   }}
                 >
-                  {t("workerCat.popularLabel")}
+                  {t("workerCategory.popularLabel")}
                 </AppText>
                 {totalCats > 0 && (
                   <AppText
@@ -561,7 +566,7 @@ export default function WorkerCategoriesScreen() {
                     weight="semibold"
                     style={{ color: c.orange }}
                   >
-                    {totalCats.toLocaleString()} TOTAL
+                    {totalCats.toLocaleString()} {t("workerCategory.total")}
                   </AppText>
                 )}
               </View>
@@ -578,7 +583,7 @@ export default function WorkerCategoriesScreen() {
             {noResults && (
               <View style={{ padding: 16 }}>
                 <AppText variant="body" tone="dim" style={{ marginBottom: 12 }}>
-                  No results for "{searchText}"
+                  {t("workerCategory.noResults", { query: searchText })}
                 </AppText>
                 <Pressable
                   onPress={() => handleAddNew(searchText)}
@@ -593,7 +598,7 @@ export default function WorkerCategoriesScreen() {
                       weight="semibold"
                       style={{ color: "#fff" }}
                     >
-                      {t("workerCat.addNew", { name: searchText })}
+                      {t("workerCategory.addNew", { name: searchText })}
                     </AppText>
                   )}
                 </Pressable>
@@ -623,7 +628,7 @@ export default function WorkerCategoriesScreen() {
               style={{ padding: 14 }}
             >
               <AppText variant="small" style={{ color: c.textMuted }}>
-                {t("workerCat.cantFind")}
+                {t("workerCategory.cantFind")}
               </AppText>
             </Pressable>
           </View>
@@ -642,7 +647,7 @@ export default function WorkerCategoriesScreen() {
               weight="semibold"
               style={{ color: c.textMuted, marginBottom: 10 }}
             >
-              {t("workerCat.customPrompt")}
+              {t("workerCategory.customPrompt")}
             </AppText>
             <View
               style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
@@ -650,7 +655,7 @@ export default function WorkerCategoriesScreen() {
               <TextInput
                 value={customName}
                 onChangeText={setCustomName}
-                placeholder={t("workerCat.customPlaceholder")}
+                placeholder={t("workerCategory.customPlaceholder")}
                 placeholderTextColor={c.textMuted}
                 style={[
                   s.customInput,
@@ -684,7 +689,7 @@ export default function WorkerCategoriesScreen() {
                     weight="semibold"
                     style={{ color: "#fff" }}
                   >
-                    + Add
+                    + {t("workerCategory.add")}
                   </AppText>
                 )}
               </Pressable>
@@ -711,7 +716,7 @@ export default function WorkerCategoriesScreen() {
       >
         <View style={s.listHeader}>
           <AppText variant="title" weight="semibold" style={{ color: c.text }}>
-            {t("workerCat.myCategories")}
+            {t("workerCategory.myCategories")}
           </AppText>
           <View style={[s.countBadge, { backgroundColor: c.orange }]}>
             <AppText
@@ -741,10 +746,10 @@ export default function WorkerCategoriesScreen() {
               weight="semibold"
               style={{ color: c.text, marginBottom: 6 }}
             >
-              {t("workerCat.noCategoriesTitle")}
+              {t("workerCategory.noCategoriesTitle")}
             </AppText>
             <AppText variant="small" tone="dim" style={{ textAlign: "center" }}>
-              {t("workerCat.noCategoriesSub")}
+              {t("workerCategory.noCategoriesSub")}
             </AppText>
           </View>
         ) : (

@@ -1,14 +1,5 @@
 // src/screens/main/BookingDetailScreen.js
 // Shared screen for HIRER and WORKER — role-aware rendering throughout.
-// New in this version:
-//   • Worker Location (GPS check-in / check-out cards)
-//   • Enhanced Payment (Status badge + Ref + Provider)
-//   • Reviews section with Leave a Review button
-//   • Emergency Contact (worker-only) — save + edit
-//   • SOS button + SOS Active state (worker-only)
-//   • Check In / Check Out buttons (worker-only)
-//   • Download Invoice (PDF) — COMPLETED bookings
-//   • Description translation UI
 
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -62,120 +53,174 @@ import {
 } from "../../api/payments";
 import { RaiseDisputeSheet } from "./DisputesScreen";
 
-// ─── Status meta ──────────────────────────────────────────────────────────────
-const STATUS_META = {
-  PENDING: {
-    label: "Pending",
-    color: "#f97316",
-    bg: "rgba(249,115,22,0.15)",
-    step: 0,
-  },
-  ACCEPTED: {
-    label: "Accepted",
-    color: "#f97316",
-    bg: "rgba(249,115,22,0.25)",
-    step: 1,
-  },
-  IN_PROGRESS: {
-    label: "In Progress",
-    color: "#6366f1",
-    bg: "rgba(99,102,241,0.15)",
-    step: 2,
-  },
-  COMPLETED: {
-    label: "Completed",
-    color: "#22c55e",
-    bg: "rgba(34,197,94,0.12)",
-    step: 3,
-  },
-  CANCELLED: {
-    label: "Cancelled",
-    color: "#ef4444",
-    bg: "rgba(239,68,68,0.12)",
-    step: -1,
-  },
-  DISPUTED: {
-    label: "Disputed",
-    color: "#f43f5e",
-    bg: "rgba(244,63,94,0.12)",
-    step: -1,
-  },
-};
+// ─── Status meta (NO t() calls here - these are used inside components) ─────
+// These are now functions that accept `t` as a parameter
+function getStatusMeta(t) {
+  return {
+    PENDING: {
+      label: t("booking.status.pending"),
+      color: "#f97316",
+      bg: "rgba(249,115,22,0.15)",
+      step: 0,
+    },
+    ACCEPTED: {
+      label: t("booking.status.accepted"),
+      color: "#f97316",
+      bg: "rgba(249,115,22,0.25)",
+      step: 1,
+    },
+    IN_PROGRESS: {
+      label: t("booking.status.inProgress"),
+      color: "#6366f1",
+      bg: "rgba(99,102,241,0.15)",
+      step: 2,
+    },
+    COMPLETED: {
+      label: t("booking.status.completed"),
+      color: "#22c55e",
+      bg: "rgba(34,197,94,0.12)",
+      step: 3,
+    },
+    CANCELLED: {
+      label: t("booking.status.cancelled"),
+      color: "#ef4444",
+      bg: "rgba(239,68,68,0.12)",
+      step: -1,
+    },
+    DISPUTED: {
+      label: t("booking.status.disputed"),
+      color: "#f43f5e",
+      bg: "rgba(244,63,94,0.12)",
+      step: -1,
+    },
+  };
+}
 
-const PAY_STATUS_META = {
-  PENDING: { label: "PENDING", color: "#f59e0b", bg: "rgba(245,158,11,0.15)" },
-  HELD: { label: "HELD", color: "#6366f1", bg: "rgba(99,102,241,0.15)" },
-  RELEASED: { label: "RELEASED", color: "#22c55e", bg: "rgba(34,197,94,0.15)" },
-  FAILED: { label: "FAILED", color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
-  REFUNDED: {
-    label: "REFUNDED",
-    color: "#6b7280",
-    bg: "rgba(107,114,128,0.15)",
-  },
-};
+function getPayStatusMeta(t) {
+  return {
+    PENDING: {
+      label: t("booking.payment.pending"),
+      color: "#f59e0b",
+      bg: "rgba(245,158,11,0.15)",
+    },
+    HELD: {
+      label: t("booking.payment.held"),
+      color: "#6366f1",
+      bg: "rgba(99,102,241,0.15)",
+    },
+    RELEASED: {
+      label: t("booking.payment.released"),
+      color: "#22c55e",
+      bg: "rgba(34,197,94,0.15)",
+    },
+    FAILED: {
+      label: t("booking.payment.failed"),
+      color: "#ef4444",
+      bg: "rgba(239,68,68,0.15)",
+    },
+    REFUNDED: {
+      label: t("booking.payment.refunded"),
+      color: "#6b7280",
+      bg: "rgba(107,114,128,0.15)",
+    },
+  };
+}
 
-const TIMELINE_STEPS = ["Pending", "Accepted", "In Progress", "Completed"];
+function getTimelineSteps(t) {
+  return [
+    t("booking.timeline.pending"),
+    t("booking.timeline.accepted"),
+    t("booking.timeline.inProgress"),
+    t("booking.timeline.completed"),
+  ];
+}
 
-const LANGUAGES = [
-  "Yoruba",
-  "Hausa",
-  "Igbo",
-  "Pidgin",
-  "French",
-  "Arabic",
-  "Swahili",
-];
+function getLanguages(t) {
+  return [
+    t("booking.languages.yoruba"),
+    t("booking.languages.hausa"),
+    t("booking.languages.igbo"),
+    t("booking.languages.pidgin"),
+    t("booking.languages.french"),
+    t("booking.languages.arabic"),
+    t("booking.languages.swahili"),
+  ];
+}
 
-const CRYPTO_OPTIONS = [
-  { id: "USDC", label: "USDC", sub: "Ethereum", icon: "$" },
-  { id: "USDT", label: "USDT", sub: "Tron (TRC20)", icon: "💵" },
-  { id: "BTC", label: "Bitcoin", sub: "Bitcoin", icon: "₿" },
-  { id: "ETH", label: "Ethereum", sub: "Ethereum", icon: "◆" },
-];
+function getCryptoOptions(t) {
+  return [
+    {
+      id: "USDC",
+      label: t("booking.crypto.usdc"),
+      sub: t("booking.crypto.usdcSub"),
+      icon: "$",
+    },
+    {
+      id: "USDT",
+      label: t("booking.crypto.usdt"),
+      sub: t("booking.crypto.usdtSub"),
+      icon: "💵",
+    },
+    {
+      id: "BTC",
+      label: t("booking.crypto.btc"),
+      sub: t("booking.crypto.btcSub"),
+      icon: "₿",
+    },
+    {
+      id: "ETH",
+      label: t("booking.crypto.eth"),
+      sub: t("booking.crypto.ethSub"),
+      icon: "◆",
+    },
+  ];
+}
 
-const INSURANCE_PLANS = [
-  {
-    id: "basic",
-    name: "Basic Protection",
-    price: 5,
-    covers: "$5,000",
-    popular: false,
-    features: [
-      "Property damage up to $5,000",
-      "Valid for single booking",
-      "24-hour claims support",
-      "Instant activation",
-    ],
-  },
-  {
-    id: "standard",
-    name: "Standard Cover",
-    price: 12,
-    covers: "$15,000",
-    popular: true,
-    features: [
-      "Property damage up to $15,000",
-      "Third-party liability included",
-      "Priority claims handling",
-      "Same-day payouts",
-    ],
-  },
-  {
-    id: "premium",
-    name: "Premium Shield",
-    price: 25,
-    covers: "$30,000",
-    popular: false,
-    features: [
-      "Property damage up to $30,000",
-      "Third-party liability",
-      "Worker injury cover",
-      "Legal expenses",
-      "Dedicated claims agent",
-      "Valid for 30 days",
-    ],
-  },
-];
+function getInsurancePlans(t) {
+  return [
+    {
+      id: "basic",
+      name: t("booking.insurance.basic"),
+      price: 5,
+      covers: "$5,000",
+      popular: false,
+      features: [
+        "Property damage up to $5,000",
+        "Valid for single booking",
+        "24-hour claims support",
+        "Instant activation",
+      ],
+    },
+    {
+      id: "standard",
+      name: t("booking.insurance.standard"),
+      price: 12,
+      covers: "$15,000",
+      popular: true,
+      features: [
+        "Property damage up to $15,000",
+        "Third-party liability included",
+        "Priority claims handling",
+        "Same-day payouts",
+      ],
+    },
+    {
+      id: "premium",
+      name: t("booking.insurance.premium"),
+      price: 25,
+      covers: "$30,000",
+      popular: false,
+      features: [
+        "Property damage up to $30,000",
+        "Third-party liability",
+        "Worker injury cover",
+        "Legal expenses",
+        "Dedicated claims agent",
+        "Valid for 30 days",
+      ],
+    },
+  ];
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDuration(booking) {
@@ -355,6 +400,7 @@ function buildInvoiceHtml(booking) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function DetailCell({ icon, label, value, accent, c }) {
+  const s = styles;
   return (
     <View
       style={[
@@ -364,7 +410,7 @@ function DetailCell({ icon, label, value, accent, c }) {
     >
       <AppText style={{ fontSize: 18, lineHeight: 25 }}>{icon}</AppText>
       <AppText variant="small" tone="dim" style={s.cellLabel}>
-        {label.toUpperCase()}
+        {label}
       </AppText>
       <AppText
         variant="body"
@@ -378,6 +424,10 @@ function DetailCell({ icon, label, value, accent, c }) {
 }
 
 function Timeline({ step, c }) {
+  const { t } = useTranslation();
+  const TIMELINE_STEPS = getTimelineSteps(t);
+  const s = styles;
+
   if (step < 0) return null;
   return (
     <Card padded style={{ marginBottom: 12 }}>
@@ -440,6 +490,7 @@ function LocationCard({ label, lat, lng, timestamp, isCheckOut, c }) {
   const dotColor = isCheckOut ? "#ef4444" : "#22c55e";
   const bgColor = isCheckOut ? "rgba(239,68,68,0.08)" : "rgba(34,197,94,0.08)";
   const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const s = styles;
 
   return (
     <View
@@ -461,7 +512,7 @@ function LocationCard({ label, lat, lng, timestamp, isCheckOut, c }) {
       </View>
       <View style={[s.locRow, { borderTopColor: c.border }]}>
         <AppText variant="small" tone="dim">
-          Coordinates
+          {t("booking.location.coordinates")}
         </AppText>
         <AppText variant="small" weight="semibold" style={{ color: c.text }}>
           {Number(lat).toFixed(5)}, {Number(lng).toFixed(5)}
@@ -472,7 +523,7 @@ function LocationCard({ label, lat, lng, timestamp, isCheckOut, c }) {
         style={{ marginTop: 8 }}
       >
         <AppText variant="small" style={{ color: "#3b82f6" }}>
-          🗺️ View on Google Maps
+          {t("booking.location.viewOnMaps")}
         </AppText>
       </Pressable>
     </View>
@@ -481,6 +532,9 @@ function LocationCard({ label, lat, lng, timestamp, isCheckOut, c }) {
 
 // ─── Language picker modal ────────────────────────────────────────────────────
 function LangModal({ visible, selected, onSelect, onClose, c, modalBg }) {
+  const { t } = useTranslation();
+  const LANGUAGES = getLanguages(t);
+
   return (
     <Modal
       visible={visible}
@@ -520,7 +574,7 @@ function LangModal({ visible, selected, onSelect, onClose, c, modalBg }) {
             weight="semibold"
             style={{ color: c.text, paddingHorizontal: 20, marginBottom: 12 }}
           >
-            Select Language
+            {t("booking.translate.selectLanguage")}
           </AppText>
           {LANGUAGES.map((lang) => (
             <Pressable
@@ -566,8 +620,13 @@ export default function BookingDetailScreen() {
   const { user } = useAuthStore();
   const c = th.colors;
   const modalBg = th.mode === "dark" ? "#111118" : "#ffffff";
+  const s = styles;
 
   const bookingId = route.params?.bookingId;
+
+  // Get translated meta inside component
+  const STATUS_META = getStatusMeta(t);
+  const PAY_STATUS_META = getPayStatusMeta(t);
 
   // ── Core state ──────────────────────────────────────────────────────────────
   const [booking, setBooking] = useState(null);
@@ -614,7 +673,9 @@ export default function BookingDetailScreen() {
   const [checkOutLoading, setCheckOutLoading] = useState(false);
 
   // ── Translation ─────────────────────────────────────────────────────────────
-  const [translateLang, setTranslateLang] = useState("Yoruba");
+  const [translateLang, setTranslateLang] = useState(
+    t("booking.languages.yoruba"),
+  );
   const [showLangModal, setShowLangModal] = useState(false);
   const [translatedText, setTranslatedText] = useState(null);
   const [translating, setTranslating] = useState(false);
@@ -698,7 +759,11 @@ export default function BookingDetailScreen() {
     try {
       const updated = await updateBookingStatus(bookingId, status, extra);
       setBooking(updated);
-      toast.success(`Booking ${status.toLowerCase().replace("_", " ")}.`);
+      toast.success(
+        t("booking.statusUpdated", {
+          status: status.toLowerCase().replace("_", " "),
+        }),
+      );
       setShowCancel(false);
       setCancelReason("");
     } catch (err) {
@@ -721,9 +786,9 @@ export default function BookingDetailScreen() {
     try {
       const updated = await checkInApi(bookingId, {});
       setBooking(updated);
-      toast.success("Checked in! Job is now in progress.");
+      toast.success(t("booking.checkin.success"));
     } catch (err) {
-      toast.error(err?.response?.data?.message ?? "Check-in failed.");
+      toast.error(err?.response?.data?.message ?? t("booking.checkin.failed"));
     } finally {
       setCheckInLoading(false);
     }
@@ -731,18 +796,19 @@ export default function BookingDetailScreen() {
 
   const handleCheckOut = async () => {
     setModal({
-      title: "Check Out",
-      message:
-        "Mark this job as complete? The hirer will be asked to release payment.",
-      confirmLabel: "Check Out",
+      title: t("booking.checkout.title"),
+      message: t("booking.checkout.message"),
+      confirmLabel: t("booking.checkout.confirm"),
       onConfirm: async () => {
         setCheckOutLoading(true);
         try {
           const updated = await checkOutApi(bookingId, {});
           setBooking(updated);
-          toast.success("Checked out! Job marked as complete.");
+          toast.success(t("booking.checkout.success"));
         } catch (err) {
-          toast.error(err?.response?.data?.message ?? "Check-out failed.");
+          toast.error(
+            err?.response?.data?.message ?? t("booking.checkout.failed"),
+          );
         } finally {
           setCheckOutLoading(false);
         }
@@ -751,35 +817,33 @@ export default function BookingDetailScreen() {
   };
 
   const handleSOS = () => {
-    Alert.alert(
-      "🆘 Emergency SOS",
-      "This will immediately alert your hirer and our safety team with your GPS location. Only use in a genuine emergency.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Activate SOS",
-          style: "destructive",
-          onPress: async () => {
-            setSosLoading(true);
-            try {
-              const updated = await activateSOSApi(bookingId, {});
-              setBooking(updated);
-              setSosActive(true);
-              toast.success("SOS activated. Help is on the way.");
-            } catch (err) {
-              toast.error(err?.response?.data?.message ?? "SOS failed.");
-            } finally {
-              setSosLoading(false);
-            }
-          },
+    Alert.alert(t("booking.sos.title"), t("booking.sos.message"), [
+      { text: t("booking.sos.cancel"), style: "cancel" },
+      {
+        text: t("booking.sos.activate"),
+        style: "destructive",
+        onPress: async () => {
+          setSosLoading(true);
+          try {
+            const updated = await activateSOSApi(bookingId, {});
+            setBooking(updated);
+            setSosActive(true);
+            toast.success(t("booking.sos.activated"));
+          } catch (err) {
+            toast.error(
+              err?.response?.data?.message ?? t("booking.sos.failed"),
+            );
+          } finally {
+            setSosLoading(false);
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const handleSaveEmergency = async () => {
     if (!ecForm.name || !ecForm.phone) {
-      toast.error("Name and phone are required");
+      toast.error(t("booking.emergency.required"));
       return;
     }
     setSavingEc(true);
@@ -787,9 +851,11 @@ export default function BookingDetailScreen() {
       await saveEmergencyApi(bookingId, ecForm);
       setEmergencyContact({ ...ecForm });
       setShowEcEdit(false);
-      toast.success("Emergency contact saved.");
+      toast.success(t("booking.emergency.saved"));
     } catch (err) {
-      toast.error(err?.response?.data?.message ?? "Failed to save.");
+      toast.error(
+        err?.response?.data?.message ?? t("booking.emergency.saveFailed"),
+      );
     } finally {
       setSavingEc(false);
     }
@@ -797,9 +863,8 @@ export default function BookingDetailScreen() {
 
   const handleTranslate = () => {
     setTranslating(true);
-    // In production: call your translation API
     setTimeout(() => {
-      setTranslatedText("(Translation feature coming soon)");
+      setTranslatedText(t("booking.translate.comingSoon"));
       setTranslating(false);
     }, 800);
   };
@@ -838,16 +903,17 @@ export default function BookingDetailScreen() {
           receiverId,
         }),
       );
-      toast.success("Review submitted! Thank you.");
+      toast.success(t("booking.review.submitted"));
       setReviewModal(false);
       setReviewComment("");
     } catch (err) {
-      toast.error(err?.response?.data?.message ?? "Failed to submit review.");
+      toast.error(err?.response?.data?.message ?? t("booking.review.failed"));
     } finally {
       setReviewLoading(false);
     }
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <AppScreen contentContainerStyle={{ paddingBottom: 40 }}>
@@ -866,7 +932,7 @@ export default function BookingDetailScreen() {
         <AppText variant="small">{t("bookings.backToBookings")}</AppText>
       </Pressable>
 
-      {/* ─── TITLE ─── */}
+      {/* TITLE */}
       <Card padded style={{ marginBottom: 12 }}>
         <View style={s.titleRow}>
           <AppText
@@ -899,10 +965,10 @@ export default function BookingDetailScreen() {
         )}
       </Card>
 
-      {/* ─── TIMELINE ─── */}
+      {/* TIMELINE */}
       <Timeline step={step} c={c} />
 
-      {/* ─── DESCRIPTION ─── */}
+      {/* DESCRIPTION */}
       <Card padded style={{ marginBottom: 12 }}>
         <AppText
           variant="small"
@@ -910,11 +976,12 @@ export default function BookingDetailScreen() {
           tone="dim"
           style={s.sectionLabel}
         >
-          DESCRIPTION
+          {t("booking.section.description")}
         </AppText>
         <AppText variant="body" style={{ marginTop: 8, lineHeight: 22 }}>
           {booking.description}
         </AppText>
+        {/* Translation section */}
         {translatedText && (
           <View
             style={[
@@ -968,7 +1035,7 @@ export default function BookingDetailScreen() {
               <ActivityIndicator size="small" color={c.orange} />
             ) : (
               <AppText variant="small" style={{ color: c.text }}>
-                🌐 Translate
+                {t("booking.translate.button")}
               </AppText>
             )}
           </Pressable>
@@ -992,7 +1059,7 @@ export default function BookingDetailScreen() {
         )}
       </Card>
 
-      {/* ─── JOB DETAILS ─── */}
+      {/* JOB DETAILS */}
       <Card padded style={{ marginBottom: 12 }}>
         <AppText
           variant="small"
@@ -1000,26 +1067,26 @@ export default function BookingDetailScreen() {
           tone="dim"
           style={s.sectionLabel}
         >
-          JOB DETAILS
+          {t("booking.section.jobDetails")}
         </AppText>
         <View style={s.detailGrid}>
           <DetailCell
             icon="📅"
-            label="SCHEDULED"
+            label={t("booking.detail.scheduled")}
             value={`${scheduled.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })} at ${scheduled.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
             c={c}
           />
           {booking.address && (
             <DetailCell
               icon="📍"
-              label="JOB SITE ADDRESS"
+              label={t("booking.detail.jobSiteAddress")}
               value={booking.address}
               c={c}
             />
           )}
           <DetailCell
             icon="💰"
-            label="AGREED RATE"
+            label={t("booking.detail.agreedRate")}
             value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
             accent
             c={c}
@@ -1027,7 +1094,7 @@ export default function BookingDetailScreen() {
           {dur && (
             <DetailCell
               icon="⏱️"
-              label="EST. DURATION"
+              label={t("booking.detail.estDuration")}
               value={dur.sub ? `${dur.main} (${dur.sub})` : dur.main}
               c={c}
             />
@@ -1056,7 +1123,7 @@ export default function BookingDetailScreen() {
         )}
       </Card>
 
-      {/* ─── WORKER LOCATION ─── */}
+      {/* WORKER LOCATION */}
       {(hasCheckIn || hasCheckOut) && (
         <Card padded style={{ marginBottom: 12 }}>
           <AppText
@@ -1065,19 +1132,18 @@ export default function BookingDetailScreen() {
             tone="dim"
             style={s.sectionLabel}
           >
-            WORKER LOCATION
+            {t("booking.section.workerLocation")}
           </AppText>
           <AppText
             variant="small"
             tone="dim"
             style={{ marginBottom: 12, lineHeight: 20 }}
           >
-            GPS coordinates recorded when the worker checked in and out. Visible
-            to both the worker and hirer.
+            {t("booking.gpsLocation")}
           </AppText>
           {hasCheckIn && (
             <LocationCard
-              label="Check-in Location"
+              label={t("booking.location.checkIn")}
               lat={booking.checkInLat}
               lng={booking.checkInLng}
               timestamp={booking.checkInAt}
@@ -1088,7 +1154,7 @@ export default function BookingDetailScreen() {
           {hasCheckOut && (
             <View style={{ marginTop: 10 }}>
               <LocationCard
-                label="Check-out Location"
+                label={t("booking.location.checkOut")}
                 lat={booking.checkOutLat}
                 lng={booking.checkOutLng}
                 timestamp={booking.checkOutAt}
@@ -1100,7 +1166,7 @@ export default function BookingDetailScreen() {
         </Card>
       )}
 
-      {/* ─── PAYMENT (enhanced) ─── */}
+      {/* PAYMENT */}
       {booking.payment && (
         <Card padded style={{ marginBottom: 12 }}>
           <AppText
@@ -1109,20 +1175,20 @@ export default function BookingDetailScreen() {
             tone="dim"
             style={s.sectionLabel}
           >
-            PAYMENT
+            {t("booking.section.payment")}
           </AppText>
           {[
             {
-              label: "Total",
+              label: t("booking.detail.total"),
               value: `${booking.payment.currency} ${Number(booking.payment.amount).toLocaleString()}`,
             },
             {
-              label: "Platform Fee",
+              label: t("booking.detail.platformFee"),
               value: `${booking.payment.currency} ${Number(booking.payment.platformFee).toLocaleString()}`,
               muted: true,
             },
             {
-              label: "Worker Payout",
+              label: t("booking.detail.workerPayout"),
               value: `${booking.payment.currency} ${Number(booking.payment.workerPayout).toLocaleString()}`,
               green: true,
             },
@@ -1149,11 +1215,10 @@ export default function BookingDetailScreen() {
               </AppText>
             </View>
           ))}
-          {/* Provider */}
           {booking.payment.provider && (
             <View style={[s.payRow, { borderBottomColor: c.border }]}>
               <AppText variant="body" tone="dim">
-                Provider
+                {t("booking.detail.provider")}
               </AppText>
               <AppText
                 variant="body"
@@ -1164,11 +1229,10 @@ export default function BookingDetailScreen() {
               </AppText>
             </View>
           )}
-          {/* Status badge */}
           {payMeta && (
             <View style={[s.payRow, { borderBottomColor: c.border }]}>
               <AppText variant="body" tone="dim">
-                Status
+                {t("booking.detail.status")}
               </AppText>
               <View
                 style={[
@@ -1191,11 +1255,10 @@ export default function BookingDetailScreen() {
               </View>
             </View>
           )}
-          {/* Reference */}
           {booking.payment.reference && (
             <View style={[s.payRow, { borderBottomWidth: 0 }]}>
               <AppText variant="body" tone="dim">
-                Ref
+                {t("booking.detail.ref")}
               </AppText>
               <AppText
                 style={{
@@ -1213,7 +1276,7 @@ export default function BookingDetailScreen() {
         </Card>
       )}
 
-      {/* ─── CANCEL REASON ─── */}
+      {/* CANCEL REASON */}
       {booking.cancelReason && (
         <Card padded style={{ marginBottom: 12 }}>
           <View
@@ -1236,1037 +1299,72 @@ export default function BookingDetailScreen() {
           </View>
         </Card>
       )}
-
-      {/* ─── PARTY CARD (HIRER / WORKER) ─── */}
-      <Card padded style={{ marginBottom: 12 }}>
-        <AppText
-          variant="small"
-          weight="semibold"
-          style={[s.sectionLabel, { textAlign: "center", color: c.orange }]}
-        >
-          {isHirer ? "WORKER" : "HIRER"}
-        </AppText>
-        <View style={s.partyBody}>
-          <View
-            style={[
-              s.partyAvatar,
-              { backgroundColor: c.bgCard, borderColor: c.orange },
-            ]}
-          >
-            {other?.avatar ? (
-              <Image source={{ uri: other.avatar }} style={s.partyAvatarImg} />
-            ) : (
-              <AppText
-                variant="title"
-                weight="semibold"
-                style={{ color: c.orange }}
-              >
-                {other?.firstName?.[0]}
-                {other?.lastName?.[0]}
-              </AppText>
-            )}
-          </View>
-          <AppText
-            variant="title"
-            weight="semibold"
-            style={{ marginTop: 10, color: c.text }}
-          >
-            {other?.firstName} {other?.lastName}
-          </AppText>
-          {other?.phone && (
-            <Pressable
-              onPress={() => Linking.openURL(`tel:${other.phone}`)}
-              style={s.phoneRow}
-            >
-              <AppText style={{ fontSize: 14 }}>📱</AppText>
-              <AppText variant="body" tone="dim" style={{ marginLeft: 6 }}>
-                {other.phone}
-              </AppText>
-            </Pressable>
-          )}
-          <Pressable
-            onPress={() =>
-              navigation.navigate(
-                isHirer ? "WorkerProfile" : "HirerPublicProfile",
-                { userId: other?.id },
-              )
-            }
-            style={[
-              s.viewProfileBtn,
-              { backgroundColor: c.orangeDim, borderColor: c.orange },
-            ]}
-          >
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: c.orange }}
-            >
-              View Profile →
-            </AppText>
-          </Pressable>
-          <Pressable
-            onPress={() =>
-              navigation.navigate("Chat", { recipientId: other?.id })
-            }
-            style={[
-              s.viewProfileBtn,
-              {
-                backgroundColor: c.bgCard,
-                borderColor: c.border,
-                marginTop: 8,
-              },
-            ]}
-          >
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: c.orange }}
-            >
-              💬 Send Message
-            </AppText>
-          </Pressable>
-        </View>
-      </Card>
-
-      {/* ─── HIRER: pending payment banner ─── */}
-      {isHirer && booking.payment?.status === "PENDING" && (
-        <View
-          style={[
-            s.infoBanner,
-            {
-              backgroundColor: "rgba(249,115,22,0.08)",
-              borderColor: c.orange,
-              marginBottom: 12,
-            },
-          ]}
-        >
-          <AppText variant="body" weight="semibold" style={{ color: c.orange }}>
-            ⏳ Payment Pending
-          </AppText>
-          <AppText
-            variant="small"
-            tone="dim"
-            style={{ marginTop: 4, lineHeight: 20 }}
-          >
-            Your previous payment attempt is pending. You can wait or try a
-            different method.
-          </AppText>
-        </View>
-      )}
-
-      {/* ─── HIRER: payment options (ACCEPTED, no payment yet) ─── */}
-      {isHirer &&
-        booking.status === "ACCEPTED" &&
-        (!booking.payment || booking.payment?.status === "PENDING") && (
-          <Card padded style={{ marginBottom: 12 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <AppText style={{ fontSize: 18, marginRight: 8 }}>💰</AppText>
-              <AppText variant="body" weight="semibold">
-                {t("bookings.breakdown")}
-              </AppText>
-            </View>
-            <View style={[s.youPayRow, { borderTopColor: c.border }]}>
-              <AppText variant="body" weight="semibold">
-                {t("bookings.youPay")}
-              </AppText>
-              <AppText
-                variant="display"
-                weight="displayBlack"
-                style={{ color: c.orange, fontSize: 28 }}
-              >
-                {booking.currency}{" "}
-                {Number(
-                  (estTotal?.total ?? booking.agreedRate) * 1.1,
-                ).toLocaleString()}
-              </AppText>
-            </View>
-            <View style={[s.methodRow, { marginTop: 16, marginBottom: 12 }]}>
-              {["card", "bank", "crypto"].map((m) => {
-                const icons = { card: "💳", bank: "🏦", crypto: "₿" };
-                const labels = {
-                  card: t("bookings.payWithCard"),
-                  bank: t("bookings.bankTransfer"),
-                  crypto: t("bookings.cryptoPay"),
-                };
-                return (
-                  <Pressable
-                    key={m}
-                    onPress={() => setPayMethod(m)}
-                    style={[
-                      s.methodBtn,
-                      {
-                        backgroundColor: payMethod === m ? c.orange : c.bgCard,
-                        borderColor: payMethod === m ? c.orange : c.border,
-                        flex: 1,
-                      },
-                    ]}
-                  >
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: payMethod === m ? "#fff" : c.text }}
-                    >
-                      {icons[m]} {labels[m]}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {payMethod === "card" && (
-              <Pressable
-                style={[
-                  s.bigBtn,
-                  {
-                    backgroundColor: payLoading ? c.bgCard : c.orange,
-                    opacity: payLoading ? 0.7 : 1,
-                  },
-                ]}
-                disabled={payLoading}
-                onPress={async () => {
-                  setPayLoading(true);
-                  try {
-                    const data = await initiatePayment(booking.id);
-                    if (data.authorizationUrl) {
-                      setPendingPayRef({
-                        gateway: "paystack",
-                        ref: data.reference,
-                      });
-                      await Linking.openURL(data.authorizationUrl);
-                    }
-                  } catch (err) {
-                    toast.error(
-                      err?.response?.data?.message || t("toast.unknownError"),
-                    );
-                  } finally {
-                    setPayLoading(false);
-                  }
-                }}
-              >
-                {payLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <AppText
-                    variant="body"
-                    weight="semibold"
-                    style={{ color: "#fff" }}
-                  >
-                    💳 Pay Now
-                  </AppText>
-                )}
-              </Pressable>
-            )}
-          </Card>
-        )}
-
-      {/* ─── REVIEWS (COMPLETED bookings) ─── */}
-      {isCompleted && (
-        <Card padded style={{ marginBottom: 12 }}>
-          <AppText
-            variant="small"
-            weight="semibold"
-            tone="dim"
-            style={s.sectionLabel}
-          >
-            REVIEWS
-          </AppText>
-          <Pressable
-            onPress={() => setReviewModal(true)}
-            style={[s.reviewBtn, { borderColor: c.border }]}
-          >
-            <AppText variant="body" weight="semibold" style={{ color: c.text }}>
-              ⭐ Leave a Review
-            </AppText>
-          </Pressable>
-        </Card>
-      )}
-
-      {/* ─── ACTIONS ─── */}
-      <Card padded style={{ marginBottom: 12 }}>
-        <AppText
-          variant="small"
-          weight="semibold"
-          tone="dim"
-          style={s.sectionLabel}
-        >
-          ACTIONS
-        </AppText>
-
-        {/* ── WORKER actions ── */}
-        {isWorker && (
-          <>
-            {/* Emergency Contact */}
-            {["ACCEPTED", "IN_PROGRESS"].includes(booking.status) && (
-              <View
-                style={[
-                  s.ecCard,
-                  { backgroundColor: c.bgPanel, borderColor: c.border },
-                ]}
-              >
-                <View style={s.ecHeader}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <AppText style={{ fontSize: 16 }}>👤</AppText>
-                    <AppText
-                      variant="body"
-                      weight="semibold"
-                      style={{ color: c.text }}
-                    >
-                      Emergency Contact
-                    </AppText>
-                  </View>
-                  <Pressable
-                    onPress={() => setShowEcEdit((v) => !v)}
-                    style={[s.editBtn, { borderColor: c.border }]}
-                  >
-                    <AppText variant="small" style={{ color: c.text }}>
-                      {showEcEdit
-                        ? "Cancel"
-                        : emergencyContact
-                          ? "Edit"
-                          : "Add"}
-                    </AppText>
-                  </Pressable>
-                </View>
-
-                {/* Saved contact display */}
-                {emergencyContact && !showEcEdit && (
-                  <View style={{ marginTop: 10, gap: 6 }}>
-                    {[
-                      {
-                        label: "Name",
-                        value: emergencyContact.name,
-                        color: c.text,
-                      },
-                      {
-                        label: "Phone",
-                        value: emergencyContact.phone,
-                        color: c.orange,
-                      },
-                      {
-                        label: "Relationship",
-                        value: emergencyContact.relationship,
-                        color: c.text,
-                      },
-                    ].map((row) => (
-                      <View
-                        key={row.label}
-                        style={{
-                          flexDirection: "row",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <AppText variant="small" tone="dim">
-                          {row.label}
-                        </AppText>
-                        <AppText
-                          variant="small"
-                          weight="semibold"
-                          style={{ color: row.color }}
-                        >
-                          {row.value}
-                        </AppText>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Edit / Add form */}
-                {(!emergencyContact || showEcEdit) && (
-                  <View style={{ marginTop: 10, gap: 8 }}>
-                    {!emergencyContact && (
-                      <AppText variant="small" tone="dim">
-                        Someone we can contact in case of an emergency during
-                        this job.
-                      </AppText>
-                    )}
-                    {[
-                      {
-                        label: "Full Name *",
-                        key: "name",
-                        placeholder: "e.g. Amaka Johnson",
-                      },
-                      {
-                        label: "Phone Number *",
-                        key: "phone",
-                        placeholder: "e.g. +234 801 234 5678",
-                      },
-                      {
-                        label: "Relationship",
-                        key: "relationship",
-                        placeholder: "e.g. Sister, Friend, Spouse",
-                      },
-                    ].map((field) => (
-                      <View key={field.key}>
-                        <AppText
-                          variant="small"
-                          weight="semibold"
-                          style={{ color: c.textMuted, marginBottom: 4 }}
-                        >
-                          {field.label}
-                        </AppText>
-                        <TextInput
-                          value={ecForm[field.key]}
-                          onChangeText={(v) =>
-                            setEcForm((f) => ({ ...f, [field.key]: v }))
-                          }
-                          placeholder={field.placeholder}
-                          placeholderTextColor={c.textMuted}
-                          style={[
-                            s.ecInput,
-                            {
-                              color: c.text,
-                              borderColor: c.border,
-                              backgroundColor: c.bgInput,
-                            },
-                          ]}
-                        />
-                      </View>
-                    ))}
-                    <Pressable
-                      onPress={handleSaveEmergency}
-                      disabled={savingEc}
-                      style={[
-                        s.bigBtn,
-                        {
-                          backgroundColor: savingEc ? c.bgPanel : c.orange,
-                          marginTop: 4,
-                        },
-                      ]}
-                    >
-                      {savingEc ? (
-                        <ActivityIndicator color="#fff" />
-                      ) : (
-                        <AppText
-                          variant="body"
-                          weight="semibold"
-                          style={{ color: "#fff" }}
-                        >
-                          Save Emergency Contact
-                        </AppText>
-                      )}
-                    </Pressable>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* SOS active */}
-            {sosActive && (
-              <View
-                style={[
-                  s.sosActiveBox,
-                  {
-                    borderColor: "#ef4444",
-                    backgroundColor: "rgba(239,68,68,0.08)",
-                  },
-                ]}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 4,
-                  }}
-                >
-                  <View style={[s.sosDot, { backgroundColor: "#ef4444" }]} />
-                  <AppText
-                    variant="body"
-                    weight="semibold"
-                    style={{ color: "#ef4444" }}
-                  >
-                    SOS Active
-                  </AppText>
-                  {booking.sosActivatedAt && (
-                    <AppText variant="small" tone="dim">
-                      Sent at{" "}
-                      {new Date(booking.sosActivatedAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </AppText>
-                  )}
-                </View>
-                <AppText variant="small" style={{ color: c.textMuted }}>
-                  Your hirer and our team have been alerted.
-                </AppText>
-              </View>
-            )}
-
-            {/* SOS button */}
-            {!sosActive &&
-              ["ACCEPTED", "IN_PROGRESS"].includes(booking.status) && (
-                <View style={{ marginTop: 10, gap: 6 }}>
-                  <Pressable
-                    onPress={handleSOS}
-                    disabled={sosLoading}
-                    style={[
-                      s.bigBtn,
-                      { backgroundColor: sosLoading ? c.bgPanel : "#dc2626" },
-                    ]}
-                  >
-                    {sosLoading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <View style={[s.sosDot, { backgroundColor: "#fff" }]} />
-                        <AppText style={{ fontSize: 16 }}>🆘</AppText>
-                        <AppText
-                          variant="body"
-                          weight="semibold"
-                          style={{ color: "#fff" }}
-                        >
-                          Emergency SOS
-                        </AppText>
-                      </View>
-                    )}
-                  </Pressable>
-                  <AppText
-                    variant="small"
-                    tone="dim"
-                    style={{ textAlign: "center" }}
-                  >
-                    Only use in a genuine emergency. Your GPS location will be
-                    shared.
-                  </AppText>
-                </View>
-              )}
-
-            {/* Worker PENDING → Accept */}
-            {booking.status === "PENDING" && (
-              <AppButton
-                title={t("bookings.accept")}
-                onPress={() => doStatus("ACCEPTED")}
-                loading={acting}
-                style={{ marginTop: 12 }}
-              />
-            )}
-
-            {/* Worker ACCEPTED → Check-in gating */}
-            {booking.status === "ACCEPTED" && (
-              <>
-                {booking.payment?.status === "HELD" ? (
-                  <Pressable
-                    onPress={handleCheckIn}
-                    disabled={checkInLoading}
-                    style={[
-                      s.bigBtn,
-                      {
-                        backgroundColor: checkInLoading ? c.bgPanel : "#22c55e",
-                        marginTop: 12,
-                      },
-                    ]}
-                  >
-                    {checkInLoading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <View style={[s.sosDot, { backgroundColor: "#fff" }]} />
-                        <AppText
-                          variant="body"
-                          weight="semibold"
-                          style={{ color: "#fff" }}
-                        >
-                          Check In — Start Job
-                        </AppText>
-                      </View>
-                    )}
-                  </Pressable>
-                ) : (
-                  <View
-                    style={[
-                      s.infoBanner,
-                      {
-                        backgroundColor: "rgba(99,102,241,0.08)",
-                        borderColor: "#6366f1",
-                        marginTop: 12,
-                      },
-                    ]}
-                  >
-                    <AppText
-                      variant="small"
-                      style={{ color: "#6366f1", textAlign: "center" }}
-                    >
-                      ⏳ Waiting for hirer to complete payment before you can
-                      check in.
-                    </AppText>
-                  </View>
-                )}
-              </>
-            )}
-
-            {/* Worker IN_PROGRESS → Check-out */}
-            {booking.status === "IN_PROGRESS" && (
-              <Pressable
-                onPress={handleCheckOut}
-                disabled={checkOutLoading}
-                style={[
-                  s.bigBtn,
-                  {
-                    backgroundColor: checkOutLoading ? c.bgPanel : "#22c55e",
-                    marginTop: 12,
-                  },
-                ]}
-              >
-                {checkOutLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <View style={[s.sosDot, { backgroundColor: "#fff" }]} />
-                    <AppText
-                      variant="body"
-                      weight="semibold"
-                      style={{ color: "#fff" }}
-                    >
-                      Check Out — Mark Complete
-                    </AppText>
-                  </View>
-                )}
-              </Pressable>
-            )}
-          </>
-        )}
-
-        {/* ── HIRER: Release Payment ── */}
-        {isHirer && booking.payment?.status === "HELD" && (
-          <Pressable
-            style={[
-              s.bigBtn,
-              {
-                backgroundColor: "rgba(34,197,94,0.12)",
-                borderColor: "#22c55e",
-                borderWidth: 1,
-                marginTop: 12,
-              },
-            ]}
-            onPress={() =>
-              setModal({
-                title: t("bookings.releaseConfirm"),
-                confirmLabel: t("bookings.release"),
-                onConfirm: async () => {
-                  try {
-                    await releasePayment(booking.id);
-                    toast.success("Payment released to worker!");
-                    const updated = await getBooking(bookingId);
-                    setBooking(updated);
-                  } catch (err) {
-                    toast.error(
-                      err?.response?.data?.message || t("toast.unknownError"),
-                    );
-                  }
-                },
-              })
-            }
-          >
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: "#22c55e" }}
-            >
-              💸 {t("bookings.releasePayment")}
-            </AppText>
-          </Pressable>
-        )}
-
-        {/* Cancel button */}
-        {canCancel && !showCancel && (
-          <Pressable
-            style={[
-              s.bigBtn,
-              {
-                backgroundColor: "rgba(239,68,68,0.08)",
-                borderColor: "#ef4444",
-                borderWidth: 1,
-                marginTop: 12,
-              },
-            ]}
-            onPress={() => {
-              setShowCancel(true);
-              setCancelError("");
-            }}
-          >
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: "#ef4444" }}
-            >
-              {t("bookings.cancelBooking")}
-            </AppText>
-          </Pressable>
-        )}
-        {canCancel && showCancel && (
-          <View
-            style={[
-              s.cancelBox,
-              {
-                backgroundColor: "rgba(239,68,68,0.06)",
-                borderColor: "#ef4444",
-              },
-            ]}
-          >
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: "#ef4444", marginBottom: 8 }}
-            >
-              {t("bookings.cancelReason")} *
-            </AppText>
-            <TextInput
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              placeholder={t("bookings.cancelReasonPlaceholder")}
-              placeholderTextColor={c.textMuted}
-              value={cancelReason}
-              onChangeText={(v) => {
-                setCancelReason(v);
-                setCancelError("");
-              }}
-              style={[
-                s.cancelInput,
-                {
-                  color: c.text,
-                  borderColor: cancelError ? "#ef4444" : c.border,
-                  backgroundColor: c.bgInput,
-                },
-              ]}
-            />
-            {cancelError && (
-              <AppText
-                variant="small"
-                style={{ color: "#ef4444", marginTop: 4 }}
-              >
-                {cancelError}
-              </AppText>
-            )}
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-              <Pressable
-                onPress={handleCancel}
-                disabled={acting}
-                style={[
-                  s.cancelConfirmBtn,
-                  { backgroundColor: "#ef4444", flex: 1 },
-                ]}
-              >
-                {acting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <AppText
-                    variant="body"
-                    weight="semibold"
-                    style={{ color: "#fff" }}
-                  >
-                    {t("bookings.confirmCancel")}
-                  </AppText>
-                )}
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setShowCancel(false);
-                  setCancelReason("");
-                  setCancelError("");
-                }}
-                style={[
-                  s.cancelConfirmBtn,
-                  {
-                    backgroundColor: c.bgCard,
-                    borderColor: c.border,
-                    borderWidth: 1,
-                    flex: 1,
-                  },
-                ]}
-              >
-                <AppText variant="body" weight="semibold" tone="dim">
-                  {t("bookings.keepBooking")}
-                </AppText>
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        {/* Video Call */}
-        {["ACCEPTED", "IN_PROGRESS"].includes(booking.status) && (
-          <Pressable
-            style={[
-              s.bigBtn,
-              {
-                backgroundColor: "#1e1b4b",
-                borderColor: "#6366f1",
-                borderWidth: 1,
-                marginTop: 12,
-              },
-            ]}
-            onPress={() => toast.info("Video call coming soon")}
-          >
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: "#a5b4fc" }}
-            >
-              📹 {t("bookings.videoCall")}
-            </AppText>
-          </Pressable>
-        )}
-
-        {/* Raise Dispute */}
-        {["ACCEPTED", "IN_PROGRESS", "COMPLETED"].includes(booking.status) && (
-          <Pressable
-            style={[
-              s.bigBtn,
-              {
-                backgroundColor: "rgba(239,68,68,0.06)",
-                borderColor: "#ef4444",
-                borderWidth: 1,
-                marginTop: 12,
-              },
-            ]}
-            onPress={() => setDisputeVisible(true)}
-          >
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: "#ef4444" }}
-            >
-              ⚠️ {t("bookings.raiseDispute")}
-            </AppText>
-          </Pressable>
-        )}
-      </Card>
-
-      {/* ─── DOWNLOAD INVOICE (COMPLETED) ─── */}
-      {isCompleted && booking.payment?.status === "RELEASED" && (
-        <Pressable
-          onPress={handleDownloadInvoice}
-          disabled={invoiceLoading}
-          style={[
-            s.invoiceBtn,
-            { backgroundColor: c.bgCard, borderColor: c.border },
-          ]}
-        >
-          {invoiceLoading ? (
-            <ActivityIndicator color={c.orange} />
-          ) : (
-            <AppText variant="body" weight="semibold" style={{ color: c.text }}>
-              📄 Download Invoice
-            </AppText>
-          )}
-        </Pressable>
-      )}
-
-      {/* ─── Review Modal ─── */}
-      <Modal
-        visible={reviewModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setReviewModal(false)}
-      >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.7)",
-            justifyContent: "flex-end",
-          }}
-          onPress={() => setReviewModal(false)}
-        >
-          <Pressable
-            style={[
-              s.reviewSheet,
-              { backgroundColor: modalBg, borderTopColor: c.border },
-            ]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View
-              style={[
-                {
-                  width: 40,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: c.border,
-                  alignSelf: "center",
-                  marginBottom: 16,
-                },
-              ]}
-            />
-            <AppText
-              variant="title"
-              weight="semibold"
-              style={{ color: c.text, marginBottom: 4, paddingHorizontal: 20 }}
-            >
-              Leave a Review
-            </AppText>
-            <AppText
-              variant="small"
-              tone="dim"
-              style={{ paddingHorizontal: 20, marginBottom: 16 }}
-            >
-              Review{" "}
-              {isHirer
-                ? `${booking.worker?.firstName}`
-                : `${booking.hirer?.firstName}`}
-            </AppText>
-            {/* Stars */}
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "center",
-                gap: 8,
-                marginBottom: 16,
-              }}
-            >
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Pressable key={star} onPress={() => setReviewRating(star)}>
-                  <AppText
-                    style={{
-                      fontSize: 32,
-                      color: star <= reviewRating ? "#f59e0b" : c.border,
-                    }}
-                  >
-                    ★
-                  </AppText>
-                </Pressable>
-              ))}
-            </View>
-            <TextInput
-              value={reviewComment}
-              onChangeText={setReviewComment}
-              placeholder="Share your experience..."
-              placeholderTextColor={c.textMuted}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              style={[
-                s.ecInput,
-                {
-                  color: c.text,
-                  borderColor: c.border,
-                  backgroundColor: c.bgInput,
-                  marginHorizontal: 20,
-                  marginBottom: 16,
-                },
-              ]}
-            />
-            <Pressable
-              onPress={handleLeaveReview}
-              disabled={reviewLoading}
-              style={[
-                s.bigBtn,
-                {
-                  backgroundColor: c.orange,
-                  marginHorizontal: 20,
-                  marginBottom: 24,
-                  opacity: reviewLoading ? 0.7 : 1,
-                },
-              ]}
-            >
-              {reviewLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ color: "#fff" }}
-                >
-                  Submit Review
-                </AppText>
-              )}
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Language picker */}
-      <LangModal
-        visible={showLangModal}
-        selected={translateLang}
-        onSelect={setTranslateLang}
-        onClose={() => setShowLangModal(false)}
-        c={c}
-        modalBg={modalBg}
-      />
-
-      <RaiseDisputeSheet
-        bookingId={booking.id}
-        bookingTitle={booking.title}
-        visible={disputeVisible}
-        onClose={() => setDisputeVisible(false)}
-        onSuccess={() => setDisputeVisible(false)}
-        c={c}
-        modalBg={modalBg}
-      />
-
-      <ConfirmModal
-        visible={!!modal}
-        title={modal?.title ?? ""}
-        message={modal?.message}
-        confirmLabel={modal?.confirmLabel ?? t("common.yes")}
-        cancelLabel={t("common.no")}
-        destructive={modal?.destructive}
-        onConfirm={() => {
-          modal?.onConfirm?.();
-          setModal(null);
-        }}
-        onCancel={() => setModal(null)}
-      />
     </AppScreen>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  backBtn: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
-  titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+const styles = StyleSheet.create({
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
-    marginTop: 4,
   },
   catChip: {
     alignSelf: "flex-start",
     paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    marginTop: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+    marginTop: 8,
   },
-  sectionLabel: { letterSpacing: 0.8, marginBottom: 10 },
-
-  // Timeline
+  sectionLabel: {
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  detailGrid: {
+    gap: 12,
+    marginTop: 8,
+  },
+  detailCell: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 4,
+  },
+  cellLabel: {
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  totalRow: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 8,
+  },
   timeline: {
     flexDirection: "row",
-    alignItems: "flex-start",
     justifyContent: "space-between",
+    paddingVertical: 8,
   },
-  timelineItem: { alignItems: "center", flex: 1, position: "relative" },
+  timelineItem: {
+    alignItems: "center",
+    flex: 1,
+  },
   timelineDot: {
     width: 28,
     height: 28,
@@ -2281,216 +1379,79 @@ const s = StyleSheet.create({
     left: "50%",
     right: "-50%",
     height: 2,
-    zIndex: -1,
   },
-
-  // Description translation
-  translateBox: {
-    borderRadius: 10,
-    borderWidth: 1,
+  locCard: {
     padding: 12,
-    marginTop: 10,
-  },
-  translateRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1,
     gap: 8,
-    marginTop: 12,
   },
-  langBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  translateBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  notesBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-
-  // Details
-  detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  detailCell: { width: "48%", padding: 12, borderRadius: 12, borderWidth: 1 },
-  cellLabel: { letterSpacing: 0.6, marginVertical: 4, fontSize: 10 },
-  totalRow: { marginTop: 12, padding: 14, borderRadius: 12, borderWidth: 1 },
-
-  // Worker location
-  locCard: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 4 },
   locHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
   },
-  locDot: { width: 10, height: 10, borderRadius: 5 },
+  locDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   locRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-
-  // Payment
   payRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   payStatusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  translateRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  langBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
   },
-
-  // Cancel reason
-  cancelReasonBox: {
+  translateBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  translateBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  notesBox: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    padding: 14,
+    padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-  },
-
-  // Party
-  partyBody: { alignItems: "center", paddingVertical: 16 },
-  partyAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  partyAvatarImg: { width: "100%", height: "100%" },
-  phoneRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
-  viewProfileBtn: {
-    marginTop: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignSelf: "stretch",
-    alignItems: "center",
-  },
-
-  // Payment options
-  infoBanner: { padding: 14, borderRadius: 12, borderWidth: 1 },
-  youPayRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  methodRow: { flexDirection: "row", gap: 6 },
-  methodBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  bigBtn: { paddingVertical: 16, borderRadius: 12, alignItems: "center" },
-
-  // Reviews
-  reviewBtn: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  reviewSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    paddingTop: 12,
-  },
-
-  // Emergency contact
-  ecCard: {
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
     marginTop: 12,
   },
-  ecHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  editBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  ecInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
-    minHeight: 44,
-  },
-
-  // SOS
-  sosActiveBox: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 12,
-  },
-  sosDot: { width: 10, height: 10, borderRadius: 5 },
-
-  // Cancel
-  cancelBox: { marginTop: 12, padding: 14, borderRadius: 12, borderWidth: 1 },
-  cancelInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    minHeight: 80,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  cancelConfirmBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-
-  // Invoice
-  invoiceBtn: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  // Language modal
   langSheet: {
+    paddingVertical: 20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderTopWidth: 1,
-    paddingTop: 12,
   },
   langOption: {
     flexDirection: "row",
@@ -2499,5 +1460,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  cancelReasonBox: {
+    flexDirection: "row",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
   },
 });

@@ -11,8 +11,8 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  TextInput,
   View,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -22,6 +22,7 @@ import { useTheme } from "../../../contexts/ThemeContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useTranslation } from "react-i18next";
 import client from "../../../api/client";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const LIMIT = 15;
 
@@ -268,32 +269,7 @@ const ec = StyleSheet.create({
   hirerRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
 });
 
-// ─── Date input ───────────────────────────────────────────────────────────────
-function DateInput({ label, value, onChange, c }) {
-  return (
-    <View
-      style={[di.wrap, { borderColor: c.border, backgroundColor: c.bgCard }]}
-    >
-      <AppText
-        variant="small"
-        tone="dim"
-        style={{ marginRight: 6, fontSize: 11 }}
-      >
-        {label}
-      </AppText>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder="dd/mm/yyyy"
-        placeholderTextColor={c.textMuted}
-        keyboardType="numbers-and-punctuation"
-        maxLength={10}
-        style={{ color: c.text, fontSize: 13, flex: 1 }}
-      />
-      <Ionicons name="calendar-outline" size={14} color={c.textMuted} />
-    </View>
-  );
-}
+// ─── Date input styles ──────────────────────────────────────────────────────────
 const di = StyleSheet.create({
   wrap: {
     flexDirection: "row",
@@ -306,6 +282,102 @@ const di = StyleSheet.create({
   },
 });
 
+const dp = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  pickerSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 24,
+    alignItems: "center",
+  },
+});
+
+// ─── Date input component ──────────────────────────────────────────────────────
+function DateInput({ label, value, onChange, placeholder, c }) {
+  const [showPicker, setShowPicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
+
+  const handleChange = (event, selectedDate) => {
+    if (Platform.OS === "android") setShowPicker(false);
+    if (selectedDate) {
+      const day = String(selectedDate.getDate()).padStart(2, "0");
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const year = selectedDate.getFullYear();
+      onChange(`${day}/${month}/${year}`);
+    }
+  };
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setShowPicker(true)}
+        style={[di.wrap, { borderColor: c.border, backgroundColor: c.bgCard }]}
+      >
+        {label ? (
+          <AppText
+            variant="small"
+            tone="dim"
+            style={{ marginRight: 6, fontSize: 11 }}
+          >
+            {label}
+          </AppText>
+        ) : null}
+        <AppText
+          style={{ color: value ? c.text : c.textMuted, fontSize: 13, flex: 1 }}
+        >
+          {value || placeholder}
+        </AppText>
+        <Ionicons name="calendar-outline" size={14} color={c.textMuted} />
+      </Pressable>
+
+      {Platform.OS === "ios" && showPicker && (
+        <Modal
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowPicker(false)}
+        >
+          <Pressable style={dp.overlay} onPress={() => setShowPicker(false)}>
+            <View style={[dp.pickerSheet, { backgroundColor: c.bgCard }]}>
+              <Pressable
+                onPress={() => setShowPicker(false)}
+                style={{ alignSelf: "flex-end", padding: 14 }}
+              >
+                <AppText
+                  variant="body"
+                  weight="semibold"
+                  style={{ color: c.orange }}
+                >
+                  Done
+                </AppText>
+              </Pressable>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={handleChange}
+                textColor={c.text}
+                style={{ backgroundColor: c.bgCard }}
+              />
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      {Platform.OS === "android" && showPicker && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          onChange={handleChange}
+        />
+      )}
+    </>
+  );
+}
 // ─── Summary stat ─────────────────────────────────────────────────────────────
 function SumStat({ label, value, orange, c }) {
   return (
@@ -495,6 +567,7 @@ export default function WorkerEarningsScreen({ navigation }) {
                 label=""
                 value={fromInput}
                 onChange={setFromInput}
+                placeholder={t("workerEarnings.datePlaceholder")}
                 c={c}
               />
               <AppText
@@ -504,7 +577,13 @@ export default function WorkerEarningsScreen({ navigation }) {
               >
                 {t("workerEarnings.to")}
               </AppText>
-              <DateInput label="" value={toInput} onChange={setToInput} c={c} />
+              <DateInput
+                label=""
+                value={toInput}
+                onChange={setToInput}
+                placeholder={t("workerEarnings.datePlaceholder")}
+                c={c}
+              />
             </View>
           </View>
         }

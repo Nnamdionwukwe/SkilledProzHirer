@@ -11,7 +11,12 @@
     "audit": "node scripts/full-audit.js",
     "extract-keys": "node scripts/extract-keys.js",
     "fix-translations": "node scripts/fix-translations.js",
-    "audit:full": "npm run extract-keys && npm run fix-translations && npm run audit"
+    "audit:full": "npm run extract-keys && npm run fix-translations && npm run audit",
+    "audit:translations": "node scripts/translation-audit.js",
+    "audit:translations:fix": "node scripts/translation-audit.js --fix",
+    "audit:translations:verbose": "node scripts/translation-audit.js --verbose",
+    "audit:translations:all": "node scripts/translation-audit.js --verbose --fix",
+    "audit-translations": "node translation-audit.js"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.1",
@@ -19,7 +24,7 @@
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-native-community/datetimepicker": "8.4.4",
+    "@react-native-community/datetimepicker": "^8.4.4",
     "@react-navigation/bottom-tabs": "^7.4.7",
     "@react-navigation/drawer": "^7.10.2",
     "@react-navigation/native": "^7.1.21",
@@ -47,6 +52,7 @@
     "react-i18next": "^15.7.4",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
+    "react-native-modal-datetime-picker": "^18.0.0",
     "react-native-reanimated": "~4.1.2",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",

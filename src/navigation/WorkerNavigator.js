@@ -124,6 +124,18 @@ function WorkerDrawer() {
       subtitle: t("screenSub.boostListing"),
     },
     Settings: { title: t("nav.settings"), subtitle: t("screenSub.settings") },
+    ReferralDashboard: {
+      title: t("nav.referralDashboard"),
+      subtitle: t("screenSub.referralDashboard"),
+    },
+    Campaign: {
+      title: t("nav.campaign"),
+      subtitle: t("screenSub.campaign"),
+    },
+    MyReports: {
+      title: t("nav.myreports"),
+      subtitle: t("screenSub.myreports"),
+    },
   };
 
   const drawerMeta = (name) =>
@@ -188,16 +200,7 @@ function WorkerDrawer() {
         name="ReferralDashboard"
         component={ReferralDashboardScreen}
       />
-      <Stack.Screen
-        name="Campaign"
-        component={CampaignDashboardScreen}
-        options={{
-          headerTitle: "Daily Campaign",
-          headerStyle: { backgroundColor: "#0a0a0b" },
-          headerTintColor: "#f1f5f9",
-        }}
-      />
-
+      <Drawer.Screen name="Campaign" component={CampaignDashboardScreen} />
       <Drawer.Screen name="MyReports" component={MyReportsScreen} />
     </Drawer.Navigator>
   );
@@ -234,7 +237,9 @@ function WorkerStack() {
   return (
     <Stack.Navigator
       screenOptions={({ route }) => {
-        if (route.name === "WorkerHome") return { headerShown: false };
+        if (route.name === "WorkerHome") {
+          return { headerShown: false };
+        }
         const m = stackMeta(route.name);
         return {
           headerShown: true,

@@ -28,79 +28,6 @@ import { useToast } from "../../contexts/ToastContext";
 import { createBooking } from "../../api/bookings";
 import { getWorkerPublicProfile } from "../../api/workers";
 
-// ── Job Type ──────────────────────────────────────────────────────────────────
-const JOB_TYPE_OPTIONS = [
-  { value: "FULL_TIME", label: "Full-time", icon: "briefcase-outline" },
-  { value: "PART_TIME", label: "Part-time", icon: "time-outline" },
-  { value: "CONTRACT", label: "Contract", icon: "document-text-outline" },
-  { value: "TEMPORARY", label: "Temporary", icon: "hourglass-outline" },
-];
-
-// ── Location Type ─────────────────────────────────────────────────────────────
-const LOCATION_TYPE_OPTIONS = [
-  { value: "REMOTE", label: "Remote", icon: "globe-outline" },
-  { value: "ON_SITE", label: "On-site", icon: "location-outline" },
-  { value: "HYBRID", label: "Hybrid", icon: "git-merge-outline" },
-];
-
-// ── Payment Type (list style, matches PostJobScreen) ──────────────────────────
-const PAYMENT_TYPE_OPTIONS = [
-  {
-    value: "FIXED",
-    label: "Fixed Price",
-    sub: "Pay a set total",
-    icon: "cash-outline",
-  },
-  {
-    value: "HOURLY",
-    label: "Per Hour",
-    sub: "Billed hourly",
-    icon: "time-outline",
-  },
-  {
-    value: "DAILY",
-    label: "Per Day",
-    sub: "Billed daily",
-    icon: "sunny-outline",
-  },
-  {
-    value: "WEEKLY",
-    label: "Per Week",
-    sub: "Billed weekly",
-    icon: "calendar-outline",
-  },
-  {
-    value: "MONTHLY",
-    label: "Per Month",
-    sub: "Billed monthly",
-    icon: "calendar-number-outline",
-  },
-  {
-    value: "CUSTOM",
-    label: "Custom",
-    sub: "Define your own",
-    icon: "create-outline",
-  },
-];
-
-// ── Job Duration (list style) ─────────────────────────────────────────────────
-const DURATION_UNIT_OPTIONS = [
-  { value: "HOURS", label: "Hours", icon: "time-outline" },
-  { value: "DAYS", label: "Days", icon: "sunny-outline" },
-  { value: "WEEKS", label: "Weeks", icon: "calendar-outline" },
-  { value: "MONTHS", label: "Months", icon: "calendar-number-outline" },
-  { value: "CUSTOM", label: "Custom", icon: "create-outline" },
-];
-
-// ── Worker engagement rates (worker profile rates) ────────────────────────────
-const ENGAGEMENT_OPTIONS = [
-  { unit: "hours", label: "Hourly", rateKey: "hourlyRate", suffix: "/hr" },
-  { unit: "days", label: "Daily", rateKey: "dailyRate", suffix: "/day" },
-  { unit: "weeks", label: "Weekly", rateKey: "weeklyRate", suffix: "/wk" },
-  { unit: "months", label: "Monthly", rateKey: "monthlyRate", suffix: "/mo" },
-  { unit: "custom", label: "Custom", rateKey: "customRate", suffix: "" },
-];
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function estHours(unit, val) {
   const n = parseFloat(val) || 0;
@@ -115,6 +42,7 @@ function estHours(unit, val) {
 
 // No worker selected state
 function EmptyWorkerState({ onBrowse, c }) {
+  const { t } = useTranslation();
   return (
     <View
       style={[es.wrap, { backgroundColor: c.bgCard, borderColor: c.border }]}
@@ -125,15 +53,14 @@ function EmptyWorkerState({ onBrowse, c }) {
         weight="semibold"
         style={{ color: c.text, marginTop: 14, textAlign: "center" }}
       >
-        Find a Worker First
+        {t("createBooking.empty.title")}
       </AppText>
       <AppText
         variant="body"
         tone="dim"
         style={{ textAlign: "center", marginTop: 6, lineHeight: 22 }}
       >
-        Browse available workers, view their profiles and rates, then come back
-        to book them directly.
+        {t("createBooking.empty.subtitle")}
       </AppText>
       <Pressable
         onPress={onBrowse}
@@ -146,7 +73,7 @@ function EmptyWorkerState({ onBrowse, c }) {
           style={{ marginRight: 8 }}
         />
         <AppText variant="body" weight="semibold" style={{ color: "#fff" }}>
-          Browse Workers
+          {t("createBooking.empty.button")}
         </AppText>
       </Pressable>
     </View>
@@ -155,6 +82,7 @@ function EmptyWorkerState({ onBrowse, c }) {
 
 // Worker card — mirrors website exactly
 function WorkerCard({ worker, c }) {
+  const { t } = useTranslation();
   const u = worker.user ?? worker;
   return (
     <View
@@ -223,7 +151,7 @@ function WorkerCard({ worker, c }) {
           {worker.avgRating > 0 && (
             <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
               ⭐ {Number(worker.avgRating).toFixed(1)} ({worker.totalReviews}{" "}
-              reviews)
+              {t("createBooking.reviews")})
             </AppText>
           )}
           {(u.city || u.country) && (
@@ -233,7 +161,7 @@ function WorkerCard({ worker, c }) {
           )}
           {worker.completedJobs > 0 && (
             <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
-              ✅ {worker.completedJobs} jobs done
+              ✅ {worker.completedJobs} {t("createBooking.jobsDone")}
             </AppText>
           )}
         </View>
@@ -256,7 +184,7 @@ function WorkerCard({ worker, c }) {
               lineHeight: 13,
             }}
           >
-            Details locked{"\n"}from worker's{"\n"}profile
+            {t("createBooking.detailsLocked")}
           </AppText>
         </View>
       </View>
@@ -300,7 +228,7 @@ function SectionLegend({ label, c }) {
         fontSize: 11,
       }}
     >
-      {label.toUpperCase()}
+      {label}
     </AppText>
   );
 }
@@ -382,6 +310,7 @@ function CategoryModal({
   c,
   modalBg,
 }) {
+  const { t } = useTranslation();
   return (
     <Modal
       visible={visible}
@@ -403,7 +332,7 @@ function CategoryModal({
             weight="semibold"
             style={{ color: c.text, paddingHorizontal: 20, marginBottom: 16 }}
           >
-            Select Category
+            {t("createBooking.field.selectCategory")}
           </AppText>
           {categories.map((wcat, idx) => {
             const catId = wcat.category?.id ?? "";
@@ -434,7 +363,7 @@ function CategoryModal({
                   {wcat.isPrimary ? (
                     <AppText variant="small" tone="dim">
                       {" "}
-                      (Primary)
+                      ({t("createBooking.primary")})
                     </AppText>
                   ) : null}
                 </AppText>
@@ -467,11 +396,153 @@ export default function CreateBookingScreen() {
   const c = th.colors;
   const modalBg = th.mode === "dark" ? "#111118" : "#ffffff";
 
+  // ── Define all options INSIDE the component with t() ──────────────────────
+  const JOB_TYPE_OPTIONS = [
+    {
+      value: "FULL_TIME",
+      label: t("createBooking.jobType.fullTime"),
+      icon: "briefcase-outline",
+    },
+    {
+      value: "PART_TIME",
+      label: t("createBooking.jobType.partTime"),
+      icon: "time-outline",
+    },
+    {
+      value: "CONTRACT",
+      label: t("createBooking.jobType.contract"),
+      icon: "document-text-outline",
+    },
+    {
+      value: "TEMPORARY",
+      label: t("createBooking.jobType.temporary"),
+      icon: "hourglass-outline",
+    },
+  ];
+
+  const LOCATION_TYPE_OPTIONS = [
+    {
+      value: "REMOTE",
+      label: t("createBooking.locationType.remote"),
+      icon: "globe-outline",
+    },
+    {
+      value: "ON_SITE",
+      label: t("createBooking.locationType.onSite"),
+      icon: "location-outline",
+    },
+    {
+      value: "HYBRID",
+      label: t("createBooking.locationType.hybrid"),
+      icon: "git-merge-outline",
+    },
+  ];
+
+  const PAYMENT_TYPE_OPTIONS = [
+    {
+      value: "FIXED",
+      label: t("createBooking.paymentType.fixed"),
+      sub: t("createBooking.paymentType.fixedSub"),
+      icon: "cash-outline",
+    },
+    {
+      value: "HOURLY",
+      label: t("createBooking.paymentType.hourly"),
+      sub: t("createBooking.paymentType.hourlySub"),
+      icon: "time-outline",
+    },
+    {
+      value: "DAILY",
+      label: t("createBooking.paymentType.daily"),
+      sub: t("createBooking.paymentType.dailySub"),
+      icon: "sunny-outline",
+    },
+    {
+      value: "WEEKLY",
+      label: t("createBooking.paymentType.weekly"),
+      sub: t("createBooking.paymentType.weeklySub"),
+      icon: "calendar-outline",
+    },
+    {
+      value: "MONTHLY",
+      label: t("createBooking.paymentType.monthly"),
+      sub: t("createBooking.paymentType.monthlySub"),
+      icon: "calendar-number-outline",
+    },
+    {
+      value: "CUSTOM",
+      label: t("createBooking.paymentType.custom"),
+      sub: t("createBooking.paymentType.customSub"),
+      icon: "create-outline",
+    },
+  ];
+
+  const DURATION_UNIT_OPTIONS = [
+    {
+      value: "HOURS",
+      label: t("createBooking.durationUnit.hours"),
+      icon: "time-outline",
+    },
+    {
+      value: "DAYS",
+      label: t("createBooking.durationUnit.days"),
+      icon: "sunny-outline",
+    },
+    {
+      value: "WEEKS",
+      label: t("createBooking.durationUnit.weeks"),
+      icon: "calendar-outline",
+    },
+    {
+      value: "MONTHS",
+      label: t("createBooking.durationUnit.months"),
+      icon: "calendar-number-outline",
+    },
+    {
+      value: "CUSTOM",
+      label: t("createBooking.durationUnit.custom"),
+      icon: "create-outline",
+    },
+  ];
+
+  const ENGAGEMENT_OPTIONS = [
+    {
+      unit: "hours",
+      label: t("createBooking.engagement.hourly"),
+      rateKey: "hourlyRate",
+      suffix: "/hr",
+    },
+    {
+      unit: "days",
+      label: t("createBooking.engagement.daily"),
+      rateKey: "dailyRate",
+      suffix: "/day",
+    },
+    {
+      unit: "weeks",
+      label: t("createBooking.engagement.weekly"),
+      rateKey: "weeklyRate",
+      suffix: "/wk",
+    },
+    {
+      unit: "months",
+      label: t("createBooking.engagement.monthly"),
+      rateKey: "monthlyRate",
+      suffix: "/mo",
+    },
+    {
+      unit: "custom",
+      label: t("createBooking.engagement.custom"),
+      rateKey: "customRate",
+      suffix: "",
+    },
+  ];
+
   const initWorkerId = route.params?.workerId ?? "";
 
   // Worker
-  const [workerIdInput, setWorkerIdInput] = useState(initWorkerId); // what user types
-  const [workerId, setWorkerId] = useState(initWorkerId); // confirmed ID for submit
+  const [workerIdInput, setWorkerIdInput] = useState(initWorkerId);
+  const [workerId, setWorkerId] = useState(initWorkerId);
   const [worker, setWorker] = useState(null);
   const [workerLoading, setWorkerLoading] = useState(false);
   const [workerError, setWorkerError] = useState("");
@@ -510,10 +581,6 @@ export default function CreateBookingScreen() {
   const [errors, setErrors] = useState({});
 
   // ── Fetch worker ────────────────────────────────────────────────────────────
-  // DELETE the entire useEffect block and replace with:
-
-  // Auto-fetch worker when input changes (debounced)
-  // ── Effect 1: Fetch immediately on mount if workerId was passed ──────────────
   useEffect(() => {
     if (!initWorkerId) return;
 
@@ -534,17 +601,16 @@ export default function CreateBookingScreen() {
         if (primary) setCategoryId(primary.category?.id ?? "");
       })
       .catch(() => {
-        setWorkerError(t("bookings.workerNotFound"));
+        setWorkerError(t("createBooking.workerNotFound"));
         setWorker(null);
       })
       .finally(() => setWorkerLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Effect 2: Debounced fetch when user TYPES a different ID ─────────────────
   useEffect(() => {
     const trimmed = workerIdInput.trim();
 
-    // Skip — this is the pre-filled value, Effect 1 handles it
     if (trimmed === initWorkerId) return;
 
     if (!trimmed) {
@@ -571,7 +637,7 @@ export default function CreateBookingScreen() {
           w.categories?.find((cat) => cat.isPrimary) ?? w.categories?.[0];
         if (primary) setCategoryId(primary.category?.id ?? "");
       } catch {
-        setWorkerError(t("bookings.workerNotFound"));
+        setWorkerError(t("createBooking.workerNotFound"));
         setWorker(null);
       } finally {
         setWorkerLoading(false);
@@ -579,7 +645,7 @@ export default function CreateBookingScreen() {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [workerIdInput]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workerIdInput]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const currentOpt = ENGAGEMENT_OPTIONS.find((o) => o.unit === selectedUnit);
@@ -632,13 +698,14 @@ export default function CreateBookingScreen() {
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     const e = {};
-    if (!worker) e.workerId = t("bookings.workerRequired");
-    if (!title.trim()) e.title = t("bookings.titleRequired");
-    if (!description.trim()) e.description = t("bookings.descriptionRequired");
+    if (!worker) e.workerId = t("createBooking.workerRequired");
+    if (!title.trim()) e.title = t("createBooking.titleRequired");
+    if (!description.trim())
+      e.description = t("createBooking.descriptionRequired");
     if (locationType !== "REMOTE" && !address.trim())
-      e.address = t("bookings.addressRequired");
-    if (!scheduledAt) e.scheduledAt = t("bookings.dateRequired");
-    if (!categoryId) e.categoryId = t("bookings.categoryRequired");
+      e.address = t("createBooking.addressRequired");
+    if (!scheduledAt) e.scheduledAt = t("createBooking.dateRequired");
+    if (!categoryId) e.categoryId = t("createBooking.categoryRequired");
     if (Object.keys(e).length) {
       setErrors(e);
       return;
@@ -669,7 +736,7 @@ export default function CreateBookingScreen() {
         notes: notes.trim() || undefined,
         durationValue: durationValue.trim() || undefined,
       });
-      toast.success(t("bookings.created"));
+      toast.success(t("createBooking.created"));
       navigation.replace("BookingDetail", { bookingId: booking.id });
     } catch (err) {
       toast.error(err?.response?.data?.message || t("toast.unknownError"));
@@ -716,8 +783,8 @@ export default function CreateBookingScreen() {
 
       <Fieldset legend={t("bookings.worker")} c={c}>
         <AppInput
-          label={`${t("bookings.workerId")} *`}
-          placeholder={t("bookings.workerIdPlaceholder")}
+          label={t("createBooking.field.workerId")}
+          placeholder={t("createBooking.field.workerIdPlaceholder")}
           value={workerIdInput}
           onChangeText={(v) => {
             setWorkerIdInput(v);
@@ -726,8 +793,6 @@ export default function CreateBookingScreen() {
           error={errors.workerId}
           iconLeft="person-outline"
         />
-
-        {/* Search button */}
 
         {/* Browse hint */}
         <View
@@ -740,7 +805,7 @@ export default function CreateBookingScreen() {
           }}
         >
           <AppText variant="small" tone="dim">
-            Browse workers on the
+            {t("createBooking.browseHint")}
           </AppText>
           <Pressable
             onPress={() => navigation.navigate("BrowseWorkers")}
@@ -751,11 +816,11 @@ export default function CreateBookingScreen() {
               weight="semibold"
               style={{ color: c.orange, textDecorationLine: "underline" }}
             >
-              search page
+              {t("createBooking.browseLink")}
             </AppText>
           </Pressable>
           <AppText variant="small" tone="dim">
-            and copy their ID.
+            {t("createBooking.browseHintEnd")}
           </AppText>
         </View>
 
@@ -771,12 +836,12 @@ export default function CreateBookingScreen() {
         <View style={s.workerLoading}>
           <ActivityIndicator color={c.orange} />
           <AppText variant="small" tone="dim" style={{ marginLeft: 10 }}>
-            {t("bookings.loadingWorker")}
+            {t("createBooking.loadingWorker")}
           </AppText>
         </View>
       )}
 
-      {/* No worker CTA (only when opened without workerId AND nothing typed) */}
+      {/* No worker CTA */}
       {!workerId.trim() && !workerLoading && (
         <EmptyWorkerState
           onBrowse={() => navigation.navigate("BrowseWorkers")}
@@ -791,7 +856,7 @@ export default function CreateBookingScreen() {
       {worker && !workerLoading && (
         <>
           {/* ── JOB TYPE ── */}
-          <Fieldset legend="Job Type" c={c}>
+          <Fieldset legend={t("createBooking.section.jobType")} c={c}>
             <View style={s.twoColGrid}>
               {JOB_TYPE_OPTIONS.map((jt) => {
                 const sel = jobType === jt.value;
@@ -833,7 +898,7 @@ export default function CreateBookingScreen() {
           </Fieldset>
 
           {/* ── LOCATION TYPE ── */}
-          <Fieldset legend="Location Type" c={c}>
+          <Fieldset legend={t("createBooking.section.locationType")} c={c}>
             <View style={s.threeColGrid}>
               {LOCATION_TYPE_OPTIONS.map((lt) => {
                 const sel = locationType === lt.value;
@@ -875,22 +940,21 @@ export default function CreateBookingScreen() {
           </Fieldset>
 
           {/* ── PRICING & DURATION (engagement type from worker) ── */}
-          <Fieldset legend={t("bookings.pricingDuration")} c={c}>
+          <Fieldset legend={t("createBooking.section.pricingDuration")} c={c}>
             <AppText
               variant="small"
               weight="semibold"
               tone="dim"
               style={{ marginBottom: 4 }}
             >
-              {t("bookings.engagementType")} *
+              {t("createBooking.field.engagementType")}
             </AppText>
             <AppText
               variant="small"
               tone="dim"
               style={{ marginBottom: 12, lineHeight: 18 }}
             >
-              Select how you want to engage this worker. The rate is set by the
-              worker and cannot be modified.
+              {t("createBooking.field.engagementHint")}
             </AppText>
 
             {/* Engagement grid */}
@@ -929,7 +993,7 @@ export default function CreateBookingScreen() {
                     >
                       {hasRate
                         ? `${lockedCurr} ${Number(rate).toLocaleString()}${opt.suffix}`
-                        : "Not offered"}
+                        : t("createBooking.notOffered")}
                     </AppText>
                   </Pressable>
                 );
@@ -953,7 +1017,7 @@ export default function CreateBookingScreen() {
                     fontSize: 10,
                   }}
                 >
-                  AGREED RATE
+                  {t("createBooking.field.agreedRate")}
                 </AppText>
                 <AppText
                   style={{
@@ -968,7 +1032,7 @@ export default function CreateBookingScreen() {
                   {currentOpt?.suffix}
                 </AppText>
                 <AppText variant="small" tone="dim" style={{ marginTop: 4 }}>
-                  🔒 Worker's rate
+                  {t("createBooking.field.workersRate")}
                 </AppText>
               </View>
               <View
@@ -986,7 +1050,7 @@ export default function CreateBookingScreen() {
                     fontSize: 10,
                   }}
                 >
-                  CURRENCY
+                  {t("createBooking.field.currency")}
                 </AppText>
                 <AppText
                   style={{
@@ -1000,7 +1064,7 @@ export default function CreateBookingScreen() {
                   {lockedCurr}
                 </AppText>
                 <AppText variant="small" tone="dim" style={{ marginTop: 4 }}>
-                  🔒 Worker's currency
+                  {t("createBooking.field.workersCurrency")}
                 </AppText>
               </View>
             </View>
@@ -1008,8 +1072,11 @@ export default function CreateBookingScreen() {
             {/* Duration value input */}
             {currentOpt?.unit === "custom" ? (
               <AppInput
-                label="DESCRIBE ENGAGEMENT"
-                placeholder="e.g. Full build, until project complete"
+                label={t("createBooking.field.describeEngagement")}
+                placeholder={
+                  t("createBooking.field.describeEngagementPlaceholder") ||
+                  "e.g. Full build, until project complete"
+                }
                 value={estValue}
                 onChangeText={setEstValue}
                 iconLeft="create-outline"
@@ -1018,8 +1085,12 @@ export default function CreateBookingScreen() {
             ) : (
               <View style={{ marginTop: 12 }}>
                 <AppInput
-                  label={`NUMBER OF ${(currentOpt?.label ?? "UNITS").toUpperCase()} *`}
-                  placeholder="e.g. 4"
+                  label={t("createBooking.field.numberOfUnits", {
+                    unit: currentOpt?.label || "",
+                  })}
+                  placeholder={
+                    t("createBooking.field.numberPlaceholder") || "e.g. 4"
+                  }
                   value={estValue}
                   onChangeText={(v) => setEstValue(v.replace(/[^0-9.]/g, ""))}
                   keyboardType="decimal-pad"
@@ -1033,7 +1104,7 @@ export default function CreateBookingScreen() {
                     ]}
                   >
                     <AppText variant="small" tone="dim">
-                      {t("bookings.estimatedTotal")}
+                      {t("createBooking.estimatedTotal")}
                     </AppText>
                     <AppText
                       variant="title"
@@ -1056,7 +1127,7 @@ export default function CreateBookingScreen() {
                 ]}
               >
                 <AppText variant="small" tone="dim">
-                  💬 Worker's pricing note:{" "}
+                  💬 {t("createBooking.pricingNote")}{" "}
                   <AppText
                     variant="small"
                     tone="dim"
@@ -1070,7 +1141,7 @@ export default function CreateBookingScreen() {
           </Fieldset>
 
           {/* ── PAYMENT TYPE ── */}
-          <Fieldset legend="Payment Type" c={c}>
+          <Fieldset legend={t("createBooking.section.paymentType")} c={c}>
             <View
               style={[
                 s.listContainer,
@@ -1091,7 +1162,7 @@ export default function CreateBookingScreen() {
           </Fieldset>
 
           {/* ── JOB DURATION ── */}
-          <Fieldset legend="Job Duration" c={c}>
+          <Fieldset legend={t("createBooking.section.jobDuration")} c={c}>
             <View
               style={[
                 s.listContainer,
@@ -1111,8 +1182,11 @@ export default function CreateBookingScreen() {
             </View>
             {durationType === "CUSTOM" ? (
               <AppInput
-                label="DESCRIBE DURATION"
-                placeholder="e.g. Until launch, ongoing retainer"
+                label={t("createBooking.field.describeDuration")}
+                placeholder={
+                  t("createBooking.field.describeDurationPlaceholder") ||
+                  "e.g. Until launch, ongoing retainer"
+                }
                 value={durationValue}
                 onChangeText={setDurationValue}
                 iconLeft="create-outline"
@@ -1120,8 +1194,12 @@ export default function CreateBookingScreen() {
               />
             ) : (
               <AppInput
-                label={`NUMBER OF ${durationType}`}
-                placeholder="e.g. 5"
+                label={t("createBooking.field.numberOfDuration", {
+                  duration: durationType,
+                })}
+                placeholder={
+                  t("createBooking.field.numberPlaceholder") || "e.g. 5"
+                }
                 value={durationValue}
                 onChangeText={(v) => setDurationValue(v.replace(/[^0-9]/g, ""))}
                 keyboardType="number-pad"
@@ -1132,7 +1210,7 @@ export default function CreateBookingScreen() {
           </Fieldset>
 
           {/* ── CATEGORY ── */}
-          <Fieldset legend={t("bookings.category")} c={c}>
+          <Fieldset legend={t("createBooking.section.category")} c={c}>
             <AppText
               variant="small"
               weight="semibold"
@@ -1143,15 +1221,14 @@ export default function CreateBookingScreen() {
                 fontSize: 11,
               }}
             >
-              SERVICE CATEGORY
+              {t("createBooking.field.serviceCategory")}
             </AppText>
             <AppText
               variant="small"
               tone="dim"
               style={{ marginBottom: 12, lineHeight: 18 }}
             >
-              Auto-filled from the worker's registered categories. Select if
-              multiple are available.
+              {t("createBooking.field.categoryHint")}
             </AppText>
             <Pressable
               onPress={() =>
@@ -1164,8 +1241,8 @@ export default function CreateBookingScreen() {
             >
               <AppText variant="body" style={{ color: c.text, flex: 1 }}>
                 {selectedCatObj
-                  ? `${selectedCatObj.category?.icon ?? ""} ${selectedCatObj.category?.name ?? ""}${selectedCatObj.isPrimary ? " (Primary)" : ""}`
-                  : "Select category"}
+                  ? `${selectedCatObj.category?.icon ?? ""} ${selectedCatObj.category?.name ?? ""}${selectedCatObj.isPrimary ? ` (${t("createBooking.primary")})` : ""}`
+                  : t("createBooking.field.selectCategory")}
               </AppText>
               {worker.categories?.length > 1 && (
                 <Ionicons name="chevron-down" size={16} color={c.textMuted} />
@@ -1179,7 +1256,7 @@ export default function CreateBookingScreen() {
           </Fieldset>
 
           {/* ── JOB INFORMATION ── */}
-          <Fieldset legend={t("bookings.jobInformation")} c={c}>
+          <Fieldset legend={t("createBooking.section.jobInformation")} c={c}>
             <AppText
               variant="small"
               weight="semibold"
@@ -1190,7 +1267,7 @@ export default function CreateBookingScreen() {
                 fontSize: 11,
               }}
             >
-              JOB TITLE *
+              {t("createBooking.field.jobTitle")}
             </AppText>
             <View
               style={[
@@ -1207,7 +1284,10 @@ export default function CreateBookingScreen() {
                   setTitle(v);
                   setErrors((e) => ({ ...e, title: null }));
                 }}
-                placeholder="e.g. Fix leaking kitchen pipe"
+                placeholder={
+                  t("createBooking.field.jobTitlePlaceholder") ||
+                  "e.g. Fix leaking kitchen pipe"
+                }
                 placeholderTextColor={c.textMuted}
                 style={[s.inputText, { color: c.text }]}
               />
@@ -1229,7 +1309,7 @@ export default function CreateBookingScreen() {
                 fontSize: 11,
               }}
             >
-              DESCRIPTION *
+              {t("createBooking.field.description")}
             </AppText>
             <View
               style={[
@@ -1244,7 +1324,10 @@ export default function CreateBookingScreen() {
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
-                placeholder="Describe exactly what needs to be done…"
+                placeholder={
+                  t("createBooking.field.descriptionPlaceholder") ||
+                  "Describe exactly what needs to be done…"
+                }
                 placeholderTextColor={c.textMuted}
                 value={description}
                 onChangeText={(v) => {
@@ -1271,7 +1354,7 @@ export default function CreateBookingScreen() {
                 fontSize: 11,
               }}
             >
-              ADDITIONAL NOTES
+              {t("createBooking.field.additionalNotes")}
             </AppText>
             <View
               style={[
@@ -1287,7 +1370,10 @@ export default function CreateBookingScreen() {
                 multiline
                 numberOfLines={2}
                 textAlignVertical="top"
-                placeholder="Access instructions, parking, tools to bring…"
+                placeholder={
+                  t("createBooking.field.notesPlaceholder") ||
+                  "Access instructions, parking, tools to bring…"
+                }
                 placeholderTextColor={c.textMuted}
                 value={notes}
                 onChangeText={setNotes}
@@ -1298,10 +1384,13 @@ export default function CreateBookingScreen() {
 
           {/* ── LOCATION ── (only if not remote) */}
           {locationType !== "REMOTE" && (
-            <Fieldset legend={t("bookings.location")} c={c}>
+            <Fieldset legend={t("createBooking.section.location")} c={c}>
               <AppInput
-                label={`${t("bookings.serviceAddress")} *`}
-                placeholder={t("createBooking.addressPlaceholder")}
+                label={t("bookings.serviceAddress")}
+                placeholder={
+                  t("createBooking.field.addressPlaceholder") ||
+                  "Enter full address..."
+                }
                 value={address}
                 onChangeText={(v) => {
                   setAddress(v);
@@ -1314,7 +1403,7 @@ export default function CreateBookingScreen() {
           )}
 
           {/* ── SCHEDULE ── */}
-          <Fieldset legend={t("bookings.schedule")} c={c}>
+          <Fieldset legend={t("createBooking.section.schedule")} c={c}>
             <AppText
               variant="small"
               weight="semibold"
@@ -1325,7 +1414,7 @@ export default function CreateBookingScreen() {
                 fontSize: 11,
               }}
             >
-              DATE & TIME *
+              {t("createBooking.field.dateTime")}
             </AppText>
             <Pressable
               onPress={() => setShowDatePicker(true)}
@@ -1346,7 +1435,7 @@ export default function CreateBookingScreen() {
                   color: formattedDate ? c.text : c.textMuted,
                 }}
               >
-                {formattedDate || "Select date & time"}
+                {formattedDate || t("createBooking.field.selectDateTime")}
               </AppText>
               <Ionicons name="chevron-down" size={16} color={c.textMuted} />
             </Pressable>
@@ -1386,7 +1475,7 @@ export default function CreateBookingScreen() {
                     style={[s.dateSheetHeader, { borderBottomColor: c.border }]}
                   >
                     <AppText variant="body" weight="semibold">
-                      Select Date & Time
+                      {t("createBooking.datePicker.title")}
                     </AppText>
                     <Pressable
                       onPress={() => setShowDatePicker(false)}
@@ -1397,7 +1486,7 @@ export default function CreateBookingScreen() {
                         weight="semibold"
                         style={{ color: c.orange }}
                       >
-                        Done
+                        {t("createBooking.datePicker.done")}
                       </AppText>
                     </Pressable>
                   </View>
@@ -1424,33 +1513,33 @@ export default function CreateBookingScreen() {
                 tone="dim"
                 style={{ letterSpacing: 0.8, marginBottom: 12 }}
               >
-                📋 BOOKING SUMMARY
+                {t("createBooking.summary.title")}
               </AppText>
               {[
                 {
-                  label: t("bookings.worker"),
+                  label: t("createBooking.summary.worker"),
                   value: `${(worker.user ?? worker).firstName} ${(worker.user ?? worker).lastName}`,
                 },
                 {
-                  label: "Job Type",
+                  label: t("createBooking.summary.jobType"),
                   value: JOB_TYPE_OPTIONS.find((j) => j.value === jobType)
                     ?.label,
                 },
                 {
-                  label: "Location",
+                  label: t("createBooking.summary.location"),
                   value: LOCATION_TYPE_OPTIONS.find(
                     (l) => l.value === locationType,
                   )?.label,
                 },
                 {
-                  label: t("bookings.agreedRate"),
+                  label: t("createBooking.summary.agreedRate"),
                   value: `${lockedCurr} ${Number(lockedRate).toLocaleString()}${currentOpt?.suffix}`,
                   accent: true,
                 },
                 ...(estTotalVal
                   ? [
                       {
-                        label: t("bookings.estimatedTotal"),
+                        label: t("createBooking.summary.estimatedTotal"),
                         value: `${lockedCurr} ${Number(estTotalVal).toLocaleString()}`,
                         green: true,
                       },
@@ -1484,7 +1573,7 @@ export default function CreateBookingScreen() {
                 tone="dim"
                 style={{ marginTop: 10, fontStyle: "italic" }}
               >
-                ⚠️ {t("bookings.summaryNote")}
+                ⚠️ {t("createBooking.summary.note")}
               </AppText>
             </Card>
           )}
@@ -1494,7 +1583,7 @@ export default function CreateBookingScreen() {
       {/* Submit */}
       {worker && (
         <AppButton
-          title={t("bookings.createBookingBtn")}
+          title={t("createBooking.button.createBooking")}
           iconLeft="add-circle-outline"
           onPress={handleSubmit}
           loading={submitting}
@@ -1506,7 +1595,7 @@ export default function CreateBookingScreen() {
         tone="dim"
         style={{ textAlign: "center", marginTop: 12, marginBottom: 8 }}
       >
-        {t("bookings.disclaimer")}
+        {t("createBooking.disclaimer")}
       </AppText>
 
       {/* Category modal */}

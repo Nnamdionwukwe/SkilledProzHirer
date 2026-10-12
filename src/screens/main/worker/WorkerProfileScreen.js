@@ -24,41 +24,63 @@ import { useTheme } from "../../../contexts/ThemeContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useAuthStore } from "../../../store/authStore";
 import client from "../../../api/client";
+import { useTranslation } from "react-i18next";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const TABS = ["About", "Portfolio", "Certifications", "Reviews"];
+// These are now functions that accept t as a parameter
+function getTabs(t) {
+  return [
+    t("workerProfile.tabs.about"),
+    t("workerProfile.tabs.portfolio"),
+    t("workerProfile.tabs.certifications"),
+    t("workerProfile.tabs.reviews"),
+  ];
+}
 
-const DAY_MAP = {
-  MONDAY: "Mon",
-  TUESDAY: "Tue",
-  WEDNESDAY: "Wed",
-  THURSDAY: "Thu",
-  FRIDAY: "Fri",
-  SATURDAY: "Sat",
-  SUNDAY: "Sun",
-};
+function getDayMap(t) {
+  return {
+    MONDAY: t("workerProfile.days.mon"),
+    TUESDAY: t("workerProfile.days.tue"),
+    WEDNESDAY: t("workerProfile.days.wed"),
+    THURSDAY: t("workerProfile.days.thu"),
+    FRIDAY: t("workerProfile.days.fri"),
+    SATURDAY: t("workerProfile.days.sat"),
+    SUNDAY: t("workerProfile.days.sun"),
+  };
+}
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+function getDays(t) {
+  return [
+    t("workerProfile.days.mon"),
+    t("workerProfile.days.tue"),
+    t("workerProfile.days.wed"),
+    t("workerProfile.days.thu"),
+    t("workerProfile.days.fri"),
+    t("workerProfile.days.sat"),
+    t("workerProfile.days.sun"),
+  ];
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function timeAgo(date) {
-  if (!date) return "Never";
+function timeAgo(date, t) {
+  if (!date) return t("workerProfile.time.never");
   const diff = Date.now() - new Date(date).getTime();
   const m = Math.floor(diff / 60_000);
-  if (m < 1) return "Just now";
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return t("workerProfile.time.justNow");
+  if (m < 60) return t("workerProfile.time.minutesAgo", { m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t("workerProfile.time.hoursAgo", { h });
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
+  if (d < 30) return t("workerProfile.time.daysAgo", { d });
   return new Date(date).toLocaleDateString("en-GB", {
     month: "short",
     year: "numeric",
   });
 }
 
-function getActiveDays(availability) {
+function getActiveDays(availability, t) {
   if (!availability || !Array.isArray(availability)) return new Set();
+  const DAY_MAP = getDayMap(t);
   return new Set(
     availability
       .filter((a) => a.isAvailable)
@@ -198,7 +220,9 @@ const lb = StyleSheet.create({
 
 // ─── ABOUT TAB ────────────────────────────────────────────────────────────────
 function AboutTab({ user, wp, c }) {
-  const activeDays = getActiveDays(wp?.availability);
+  const { t } = useTranslation();
+  const DAYS = getDays(t);
+  const activeDays = getActiveDays(wp?.availability, t);
 
   return (
     <View style={{ gap: 12 }}>
@@ -211,7 +235,7 @@ function AboutTab({ user, wp, c }) {
           weight="semibold"
           style={[tab.sectionLabel, { color: c.textMuted }]}
         >
-          ABOUT
+          {t("workerProfile.section.about")}
         </AppText>
         {user.bio ? (
           <AppText
@@ -222,7 +246,7 @@ function AboutTab({ user, wp, c }) {
           </AppText>
         ) : (
           <AppText variant="body" tone="dim" style={{ marginTop: 8 }}>
-            No bio added yet.
+            {t("workerProfile.empty.noBio")}
           </AppText>
         )}
       </View>
@@ -240,7 +264,7 @@ function AboutTab({ user, wp, c }) {
             weight="semibold"
             style={[tab.sectionLabel, { color: c.textMuted }]}
           >
-            AVAILABILITY
+            {t("workerProfile.section.availability")}
           </AppText>
           <View style={tab.daysRow}>
             {DAYS.map((d) => {
@@ -298,7 +322,9 @@ function AboutTab({ user, wp, c }) {
               marginLeft: 5,
             }}
           >
-            Email {user.isEmailVerified ? "Verified" : "Unverified"}
+            {user.isEmailVerified
+              ? t("workerProfile.badge.emailVerified")
+              : t("workerProfile.badge.emailUnverified")}
           </AppText>
         </View>
         {wp?.verificationStatus === "VERIFIED" && (
@@ -317,7 +343,7 @@ function AboutTab({ user, wp, c }) {
               weight="semibold"
               style={{ color: c.orange, marginLeft: 5 }}
             >
-              ID Verified
+              {t("workerProfile.badge.idVerified")}
             </AppText>
           </View>
         )}
@@ -328,6 +354,7 @@ function AboutTab({ user, wp, c }) {
 
 // ─── PORTFOLIO TAB ────────────────────────────────────────────────────────────
 function PortfolioTab({ items, c }) {
+  const { t } = useTranslation();
   const [lightbox, setLightbox] = useState(null);
 
   if (!items?.length) {
@@ -335,7 +362,7 @@ function PortfolioTab({ items, c }) {
       <View style={tab.empty}>
         <AppText style={{ fontSize: 40, marginBottom: 12 }}>🖼️</AppText>
         <AppText variant="body" weight="semibold" style={{ color: c.text }}>
-          No portfolio items yet
+          {t("workerProfile.empty.noPortfolio")}
         </AppText>
       </View>
     );
@@ -427,12 +454,14 @@ const pt = StyleSheet.create({
 
 // ─── CERTIFICATIONS TAB ──────────────────────────────────────────────────────
 function CertificationsTab({ items, c }) {
+  const { t } = useTranslation();
+
   if (!items?.length) {
     return (
       <View style={tab.empty}>
         <AppText style={{ fontSize: 40, marginBottom: 12 }}>🏆</AppText>
         <AppText variant="body" weight="semibold" style={{ color: c.text }}>
-          No certifications yet
+          {t("workerProfile.empty.noCertifications")}
         </AppText>
       </View>
     );
@@ -454,7 +483,7 @@ function CertificationsTab({ items, c }) {
             </AppText>
             {cert.issuer && (
               <AppText variant="small" tone="dim">
-                Issued by {cert.issuer}
+                {t("workerProfile.cert.issuedBy", { issuer: cert.issuer })}
               </AppText>
             )}
             {cert.issuedAt && (
@@ -487,7 +516,7 @@ function CertificationsTab({ items, c }) {
                   fontWeight: "600",
                 }}
               >
-                Verified
+                {t("workerProfile.badge.verified")}
               </AppText>
             </View>
           )}
@@ -526,6 +555,8 @@ const ct = StyleSheet.create({
 
 // ─── REVIEWS TAB ──────────────────────────────────────────────────────────────
 function ReviewsTab({ reviews, total, loading, c }) {
+  const { t } = useTranslation();
+
   if (loading)
     return (
       <View style={{ paddingVertical: 40, alignItems: "center" }}>
@@ -538,12 +569,16 @@ function ReviewsTab({ reviews, total, loading, c }) {
       <View style={tab.empty}>
         <AppText style={{ fontSize: 40, marginBottom: 12 }}>⭐</AppText>
         <AppText variant="body" weight="semibold" style={{ color: c.text }}>
-          No reviews yet
+          {t("workerProfile.empty.noReviews")}
         </AppText>
       </View>
     );
 
   const avg = reviews.reduce((a, r) => a + r.rating, 0) / reviews.length;
+  const reviewLabel =
+    total === 1
+      ? t("workerProfile.reviews.reviewCount")
+      : t("workerProfile.reviews.reviewCountPlural");
 
   return (
     <View style={{ gap: 12 }}>
@@ -563,7 +598,7 @@ function ReviewsTab({ reviews, total, loading, c }) {
         <View>
           <Stars rating={avg} size={18} />
           <AppText variant="small" tone="dim" style={{ marginTop: 4 }}>
-            {total} review{total !== 1 ? "s" : ""}
+            {total} {reviewLabel}
           </AppText>
         </View>
       </View>
@@ -593,7 +628,10 @@ function ReviewsTab({ reviews, total, loading, c }) {
                 {r.giver?.firstName} {r.giver?.lastName}
                 <AppText variant="small" tone="dim">
                   {" "}
-                  · {r.giver?.role === "HIRER" ? "Hirer" : "Worker"}
+                  ·{" "}
+                  {r.giver?.role === "HIRER"
+                    ? t("workerProfile.role.hirer")
+                    : t("workerProfile.role.worker")}
                 </AppText>
               </AppText>
               {r.booking?.title && (
@@ -612,7 +650,8 @@ function ReviewsTab({ reviews, total, loading, c }) {
             <View style={{ alignItems: "flex-end" }}>
               <Stars rating={r.rating} size={13} />
               <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
-                {r.rating}/5
+                {r.rating}
+                {t("workerProfile.reviews.ratingOutOf")}
               </AppText>
             </View>
           </View>
@@ -680,6 +719,7 @@ const tab = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WorkerProfileScreen({ navigation }) {
+  const { t } = useTranslation();
   const { theme: th } = useTheme();
   const { toast } = useToast();
   const { user: me } = useAuthStore();
@@ -690,10 +730,13 @@ export default function WorkerProfileScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState("About");
+  const [activeTab, setActiveTab] = useState(t("workerProfile.tabs.about"));
   const [reviews, setReviews] = useState([]);
   const [reviewsTotal, setReviewsTotal] = useState(0);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+
+  // Get TABS inside component with t()
+  const TABS = getTabs(t);
 
   // ── Load profile ─────────────────────────────────────────────────────────────
   const loadProfile = useCallback(async () => {
@@ -702,7 +745,7 @@ export default function WorkerProfileScreen({ navigation }) {
       const res = await client.get(`/users/${userId}`);
       setUser(res.data.data?.user ?? res.data.data);
     } catch {
-      toast.error("Failed to load profile");
+      toast.error(t("workerProfile.error.loadFailed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -715,7 +758,7 @@ export default function WorkerProfileScreen({ navigation }) {
 
   // ── Load reviews when tab opens ─────────────────────────────────────────────
   useEffect(() => {
-    if (activeTab !== "Reviews" || !userId) return;
+    if (activeTab !== t("workerProfile.tabs.reviews") || !userId) return;
     setReviewsLoading(true);
     client
       .get(`/reviews/worker/${userId}`, { params: { limit: 20 } })
@@ -754,7 +797,7 @@ export default function WorkerProfileScreen({ navigation }) {
         }}
       >
         <AppText variant="title" weight="semibold" style={{ color: c.text }}>
-          Profile not found
+          {t("workerProfile.error.notFound")}
         </AppText>
       </View>
     );
@@ -835,7 +878,7 @@ export default function WorkerProfileScreen({ navigation }) {
             weight="semibold"
             style={{ color: c.orange, letterSpacing: 0.5 }}
           >
-            WORKER
+            {t("workerProfile.role.worker")}
           </AppText>
         </View>
 
@@ -859,7 +902,7 @@ export default function WorkerProfileScreen({ navigation }) {
             <AppText
               style={{ fontSize: 11, color: c.orange, fontWeight: "700" }}
             >
-              Verified Worker
+              {t("workerProfile.role.verifiedWorker")}
             </AppText>
           </View>
         )}
@@ -875,7 +918,7 @@ export default function WorkerProfileScreen({ navigation }) {
                 letterSpacing: 0.5,
               }}
             >
-              ⭐ PRO
+              {t("workerProfile.role.pro")}
             </AppText>
           </View>
         )}
@@ -907,7 +950,8 @@ export default function WorkerProfileScreen({ navigation }) {
               {Number(wp.avgRating).toFixed(1)}
             </AppText>
             <AppText variant="small" tone="dim" style={{ marginLeft: 4 }}>
-              ({wp.totalReviews ?? 0} reviews)
+              ({wp.totalReviews ?? 0}{" "}
+              {t("workerProfile.reviews.reviewCountPlural")})
             </AppText>
           </View>
         )}
@@ -927,7 +971,7 @@ export default function WorkerProfileScreen({ navigation }) {
             style={{ marginRight: 8 }}
           />
           <AppText variant="body" weight="semibold" style={{ color: c.text }}>
-            Edit Profile
+            {t("workerProfile.button.editProfile")}
           </AppText>
         </Pressable>
       </View>
@@ -941,7 +985,7 @@ export default function WorkerProfileScreen({ navigation }) {
             <StatRow
               icon="cash-outline"
               value={`${wp.currency ?? user.currency ?? "USD"} ${Number(wp.hourlyRate).toLocaleString()}`}
-              label="/hr"
+              label={t("workerProfile.stats.perHour")}
               c={c}
             />
           )}
@@ -949,20 +993,20 @@ export default function WorkerProfileScreen({ navigation }) {
             <StatRow
               icon="location-outline"
               value={`${wp.serviceRadius} km`}
-              label="radius"
+              label={t("workerProfile.stats.radius")}
               c={c}
             />
           )}
           <StatRow
             icon="checkmark-circle-outline"
             value={wp.completedJobs ?? 0}
-            label="jobs done"
+            label={t("workerProfile.stats.jobsDone")}
             c={c}
           />
           <StatRow
             icon="time-outline"
-            value={timeAgo(user.lastSeen)}
-            label="last seen"
+            value={timeAgo(user.lastSeen, t)}
+            label={t("workerProfile.stats.lastSeen")}
             c={c}
           />
           <StatRow
@@ -971,7 +1015,7 @@ export default function WorkerProfileScreen({ navigation }) {
               month: "short",
               year: "numeric",
             })}
-            label="joined"
+            label={t("workerProfile.stats.joined")}
             c={c}
           />
         </View>
@@ -1026,7 +1070,7 @@ export default function WorkerProfileScreen({ navigation }) {
                 marginBottom: 12,
               }}
             >
-              SPECIALITIES
+              {t("workerProfile.section.specialities")}
             </AppText>
             <View style={s.pillWrap}>
               {categories.map((wc) => {
@@ -1051,12 +1095,12 @@ export default function WorkerProfileScreen({ navigation }) {
 
         {/* ═══ TAB BAR ═══ */}
         <View style={[s.tabBar, { borderBottomColor: c.border }]}>
-          {TABS.map((t) => {
-            const active = activeTab === t;
+          {TABS.map((tabLabel) => {
+            const active = activeTab === tabLabel;
             return (
               <Pressable
-                key={t}
-                onPress={() => setActiveTab(t)}
+                key={tabLabel}
+                onPress={() => setActiveTab(tabLabel)}
                 style={[s.tabBtn, active && { borderBottomColor: c.orange }]}
               >
                 <AppText
@@ -1064,7 +1108,7 @@ export default function WorkerProfileScreen({ navigation }) {
                   weight={active ? "semibold" : "regular"}
                   style={{ color: active ? c.orange : c.textMuted }}
                 >
-                  {t}
+                  {tabLabel}
                 </AppText>
               </Pressable>
             );
@@ -1072,12 +1116,16 @@ export default function WorkerProfileScreen({ navigation }) {
         </View>
 
         {/* ═══ TAB CONTENT ═══ */}
-        {activeTab === "About" && <AboutTab user={user} wp={wp} c={c} />}
-        {activeTab === "Portfolio" && <PortfolioTab items={portfolio} c={c} />}
-        {activeTab === "Certifications" && (
+        {activeTab === t("workerProfile.tabs.about") && (
+          <AboutTab user={user} wp={wp} c={c} />
+        )}
+        {activeTab === t("workerProfile.tabs.portfolio") && (
+          <PortfolioTab items={portfolio} c={c} />
+        )}
+        {activeTab === t("workerProfile.tabs.certifications") && (
           <CertificationsTab items={certs} c={c} />
         )}
-        {activeTab === "Reviews" && (
+        {activeTab === t("workerProfile.tabs.reviews") && (
           <ReviewsTab
             reviews={reviews}
             total={reviewsTotal}

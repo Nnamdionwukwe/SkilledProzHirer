@@ -24,7 +24,7 @@ export const LANGUAGES = [
     flag: "🇫🇷",
     rtl: false,
   },
-  { code: "de", name: "German", nativeName: "Deutsch", flag: "🇩🇪", rtl: false },
+  // { code: "de", name: "German", nativeName: "Deutsch", flag: "🇩🇪", rtl: false },
   {
     code: "pt",
     name: "Portuguese",
@@ -39,7 +39,7 @@ export const LANGUAGES = [
   //   flag: "🇮🇹",
   //   rtl: false,
   // },
-  // { code: "ar", name: "Arabic", nativeName: "العربية", flag: "🇸🇦", rtl: true },
+  { code: "ar", name: "Arabic", nativeName: "العربية", flag: "🇸🇦", rtl: true },
   // { code: "he", name: "Hebrew", nativeName: "עברית", flag: "🇮🇱", rtl: true },
   // { code: "ur", name: "Urdu", nativeName: "اردو", flag: "🇵🇰", rtl: true },
   // { code: "hi", name: "Hindi", nativeName: "हिन्दी", flag: "🇮🇳", rtl: false },

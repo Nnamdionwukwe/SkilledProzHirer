@@ -53,6 +53,7 @@ function StarRow({ rating, size = 16, color }) {
 
 // ─── Rating summary card ──────────────────────────────────────────────────────
 function RatingSummaryCard({ avgRating, totalReviews, distribution, c }) {
+  const { t } = useTranslation();
   const maxCount = Math.max(
     ...[5, 4, 3, 2, 1].map((s) => distribution[s] ?? 0),
     1,
@@ -76,7 +77,10 @@ function RatingSummaryCard({ avgRating, totalReviews, distribution, c }) {
         <View style={{ marginLeft: 16 }}>
           <StarRow rating={avgRating} size={22} color={c.orange} />
           <AppText variant="small" tone="dim" style={{ marginTop: 6 }}>
-            {totalReviews} review{totalReviews !== 1 ? "s" : ""}
+            {t("workerReviews.reviewCount", {
+              count: totalReviews,
+              s: totalReviews !== 1 ? "s" : "",
+            })}
           </AppText>
         </View>
       </View>
@@ -112,9 +116,15 @@ function RatingSummaryCard({ avgRating, totalReviews, distribution, c }) {
 
 // ─── Review card ──────────────────────────────────────────────────────────────
 function ReviewCard({ review, c }) {
+  const { t } = useTranslation();
   const giver = review.giver ?? {};
   const booking = review.booking ?? null;
   const location = [giver.city, giver.country].filter(Boolean).join(", ");
+
+  const roleLabel =
+    giver.role === "WORKER"
+      ? t("workerReviews.role.worker")
+      : t("workerReviews.role.hirer");
 
   return (
     <View
@@ -133,7 +143,7 @@ function ReviewCard({ review, c }) {
             {giver.firstName} {giver.lastName}
           </AppText>
           <AppText variant="small" style={{ color: c.textMuted }}>
-            {giver.role === "WORKER" ? "Worker" : "Hirer"}
+            {roleLabel}
           </AppText>
           {!!location && (
             <AppText variant="small" style={{ color: c.textMuted }}>
@@ -237,7 +247,7 @@ export default function WorkerReviewsScreen({ navigation }) {
       );
       setTotalPages(d.pages ?? 1);
     } catch {
-      toast.error(t("workerReviews.loadFail"));
+      toast.error(t("workerReviews.error.loadFailed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -318,14 +328,14 @@ export default function WorkerReviewsScreen({ navigation }) {
                 weight="semibold"
                 style={{ color: c.text, marginTop: 12 }}
               >
-                {t("workerReviews.noReviews")}
+                {t("workerReviews.empty.noReviews")}
               </AppText>
               <AppText
                 variant="small"
                 tone="dim"
                 style={{ marginTop: 6, textAlign: "center" }}
               >
-                {t("workerReviews.noReviewsSub")}
+                {t("workerReviews.empty.noReviewsSub")}
               </AppText>
             </View>
           )
@@ -341,10 +351,9 @@ export default function WorkerReviewsScreen({ navigation }) {
               tone="dim"
               style={{ textAlign: "center", paddingVertical: 16 }}
             >
-              {t("reviews.reviewsCount", {
+              {t("workerReviews.footer.loaded", {
                 count: data?.totalReviews ?? reviews.length,
-              })}{" "}
-              loaded
+              })}
             </AppText>
           ) : (
             <View style={{ height: 40 }} />

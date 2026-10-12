@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 import AppScreen from "../../../components/AppScreen";
@@ -26,15 +27,22 @@ import { useAuthStore } from "../../../store/authStore";
 import client from "../../../api/client";
 
 // ─── Day definitions — matches website exactly ────────────────────────────────
-const DAYS = [
-  { value: "MONDAY", label: "Monday", num: 1 },
-  { value: "TUESDAY", label: "Tuesday", num: 2 },
-  { value: "WEDNESDAY", label: "Wednesday", num: 3 },
-  { value: "THURSDAY", label: "Thursday", num: 4 },
-  { value: "FRIDAY", label: "Friday", num: 5 },
-  { value: "SATURDAY", label: "Saturday", num: 6 },
-  { value: "SUNDAY", label: "Sunday", num: 0 },
-];
+// Now a function that accepts t
+function getDays(t) {
+  return [
+    { value: "MONDAY", label: t("workerAvailability.days.monday"), num: 1 },
+    { value: "TUESDAY", label: t("workerAvailability.days.tuesday"), num: 2 },
+    {
+      value: "WEDNESDAY",
+      label: t("workerAvailability.days.wednesday"),
+      num: 3,
+    },
+    { value: "THURSDAY", label: t("workerAvailability.days.thursday"), num: 4 },
+    { value: "FRIDAY", label: t("workerAvailability.days.friday"), num: 5 },
+    { value: "SATURDAY", label: t("workerAvailability.days.saturday"), num: 6 },
+    { value: "SUNDAY", label: t("workerAvailability.days.sunday"), num: 0 },
+  ];
+}
 
 // Backend returns numeric dayOfWeek; we map back to name
 const NUM_TO_DAY = {
@@ -57,7 +65,8 @@ const DAY_TO_NUM = {
   SATURDAY: 6,
 };
 
-function buildDefault() {
+function buildDefault(t) {
+  const DAYS = getDays(t);
   return DAYS.map((d) => ({
     dayOfWeek: d.value,
     startTime: "08:00",
@@ -90,6 +99,7 @@ function dateToTimeString(date) {
 
 // ─── Time picker field ────────────────────────────────────────────────────────
 function TimeField({ value, onChange, c }) {
+  const { t } = useTranslation();
   const [show, setShow] = useState(false);
   const dateVal = timeStringToDate(value);
 
@@ -134,7 +144,7 @@ function TimeField({ value, onChange, c }) {
                   weight="semibold"
                   style={{ color: c.orange }}
                 >
-                  Done
+                  {t("workerAvailability.common.done")}
                 </AppText>
               </Pressable>
               <DateTimePicker
@@ -164,7 +174,12 @@ function TimeField({ value, onChange, c }) {
 
 // ─── Single day row ───────────────────────────────────────────────────────────
 function DayRow({ day, onToggle, onTimeChange, c }) {
+  const { t } = useTranslation();
   const active = day.isAvailable;
+  const DAYS = getDays(t);
+  const dayLabel =
+    DAYS.find((d) => d.value === day.dayOfWeek)?.label || day.dayOfWeek;
+
   return (
     <View
       style={[
@@ -189,7 +204,7 @@ function DayRow({ day, onToggle, onTimeChange, c }) {
           weight="semibold"
           style={{ color: active ? c.orange : c.textMuted, marginLeft: 10 }}
         >
-          {DAYS.find((d) => d.value === day.dayOfWeek)?.label}
+          {dayLabel}
         </AppText>
       </View>
 
@@ -205,7 +220,7 @@ function DayRow({ day, onToggle, onTimeChange, c }) {
             variant="small"
             style={{ color: "rgba(255,255,255,0.4)", marginHorizontal: 6 }}
           >
-            to
+            {t("workerAvailability.common.to")}
           </AppText>
           <TimeField
             value={day.endTime}
@@ -215,7 +230,7 @@ function DayRow({ day, onToggle, onTimeChange, c }) {
         </View>
       ) : (
         <AppText variant="small" tone="dim" style={av.offLabel}>
-          Not available
+          {t("workerAvailability.common.notAvailable")}
         </AppText>
       )}
     </View>
@@ -224,12 +239,14 @@ function DayRow({ day, onToggle, onTimeChange, c }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WorkerAvailabilityScreen() {
+  const { t } = useTranslation();
   const { theme: th } = useTheme();
   const { toast } = useToast();
   const { user } = useAuthStore();
   const c = th.colors;
 
-  const [schedule, setSchedule] = useState(buildDefault());
+  const DAYS = getDays(t);
+  const [schedule, setSchedule] = useState(buildDefault(t));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -265,7 +282,7 @@ export default function WorkerAvailabilityScreen() {
         );
       }
     } catch {
-      toast.error("Could not load availability");
+      toast.error(t("workerAvailability.error.loadFailed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -297,7 +314,7 @@ export default function WorkerAvailabilityScreen() {
       })),
     );
 
-  const reset = () => setSchedule(buildDefault());
+  const reset = () => setSchedule(buildDefault(t));
 
   // ── Day mutations ───────────────────────────────────────────────────────────
   const toggle = (idx) =>
@@ -313,10 +330,11 @@ export default function WorkerAvailabilityScreen() {
     setSaving(true);
     try {
       await client.put("/workers/availability", { availability: schedule });
-      toast.success("Availability saved!");
+      toast.success(t("workerAvailability.success.saved"));
     } catch (err) {
       toast.error(
-        err?.response?.data?.message ?? "Failed to save availability",
+        err?.response?.data?.message ??
+          t("workerAvailability.error.saveFailed"),
       );
     } finally {
       setSaving(false);
@@ -357,16 +375,18 @@ export default function WorkerAvailabilityScreen() {
       {/* ── Header ── */}
 
       <AppText variant="body" tone="dim" style={{ marginBottom: 20 }}>
-        Set the days and hours you're available. This is shown to hirers on your
-        profile.
+        {t("workerAvailability.subtitle")}
       </AppText>
 
       {/* ── Quick actions ── */}
       <View style={av.quickRow}>
         {[
-          { label: "Mon–Fri 8am–6pm", onPress: setMonFri },
-          { label: "Every day", onPress: setEveryDay },
-          { label: "Reset", onPress: reset },
+          { label: t("workerAvailability.quick.monFri"), onPress: setMonFri },
+          {
+            label: t("workerAvailability.quick.everyDay"),
+            onPress: setEveryDay,
+          },
+          { label: t("workerAvailability.quick.reset"), onPress: reset },
         ].map((btn) => (
           <Pressable
             key={btn.label}
@@ -390,7 +410,10 @@ export default function WorkerAvailabilityScreen() {
           tone="dim"
           style={{ alignSelf: "center", flexShrink: 1 }}
         >
-          {activeDays} day{activeDays !== 1 ? "s" : ""} active
+          {t("workerAvailability.common.daysActive", {
+            count: activeDays,
+            s: activeDays !== 1 ? "s" : "",
+          })}
         </AppText>
       </View>
 
@@ -406,10 +429,10 @@ export default function WorkerAvailabilityScreen() {
           weight="semibold"
           style={{ color: c.text, marginBottom: 4 }}
         >
-          Weekly Schedule
+          {t("workerAvailability.schedule.title")}
         </AppText>
         <AppText variant="small" tone="dim" style={{ marginBottom: 16 }}>
-          Toggle days on/off and set your working hours.
+          {t("workerAvailability.schedule.subtitle")}
         </AppText>
 
         {schedule.map((day, idx) => (
@@ -435,7 +458,7 @@ export default function WorkerAvailabilityScreen() {
             <ActivityIndicator color="#fff" />
           ) : (
             <AppText variant="body" weight="semibold" style={{ color: "#fff" }}>
-              Save Availability
+              {t("workerAvailability.button.save")}
             </AppText>
           )}
         </Pressable>
