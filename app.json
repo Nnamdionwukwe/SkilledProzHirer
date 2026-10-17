@@ -7,13 +7,32 @@
     "scheme": "skilledproz",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c4820a3d-3973-4a12-8f9a-06cf60905e00",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.skilledproz.hirer"
     },
     "android": {
       "package": "com.skilledproz.hirer",
-      "edgeToEdgeEnabled": true
+      "versionCode": 1,
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -22,10 +41,16 @@
       "expo-font",
       "expo-secure-store",
       "expo-localization",
+      "expo-updates",
+      "expo-notifications",
       "@react-native-community/datetimepicker"
     ],
     "extra": {
-      "API_URL": "https://api.skilledproz.com/api"
-    }
+      "API_URL": "https://api.skilledproz.com/api",
+      "eas": {
+        "projectId": "c4820a3d-3973-4a12-8f9a-06cf60905e00"
+      }
+    },
+    "owner": "nnamdi-michael"
   }
 }

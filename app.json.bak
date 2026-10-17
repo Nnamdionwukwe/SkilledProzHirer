@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "SkilledProz Hirer",
+    "slug": "skilledproz-hirer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "skilledproz",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.skilledproz.hirer"
+    },
+    "android": {
+      "package": "com.skilledproz.hirer",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-secure-store",
+      "expo-localization",
+      "@react-native-community/datetimepicker"
+    ],
+    "extra": {
+      "API_URL": "https://api.skilledproz.com/api",
+      "eas": {
+        "projectId": "c4820a3d-3973-4a12-8f9a-06cf60905e00"
+      }
+    },
+    "owner": "nnamdi-michael"
+  }
+}

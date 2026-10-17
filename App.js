@@ -23,12 +23,19 @@ import { ToastProvider } from "./src/contexts/ToastContext";
 import RootNavigator from "./src/navigation/RootNavigator";
 import { initI18n } from "./src/i18n";
 import i18n from "./src/i18n"; // same configured singleton
+import useOTAUpdates from "./src/hooks/useOTAUpdates";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   const [i18nReady, setI18nReady] = useState(false);
   const [langKey, setLangKey] = useState("en");
+
+  // ── Silent OTA update check ─────────────────────────────────────────────
+  // Runs on every cold start. If a new JS bundle is available on the
+  // production channel, it downloads in the background and applies on the
+  // next launch. Never blocks UI, never throws.
+  useOTAUpdates();
 
   const [fontsLoaded] = useFonts({
     Syne_700Bold,
