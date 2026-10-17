@@ -40,6 +40,12 @@ import HirerPublicProfileScreen from "../screens/main/HirerPublicProfileScreen";
 import ReferralDashboardScreen from "../screens/main/ReferralDashboardScreen";
 import CampaignDashboardScreen from "../screens/main/CampaignDashboardScreen";
 import MyReportsScreen from "../screens/main/MyReportsScreen";
+import VideoCallScreen from "../screens/main/VideoCallScreen";
+
+// Near the other imports
+import RefundHistoryScreen from "../screens/main/RefundHistoryScreen";
+import RefundDetailScreen from "../screens/main/RefundDetailScreen";
+import MyDisputesScreen from "../screens/main/MyDisputesScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -247,6 +253,21 @@ export default function HirerNavigator() {
       <Drawer.Screen name="HirerDetail">
         {() => <ScreenWithChrome Screen={HirerPublicProfileScreen} />}
       </Drawer.Screen>
+
+      <Drawer.Screen name="RefundHistory">
+        {() => <ScreenWithChrome Screen={RefundHistoryScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen name="RefundDetail">
+        {() => <ScreenWithChrome Screen={RefundDetailScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen name="MyDisputes">
+        {() => <ScreenWithChrome Screen={MyDisputesScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen
+        name="VideoCall"
+        component={VideoCallScreen}
+        options={{ headerShown: false, swipeEnabled: false }}
+      />
     </Drawer.Navigator>
   );
 }

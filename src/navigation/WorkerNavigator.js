@@ -43,6 +43,13 @@ import ReferralDashboardScreen from "../screens/main/ReferralDashboardScreen";
 import CampaignDashboardScreen from "../screens/main/CampaignDashboardScreen";
 import MyReportsScreen from "../screens/main/MyReportsScreen";
 
+// Near the other imports
+import RefundHistoryScreen from "../screens/main/RefundHistoryScreen";
+import RefundDetailScreen from "../screens/main/RefundDetailScreen";
+import MyDisputesScreen from "../screens/main/MyDisputesScreen";
+
+import VideoCallScreen from "../screens/main/VideoCallScreen";
+
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
 
@@ -136,6 +143,24 @@ function WorkerDrawer() {
       title: t("nav.myreports"),
       subtitle: t("screenSub.myreports"),
     },
+    RefundHistory: {
+      title: t("nav.refundHistory", { defaultValue: "Refund History" }),
+      subtitle: null,
+    },
+    RefundDetail: {
+      title: t("booking.refund.detailTitle", {
+        defaultValue: "Refund Details",
+      }),
+      subtitle: null,
+    },
+    MyDisputes: {
+      title: t("disputes.title", { defaultValue: "My Disputes" }),
+      subtitle: null,
+    },
+    VideoCall: {
+      title: "SkilledProz Call",
+      subtitle: null,
+    },
   };
 
   const drawerMeta = (name) =>
@@ -202,6 +227,16 @@ function WorkerDrawer() {
       />
       <Drawer.Screen name="Campaign" component={CampaignDashboardScreen} />
       <Drawer.Screen name="MyReports" component={MyReportsScreen} />
+
+      <Stack.Screen name="RefundHistory" component={RefundHistoryScreen} />
+      <Stack.Screen name="RefundDetail" component={RefundDetailScreen} />
+      <Stack.Screen name="MyDisputes" component={MyDisputesScreen} />
+
+      <Stack.Screen
+        name="VideoCall"
+        component={VideoCallScreen}
+        options={{ headerShown: false, presentation: "fullScreenModal" }}
+      />
     </Drawer.Navigator>
   );
 }

@@ -3,13 +3,13 @@ import axios from "axios";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 
-// Update to use new DigitalOcean backend
 const API_URL =
   Constants.expoConfig?.extra?.API_URL || "https://api.skilledproz.com/api";
 
 const ACCESS_KEY = "skp_access";
 const REFRESH_KEY = "skp_refresh";
 
+// ─── Token storage ────────────────────────────────────────────────────────
 export const tokenStore = {
   async getAccess() {
     try {
@@ -39,6 +39,7 @@ export const tokenStore = {
   },
 };
 
+// ─── Axios instance ───────────────────────────────────────────────────────
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,
@@ -48,14 +49,13 @@ const api = axios.create({
   },
 });
 
-// Logging interceptor for debugging (optional - remove in production)
+// ─── Dev logging ─────────────────────────────────────────────────────────
 if (__DEV__) {
   api.interceptors.request.use(
     (config) => {
       console.log(
         `🚀 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`,
       );
-      if (config.data) console.log("📤 Request Data:", config.data);
       return config;
     },
     (error) => Promise.reject(error),
@@ -75,8 +75,15 @@ if (__DEV__) {
   );
 }
 
-// Attach access token
+// ─── Auth token interceptor ───────────────────────────────────────────────
+// Skip attaching bearer to auth endpoints themselves — the refresh POST
+// must go without a (stale) Authorization header or the backend rejects it.
+const AUTH_EXEMPT_PATHS = ["/auth/refresh", "/auth/login", "/auth/register"];
+
 api.interceptors.request.use(async (config) => {
+  if (AUTH_EXEMPT_PATHS.some((p) => config.url?.includes(p))) {
+    return config;
+  }
   const token = await tokenStore.getAccess();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -84,66 +91,105 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Refresh on 401 once
+// ─── 401 → refresh queue ─────────────────────────────────────────────────
+// One in-flight refresh at a time. All 401'd requests queue here.
+// The critical fix: isRefreshing must be cleared BEFORE the queue is
+// flushed, so any 401 arriving during flush starts a NEW refresh cycle
+// rather than enqueueing into a dead queue.
+
 let isRefreshing = false;
 let queued = [];
 
-const flush = (err, token) => {
-  queued.forEach(({ resolve, reject }) => {
-    if (err) reject(err);
-    else resolve(token);
-  });
+const flushQueue = (err, token) => {
+  const pending = queued;
   queued = [];
+  pending.forEach(({ resolve, reject }) => {
+    try {
+      if (err) reject(err);
+      else resolve(token);
+    } catch {}
+  });
 };
 
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (
-      error.response?.status === 401 &&
-      !original._retry &&
-      !original.url?.includes("/auth/refresh") &&
-      !original.url?.includes("/auth/login")
-    ) {
-      original._retry = true;
-      const refresh = await tokenStore.getRefresh();
-      if (!refresh) return Promise.reject(error);
 
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          queued.push({ resolve, reject });
-        }).then((token) => {
-          original.headers.Authorization = `Bearer ${token}`;
-          return api(original);
-        });
-      }
+    const is401 = error.response?.status === 401;
+    const alreadyRetried = original?._retry;
+    const isAuthEndpoint = AUTH_EXEMPT_PATHS.some((p) =>
+      original?.url?.includes(p),
+    );
 
-      isRefreshing = true;
-      try {
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, {
-          refreshToken: refresh,
-        });
-        const newAccess = data?.data?.accessToken;
-        const newRefresh = data?.data?.refreshToken;
-        await tokenStore.setTokens(newAccess, newRefresh);
-        flush(null, newAccess);
-        original.headers.Authorization = `Bearer ${newAccess}`;
-        return api(original);
-      } catch (err) {
-        flush(err, null);
-        await tokenStore.clear();
-        // Optionally trigger logout event
-        return Promise.reject(err);
-      } finally {
-        isRefreshing = false;
-      }
+    if (!is401 || alreadyRetried || isAuthEndpoint) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    original._retry = true;
+
+    // If a refresh is already in flight, wait for it.
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        queued.push({
+          resolve: (token) => {
+            original.headers.Authorization = `Bearer ${token}`;
+            resolve(api(original));
+          },
+          reject,
+        });
+      });
+    }
+
+    // Start a new refresh cycle.
+    const refresh = await tokenStore.getRefresh();
+    if (!refresh) {
+      return Promise.reject(error);
+    }
+
+    isRefreshing = true;
+
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/auth/refresh`,
+        { refreshToken: refresh },
+        {
+          timeout: 15000,
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+        },
+      );
+
+      const newAccess = data?.data?.accessToken;
+      const newRefresh = data?.data?.refreshToken;
+
+      if (!newAccess) {
+        throw new Error("Refresh response missing access token");
+      }
+
+      await tokenStore.setTokens(newAccess, newRefresh);
+
+      // CRITICAL: clear the flag BEFORE flushing so any concurrent 401
+      // that arrives during retry starts a new cycle instead of queueing
+      // to a queue that will never be flushed again.
+      isRefreshing = false;
+      flushQueue(null, newAccess);
+
+      // Retry the original request with the new token.
+      original.headers.Authorization = `Bearer ${newAccess}`;
+      return api(original);
+    } catch (err) {
+      isRefreshing = false;
+      flushQueue(err, null);
+      await tokenStore.clear();
+      return Promise.reject(err);
+    }
   },
 );
 
-/** Pull a friendly error message off an axios error. */
+// ─── Helper ──────────────────────────────────────────────────────────────
 export function getErrorMessage(err, fallback = "Something went wrong") {
   return (
     err?.response?.data?.message ||

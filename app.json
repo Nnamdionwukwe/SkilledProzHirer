@@ -7,9 +7,7 @@
     "scheme": "skilledproz",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/c4820a3d-3973-4a12-8f9a-06cf60905e00",
       "enabled": true,
@@ -18,7 +16,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.skilledproz.hirer"
+      "bundleIdentifier": "com.skilledproz.hirer",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "SkilledProz uses your location to verify check-in at the job site.",
+        "NSPhotoLibraryUsageDescription": "SkilledProz needs access to your photos so you can attach evidence to disputes.",
+        "NSCameraUsageDescription": "SkilledProz uses your camera to attach photos to disputes."
+      }
     },
     "android": {
       "package": "com.skilledproz.hirer",
@@ -31,7 +34,10 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -43,7 +49,19 @@
       "expo-localization",
       "expo-updates",
       "expo-notifications",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SkilledProz uses your location to verify check-in at the job site."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SkilledProz needs access to your photos so you can attach evidence to disputes."
+        }
+      ]
     ],
     "extra": {
       "API_URL": "https://api.skilledproz.com/api",

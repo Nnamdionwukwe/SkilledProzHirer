@@ -19,7 +19,11 @@ function getNavGroups(t) {
       labelKey: "nav.main",
       items: [
         { name: "Dashboard", labelKey: "nav.dashboard", icon: "grid-outline" },
-        { name: "Bookings", labelKey: "nav.bookings", icon: "briefcase-outline" },
+        {
+          name: "Bookings",
+          labelKey: "nav.bookings",
+          icon: "briefcase-outline",
+        },
         {
           name: "PostJob",
           labelKey: "Post Job",
@@ -120,6 +124,11 @@ function getNavGroups(t) {
           name: "MyReports",
           labelKey: "nav.MyReports",
           icon: "document-text-outline",
+        },
+        {
+          name: "RefundHistory",
+          labelKey: "nav.refundHistory",
+          icon: "refresh-outline",
         },
       ],
     },
