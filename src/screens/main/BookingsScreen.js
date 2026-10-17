@@ -1,10 +1,10 @@
 // src/screens/main/BookingsScreen.js
-// Mirrors the website's BookingList.
+// Mirrors the website's BookingList.jsx.
+// Skeleton loading. Edge-to-edge content.
 // API: GET /bookings?page&limit&status
 
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Image,
   Pressable,
   RefreshControl,
@@ -12,20 +12,78 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 
 import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
-import AppButton from "../../components/AppButton";
-import Card from "../../components/Card";
+import Skeleton from "../../components/Skeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
 import { getBookings } from "../../api/bookings";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+import {
+  FaBriefcase,
+  FaMapMarkerAlt,
+  FaClock,
+  FaHandshake,
+  FaCalendarAlt,
+  FaMoneyBillWave,
+} from "../../icons/fa";
+
+// ── Duration formatter (mirrors website) ────────────────────────────────
+function formatDuration(booking) {
+  if (!booking) return null;
+
+  const unit = booking.estimatedUnit || "hours";
+  const value = booking.estimatedValue || null;
+  const hours = booking.estimatedHours || null;
+  const customLabel = booking.customLabel || "Custom";
+
+  if (!value && !hours) return null;
+
+  if (unit === "custom") {
+    const quantityNum = booking.quantity || 1;
+    return { main: `${quantityNum} ${customLabel}`, sub: null };
+  }
+
+  if (value) {
+    const unitLabel =
+      {
+        hours: "hour",
+        days: "day",
+        weeks: "week",
+        months: "month",
+        years: "year",
+      }[unit] || unit;
+
+    let numValue = value;
+    if (typeof value === "string" && !isNaN(parseFloat(value))) {
+      numValue = parseFloat(value);
+    }
+
+    const num = typeof numValue === "number" ? numValue : parseFloat(value);
+    if (isNaN(num) || num <= 0) {
+      return { main: value, sub: null };
+    }
+
+    const label = unitLabel + (num !== 1 ? "s" : "");
+    const eqv = unit !== "hours" && hours ? `≈ ${hours}h` : null;
+    return { main: `${num} ${label}`, sub: eqv };
+  }
+
+  if (hours) {
+    const num = parseFloat(hours);
+    if (isNaN(num) || num <= 0) {
+      return { main: `${hours} hours`, sub: null };
+    }
+    return { main: `${num} hours`, sub: null };
+  }
+
+  return null;
+}
+
 const STATUSES = [
   "ALL",
   "PENDING",
@@ -37,21 +95,91 @@ const STATUSES = [
 ];
 
 const STATUS_META = {
-  PENDING: { color: "#f97316", bg: "rgba(249,115,22,0.15)" },
-  ACCEPTED: { color: "#f97316", bg: "rgba(249,115,22,0.25)" },
-  IN_PROGRESS: { color: "#6366f1", bg: "rgba(99,102,241,0.15)" },
+  PENDING: { color: "#fbbf24", bg: "rgba(251,191,36,0.12)" },
+  ACCEPTED: { color: "#f97316", bg: "rgba(249,115,22,0.2)" },
+  IN_PROGRESS: { color: "#818cf8", bg: "rgba(129,140,248,0.12)" },
   COMPLETED: { color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
   CANCELLED: { color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
-  DISPUTED: { color: "#f43f5e", bg: "rgba(244,63,94,0.12)" },
+  DISPUTED: { color: "#fb7185", bg: "rgba(251,113,133,0.12)" },
 };
 
-// ─── Booking Card ─────────────────────────────────────────────────────────────
-function BookingCard({ booking, c, t }) {
+// ── Skeleton card ──────────────────────────────────────────────────────
+function BookingCardSkeleton() {
+  const { theme: th } = useTheme();
+  const c = th.colors;
+
+  return (
+    <View
+      style={{
+        backgroundColor: c.bgPanel,
+        borderColor: c.border,
+        borderWidth: 1,
+        borderRadius: 16,
+        padding: 18,
+        gap: 10,
+      }}
+    >
+      {/* Avatar + badge row */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <Skeleton.Circle size={36} />
+        <Skeleton width={70} height={20} radius={10} />
+      </View>
+      {/* Title */}
+      <Skeleton.Line width="80%" height={16} />
+      {/* Party */}
+      <Skeleton.Line width="50%" height={11} />
+      {/* Meta chips */}
+      <View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
+        <Skeleton width={80} height={18} radius={9} />
+        <Skeleton width={60} height={18} radius={9} />
+        <Skeleton width={70} height={18} radius={9} />
+      </View>
+      {/* Date + address */}
+      <Skeleton.Line width="65%" height={11} />
+      <Skeleton.Line width="90%" height={11} />
+      {/* Footer */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginTop: 10,
+          paddingTop: 10,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: c.border,
+        }}
+      >
+        <Skeleton width={90} height={20} radius={6} />
+        <Skeleton width={60} height={16} radius={8} />
+      </View>
+    </View>
+  );
+}
+
+// ── Booking card (mirrors website BookingCard) ─────────────────────────
+function BookingCard({ booking }) {
   const navigation = useNavigation();
-  const meta = STATUS_META[booking.status] ?? STATUS_META.PENDING;
-  const other = booking.worker ?? booking.hirer; // counterparty
+  const { theme: th } = useTheme();
+  const c = th.colors;
+
+  const meta = STATUS_META[booking.status] || STATUS_META.PENDING;
+  const other = booking.worker ?? booking.hirer;
   const scheduled = new Date(booking.scheduledAt);
   const isPast = scheduled < new Date();
+  const dur = formatDuration(booking);
+
+  const jobTypeLabel = (type) => {
+    if (!type) return null;
+    return type
+      .toLowerCase()
+      .replace("_", " ")
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+  };
 
   return (
     <Pressable
@@ -61,30 +189,30 @@ function BookingCard({ booking, c, t }) {
       style={({ pressed }) => [
         styles.card,
         {
-          backgroundColor: c.bgCard,
+          backgroundColor: c.bgPanel,
           borderColor: c.border,
           opacity: pressed ? 0.92 : 1,
         },
       ]}
     >
-      {/* Accent bar */}
+      {/* Left accent bar */}
       <View style={[styles.accentBar, { backgroundColor: meta.color }]} />
 
       <View style={styles.cardInner}>
-        {/* Top: avatar + status */}
+        {/* Avatar + status badge */}
         <View style={styles.cardTop}>
           <View
             style={[
               styles.avatar,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
+              { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
             ]}
           >
             {other?.avatar ? (
               <Image source={{ uri: other.avatar }} style={styles.avatarImg} />
             ) : (
               <AppText
-                variant="body"
-                weight="semibold"
+                variant="small"
+                weight="bold"
                 style={{ color: c.orange }}
               >
                 {other?.firstName?.[0]}
@@ -92,11 +220,21 @@ function BookingCard({ booking, c, t }) {
               </AppText>
             )}
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
+          <View
+            style={[
+              styles.badge,
+              { backgroundColor: meta.bg, borderColor: `${meta.color}55` },
+            ]}
+          >
             <AppText
               variant="small"
-              weight="semibold"
-              style={{ color: meta.color }}
+              weight="bold"
+              style={{
+                color: meta.color,
+                textTransform: "uppercase",
+                fontSize: 10,
+                letterSpacing: 0.5,
+              }}
             >
               {booking.status.replace("_", " ")}
             </AppText>
@@ -106,20 +244,15 @@ function BookingCard({ booking, c, t }) {
         {/* Title */}
         <AppText
           variant="title"
-          weight="semibold"
-          style={{ marginTop: 10 }}
+          weight="displayBlack"
           numberOfLines={2}
+          style={{ fontSize: 15, lineHeight: 20, marginTop: 2 }}
         >
           {booking.title}
         </AppText>
 
-        {/* Counterparty + category */}
-        <AppText
-          variant="small"
-          tone="dim"
-          numberOfLines={1}
-          style={{ marginTop: 4 }}
-        >
+        {/* Party + category */}
+        <AppText variant="small" tone="dim" numberOfLines={1}>
           {other?.firstName} {other?.lastName}
           {booking.category ? (
             <AppText variant="small" style={{ color: c.orange }}>
@@ -129,18 +262,96 @@ function BookingCard({ booking, c, t }) {
           ) : null}
         </AppText>
 
+        {/* Meta chips */}
+        <View style={styles.metaGrid}>
+          {booking.jobType && (
+            <View
+              style={[
+                styles.metaChip,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
+            >
+              <FaBriefcase size={9} color={c.textDim} />
+              <AppText
+                variant="small"
+                weight="semibold"
+                tone="dim"
+                style={{ fontSize: 10, marginLeft: 4 }}
+              >
+                {jobTypeLabel(booking.jobType)}
+              </AppText>
+            </View>
+          )}
+          {booking.locationType && (
+            <View
+              style={[
+                styles.metaChip,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
+            >
+              <FaMapMarkerAlt size={9} color={c.textDim} />
+              <AppText
+                variant="small"
+                weight="semibold"
+                tone="dim"
+                style={{ fontSize: 10, marginLeft: 4 }}
+              >
+                {booking.locationType.replace("_", " ").toUpperCase()}
+              </AppText>
+            </View>
+          )}
+          {dur && (
+            <View
+              style={[
+                styles.metaChip,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
+            >
+              <FaClock size={9} color={c.textDim} />
+              <AppText
+                variant="small"
+                weight="semibold"
+                tone="dim"
+                style={{ fontSize: 10, marginLeft: 4 }}
+              >
+                {dur.main}
+                {dur.sub ? ` ${dur.sub}` : ""}
+              </AppText>
+            </View>
+          )}
+          {booking.isNegotiated && booking.negotiatedRate && (
+            <View
+              style={[
+                styles.metaChip,
+                {
+                  backgroundColor: c.orangeDim,
+                  borderColor: c.orangeGlow,
+                },
+              ]}
+            >
+              <FaHandshake size={9} color={c.orange} />
+              <AppText
+                variant="small"
+                weight="semibold"
+                style={{ fontSize: 10, marginLeft: 4, color: c.orange }}
+              >
+                Negotiated
+              </AppText>
+            </View>
+          )}
+        </View>
+
         {/* Date + address */}
-        <View style={{ marginTop: 10, gap: 4 }}>
+        <View style={{ gap: 4 }}>
           <View style={styles.detailRow}>
-            <Ionicons
-              name="calendar-outline"
-              size={12}
-              color={isPast ? c.textMuted : c.orange}
-              style={{ marginRight: 5 }}
-            />
+            <FaCalendarAlt size={10} color={isPast ? c.textMuted : c.orange} />
             <AppText
               variant="small"
-              style={{ color: isPast ? c.textMuted : c.text }}
+              style={{
+                color: isPast ? c.textMuted : c.text,
+                marginLeft: 6,
+                fontSize: 11,
+              }}
             >
               {scheduled.toLocaleDateString("en-GB", {
                 day: "numeric",
@@ -156,13 +367,13 @@ function BookingCard({ booking, c, t }) {
           </View>
           {booking.address && (
             <View style={styles.detailRow}>
-              <Ionicons
-                name="location-outline"
-                size={12}
-                color={c.textMuted}
-                style={{ marginRight: 5 }}
-              />
-              <AppText variant="small" tone="dim" numberOfLines={1}>
+              <FaMapMarkerAlt size={10} color={c.textMuted} />
+              <AppText
+                variant="small"
+                tone="dim"
+                numberOfLines={1}
+                style={{ marginLeft: 6, fontSize: 11, flex: 1 }}
+              >
                 {booking.address}
               </AppText>
             </View>
@@ -171,13 +382,17 @@ function BookingCard({ booking, c, t }) {
 
         {/* Footer: rate + payment status */}
         <View style={[styles.cardFooter, { borderTopColor: c.border }]}>
-          <AppText
-            variant="body"
-            weight="displayBlack"
-            style={{ color: c.text, fontSize: 22 }}
-          >
-            {booking.currency} {Number(booking.agreedRate).toLocaleString()}
-          </AppText>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <FaMoneyBillWave size={13} color={c.text} />
+            <AppText
+              variant="body"
+              weight="displayBlack"
+              style={{ color: c.text, fontSize: 16 }}
+            >
+              {booking.currency}{" "}
+              {Number(booking.agreedRate || 0).toLocaleString()}
+            </AppText>
+          </View>
           {booking.payment && (
             <View
               style={[
@@ -192,13 +407,15 @@ function BookingCard({ booking, c, t }) {
             >
               <AppText
                 variant="small"
-                weight="semibold"
+                weight="bold"
                 style={{
                   color:
                     booking.payment.status === "RELEASED"
                       ? "#22c55e"
                       : c.orange,
-                  fontSize: 10,
+                  fontSize: 9,
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
                 }}
               >
                 {booking.payment.status}
@@ -211,7 +428,7 @@ function BookingCard({ booking, c, t }) {
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ── Main screen ────────────────────────────────────────────────────────
 export default function BookingsScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
@@ -259,6 +476,7 @@ export default function BookingsScreen() {
 
   return (
     <AppScreen
+      padded={false}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -271,243 +489,331 @@ export default function BookingsScreen() {
       }
       contentContainerStyle={{ paddingBottom: 40 }}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange, letterSpacing: 0.8 }}
-          >
-            {t("bookings.myJobs").toUpperCase()}
-          </AppText>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              marginTop: 4,
-            }}
-          >
-            {total > 0 && (
-              <View
-                style={[
-                  styles.totalBadge,
-                  { backgroundColor: c.bgCard, borderColor: c.border },
-                ]}
+      <View style={styles.outer}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <AppText
+              variant="small"
+              weight="bold"
+              style={{
+                color: c.orange,
+                letterSpacing: 1.2,
+                textTransform: "uppercase",
+              }}
+            >
+              {t("bookings.myJobs")}
+            </AppText>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                marginTop: 4,
+              }}
+            >
+              <AppText
+                variant="title"
+                weight="displayBlack"
+                style={{ fontSize: 26 }}
               >
-                <AppText variant="small" weight="semibold">
-                  {total}
-                </AppText>
-              </View>
-            )}
+                {t("bookings.title", { defaultValue: "Bookings" })}
+              </AppText>
+              {total > 0 && !loading && (
+                <View
+                  style={[
+                    styles.countBadge,
+                    { backgroundColor: c.bgCard, borderColor: c.border },
+                  ]}
+                >
+                  <AppText variant="small" weight="bold" tone="dim">
+                    {total}
+                  </AppText>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-        {isHirer && (
-          <AppButton
-            title={t("bookings.newBooking")}
-            fullWidth={false}
-            onPress={() => navigation.navigate("CreateBooking")}
-            style={{ paddingHorizontal: 14 }}
-          />
-        )}
-      </View>
-
-      {/* Filter tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ marginTop: 16 }}
-        contentContainerStyle={{ gap: 8, paddingRight: 8 }}
-      >
-        {STATUSES.map((s) => {
-          const active = filter === s;
-          return (
+          {isHirer && (
             <Pressable
-              key={s}
-              onPress={() => handleFilter(s)}
-              style={[
-                styles.filterTab,
-                {
-                  backgroundColor: active ? c.orange : c.bgCard,
-                  borderColor: active ? c.orange : c.border,
-                },
-              ]}
+              onPress={() => navigation.navigate("CreateBooking")}
+              style={[styles.newBtn, { backgroundColor: c.orange }]}
             >
               <AppText
                 variant="small"
-                weight="semibold"
-                style={{ color: active ? "#fff" : c.text }}
+                weight="bold"
+                style={{ color: c.bg, fontSize: 13 }}
               >
-                {s === "ALL"
-                  ? t("bookings.all")
-                  : s === "IN_PROGRESS"
-                    ? t("bookings.inProgress")
-                    : t(`bookings.${s.toLowerCase()}`)}
+                + {t("bookings.newBooking", { defaultValue: "New Booking" })}
               </AppText>
             </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* Content */}
-      {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={c.orange} />
-        </View>
-      ) : bookings.length === 0 ? (
-        <Card padded style={styles.emptyCard}>
-          <Ionicons name="briefcase-outline" size={36} color={c.textMuted} />
-          <AppText variant="body" weight="semibold" style={{ marginTop: 12 }}>
-            {t("bookings.noBookings")}
-          </AppText>
-          <AppText
-            variant="small"
-            tone="dim"
-            style={{ marginTop: 6, textAlign: "center" }}
-          >
-            {filter === "ALL"
-              ? isHirer
-                ? t("bookings.noBookingsHirer")
-                : t("bookings.noBookingsWorker")
-              : t("bookings.noBookingsFiltered", {
-                  status: filter.toLowerCase().replace("_", " "),
-                })}
-          </AppText>
-          {filter === "ALL" && isHirer && (
-            <AppButton
-              title={t("bookings.newBooking")}
-              iconLeft="add"
-              onPress={() => navigation.navigate("CreateBooking")}
-              style={{ marginTop: 16 }}
-            />
           )}
-        </Card>
-      ) : (
-        <View style={styles.grid}>
-          {bookings.map((b) => (
-            <BookingCard key={b.id} booking={b} c={c} t={t} />
-          ))}
         </View>
-      )}
 
-      {/* Pagination */}
-      {pages > 1 && (
-        <View style={[styles.pagination, { borderTopColor: c.border }]}>
-          <Pressable
-            disabled={page === 1}
-            onPress={() => setPage((p) => p - 1)}
+        {/* Filter tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginTop: 16, marginBottom: 20 }}
+          contentContainerStyle={{ gap: 6, paddingRight: 8 }}
+        >
+          {STATUSES.map((s) => {
+            const active = filter === s;
+            return (
+              <Pressable
+                key={s}
+                onPress={() => handleFilter(s)}
+                style={[
+                  styles.filterTab,
+                  {
+                    backgroundColor: active ? c.orangeDim : "transparent",
+                    borderColor: active ? c.orange : c.border,
+                  },
+                ]}
+              >
+                <AppText
+                  variant="small"
+                  weight="semibold"
+                  style={{
+                    color: active ? c.orange : c.textDim,
+                    fontSize: 12,
+                  }}
+                >
+                  {s === "ALL"
+                    ? t("bookings.all")
+                    : s === "IN_PROGRESS"
+                      ? t("bookings.inProgress")
+                      : t(`bookings.${s.toLowerCase()}`)}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Content */}
+        {loading ? (
+          <View style={{ gap: 14 }}>
+            {[1, 2, 3, 4].map((i) => (
+              <BookingCardSkeleton key={i} />
+            ))}
+          </View>
+        ) : bookings.length === 0 ? (
+          <View
             style={[
-              styles.pageBtn,
-              {
-                backgroundColor: c.bgCard,
-                borderColor: c.border,
-                opacity: page === 1 ? 0.4 : 1,
-              },
+              styles.emptyCard,
+              { backgroundColor: c.bgPanel, borderColor: c.border },
             ]}
           >
-            <Ionicons name="arrow-back" size={16} color={c.text} />
+            <FaBriefcase size={40} color={c.textMuted} />
+            <AppText weight="bold" style={{ marginTop: 12, fontSize: 18 }}>
+              {t("bookings.noBookings")}
+            </AppText>
             <AppText
               variant="small"
-              weight="semibold"
-              style={{ marginLeft: 6 }}
+              tone="dim"
+              style={{ marginTop: 6, textAlign: "center", maxWidth: 320 }}
             >
-              Prev
+              {filter === "ALL"
+                ? isHirer
+                  ? t("bookings.noBookingsHirer")
+                  : t("bookings.noBookingsWorker")
+                : t("bookings.noBookingsFiltered", {
+                    status: filter.toLowerCase().replace("_", " "),
+                  })}
             </AppText>
-          </Pressable>
-          <AppText variant="body" tone="dim">
-            {page} {t("bookings.of")} {pages}
-          </AppText>
-          <Pressable
-            disabled={page === pages}
-            onPress={() => setPage((p) => p + 1)}
-            style={[
-              styles.pageBtn,
-              {
-                backgroundColor: c.bgCard,
-                borderColor: c.border,
-                opacity: page === pages ? 0.4 : 1,
-              },
-            ]}
-          >
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ marginRight: 6 }}
+            {filter === "ALL" && isHirer && (
+              <Pressable
+                onPress={() => navigation.navigate("CreateBooking")}
+                style={[styles.emptyBtn, { backgroundColor: c.orange }]}
+              >
+                <AppText variant="small" weight="bold" style={{ color: c.bg }}>
+                  + {t("bookings.newBooking")}
+                </AppText>
+              </Pressable>
+            )}
+          </View>
+        ) : (
+          <View style={{ gap: 14 }}>
+            {bookings.map((b) => (
+              <BookingCard key={b.id} booking={b} />
+            ))}
+          </View>
+        )}
+
+        {/* Pagination */}
+        {pages > 1 && (
+          <View style={[styles.pagination, { borderTopColor: c.border }]}>
+            <Pressable
+              disabled={page === 1}
+              onPress={() => setPage((p) => p - 1)}
+              style={[
+                styles.pageBtn,
+                {
+                  backgroundColor: c.bgCard,
+                  borderColor: c.border,
+                  opacity: page === 1 ? 0.4 : 1,
+                },
+              ]}
             >
-              Next
+              <AppText variant="small" weight="semibold">
+                ← {t("bookings.prev", { defaultValue: "Prev" })}
+              </AppText>
+            </Pressable>
+            <AppText variant="small" tone="dim">
+              {page} {t("bookings.of")} {pages}
             </AppText>
-            <Ionicons name="arrow-forward" size={16} color={c.text} />
-          </Pressable>
-        </View>
-      )}
+            <Pressable
+              disabled={page === pages}
+              onPress={() => setPage((p) => p + 1)}
+              style={[
+                styles.pageBtn,
+                {
+                  backgroundColor: c.bgCard,
+                  borderColor: c.border,
+                  opacity: page === pages ? 0.4 : 1,
+                },
+              ]}
+            >
+              <AppText variant="small" weight="semibold">
+                {t("bookings.next", { defaultValue: "Next" })} →
+              </AppText>
+            </Pressable>
+          </View>
+        )}
+      </View>
     </AppScreen>
   );
 }
 
+// ── Styles ─────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  // Edge-to-edge wrapper — only 8px horizontal
+  outer: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+  },
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     flexWrap: "wrap",
     gap: 10,
+    paddingHorizontal: 4,
   },
-  totalBadge: {
+  countBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 20,
     borderWidth: 1,
+  },
+  newBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
   },
   filterTab: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
   },
-  loadingWrap: { paddingVertical: 60, alignItems: "center" },
-  emptyCard: { alignItems: "center", paddingVertical: 40, marginTop: 16 },
-  grid: { gap: 12, marginTop: 16 },
-  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
-  accentBar: { height: 3, width: "100%" },
-  cardInner: { padding: 16 },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+    position: "relative",
+  },
+  accentBar: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
+  },
+  cardInner: {
+    padding: 18,
+    paddingLeft: 22,
+    gap: 8,
+  },
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   avatarImg: { width: "100%", height: "100%" },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  detailRow: { flexDirection: "row", alignItems: "center" },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  metaGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
+  },
+  metaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   cardFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 14,
-    paddingTop: 12,
+    marginTop: 8,
+    paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  payTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
+  payTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  emptyCard: {
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 16,
+  },
+  emptyBtn: {
+    marginTop: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
   pagination: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 20,
     paddingTop: 16,
+    paddingHorizontal: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   pageBtn: {
-    flexDirection: "row",
-    alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,

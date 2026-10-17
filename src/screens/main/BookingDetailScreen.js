@@ -1,18 +1,11 @@
 // src/screens/main/BookingDetailScreen.js
 //
 // Orchestrator. Works for both Hirer (drawer) and Worker (stack push).
-// No AppScreen — TopBar is already rendered by the navigator.
-// NO LocationCard — GpsCard is used via BookingDetailMain.
+// Loading state uses a skeleton that mirrors the actual layout.
+// Content hugs the phone edges (8px horizontal) — same rhythm as BookingsScreen.
 
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import {
@@ -23,6 +16,7 @@ import {
 } from "../../icons/fa";
 
 import AppText from "../../components/AppText";
+import Skeleton from "../../components/Skeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
@@ -88,6 +82,99 @@ const STATUS_STEP = {
   CANCELLED: -1,
   DISPUTED: -1,
 };
+
+// ── Skeleton (edge-to-edge, mirrors layout below) ──────────────────────
+function BookingDetailSkeleton() {
+  const { theme: th } = useTheme();
+  const c = th.colors;
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      contentContainerStyle={{ padding: 8, paddingBottom: 40, gap: 10 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Title block */}
+      <Skeleton width="100%" height={110} radius={16} />
+
+      {/* Timeline */}
+      <Skeleton width="100%" height={76} radius={14} />
+
+      {/* Description / job info */}
+      <Skeleton width="100%" height={140} radius={14} />
+
+      {/* Job details grid */}
+      <View
+        style={{
+          backgroundColor: c.bgPanel,
+          borderColor: c.border,
+          borderWidth: 1,
+          borderRadius: 14,
+          padding: 14,
+          gap: 8,
+        }}
+      >
+        <Skeleton.Line width={90} height={10} />
+        {[1, 2, 3, 4].map((i) => (
+          <View
+            key={i}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              padding: 12,
+              borderWidth: 1,
+              borderRadius: 10,
+              borderColor: c.border,
+              backgroundColor: c.bgCard,
+            }}
+          >
+            <Skeleton.Circle size={20} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <Skeleton.Line width="40%" height={9} />
+              <Skeleton.Line width="70%" height={12} />
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {/* Party card */}
+      <View
+        style={{
+          backgroundColor: c.bgPanel,
+          borderColor: c.border,
+          borderWidth: 1,
+          borderRadius: 16,
+          padding: 20,
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <Skeleton.Circle size={56} />
+        <Skeleton.Line width={140} height={14} />
+        <Skeleton.Line width={100} height={11} />
+        <Skeleton width="100%" height={40} radius={8} />
+      </View>
+
+      {/* Actions card */}
+      <View
+        style={{
+          backgroundColor: c.bgPanel,
+          borderColor: c.border,
+          borderWidth: 1,
+          borderRadius: 16,
+          padding: 18,
+          gap: 10,
+        }}
+      >
+        <Skeleton.Line width={80} height={10} />
+        <Skeleton width="100%" height={42} radius={10} />
+        <Skeleton width="100%" height={42} radius={10} />
+        <Skeleton width="100%" height={42} radius={10} />
+      </View>
+    </ScrollView>
+  );
+}
 
 export default function BookingDetailScreen() {
   const { t } = useTranslation();
@@ -269,12 +356,9 @@ export default function BookingDetailScreen() {
 
   const handleReferralToggle = () => setReferralApplied((v) => !v);
 
+  // ── Skeleton ─────────────────────────────────────────────────────────
   if (loading) {
-    return (
-      <View style={[styles.center, { backgroundColor: c.bg }]}>
-        <ActivityIndicator size="large" color={c.orange} />
-      </View>
-    );
+    return <BookingDetailSkeleton />;
   }
 
   if (!booking) {
@@ -367,16 +451,17 @@ export default function BookingDetailScreen() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: 16,
+          paddingHorizontal: 8,
           paddingBottom: 40,
-          paddingTop: 12,
+          paddingTop: 8,
+          gap: 10,
         }}
         showsVerticalScrollIndicator={false}
       >
         {isWorker && (
           <Pressable
             onPress={() => navigation.goBack()}
-            style={[styles.backBtn, { borderColor: c.border }]}
+            style={[styles.backBtn, { borderColor: c.border, marginLeft: 4 }]}
           >
             <FaArrowLeft
               size={12}
@@ -470,35 +555,31 @@ export default function BookingDetailScreen() {
         />
 
         {isWorker && booking.status === "PENDING" && (
-          <View style={{ marginTop: 12 }}>
-            <WorkerPaymentPreview booking={booking} />
-          </View>
+          <WorkerPaymentPreview booking={booking} />
         )}
 
         {booking.payment && !paymentRequired && (
-          <View style={{ marginTop: 12 }}>
-            <BookingDetailPayment
-              booking={booking}
-              payment={booking.payment}
-              feeBreakdown={feeBreakdown}
-              walletBalance={walletBalance}
-              referralAmount={referralAmount}
-              referralApplied={referralApplied}
-              referralPercent={referralPercent}
-              onPercentChange={handlePercentChange}
-              onReferralToggle={handleReferralToggle}
-              showPayOptions={showPayOptions}
-              onTogglePayOptions={() => setShowPayOptions((v) => !v)}
-              paymentRequired={false}
-              refetch={() => fetchAll(true)}
-              onSuccess={(msg) => toast.success(msg)}
-              isHirer={isHirer}
-              isWorker={isWorker}
-            />
-          </View>
+          <BookingDetailPayment
+            booking={booking}
+            payment={booking.payment}
+            feeBreakdown={feeBreakdown}
+            walletBalance={walletBalance}
+            referralAmount={referralAmount}
+            referralApplied={referralApplied}
+            referralPercent={referralPercent}
+            onPercentChange={handlePercentChange}
+            onReferralToggle={handleReferralToggle}
+            showPayOptions={showPayOptions}
+            onTogglePayOptions={() => setShowPayOptions((v) => !v)}
+            paymentRequired={false}
+            refetch={() => fetchAll(true)}
+            onSuccess={(msg) => toast.success(msg)}
+            isHirer={isHirer}
+            isWorker={isWorker}
+          />
         )}
 
-        <View style={{ marginTop: 12, gap: 12 }}>
+        <View style={{ gap: 10 }}>
           {isHirer && paymentRequired && (
             <BookingDetailPayment
               booking={booking}
@@ -569,13 +650,11 @@ export default function BookingDetailScreen() {
         </View>
 
         {activeRefund && (
-          <View style={{ marginTop: 12 }}>
-            <RefundStatus
-              refund={activeRefund}
-              isHirer={isHirer}
-              onViewDetails={goToRefundDetail}
-            />
-          </View>
+          <RefundStatus
+            refund={activeRefund}
+            isHirer={isHirer}
+            onViewDetails={goToRefundDetail}
+          />
         )}
       </ScrollView>
 
@@ -722,15 +801,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 16,
   },
   sosBanner: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    padding: 14,
     borderRadius: 12,
     borderWidth: 2,
-    marginBottom: 16,
     gap: 10,
   },
   sosResolveBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },

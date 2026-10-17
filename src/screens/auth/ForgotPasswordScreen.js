@@ -1,14 +1,23 @@
 // src/screens/auth/ForgotPasswordScreen.js
+//
+// Mirrors the website's ForgotPassword.jsx.
+// Uses AuthShell + AuthField + AuthButton + AuthStateBox + AuthFooter.
+
 import React, { useState } from "react";
-import { View, Pressable, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Pressable } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 
-import AppScreen from "../../components/AppScreen";
+import {
+  AuthShell,
+  AuthHeader,
+  AuthField,
+  AuthButton,
+  AuthAlert,
+  AuthStateBox,
+  AuthFooter,
+} from "../../components/auth/AuthShell";
 import AppText from "../../components/AppText";
-import AppInput from "../../components/AppInput";
-import AppButton from "../../components/AppButton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
@@ -17,12 +26,14 @@ import { isEmail } from "../../utils/validators";
 export default function ForgotPasswordScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { theme } = useTheme();
+  const { theme: th } = useTheme();
+  const c = th.colors;
   const { toast } = useToast();
   const { forgotPassword } = useAuthStore();
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
@@ -34,74 +45,89 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     try {
       await forgotPassword(email.trim().toLowerCase());
-      toast.success(t("auth.resetLinkSent"));
-      navigation.navigate("Login");
+      setSent(true);
     } catch (err) {
-      toast.error(err.message);
+      setError(err?.message || t("toast.unknownError"));
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Success state ────────────────────────────────────────────────
+  if (sent) {
+    return (
+      <AuthShell showBack backTo="Login">
+        <AuthStateBox
+          icon="checkmark-circle"
+          title={t("auth.resetLinkSent")}
+          subtitle={
+            <>
+              If{" "}
+              <AppText weight="semibold" style={{ color: c.textDim }}>
+                {email}
+              </AppText>{" "}
+              is registered, check your inbox.
+            </>
+          }
+        />
+        <AuthButton
+          title={t("auth.backToSignIn", {
+            defaultValue: "Back to sign in",
+          })}
+          variant="outline"
+          iconLeft="arrow-back"
+          onPress={() => navigation.navigate("Login")}
+        />
+      </AuthShell>
+    );
+  }
+
+  // ── Form state ───────────────────────────────────────────────────
   return (
-    <AppScreen>
-      <View style={styles.container}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backRow} hitSlop={6}>
-          <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
-          <AppText variant="body" weight="medium" style={{ marginLeft: 8 }}>
-            {t("common.back")}
-          </AppText>
-        </Pressable>
+    <AuthShell showBack backTo="Login">
+      <AuthHeader
+        eyebrow={t("auth.accountRecovery", {
+          defaultValue: "Account recovery",
+        })}
+        title={t("auth.forgotPasswordTitle")}
+        subtitle={t("auth.forgotPasswordBody")}
+      />
 
-        <View style={{ height: 40 }} />
+      {error ? <AuthAlert type="error" message={error} /> : null}
 
-        <AppText variant="display" weight="displayBlack">
-          {t("auth.forgotPasswordTitle")}
-        </AppText>
-        <AppText variant="subtitle" tone="dim" style={{ marginTop: 8, marginBottom: 24 }}>
-          {t("auth.forgotPasswordBody")}
-        </AppText>
-
-        <AppInput
+      <View style={{ gap: 18 }}>
+        <AuthField
           label={t("auth.emailAddress")}
           iconLeft="mail-outline"
           placeholder={t("auth.emailPlaceholder")}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(v) => {
+            setEmail(v);
+            setError("");
+          }}
           keyboardType="email-address"
           autoComplete="email"
           textContentType="emailAddress"
-          error={error}
+          error={error || undefined}
         />
 
-        <AppButton
-          title={t("auth.sendResetLink")}
+        <AuthButton
+          title={
+            loading
+              ? t("auth.sending", { defaultValue: "Sending…" })
+              : t("auth.sendResetLink")
+          }
           onPress={handleSubmit}
           loading={loading}
-          style={{ marginTop: 16 }}
+          disabled={!email}
         />
-
-        <View style={styles.bottomRow}>
-          <AppText variant="body" tone="dim">
-            {t("auth.rememberPassword")}{" "}
-          </AppText>
-          <Pressable onPress={() => navigation.navigate("Login")} hitSlop={6}>
-            <AppText variant="body" tone="brand" weight="semibold">
-              {t("auth.signIn")}
-            </AppText>
-          </Pressable>
-        </View>
       </View>
-    </AppScreen>
+
+      <AuthFooter
+        prompt={t("auth.rememberPassword")}
+        actionLabel={t("auth.signIn")}
+        onPress={() => navigation.navigate("Login")}
+      />
+    </AuthShell>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { gap: 12 },
-  backRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
-  bottomRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 24,
-  },
-});

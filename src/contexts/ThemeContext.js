@@ -1,3 +1,10 @@
+// src/contexts/ThemeContext.js
+//
+// Exposes theme, mode, setMode, fonts, radii, spacing, AND
+// fontScale / systemFontScale / effectiveFontScale. AppText and
+// any consumer that needs proportional sizing multiplies by
+// effectiveFontScale.
+
 import React, {
   createContext,
   useContext,
@@ -5,9 +12,15 @@ import React, {
   useState,
   useMemo,
 } from "react";
-import { Appearance } from "react-native";
+import { Appearance, useWindowDimensions, PixelRatio } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { THEMES, FONTS, RADII, SPACING } from "../constants/theme";
+import {
+  THEMES,
+  FONTS,
+  RADII,
+  SPACING,
+  fontScaleFor,
+} from "../constants/theme";
 
 const STORAGE_KEY = "@skilledproz:theme";
 const ThemeContext = createContext({
@@ -21,6 +34,9 @@ export function ThemeProvider({ children }) {
   const [systemScheme, setSystemScheme] = useState(
     Appearance.getColorScheme() || "dark",
   );
+
+  // Reactive width so fontScale updates on rotation / foldables
+  const { width } = useWindowDimensions();
 
   useEffect(() => {
     (async () => {
@@ -49,6 +65,11 @@ export function ThemeProvider({ children }) {
   const effectiveMode = mode === "system" ? systemScheme : mode;
   const theme = effectiveMode === "light" ? THEMES.light : THEMES.dark;
 
+  // Font scale — combines our breakpoint scale with the OS accessibility scale
+  const fontScale = fontScaleFor(width);
+  const systemFontScale = PixelRatio.getFontScale() || 1.0;
+  const effectiveFontScale = fontScale * systemFontScale;
+
   const value = useMemo(
     () => ({
       theme,
@@ -58,8 +79,18 @@ export function ThemeProvider({ children }) {
       fonts: FONTS,
       radii: RADII,
       spacing: SPACING,
+      fontScale,
+      systemFontScale,
+      effectiveFontScale,
     }),
-    [theme, mode, effectiveMode],
+    [
+      theme,
+      mode,
+      effectiveMode,
+      fontScale,
+      systemFontScale,
+      effectiveFontScale,
+    ],
   );
 
   return (

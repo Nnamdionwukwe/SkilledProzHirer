@@ -1,5 +1,12 @@
 // src/constants/theme.js
 // Mirrors the website's CSS variables in src/styles/global.css
+//
+// Also exports fontScaleFor() — the RN equivalent of the website's
+// `html { font-size }` breakpoints. The website uses rem and drops root
+// font-size to 14px on phones. RN has no rem, so we express the same
+// ratio as a multiplier applied by AppText.
+
+import { Dimensions, PixelRatio } from "react-native";
 
 export const COLORS = {
   // Brand
@@ -48,8 +55,8 @@ const dark = {
     bgCard: "rgba(255, 255, 255, 0.03)",
     bgInput: "rgba(255, 255, 255, 0.04)",
     // ── Aliases used by PostJobScreen / SettingsScreen ──
-    card: "rgba(255, 255, 255, 0.03)", // = bgCard
-    inputBg: "rgba(255, 255, 255, 0.04)", // = bgInput
+    card: "rgba(255, 255, 255, 0.03)",
+    inputBg: "rgba(255, 255, 255, 0.04)",
     // ────────────────────────────────────────────────────
     text: "#ffffff",
     textDim: "rgba(255, 255, 255, 0.55)",
@@ -88,3 +95,31 @@ const light = {
 };
 
 export const THEMES = { dark, light };
+
+// ── Font scale (mirrors the website's html { font-size } breakpoints) ──
+// Website breakpoints:
+//   > 860px  → 16px  (1.00×)
+//   ≤ 860px  → 15px  (0.9375×)
+//   ≤ 480px  → 14px  (0.875×)
+//   ≤ 360px  → 13.5px (0.8437×)
+//
+// RN equivalent: multiply every fontSize by fontScaleFor(width).
+
+export function fontScaleFor(width) {
+  if (width <= 320) return 0.78;
+  if (width <= 360) return 0.84; // ↔ 13.5px on 16px root
+  if (width <= 400) return 0.88;
+  if (width <= 480) return 0.9; // ↔ 14px on 16px root
+  if (width <= 860) return 0.96; // ↔ 15px on 16px root
+  return 1.0;
+}
+
+// Convenience: scale a base font size (in "web rem-like" px)
+export const sfs = (base, factor = 1) => Math.round(base * factor);
+
+// A React-free resolver — safe to call anywhere
+export const getCurrentFontScale = () =>
+  fontScaleFor(Dimensions.get("window").width);
+
+// Respect the OS's accessibility font-size setting too
+export const getSystemFontScale = () => PixelRatio.getFontScale() || 1.0;
