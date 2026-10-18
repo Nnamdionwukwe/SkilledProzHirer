@@ -2987,5 +2987,22 @@
   "booking.emergency.update": "Update Contact",
   "booking.emergency.saving": "Saving...",
   "booking.emergency.saveFailed": "Save failed. Try again.",
-  "refundHistory": "Refund History"
+  "refundHistory": "Refund History",
+
+  "auth.accountRecovery": "Account recovery",
+  "auth.accountSuspended": "Account suspended",
+  "auth.accountSuspendedBody": "Your account has been suspended by an administrator. Contact support if you believe this is a mistake.",
+  "auth.accountDeactivated": "Account deactivated",
+  "auth.accountDeactivatedBody": "This account has been deactivated. Contact support to restore access.",
+  "auth.accountNotFound": "Account not found",
+  "auth.accountNotFoundBody": "This account no longer exists. Contact support if this is unexpected.",
+  "auth.backToSignIn": "Back to sign in",
+  "auth.contactSupport": "Contact support",
+  "auth.continueWithGoogle": "Continue with Google",
+  "auth.googleFailed": "Google sign-in failed. Please try again.",
+  "auth.googleNotConfigured": "Google Sign-In is not configured yet. Use email + password to continue.",
+  "auth.googleOnlyAccount": "This account was created with Google. Please sign in with Google.",
+  "auth.or": "or",
+  "auth.sending": "Sending…",
+  "auth.signingIn": "Signing in…"
 }

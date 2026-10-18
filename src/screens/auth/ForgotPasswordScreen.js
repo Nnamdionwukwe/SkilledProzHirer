@@ -4,7 +4,7 @@
 // Uses AuthShell + AuthField + AuthButton + AuthStateBox + AuthFooter.
 
 import React, { useState } from "react";
-import { View, Pressable } from "react-native";
+import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 
@@ -19,7 +19,6 @@ import {
 } from "../../components/auth/AuthShell";
 import AppText from "../../components/AppText";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
 import { isEmail } from "../../utils/validators";
 
@@ -28,7 +27,6 @@ export default function ForgotPasswordScreen() {
   const navigation = useNavigation();
   const { theme: th } = useTheme();
   const c = th.colors;
-  const { toast } = useToast();
   const { forgotPassword } = useAuthStore();
 
   const [email, setEmail] = useState("");

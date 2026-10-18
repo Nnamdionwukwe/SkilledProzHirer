@@ -61,10 +61,15 @@
         {
           "photosPermission": "SkilledProz needs access to your photos so you can attach evidence to disputes."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
+
     "extra": {
       "API_URL": "https://api.skilledproz.com/api",
+      "googleWebClientId": "981568518761-ddam93tb23968092932kb1cscrmsrkek.apps.googleusercontent.com",
+      "googleAndroidClientId": "981568518761-ddam93tb23968092932kb1cscrmsrkek.apps.googleusercontent.com",
+      "googleIosClientId": "981568518761-hkiq5eph9liqs32k3kpalu80u3juucdg.apps.googleusercontent.com",
       "eas": {
         "projectId": "c4820a3d-3973-4a12-8f9a-06cf60905e00"
       }

@@ -4,9 +4,8 @@
 // + form.module.css. Every auth screen composes these so all look
 // identical and match the website 1:1.
 //
-// All icons are validated before render so a typo in a name cannot
-// silently blank the whole screen. Font scale reads from the theme
-// context with a safe fallback of 1.0.
+// Safe-area aware: the back button always clears the notch/status bar
+// by a comfortable margin, on every device, without per-screen tweaks.
 
 import React, { useEffect, useRef } from "react";
 import {
@@ -22,15 +21,16 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
 
 // ─── Icon safety helper ─────────────────────────────────────────────
-// Ionicons throws if a name is invalid. We pre-check so a typo becomes
-// a no-op instead of a screen-killing crash.
-const GLYPH_MAP = Ionicons?.glyphMap || {};
-const safeIcon = (name) => (name && GLYPH_MAP[name] ? name : null);
+// Simple pass-through. Anything non-null is trusted; consumers pass
+// valid Ionicons names. If you ever ship an invalid name, only that
+// icon is affected — the screen survives.
+const safeIcon = (name) => name || null;
 
 // ────────────────────────────────────────────────────────────────────
 // AuthShell — outer wrapper for every auth screen.
@@ -46,6 +46,7 @@ export function AuthShell({ children, showBack = true, backTo = "Login" }) {
     orange: "#f97316",
   };
 
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
   const fade = useRef(new Animated.Value(0)).current;
@@ -78,7 +79,7 @@ export function AuthShell({ children, showBack = true, backTo = "Login" }) {
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 16,
-          paddingTop: 24,
+          paddingTop: Math.max(insets.top, 24) + 32,
           paddingBottom: 40,
         }}
         keyboardShouldPersistTaps="handled"
@@ -441,6 +442,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
+    marginTop: 4,
     marginBottom: 24,
   },
   inputWrap: {
