@@ -3,10 +3,10 @@ import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import LoginScreen from "../screens/auth/LoginScreen";
-import WelcomeScreen from "../screens/auth/WelcomeScreen";
-import RegisterScreen from "../screens/auth/RegisterScreen";
-import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
+import RegisterScreen from "../screens/auth/RegisterScreen"; // The Role Picker
+import RegisterHirerScreen from "../screens/auth/RegisterHirerScreen"; // The Hirer Form
 import WorkerRegisterScreen from "../screens/auth/WorkerRegisterScreen";
+import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -21,12 +21,10 @@ export default function AuthNavigator() {
       initialRouteName="Login"
     >
       <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
-      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="RegisterHirer" component={RegisterHirerScreen} />
       <Stack.Screen name="WorkerRegister" component={WorkerRegisterScreen} />
-      {/* VerifyEmail is no longer here — RootNavigator routes the user to
-          VerifyGate automatically when they're signed in but unverified. */}
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </Stack.Navigator>
   );
 }

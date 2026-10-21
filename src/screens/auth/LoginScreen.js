@@ -1,8 +1,6 @@
 // src/screens/auth/LoginScreen.js
 //
 // Mirrors the website's Login.jsx 1:1.
-// Google Sign-In reads client IDs from Constants.expoConfig.extra,
-// not process.env — that's what app.json → extra actually populates.
 
 import React, { useEffect, useState } from "react";
 import { View, Pressable, ActivityIndicator, Linking } from "react-native";
@@ -12,6 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
+import * as AuthSession from "expo-auth-session"; // <-- IMPORT MOVED HERE
 
 import {
   AuthShell,
@@ -26,13 +25,10 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore";
 import { isEmail, isNonEmpty } from "../../utils/validators";
 import { Ionicons } from "@expo/vector-icons";
-import * as AuthSession from "expo-auth-session"; // Add this
 
 WebBrowser.maybeCompleteAuthSession();
 
 // ── Google client IDs ────────────────────────────────────────────
-// Read from app.json → extra. These are the values you already put
-// in app.json (googleWebClientId etc.).
 const extra = Constants.expoConfig?.extra || {};
 const GOOGLE_WEB_CLIENT_ID = extra.googleWebClientId || "";
 const GOOGLE_ANDROID_CLIENT_ID = extra.googleAndroidClientId || "";
@@ -67,11 +63,6 @@ export default function LoginScreen() {
   }, []);
 
   // ── Google auth request ───────────────────────────────────────
-  // Provide all three platform client IDs. On Android, expo-auth-session
-  // uses the androidClientId + redirect URI to talk to Google.
-  import * as AuthSession from "expo-auth-session"; // Add this import
-
-  // ... inside your component ...
   const [request, response, promptAsync] = Google.useAuthRequest(
     GOOGLE_WEB_CLIENT_ID
       ? {
@@ -79,7 +70,7 @@ export default function LoginScreen() {
           androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
           iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
           scopes: ["openid", "email", "profile"],
-          // ADD THIS LINE:
+          // THIS IS THE KEY FIX FOR REDIRECTING:
           redirectUri: AuthSession.makeRedirectUri({
             scheme: "skilledproz",
             path: "oauth",
@@ -118,15 +109,12 @@ export default function LoginScreen() {
   // ── Send token to backend ──────────────────────────────────────
   const handleGoogleToken = async (accessToken) => {
     try {
-      // googleSignIn must POST { accessToken, ref } to /auth/google
-      // and return either { user } or { needsRole, googleProfile }.
       const result = await googleSignIn({
         accessToken,
         ref: refCode || undefined,
       });
 
       if (result?.needsRole) {
-        // Brand new Google user → they need to pick HIRER/WORKER
         navigation.navigate("Register", {
           googleProfile: result.googleProfile,
           accessToken,
@@ -135,9 +123,6 @@ export default function LoginScreen() {
         });
         return;
       }
-
-      // Existing user — authStore updates `user`, RootNavigator handles
-      // the switch to HirerNavigator/WorkerNavigator. No manual nav.
     } catch (err) {
       const res = err?.response?.data;
       const code = res?.code;
@@ -186,7 +171,6 @@ export default function LoginScreen() {
     setGoogleLoading(true);
     try {
       const result = await promptAsync();
-      // Response is handled by the useEffect above
       if (result?.type === "cancel" || result?.type === "dismiss") {
         setGoogleLoading(false);
       }
@@ -250,7 +234,6 @@ export default function LoginScreen() {
     }
   };
 
-  // ── Block content ─────────────────────────────────────────────
   const blockContent =
     block === "banned"
       ? {
@@ -284,7 +267,6 @@ export default function LoginScreen() {
             }
           : null;
 
-  // ── Render ───────────────────────────────────────────────────
   return (
     <AuthShell showBack={false}>
       <AuthHeader
@@ -329,7 +311,6 @@ export default function LoginScreen() {
         </View>
       ) : null}
 
-      {/* ── Google Sign-In ─────────────────────────────────────── */}
       <GoogleSignInButton loading={googleLoading} onPress={handleGooglePress} />
 
       <View
@@ -349,7 +330,6 @@ export default function LoginScreen() {
 
       {error && !block ? <AuthAlert type="error" message={error} /> : null}
 
-      {/* ── Form ───────────────────────────────────────────────── */}
       <View style={{ gap: 14 }}>
         <AuthField
           label={t("auth.emailAddress")}
@@ -417,9 +397,6 @@ export default function LoginScreen() {
   );
 }
 
-// ────────────────────────────────────────────────────────────────
-// Google Sign-In button
-// ────────────────────────────────────────────────────────────────
 function GoogleSignInButton({ loading, onPress }) {
   const { t } = useTranslation();
   const { theme: th } = useTheme();

@@ -4,9 +4,8 @@
 // + form.module.css. Every auth screen composes these so all look
 // identical and match the website 1:1.
 //
-// All icons are validated before render so a typo in a name cannot
-// silently blank the whole screen. Font scale reads from the theme
-// context with a safe fallback of 1.0.
+// Safe-area aware — the back button always clears the notch/status bar
+// by a generous margin on every device, including the S22.
 
 import React, { useEffect, useRef } from "react";
 import {
@@ -22,13 +21,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
 
 // ─── Icon safety helper ─────────────────────────────────────────────
-// Ionicons throws if a name is invalid. We pre-check so a typo becomes
-// a no-op instead of a screen-killing crash.
 const safeIcon = (name) => name || null;
 
 // ────────────────────────────────────────────────────────────────────
@@ -45,6 +43,7 @@ export function AuthShell({ children, showBack = true, backTo = "Login" }) {
     orange: "#f97316",
   };
 
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
   const fade = useRef(new Animated.Value(0)).current;
@@ -77,8 +76,9 @@ export function AuthShell({ children, showBack = true, backTo = "Login" }) {
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 16,
-          paddingTop: 24,
-          paddingBottom: 40,
+          // Increased top padding to push the back button lower from the screen edge
+          paddingTop: Math.max(insets.top, 24) + 56,
+          paddingBottom: Math.max(insets.bottom, 24) + 24,
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -440,7 +440,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
+    marginTop: 8,
     marginBottom: 24,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
   },
   inputWrap: {
     flexDirection: "row",
@@ -497,4 +500,3 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 });
-

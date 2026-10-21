@@ -1,292 +1,232 @@
 // src/screens/auth/RegisterScreen.js
 import React, { useState } from "react";
 import { View, Pressable, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 
-import AppScreen from "../../components/AppScreen";
-import AppText from "../../components/AppText";
-import AppInput from "../../components/AppInput";
-import AppButton from "../../components/AppButton";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useToast } from "../../contexts/ToastContext";
-import { useAuthStore } from "../../store/authStore";
 import {
-  isEmail,
-  isNonEmpty,
-  isStrongEnoughPassword,
-} from "../../utils/validators";
+  AuthShell,
+  AuthButton,
+  AuthAlert,
+} from "../../components/auth/AuthShell";
+import AppText from "../../components/AppText";
+import { useTheme } from "../../contexts/ThemeContext";
 
 export default function RegisterScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const route = useRoute();
-  const { theme } = useTheme();
-  const { toast } = useToast();
-  const { register, isLoading } = useAuthStore();
+  const { theme: th } = useTheme();
+  const c = th.colors;
 
-  const role = route.params?.role || "HIRER";
+  const [selected, setSelected] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    country: "",
-    city: "",
-    password: "",
-    confirm: "",
-  });
-  const [agree, setAgree] = useState(false);
-  const [errors, setErrors] = useState({});
+  const handleContinue = () => {
+    if (!selected) return;
 
-  const update = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
-
-  const validate = () => {
-    const e = {};
-    if (!isNonEmpty(form.firstName)) e.firstName = t("auth.fillAllFields");
-    if (!isNonEmpty(form.lastName)) e.lastName = t("auth.fillAllFields");
-    if (!isNonEmpty(form.email)) e.email = t("auth.emailRequired");
-    else if (!isEmail(form.email)) e.email = t("auth.validEmailRequired");
-    if (!isStrongEnoughPassword(form.password))
-      e.password = t("auth.passwordTooShort");
-    if (form.password !== form.confirm)
-      e.confirm = t("auth.passwordsDontMatch");
-    setErrors(e);
-
-    if (!agree) {
-      toast.warning(t("auth.mustAgreeTerms"));
-      return false;
-    }
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-
-    try {
-      await register({
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim() || undefined,
-        country: form.country.trim() || undefined,
-        city: form.city.trim() || undefined,
-        password: form.password,
-        role, // "HIRER"
-      });
-      toast.success(t("auth.registerSuccess"));
-      // No manual navigation — RootNavigator sees the new (unverified) user
-      // and swaps to the VerifyGate automatically.
-    } catch (err) {
-      toast.error(err.message);
+    if (selected === "HIRER") {
+      navigation.navigate("RegisterHirer");
+    } else {
+      navigation.navigate("WorkerRegister");
     }
   };
 
   return (
-    <AppScreen>
-      <View style={styles.container}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.backRow}
-          hitSlop={6}
+    <AuthShell showBack backTo="Login">
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <AppText
+          variant="small"
+          weight="bold"
+          style={{
+            color: c.orange,
+            textTransform: "uppercase",
+            letterSpacing: 1.8,
+            fontSize: 11,
+            marginBottom: 6,
+          }}
         >
-          <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
-          <AppText variant="body" weight="medium" style={{ marginLeft: 8 }}>
-            {t("common.back")}
+          {t("auth.getStartedFree", {
+            defaultValue: "GET STARTED — IT'S FREE",
+          })}
+        </AppText>
+        <AppText
+          variant="display"
+          weight="displayBlack"
+          style={{
+            fontSize: 34,
+            letterSpacing: -1.5,
+            lineHeight: 38,
+            marginBottom: 4,
+          }}
+        >
+          {t("auth.joinTitle", { defaultValue: "Join\nSkilledProz" })}
+        </AppText>
+        <AppText
+          variant="body"
+          tone="dim"
+          style={{ fontSize: 14, marginTop: 6, lineHeight: 22 }}
+        >
+          {t("auth.joinSubtitle", {
+            defaultValue: "How will you use the platform?",
+          })}
+        </AppText>
+      </View>
+
+      {error ? <AuthAlert type="error" message={error} /> : null}
+
+      {/* ── Role Grid ── */}
+      <View style={styles.roleGrid}>
+        {/* HIRER CARD */}
+        <Pressable
+          onPress={() => setSelected("HIRER")}
+          disabled={loading}
+          style={({ pressed }) => [
+            styles.roleCard,
+            {
+              backgroundColor: selected === "HIRER" ? c.orangeDim : c.bgCard,
+              borderColor: selected === "HIRER" ? c.orange : c.border,
+              opacity: pressed ? 0.9 : 1,
+            },
+          ]}
+        >
+          <View style={[styles.roleIcon, { backgroundColor: c.orangeDim }]}>
+            <Ionicons name="briefcase-outline" size={20} color={c.orange} />
+          </View>
+          <AppText
+            variant="body"
+            weight="displayBlack"
+            style={{
+              fontSize: 15,
+              letterSpacing: -0.3,
+              marginTop: 10,
+              marginBottom: 4,
+            }}
+          >
+            {t("auth.imAHirer", { defaultValue: "I'm a Hirer" })}
+          </AppText>
+          <AppText
+            variant="small"
+            tone="muted"
+            style={{ fontSize: 12.5, lineHeight: 18 }}
+          >
+            {t("auth.hirerDescription", {
+              defaultValue: "Find and book skilled professionals for any job.",
+            })}
           </AppText>
         </Pressable>
 
-        <AppText variant="label" tone="brand" style={{ marginTop: 8 }}>
-          {t("auth.hirerAccount")}
-        </AppText>
-
-        <AppText variant="display" weight="displayBlack" style={styles.title}>
-          {t("auth.findNextProz")}
-        </AppText>
-
-        <View style={styles.form}>
-          <View style={styles.row2}>
-            <View style={styles.col}>
-              <AppInput
-                label={t("auth.firstName")}
-                iconLeft="person-outline"
-                placeholder={t("auth.firstNamePlaceholder")}
-                value={form.firstName}
-                onChangeText={update("firstName")}
-                autoCapitalize="words"
-                textContentType="givenName"
-                error={errors.firstName}
-              />
-            </View>
-            <View style={styles.col}>
-              <AppInput
-                label={t("auth.lastName")}
-                placeholder={t("auth.lastNamePlaceholder")}
-                value={form.lastName}
-                onChangeText={update("lastName")}
-                autoCapitalize="words"
-                textContentType="familyName"
-                error={errors.lastName}
-              />
-            </View>
+        {/* WORKER CARD */}
+        <Pressable
+          onPress={() => setSelected("WORKER")}
+          disabled={loading}
+          style={({ pressed }) => [
+            styles.roleCard,
+            {
+              backgroundColor: selected === "WORKER" ? c.orangeDim : c.bgCard,
+              borderColor: selected === "WORKER" ? c.orange : c.border,
+              opacity: pressed ? 0.9 : 1,
+            },
+          ]}
+        >
+          <View style={[styles.roleIcon, { backgroundColor: c.orangeDim }]}>
+            <Ionicons name="hammer-outline" size={20} color={c.orange} />
           </View>
-
-          <AppInput
-            label={t("auth.emailAddress")}
-            iconLeft="mail-outline"
-            placeholder={t("auth.emailPlaceholder")}
-            value={form.email}
-            onChangeText={update("email")}
-            keyboardType="email-address"
-            autoComplete="email"
-            textContentType="emailAddress"
-            error={errors.email}
-          />
-
-          <AppInput
-            label={`${t("auth.phone")} (${t("common.optional")})`}
-            iconLeft="call-outline"
-            placeholder={t("auth.phonePlaceholder")}
-            value={form.phone}
-            onChangeText={update("phone")}
-            keyboardType="phone-pad"
-            autoComplete="tel"
-            textContentType="telephoneNumber"
-          />
-
-          <View style={styles.row2}>
-            <View style={styles.col}>
-              <AppInput
-                label={t("auth.country")}
-                iconLeft="globe-outline"
-                placeholder={t("auth.countryPlaceholder")}
-                value={form.country}
-                onChangeText={update("country")}
-                autoCapitalize="words"
-              />
-            </View>
-            <View style={styles.col}>
-              <AppInput
-                label={t("auth.city")}
-                iconLeft="location-outline"
-                placeholder={t("auth.cityPlaceholder")}
-                value={form.city}
-                onChangeText={update("city")}
-                autoCapitalize="words"
-              />
-            </View>
-          </View>
-
-          <View style={styles.row2}>
-            <View style={styles.col}>
-              <AppInput
-                label={t("auth.password")}
-                iconLeft="lock-closed-outline"
-                placeholder={t("auth.passwordMinChars")}
-                value={form.password}
-                onChangeText={update("password")}
-                secureTextEntry
-                textContentType="newPassword"
-                error={errors.password}
-              />
-            </View>
-            <View style={styles.col}>
-              <AppInput
-                label={t("auth.confirm")}
-                placeholder={t("auth.confirmPlaceholder")}
-                value={form.confirm}
-                onChangeText={update("confirm")}
-                secureTextEntry
-                error={errors.confirm}
-              />
-            </View>
-          </View>
-
-          <Pressable
-            onPress={() => setAgree((a) => !a)}
-            style={styles.agreeRow}
-            hitSlop={6}
+          <AppText
+            variant="body"
+            weight="displayBlack"
+            style={{
+              fontSize: 15,
+              letterSpacing: -0.3,
+              marginTop: 10,
+              marginBottom: 4,
+            }}
           >
-            <View
-              style={[
-                styles.checkbox,
-                {
-                  borderColor: agree
-                    ? theme.colors.orange
-                    : theme.colors.border,
-                  backgroundColor: agree ? theme.colors.orange : "transparent",
-                },
-              ]}
-            >
-              {agree ? (
-                <Ionicons name="checkmark" size={14} color="#0f0f1a" />
-              ) : null}
-            </View>
-            <AppText variant="small" tone="dim" style={{ flex: 1 }}>
-              {t("auth.agreeToTerms")}{" "}
-              <AppText variant="small" tone="brand" weight="semibold">
-                {t("auth.terms")}
-              </AppText>
-              {"  "}
-              {t("auth.and")}{" "}
-              <AppText variant="small" tone="brand" weight="semibold">
-                {t("auth.privacyPolicy")}
-              </AppText>
-            </AppText>
-          </Pressable>
-
-          <AppButton
-            title={
-              isLoading ? t("auth.creating") : t("auth.createHirerAccount")
-            }
-            iconRight={isLoading ? undefined : "arrow-forward"}
-            onPress={handleSubmit}
-            loading={isLoading}
-            style={{ marginTop: 8 }}
-          />
-
-          <View style={styles.bottomRow}>
-            <AppText variant="body" tone="dim">
-              {t("auth.alreadyHaveAccount")}{" "}
-            </AppText>
-            <Pressable onPress={() => navigation.navigate("Login")} hitSlop={6}>
-              <AppText variant="body" tone="brand" weight="semibold">
-                {t("auth.signIn")}
-              </AppText>
-            </Pressable>
-          </View>
-        </View>
+            {t("auth.imAWorker", { defaultValue: "I'm a Worker" })}
+          </AppText>
+          <AppText
+            variant="small"
+            tone="muted"
+            style={{ fontSize: 12.5, lineHeight: 18 }}
+          >
+            {t("auth.workerDescription", {
+              defaultValue: "Offer your skills and get booked by clients.",
+            })}
+          </AppText>
+        </Pressable>
       </View>
-    </AppScreen>
+
+      {/* ── Continue Button ── */}
+      <AuthButton
+        title={
+          loading
+            ? t("auth.creating", { defaultValue: "Creating account…" })
+            : `${t("auth.continueAs", { defaultValue: "Continue as" })} ${
+                selected === "HIRER"
+                  ? t("auth.imAHirer", { defaultValue: "Hirer" })
+                  : selected === "WORKER"
+                    ? t("auth.imAWorker", { defaultValue: "Worker" })
+                    : "…"
+              }`
+        }
+        onPress={handleContinue}
+        loading={loading}
+        disabled={!selected}
+        style={{ marginTop: 24 }}
+      />
+
+      {/* ── Footer ── */}
+      <View style={styles.footer}>
+        <AppText variant="body" tone="dim" style={{ fontSize: 13.5 }}>
+          {t("auth.alreadyHaveAccount", {
+            defaultValue: "Already have an account?",
+          })}{" "}
+        </AppText>
+        <Pressable onPress={() => navigation.navigate("Login")} hitSlop={6}>
+          <AppText
+            variant="body"
+            weight="semibold"
+            style={{ color: c.orange, fontSize: 13.5 }}
+          >
+            {t("auth.signIn", { defaultValue: "Sign in" })}
+          </AppText>
+        </Pressable>
+      </View>
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { gap: 8 },
-  backRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
-  title: { marginTop: 8, marginBottom: 16 },
-  form: { gap: 14 },
-  row2: { flexDirection: "row", gap: 12 },
-  col: { flex: 1 },
-  agreeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginTop: 8,
+  header: {
+    marginBottom: 28,
   },
-  checkbox: {
-    width: 20,
-    height: 20,
+  roleGrid: {
+    flexDirection: "row",
+    gap: 14,
+    marginBottom: 24,
+  },
+  roleCard: {
+    flex: 1,
     borderWidth: 1.5,
-    borderRadius: 4,
+    borderRadius: 14,
+    paddingVertical: 24,
+    paddingHorizontal: 18,
+    alignItems: "flex-start",
+  },
+  roleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
   },
-  bottomRow: {
+  footer: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 16,
+    alignItems: "center",
+    marginTop: 28,
+    flexWrap: "wrap",
   },
 });
