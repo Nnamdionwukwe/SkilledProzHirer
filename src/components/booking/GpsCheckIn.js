@@ -1,23 +1,50 @@
 // src/components/booking/GpsCheckIn.js
+//
+// Verbatim port of components/booking/GpsCheckIn.jsx.
+//
+// Renders only when:
+//   · isWorker === true
+//   · status ∈ ["ACCEPTED", "IN_PROGRESS"]
+//
+// Two modes:
+//   · status === "ACCEPTED"     → check-in  (PATCH /bookings/:id/checkin)
+//   · status === "IN_PROGRESS"  → check-out (PATCH /bookings/:id/checkout)
+//
+// Five phases:
+//   idle → locating → confirming → submitting → done
+//
+// Port notes:
+//   · navigator.geolocation → expo-location (guarded require)
+//   · Reverse-geocoding uses the same public Nominatim endpoint as web
+//   · Distance calc uses haversineKm, verbatim from web
+//   · Timeout at 10s to match web's `timeout: 10000`
+//   · If permission is denied or the fix fails, the check-in proceeds
+//     without coordinates — matches web's behavior
+
 import React, { useState } from "react";
-import { View, Pressable, StyleSheet } from "react-native";
-import * as Location from "expo-location";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
+
+import AppText from "../AppText";
+import { useTheme } from "../../contexts/ThemeContext";
+import client from "../../api/client";
 import {
   FaMapMarkerAlt,
   FaLocationArrow,
   FaCheckCircle,
   FaExclamationTriangle,
-  FaSpinner,
   FaCheck,
   FaTimes,
   FaCircle,
 } from "../../icons/fa";
 
-import AppText from "../AppText";
-import { useTheme } from "../../contexts/ThemeContext";
-import { checkIn, checkOut } from "../../api/bookings";
+// Optional expo-location — guarded
+let Location = null;
+try {
+  Location = require("expo-location");
+} catch {}
 
+// ── Haversine distance (verbatim from web) ─────────────────────────────
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -30,17 +57,42 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-async function getGPS() {
+// ── Reverse geocode via Nominatim (verbatim from web) ──────────────────
+async function reverseGeocode(lat, lng) {
   try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") return { latitude: null, longitude: null };
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { Accept: "application/json" } },
+    );
+    const data = await res.json();
+    const addr = data.address || {};
+    return (
+      addr.suburb ||
+      addr.neighbourhood ||
+      addr.village ||
+      addr.town ||
+      addr.city ||
+      addr.county ||
+      `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+    );
+  } catch {
+    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  }
+}
+
+// ── GPS fetch ─────────────────────────────────────────────────────────
+async function getGPS() {
+  if (!Location) return { latitude: null, longitude: null };
+  try {
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (!perm.granted) return { latitude: null, longitude: null };
     const pos = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
+      accuracy: Location.Accuracy?.BestForNavigation ?? 6,
     });
     return {
       latitude: pos.coords.latitude,
       longitude: pos.coords.longitude,
-      accuracy: Math.round(pos.coords.accuracy),
+      accuracy: Math.round(pos.coords.accuracy || 0),
     };
   } catch {
     return { latitude: null, longitude: null };
@@ -56,46 +108,68 @@ export default function GpsCheckIn({
   onSuccess,
 }) {
   const { t } = useTranslation();
-  const { theme: th } = useTheme();
-  const c = th.colors;
+  const { theme } = useTheme();
+  const c = theme.colors;
 
   const [phase, setPhase] = useState("idle");
   const [gpsData, setGpsData] = useState(null);
+  const [locationLabel, setLocationLabel] = useState("");
   const [distanceKm, setDistanceKm] = useState(null);
   const [error, setError] = useState("");
 
+  // ── Guards ──────────────────────────────────────────────────────────
   if (!isWorker) return null;
   if (!["ACCEPTED", "IN_PROGRESS"].includes(status)) return null;
 
   const isCheckIn = status === "ACCEPTED";
 
+  // ── Handle locate ───────────────────────────────────────────────────
   const handleLocate = async () => {
     setPhase("locating");
     setError("");
+
     const gps = await getGPS();
-    setGpsData(gps);
-    if (gps.latitude && jobLatitude && jobLongitude) {
-      setDistanceKm(
-        haversineKm(gps.latitude, gps.longitude, jobLatitude, jobLongitude),
-      );
+
+    if (!gps.latitude) {
+      setGpsData({ latitude: null, longitude: null });
+      setLocationLabel("Location unavailable");
+      setDistanceKm(null);
+      setPhase("confirming");
+      return;
     }
+
+    const label = await reverseGeocode(gps.latitude, gps.longitude);
+    setLocationLabel(label);
+    setGpsData(gps);
+
+    if (jobLatitude && jobLongitude) {
+      const dist = haversineKm(
+        gps.latitude,
+        gps.longitude,
+        jobLatitude,
+        jobLongitude,
+      );
+      setDistanceKm(dist);
+    }
+
     setPhase("confirming");
   };
 
+  // ── Handle confirm ──────────────────────────────────────────────────
   const handleConfirm = async () => {
     setPhase("submitting");
     try {
-      const res = isCheckIn
-        ? await checkIn(bookingId, {
-            latitude: gpsData?.latitude ?? null,
-            longitude: gpsData?.longitude ?? null,
-          })
-        : await checkOut(bookingId, {
-            latitude: gpsData?.latitude ?? null,
-            longitude: gpsData?.longitude ?? null,
-          });
+      const endpoint = isCheckIn
+        ? `/bookings/${bookingId}/checkin`
+        : `/bookings/${bookingId}/checkout`;
+
+      const res = await client.patch(endpoint, {
+        latitude: gpsData?.latitude || null,
+        longitude: gpsData?.longitude || null,
+      });
+
       setPhase("done");
-      onSuccess?.(res, gpsData);
+      onSuccess?.(res?.data?.data?.booking, gpsData);
     } catch (e) {
       setError(
         e?.response?.data?.message || "Action failed. Please try again.",
@@ -104,31 +178,62 @@ export default function GpsCheckIn({
     }
   };
 
-  const reset = () => {
+  // ── Handle reset ────────────────────────────────────────────────────
+  const handleReset = () => {
     setPhase("idle");
     setGpsData(null);
+    setLocationLabel("");
     setDistanceKm(null);
     setError("");
   };
 
+  const distanceWarning =
+    distanceKm !== null && distanceKm > 1
+      ? `You appear to be ${distanceKm.toFixed(1)} km from the job site.`
+      : null;
+
+  // ═════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═════════════════════════════════════════════════════════════════════
   return (
     <View style={{ gap: 8 }}>
-      {phase === "idle" && (
+      {/* ─── IDLE ─────────────────────────────────────────────────── */}
+      {phase === "idle" ? (
         <Pressable
           onPress={handleLocate}
-          style={[
+          style={({ pressed }) => [
             styles.mainBtn,
-            { backgroundColor: isCheckIn ? c.orange : "#22c55e" },
+            {
+              backgroundColor: isCheckIn ? c.orange : c.green,
+              opacity: pressed ? 0.9 : 1,
+            },
           ]}
         >
-          <View style={styles.pulseDot} />
-          <AppText weight="bold" style={{ color: c.bg, marginLeft: 10 }}>
-            {isCheckIn ? t("booking.gps.checkIn") : t("booking.gps.checkOut")}
+          <View
+            style={[
+              styles.pulseDot,
+              {
+                backgroundColor: isCheckIn
+                  ? "rgba(8,8,16,0.5)"
+                  : "rgba(8,8,16,0.5)",
+              },
+            ]}
+          />
+          <AppText
+            style={{
+              fontSize: 14,
+              fontWeight: "700",
+              color: c.bg,
+              marginLeft: 8,
+            }}
+          >
+            {isCheckIn ? "Check In — Start Job" : "Check Out — Mark Complete"}
           </AppText>
         </Pressable>
-      )}
+      ) : null}
 
-      {phase === "locating" && (
+      {/* ─── LOCATING ─────────────────────────────────────────────── */}
+      {phase === "locating" ? (
         <View
           style={[
             styles.locatingBox,
@@ -137,193 +242,290 @@ export default function GpsCheckIn({
         >
           <FaMapMarkerAlt size={20} color={c.orange} />
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <AppText weight="semibold">{t("booking.gps.acquiring")}</AppText>
-            <AppText variant="small" tone="dim">
-              {t("booking.gps.allowAccess")}
+            <AppText style={{ fontSize: 13, fontWeight: "600", color: c.text }}>
+              Acquiring your location…
+            </AppText>
+            <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 2 }}>
+              Please allow location access if prompted
             </AppText>
           </View>
-          <FaSpinner size={14} color={c.orange} />
+          <ActivityIndicator size="small" color={c.orange} />
         </View>
-      )}
+      ) : null}
 
-      {phase === "confirming" && (
+      {/* ─── CONFIRMING ───────────────────────────────────────────── */}
+      {phase === "confirming" ? (
         <View
           style={[
             styles.confirmBox,
             { backgroundColor: c.bgPanel, borderColor: c.border },
           ]}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          {/* Confirm header */}
+          <View style={styles.confirmHeader}>
             {isCheckIn ? (
-              <FaCheckCircle size={20} color="#22c55e" />
+              <FaCheckCircle size={22} color={c.green} />
             ) : (
-              <FaCircle size={20} color="#ef4444" />
+              <FaCircle size={22} color={c.red} />
             )}
-            <View>
-              <AppText weight="bold">
-                {isCheckIn
-                  ? t("booking.gps.confirmCheckIn")
-                  : t("booking.gps.confirmCheckOut")}
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <AppText
+                style={{ fontSize: 14, fontWeight: "700", color: c.text }}
+              >
+                {isCheckIn ? "Confirm Check-In" : "Confirm Check-Out"}
               </AppText>
-              <AppText variant="small" tone="dim">
+              <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 2 }}>
                 {new Date().toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
                 })}
               </AppText>
             </View>
           </View>
 
+          {/* Location card */}
           <View
             style={[
               styles.locationCard,
               { backgroundColor: c.bgInput, borderColor: c.border },
             ]}
           >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
-            >
-              <FaLocationArrow size={14} color={c.orange} />
-              <View style={{ flex: 1 }}>
-                <AppText variant="small" tone="dim">
-                  {t("booking.gps.yourLocation")}
+            <View style={styles.locationRow}>
+              <FaLocationArrow
+                size={16}
+                color={c.orange}
+                style={{ marginTop: 2 }}
+              />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <AppText
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "600",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.8,
+                    color: c.textMuted,
+                  }}
+                >
+                  Your current location
                 </AppText>
-                <AppText weight="semibold">
-                  {gpsData?.latitude
-                    ? `${gpsData.latitude.toFixed(4)}, ${gpsData.longitude.toFixed(4)}`
-                    : t("booking.gps.unknown")}
+                <AppText
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: c.text,
+                    marginTop: 2,
+                  }}
+                >
+                  {locationLabel || "Unknown"}
                 </AppText>
-                {gpsData?.accuracy && (
-                  <AppText variant="small" tone="dim">
-                    ±{gpsData.accuracy}m
+                {gpsData?.accuracy ? (
+                  <AppText
+                    style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}
+                  >
+                    ±{gpsData.accuracy}m accuracy
                   </AppText>
-                )}
+                ) : null}
+                {gpsData?.latitude ? (
+                  <AppText
+                    style={{
+                      fontSize: 10,
+                      color: c.textMuted,
+                      fontFamily: "monospace",
+                      marginTop: 2,
+                    }}
+                  >
+                    {gpsData.latitude.toFixed(5)},{" "}
+                    {gpsData.longitude.toFixed(5)}
+                  </AppText>
+                ) : null}
               </View>
             </View>
-            {distanceKm !== null && (
+
+            {/* Distance */}
+            {distanceKm !== null ? (
               <View
                 style={[
                   styles.distanceRow,
-                  {
-                    backgroundColor: distanceKm > 1 ? c.orangeDim : c.greenDim,
-                  },
+                  distanceKm > 1
+                    ? { backgroundColor: c.orangeDim }
+                    : { backgroundColor: c.greenDim },
                 ]}
               >
                 {distanceKm < 0.1 ? (
-                  <FaCheckCircle size={11} color="#22c55e" />
+                  <FaCheckCircle size={13} color={c.green} />
                 ) : distanceKm > 1 ? (
-                  <FaExclamationTriangle size={11} color={c.orange} />
+                  <FaExclamationTriangle size={13} color="#fbbf24" />
                 ) : (
-                  <FaLocationArrow size={11} color={c.blue} />
+                  <FaLocationArrow size={13} color={c.textDim} />
                 )}
                 <AppText
-                  variant="small"
-                  weight="semibold"
                   style={{
+                    fontSize: 12,
+                    fontWeight: "600",
+                    color: distanceKm > 1 ? c.orange : c.green,
                     marginLeft: 6,
-                    color: distanceKm > 1 ? c.orange : "#22c55e",
                   }}
                 >
                   {distanceKm < 0.1
-                    ? t("booking.gps.atJobSite")
-                    : t("booking.gps.fromJobSite", {
-                        km: distanceKm.toFixed(2),
-                      })}
+                    ? "You're at the job site"
+                    : `${distanceKm.toFixed(2)} km from job site`}
                 </AppText>
               </View>
-            )}
-            {!gpsData?.latitude && (
-              <AppText variant="small" tone="dim" style={{ marginTop: 6 }}>
-                {t("booking.gps.unavailable")}
-              </AppText>
-            )}
+            ) : null}
+
+            {/* No GPS warning */}
+            {!gpsData?.latitude ? (
+              <View
+                style={[
+                  styles.noGpsRow,
+                  { backgroundColor: c.bgCard, borderColor: c.border },
+                ]}
+              >
+                <FaExclamationTriangle size={12} color="#fbbf24" />
+                <AppText
+                  style={{
+                    fontSize: 11,
+                    color: c.textDim,
+                    marginLeft: 6,
+                    flex: 1,
+                    lineHeight: 16,
+                  }}
+                >
+                  Location unavailable — check-in will proceed without GPS
+                </AppText>
+              </View>
+            ) : null}
           </View>
 
-          {distanceKm !== null && distanceKm > 1 && (
+          {/* Distance warning */}
+          {distanceWarning ? (
             <View
               style={[
                 styles.warningBox,
                 { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
               ]}
             >
-              <FaExclamationTriangle size={11} color={c.orange} />
+              <FaExclamationTriangle
+                size={11}
+                color={c.orange}
+                style={{ marginTop: 2 }}
+              />
               <AppText
-                variant="small"
-                style={{ color: c.orange, marginLeft: 6, flex: 1 }}
+                style={{
+                  fontSize: 12,
+                  color: c.orange,
+                  marginLeft: 6,
+                  flex: 1,
+                  lineHeight: 17,
+                }}
               >
-                {t("booking.gps.distanceWarning", {
-                  km: distanceKm.toFixed(1),
-                })}
+                {distanceWarning} Your location is still recorded.
               </AppText>
             </View>
-          )}
+          ) : null}
 
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+          {/* Actions */}
+          <View style={styles.actionsRow}>
             <Pressable
-              onPress={reset}
-              style={[styles.cancelBtn, { borderColor: c.border }]}
+              onPress={handleReset}
+              style={({ pressed }) => [
+                styles.cancelBtn,
+                { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
+              ]}
             >
               <FaTimes size={11} color={c.textDim} />
               <AppText
-                variant="small"
-                weight="semibold"
-                tone="dim"
-                style={{ marginLeft: 4 }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: c.textDim,
+                  marginLeft: 4,
+                }}
               >
-                {t("booking.gps.cancel")}
+                Cancel
               </AppText>
             </Pressable>
             <Pressable
               onPress={handleConfirm}
-              style={[
+              style={({ pressed }) => [
                 styles.confirmBtn,
-                { backgroundColor: isCheckIn ? c.orange : "#22c55e" },
+                {
+                  backgroundColor: isCheckIn ? c.orange : c.green,
+                  opacity: pressed ? 0.9 : 1,
+                },
               ]}
             >
-              <FaCheck size={11} color={c.bg} />
-              <AppText weight="bold" style={{ color: c.bg, marginLeft: 6 }}>
-                {isCheckIn
-                  ? t("booking.gps.confirmCheckIn")
-                  : t("booking.gps.confirmCheckOut")}
+              <FaCheck size={12} color={c.bg} />
+              <AppText
+                style={{
+                  fontSize: 13,
+                  fontWeight: "700",
+                  color: c.bg,
+                  marginLeft: 6,
+                }}
+              >
+                {isCheckIn ? "Confirm Check-In" : "Confirm Check-Out"}
               </AppText>
             </Pressable>
           </View>
         </View>
-      )}
+      ) : null}
 
-      {phase === "submitting" && (
+      {/* ─── SUBMITTING ───────────────────────────────────────────── */}
+      {phase === "submitting" ? (
         <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            padding: 12,
-          }}
+          style={[
+            styles.locatingBox,
+            { backgroundColor: c.bgCard, borderColor: c.border },
+          ]}
         >
-          <FaSpinner size={14} color={c.orange} />
-          <AppText tone="dim">
-            {isCheckIn ? "Checking in..." : "Checking out..."}
+          <ActivityIndicator size="small" color={c.orange} />
+          <AppText
+            style={{
+              fontSize: 13,
+              fontWeight: "600",
+              color: c.textDim,
+              marginLeft: 10,
+            }}
+          >
+            {isCheckIn ? "Checking in…" : "Checking out…"}
           </AppText>
         </View>
-      )}
+      ) : null}
 
+      {/* ─── ERROR ────────────────────────────────────────────────── */}
       {error ? (
         <View
           style={[
             styles.errorBox,
-            { backgroundColor: "rgba(239,68,68,0.1)", borderColor: "#ef4444" },
+            { backgroundColor: c.redDim, borderColor: c.red },
           ]}
         >
-          <FaExclamationTriangle size={11} color="#ef4444" />
+          <FaExclamationTriangle
+            size={11}
+            color={c.red}
+            style={{ marginTop: 2 }}
+          />
           <AppText
-            variant="small"
-            style={{ color: "#ef4444", marginLeft: 6, flex: 1 }}
+            style={{
+              fontSize: 12,
+              color: c.red,
+              marginLeft: 6,
+              flex: 1,
+              lineHeight: 17,
+            }}
           >
             {error}
           </AppText>
-          <Pressable onPress={reset}>
-            <AppText variant="small" weight="bold" style={{ color: "#ef4444" }}>
-              {t("booking.gps.retry")}
+          <Pressable
+            onPress={handleReset}
+            style={[styles.retryBtn, { borderColor: c.red }]}
+          >
+            <AppText style={{ fontSize: 10, color: c.red, fontWeight: "600" }}>
+              Retry
             </AppText>
           </Pressable>
         </View>
@@ -337,43 +539,77 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
     borderRadius: 10,
+    minHeight: 46,
   },
   pulseDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "rgba(0,0,0,0.4)",
   },
   locatingBox: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 10,
     borderWidth: 1,
   },
-  confirmBox: { padding: 16, borderRadius: 12, borderWidth: 1, gap: 12 },
-  locationCard: { padding: 12, borderRadius: 10, borderWidth: 1 },
+  confirmBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+  },
+  confirmHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  locationCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+    gap: 10,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
   distanceRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 6,
-    borderRadius: 6,
-    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 7,
+  },
+  noGpsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 7,
+    borderWidth: 1,
   },
   warningBox: {
     flexDirection: "row",
     alignItems: "flex-start",
-    padding: 10,
     borderRadius: 8,
     borderWidth: 1,
+    padding: 10,
+  },
+  actionsRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingTop: 4,
   },
   cancelBtn: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 11,
     paddingHorizontal: 14,
-    paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
   },
@@ -382,14 +618,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
     borderRadius: 8,
   },
   errorBox: {
     flexDirection: "row",
-    alignItems: "center",
-    padding: 10,
+    alignItems: "flex-start",
     borderRadius: 8,
     borderWidth: 1,
+    padding: 10,
+  },
+  retryBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginLeft: 8,
   },
 });

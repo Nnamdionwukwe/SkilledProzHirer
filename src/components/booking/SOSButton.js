@@ -1,18 +1,61 @@
 // src/components/booking/SOSButton.js
+//
+// Verbatim port of components/booking/SOSButton.jsx.
+//
+// Renders only when:
+//   · isWorker === true
+//   · bookingStatus ∈ ["ACCEPTED", "IN_PROGRESS"]
+//
+// Three states:
+//   · idle     → red "Emergency SOS" button
+//   · locating → spinner "Getting your location…"
+//   · sending  → spinner "Sending emergency alert…"
+//   · active   → pulsing red card "SOS Active · sent at HH:MM"
+//   · resolved → green "Emergency resolved" pill
+//
+// Endpoint: POST /bookings/:bookingId/sos
+// Payload:  { latitude, longitude }
+//
+// Mobile port notes:
+//   · navigator.geolocation.getCurrentPosition  →  expo-location
+//     (requestForegroundPermissionsAsync + getCurrentPositionAsync)
+//   · Timed at 8s to match web's `timeout: 8000`. If permission is denied
+//     or the fix times out, the SOS is still sent without coordinates.
+
 import React, { useState } from "react";
-import { View, Pressable, StyleSheet } from "react-native";
-import * as Location from "expo-location";
-import { useTranslation } from "react-i18next";
-import {
-  FaExclamationTriangle,
-  FaCheckCircle,
-  FaSpinner,
-  FaShieldAlt,
-} from "../../icons/fa";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
-import { activateSOS } from "../../api/bookings";
+import client from "../../api/client";
+import {
+  FaExclamationTriangle,
+  FaCheckCircle,
+  FaShieldAlt,
+} from "../../icons/fa";
+
+// Optional expo-location — guarded
+let Location = null;
+try {
+  Location = require("expo-location");
+} catch {}
+
+async function getGPS() {
+  if (!Location) return { latitude: null, longitude: null };
+  try {
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (!perm.granted) return { latitude: null, longitude: null };
+    const pos = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy?.Balanced ?? 3,
+    });
+    return {
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
+    };
+  } catch {
+    return { latitude: null, longitude: null };
+  }
+}
 
 export default function SOSButton({
   bookingId,
@@ -22,194 +65,268 @@ export default function SOSButton({
   sosResolvedAt,
   onUpdate,
 }) {
-  const { t } = useTranslation();
-  const { theme: th } = useTheme();
-  const c = th.colors;
+  const { theme } = useTheme();
+  const c = theme.colors;
 
-  const [phase, setPhase] = useState("idle");
+  const [phase, setPhase] = useState("idle"); // idle | locating | sending | done
   const [error, setError] = useState("");
 
+  // ── Guards ──────────────────────────────────────────────────────────
   if (!isWorker) return null;
   if (!["ACCEPTED", "IN_PROGRESS"].includes(bookingStatus)) return null;
 
   const isActive = !!sosActivatedAt && !sosResolvedAt;
   const isResolved = !!sosActivatedAt && !!sosResolvedAt;
 
-  const handleSOS = async () => {
+  // ── SOS trigger ─────────────────────────────────────────────────────
+  async function handleSOS() {
     if (isActive) return;
     setPhase("locating");
     setError("");
-    let lat = null;
-    let lng = null;
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      }
-    } catch {}
+
+    const gps = await getGPS();
 
     setPhase("sending");
     try {
-      const res = await activateSOS(bookingId, {
-        latitude: lat,
-        longitude: lng,
+      const res = await client.post(`/bookings/${bookingId}/sos`, {
+        latitude: gps.latitude,
+        longitude: gps.longitude,
       });
       setPhase("done");
-      onUpdate?.(res);
+      onUpdate?.(res?.data?.data?.booking);
     } catch (e) {
-      setError(e?.response?.data?.message || t("booking.sos.failedCall"));
+      setError(
+        e?.response?.data?.message ||
+          "Failed to send SOS. Please call emergency services.",
+      );
       setPhase("idle");
     }
-  };
+  }
 
+  // ═════════════════════════════════════════════════════════════════════
+  // RESOLVED STATE
+  // ═════════════════════════════════════════════════════════════════════
   if (isResolved) {
     return (
       <View
         style={[
           styles.resolved,
           {
-            backgroundColor: "rgba(34,197,94,0.08)",
-            borderColor: "rgba(34,197,94,0.2)",
+            backgroundColor: "rgba(22,163,74,0.08)",
+            borderColor: "rgba(22,163,74,0.2)",
           },
         ]}
       >
-        <FaCheckCircle size={16} color="#22c55e" />
+        <FaCheckCircle size={14} color="#16a34a" />
         <AppText
-          variant="small"
-          weight="semibold"
-          style={{ color: "#22c55e", marginLeft: 8 }}
+          style={{
+            fontSize: 12,
+            fontWeight: "600",
+            color: "#16a34a",
+            marginLeft: 8,
+          }}
         >
-          {t("booking.sos.resolved")}
+          Emergency resolved
         </AppText>
       </View>
     );
   }
 
+  // ═════════════════════════════════════════════════════════════════════
+  // ACTIVE (activated but not resolved)
+  // ═════════════════════════════════════════════════════════════════════
   if (isActive) {
     return (
       <View
         style={[
           styles.activeWrap,
-          { backgroundColor: "rgba(220,38,38,0.08)", borderColor: "#dc2626" },
+          {
+            backgroundColor: "rgba(220,38,38,0.08)",
+            borderColor: "#dc2626",
+          },
         ]}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View style={styles.activeContent}>
           <FaExclamationTriangle size={22} color="#dc2626" />
-          <View>
-            <AppText weight="bold" style={{ color: "#dc2626" }}>
-              {t("booking.sos.active")}
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <AppText
+              style={{
+                fontSize: 14,
+                fontWeight: "800",
+                color: "#dc2626",
+              }}
+            >
+              SOS Active
             </AppText>
-            <AppText variant="small" tone="dim">
-              {t("booking.sos.activeAt", {
-                time: new Date(sosActivatedAt).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
+            <AppText style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}>
+              Sent at{" "}
+              {new Date(sosActivatedAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
               })}
             </AppText>
           </View>
         </View>
-        <AppText variant="small" tone="dim" style={{ marginTop: 6 }}>
-          {t("booking.sos.alerted")}
+        <AppText
+          style={{
+            fontSize: 11,
+            color: c.textMuted,
+            marginTop: 8,
+            lineHeight: 16,
+          }}
+        >
+          Your hirer and our team have been alerted.
         </AppText>
       </View>
     );
   }
 
+  // ═════════════════════════════════════════════════════════════════════
+  // IDLE / LOCATING / SENDING / DONE
+  // ═════════════════════════════════════════════════════════════════════
   return (
-    <View style={{ gap: 8 }}>
-      {phase === "idle" && (
+    <View style={{ gap: 6 }}>
+      {phase === "idle" ? (
         <Pressable
           onPress={handleSOS}
-          style={[styles.sosBtn, { backgroundColor: "#dc2626" }]}
+          style={({ pressed }) => [
+            styles.sosBtn,
+            {
+              backgroundColor: pressed ? "#b91c1c" : "#dc2626",
+              transform: [{ scale: pressed ? 0.98 : 1 }],
+            },
+          ]}
         >
           <View style={styles.sosDot} />
-          <FaExclamationTriangle
-            size={14}
-            color="#fff"
-            style={{ marginLeft: 8 }}
-          />
-          <AppText weight="bold" style={{ color: "#fff", marginLeft: 6 }}>
-            {t("booking.sos.emergencySOS")}
+          <FaExclamationTriangle size={13} color="#fff" />
+          <AppText
+            style={{
+              fontSize: 14,
+              fontWeight: "800",
+              color: "#fff",
+              letterSpacing: 0.3,
+              marginLeft: 6,
+            }}
+          >
+            Emergency SOS
           </AppText>
         </Pressable>
-      )}
+      ) : null}
 
-      {phase === "locating" && (
+      {phase === "locating" ? (
         <View
           style={[
-            styles.locating,
+            styles.locatingBox,
             {
               backgroundColor: "rgba(220,38,38,0.08)",
               borderColor: "rgba(220,38,38,0.2)",
             },
           ]}
         >
-          <FaSpinner size={12} color="#dc2626" />
+          <View
+            style={[
+              styles.spinnerDot,
+              { borderTopColor: "#dc2626", borderColor: "rgba(220,38,38,0.2)" },
+            ]}
+          />
           <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: "#dc2626", marginLeft: 8 }}
+            style={{
+              fontSize: 13,
+              fontWeight: "600",
+              color: "#dc2626",
+              marginLeft: 10,
+            }}
           >
-            {t("booking.sos.gettingLocation")}
+            Getting your location…
           </AppText>
         </View>
-      )}
+      ) : null}
 
-      {phase === "sending" && (
+      {phase === "sending" ? (
         <View
           style={[
-            styles.locating,
+            styles.locatingBox,
             {
               backgroundColor: "rgba(220,38,38,0.08)",
               borderColor: "rgba(220,38,38,0.2)",
             },
           ]}
         >
-          <FaSpinner size={12} color="#dc2626" />
+          <View
+            style={[
+              styles.spinnerDot,
+              { borderTopColor: "#dc2626", borderColor: "rgba(220,38,38,0.2)" },
+            ]}
+          />
           <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: "#dc2626", marginLeft: 8 }}
+            style={{
+              fontSize: 13,
+              fontWeight: "600",
+              color: "#dc2626",
+              marginLeft: 10,
+            }}
           >
-            {t("booking.sos.sendingAlert")}
+            Sending emergency alert…
           </AppText>
         </View>
-      )}
+      ) : null}
 
-      {phase === "done" && (
+      {phase === "done" ? (
         <View
           style={[
             styles.activeWrap,
-            { backgroundColor: "rgba(220,38,38,0.08)", borderColor: "#dc2626" },
+            {
+              backgroundColor: "rgba(220,38,38,0.08)",
+              borderColor: "#dc2626",
+            },
           ]}
         >
-          <FaShieldAlt size={22} color="#dc2626" />
-          <AppText weight="bold" style={{ color: "#dc2626", marginTop: 4 }}>
-            {t("booking.sos.sentHelp")}
-          </AppText>
+          <View style={styles.activeContent}>
+            <FaShieldAlt size={22} color="#dc2626" />
+            <AppText
+              style={{
+                fontSize: 13,
+                fontWeight: "800",
+                color: "#dc2626",
+                marginLeft: 10,
+                flex: 1,
+              }}
+            >
+              SOS Sent — help is on the way
+            </AppText>
+          </View>
         </View>
-      )}
+      ) : null}
 
       {error ? (
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <FaExclamationTriangle size={11} color="#dc2626" />
-          <AppText variant="small" style={{ color: "#dc2626", marginLeft: 4 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: 4,
+            marginTop: 2,
+          }}
+        >
+          <FaExclamationTriangle
+            size={10}
+            color="#dc2626"
+            style={{ marginTop: 2 }}
+          />
+          <AppText style={{ fontSize: 11, color: "#dc2626", flex: 1 }}>
             {error}
           </AppText>
         </View>
       ) : null}
 
       <AppText
-        variant="small"
-        tone="dim"
-        style={{ textAlign: "center", fontSize: 10 }}
+        style={{
+          fontSize: 10,
+          color: c.textMuted,
+          textAlign: "center",
+          lineHeight: 15,
+        }}
       >
-        {t("booking.sos.onlyUseShort")}
+        Only use in a genuine emergency. Your GPS location will be shared.
       </AppText>
     </View>
   );
@@ -221,21 +338,47 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 13,
+    paddingHorizontal: 16,
     borderRadius: 10,
+    gap: 8,
+    minHeight: 46,
   },
-  sosDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
-  locating: {
+  sosDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#fff",
+    opacity: 0.85,
+  },
+  locatingBox: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 10,
     borderWidth: 1,
   },
-  activeWrap: { padding: 14, borderRadius: 10, borderWidth: 2, gap: 4 },
+  spinnerDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+  },
+  activeWrap: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+  },
+  activeContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   resolved: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: 1,
   },

@@ -7,13 +7,11 @@
 import React from "react";
 import { Ionicons } from "@expo/vector-icons";
 
-// One mapping per icon name. If you find an icon that looks off-brand,
-// swap the Ionicons name here — every consumer updates automatically.
-
 const MAP = {
   FaArrowLeft: "arrow-back",
   FaExclamationTriangle: "warning",
   FaTimes: "close",
+  FaX: "close",
   FaCheckCircle: "checkmark-circle",
   FaExclamationCircle: "alert-circle",
   FaCalendarAlt: "calendar",
@@ -43,6 +41,8 @@ const MAP = {
   FaInfoCircle: "information-circle",
   FaChevronUp: "chevron-up",
   FaChevronDown: "chevron-down",
+  FaChevronLeft: "chevron-back",
+  FaChevronRight: "chevron-forward",
   FaLock: "lock-closed",
   FaUser: "person",
   FaMap: "map",
@@ -60,7 +60,6 @@ const MAP = {
   FaChartLine: "trending-up",
   FaAlignLeft: "reorder-three",
   FaClipboardCheck: "clipboard",
-  FaChevronRight: "chevron-forward",
   FaSearch: "search",
   FaHistory: "time-outline",
   FaTimesCircle: "close-circle",
@@ -73,6 +72,7 @@ const MAP = {
   FaPercent: "percent",
   FaFileInvoice: "receipt",
   FaDownload: "download",
+  FaPrint: "print",
   FaEye: "eye",
   FaExpand: "expand",
   FaCompress: "contract",
@@ -80,6 +80,23 @@ const MAP = {
   FaSignOutAlt: "log-out",
   FaCircle: "ellipse",
   FaSpinnerAlt: "sync",
+  FaPlus: "add",
+  FaTarget: "locate",
+  FaRefreshCw: "refresh",
+  FaUsers: "people",
+  FaRegStar: "star-outline",
+  FaInbox: "file-tray-outline",
+  FaQuoteLeft: "chatbox-outline",
+  FaBan: "ban",
+  FaClipboardList: "list",
+  FaCopy: "copy",
+  FaTrophy: "trophy",
+  FaBookmark: "bookmark",
+  FaBookOpen: "book",
+  FaLink: "link",
+  FaLayers: "layers",
+  FaUserCheck: "person-add",
+  FaChartLine: "trending-up",
 };
 
 // Build a component for each key. Renders Ionicons with the same props.
@@ -99,6 +116,7 @@ const make = (ionName) =>
 export const FaArrowLeft = make(MAP.FaArrowLeft);
 export const FaExclamationTriangle = make(MAP.FaExclamationTriangle);
 export const FaTimes = make(MAP.FaTimes);
+export const FaX = make(MAP.FaX);
 export const FaCheckCircle = make(MAP.FaCheckCircle);
 export const FaExclamationCircle = make(MAP.FaExclamationCircle);
 export const FaCalendarAlt = make(MAP.FaCalendarAlt);
@@ -128,6 +146,8 @@ export const FaBolt = make(MAP.FaBolt);
 export const FaInfoCircle = make(MAP.FaInfoCircle);
 export const FaChevronUp = make(MAP.FaChevronUp);
 export const FaChevronDown = make(MAP.FaChevronDown);
+export const FaChevronLeft = make(MAP.FaChevronLeft);
+export const FaChevronRight = make(MAP.FaChevronRight);
 export const FaLock = make(MAP.FaLock);
 export const FaUser = make(MAP.FaUser);
 export const FaMap = make(MAP.FaMap);
@@ -145,7 +165,6 @@ export const FaBookOpen = make(MAP.FaBookOpen);
 export const FaChartLine = make(MAP.FaChartLine);
 export const FaAlignLeft = make(MAP.FaAlignLeft);
 export const FaClipboardCheck = make(MAP.FaClipboardCheck);
-export const FaChevronRight = make(MAP.FaChevronRight);
 export const FaSearch = make(MAP.FaSearch);
 export const FaHistory = make(MAP.FaHistory);
 export const FaTimesCircle = make(MAP.FaTimesCircle);
@@ -158,9 +177,24 @@ export const FaFileImage = make(MAP.FaFileImage);
 export const FaPercent = make(MAP.FaPercent);
 export const FaFileInvoice = make(MAP.FaFileInvoice);
 export const FaDownload = make(MAP.FaDownload);
+export const FaPrint = make(MAP.FaPrint);
 export const FaEye = make(MAP.FaEye);
 export const FaExpand = make(MAP.FaExpand);
 export const FaCompress = make(MAP.FaCompress);
 export const FaEdit = make(MAP.FaEdit);
 export const FaSignOutAlt = make(MAP.FaSignOutAlt);
 export const FaCircle = make(MAP.FaCircle);
+export const FaPlus = make(MAP.FaPlus);
+export const FaTarget = make(MAP.FaTarget);
+export const FaRefreshCw = make(MAP.FaRefreshCw);
+export const FaUsers = make(MAP.FaUsers);
+export const FaRegStar = make(MAP.FaRegStar);
+export const FaInbox = make(MAP.FaInbox);
+export const FaQuoteLeft = make(MAP.FaQuoteLeft);
+export const FaBan = make(MAP.FaBan);
+export const FaClipboardList = make(MAP.FaClipboardList);
+export const FaCopy = make(MAP.FaCopy);
+export const FaTrophy = make(MAP.FaTrophy);
+export const FaBookmark = make(MAP.FaBookmark);
+export const FaLayers = make(MAP.FaLayers);
+export const FaUserCheck = make(MAP.FaUserCheck);

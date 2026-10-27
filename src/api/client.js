@@ -154,7 +154,7 @@ api.interceptors.response.use(
         `${API_URL}/auth/refresh`,
         { refreshToken: refresh },
         {
-          timeout: 15000,
+          timeout: 60000,
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",

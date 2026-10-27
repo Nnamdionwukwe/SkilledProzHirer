@@ -1,125 +1,157 @@
 // src/utils/pricing.js
-export const HIRER_FEE_RATE = 0.01;
+//
+// Verbatim port of the web pricing utility. This is the SINGLE source of
+// truth for fee rates and the calcPricing pipeline — used by BookingDetail,
+// BookingDetailPayment, WorkerPaymentPreview, and the dashboard Total Spent
+// footnote.
+//
+// Rule (matches web exactly):
+//   · NGN (local currency) → 2% fee, 98% to worker
+//   · Any other currency   → 5% fee, 95% to worker
+//
+// Do NOT hardcode percentages anywhere else. Call getHirerFeeRate(currency).
 
-export function calcPricing(booking, referralDiscount = 0) {
-  const agreedRate = booking?.agreedRate || 0;
+const NGN_RATE = 0.03;
+const FOREIGN_RATE = 0.06;
+
+/**
+ * Fee rate charged to the HIRER for the given currency.
+ * Returns a decimal, e.g. 0.02 for 2% or 0.05 for 5%.
+ */
+export function getHirerFeeRate(currency = "NGN") {
+  return String(currency).toUpperCase() === "NGN" ? NGN_RATE : FOREIGN_RATE;
+}
+
+// ── Normalize a booking's rate + quantity into a subtotal ────────────────────
+function normalizeQuantity(booking) {
   const unit = booking?.estimatedUnit || "hours";
-  const hours = booking?.estimatedHours;
-  const value = booking?.estimatedValue
-    ? parseFloat(booking.estimatedValue)
-    : null;
-  const currency = booking?.currency || "USD";
-  const isNegotiated = !!(booking?.isNegotiated && booking?.negotiatedRate);
-  const quantity = booking?.quantity || 1;
+  const rawValue = booking?.estimatedValue;
+  const rawHours = booking?.estimatedHours;
 
-  const isJobPostBooking = booking?.source === "JOB_POST";
-
-  let qty = 1;
-  let subtotal = 0;
-  let hasQty = false;
-
-  if (isJobPostBooking) {
-    subtotal = parseFloat(agreedRate.toFixed(2));
-    if (unit === "custom" && quantity) {
-      qty = quantity;
-      hasQty = true;
-    } else if (value && unit !== "custom") {
-      qty = value;
-      hasQty = true;
-    } else if (hours) {
-      if (unit === "hours") qty = hours;
-      else if (unit === "days") qty = Math.round(hours / 8);
-      else if (unit === "weeks") qty = Math.round(hours / 40);
-      else if (unit === "months") qty = Math.round(hours / 160);
-      else if (unit === "years") qty = Math.round(hours / 1920);
-      hasQty = true;
-    }
-  } else if (isNegotiated) {
-    subtotal =
-      parseFloat(booking.negotiatedRate) || parseFloat(agreedRate) || 0;
-    if (unit === "custom" && quantity) {
-      qty = quantity;
-      hasQty = true;
-    } else if (value && unit !== "custom") {
-      qty = value;
-      hasQty = true;
-    } else if (hours) {
-      if (unit === "hours") qty = hours;
-      else if (unit === "days") qty = Math.round(hours / 8);
-      else if (unit === "weeks") qty = Math.round(hours / 40);
-      else if (unit === "months") qty = Math.round(hours / 160);
-      else if (unit === "years") qty = Math.round(hours / 1920);
-      hasQty = true;
-    }
-  } else if (unit === "custom") {
-    const customRate = agreedRate || 0;
-    const customQty = quantity || 1;
-    subtotal = parseFloat((customRate * customQty).toFixed(2));
-    qty = customQty;
-    hasQty = true;
-  } else {
-    if (value && unit !== "custom") {
-      qty = value;
-      hasQty = true;
-    } else if (hours) {
-      if (unit === "hours") qty = hours;
-      else if (unit === "days") qty = Math.round(hours / 8);
-      else if (unit === "weeks") qty = Math.round(hours / 40);
-      else if (unit === "months") qty = Math.round(hours / 160);
-      else if (unit === "years") qty = Math.round(hours / 1920);
-      hasQty = true;
-    }
-    subtotal = parseFloat((agreedRate * qty).toFixed(2));
+  // Custom duration → no arithmetic, treat estimatedValue as the human label
+  if (unit === "custom") {
+    return {
+      unit,
+      hasQty: false,
+      qty: null,
+      unitLabel: "custom",
+      unitSuffix: "",
+      subtotal: Number(booking?.agreedRate) || 0,
+    };
   }
 
-  const unitSuffix =
-    {
-      hours: "/hr",
-      days: "/day",
-      weeks: "/wk",
-      months: "/mo",
-      years: "/yr",
-      custom: "",
-    }[unit] || "";
+  // Negotiated bookings use negotiatedRate as the whole total (no * qty)
+  if (booking?.isNegotiated && booking?.negotiatedRate) {
+    return {
+      unit,
+      hasQty: false,
+      qty: null,
+      unitLabel: unit,
+      unitSuffix: suffixForUnit(unit),
+      subtotal: Number(booking.negotiatedRate) || 0,
+    };
+  }
 
-  const unitLabel =
-    {
-      hours: "hour",
-      days: "day",
-      weeks: "week",
-      months: "month",
-      years: "year",
-      custom: "custom",
-    }[unit] || unit;
+  // Direct bookings: parse estimatedValue or estimatedHours into qty
+  let qty = null;
+  if (rawValue) qty = parseFloat(rawValue);
+  else if (rawHours) qty = parseFloat(rawHours);
 
-  const hirerFee = parseFloat((subtotal * HIRER_FEE_RATE).toFixed(2));
-  const workerPayout = subtotal;
-  const grossTotal = parseFloat((subtotal + hirerFee).toFixed(2));
-  const referralSaving = currency === "NGN" ? referralDiscount : 0;
-  const totalCharged = parseFloat(
-    Math.max(0, grossTotal - referralSaving).toFixed(2),
-  );
+  const agreedRate = Number(booking?.agreedRate) || 0;
+
+  // If we have a valid qty, subtotal = qty × rate; otherwise subtotal = rate
+  const hasQty = Number.isFinite(qty) && qty > 0;
+  const subtotal = hasQty ? qty * agreedRate : agreedRate;
 
   return {
-    agreedRate: isJobPostBooking
-      ? agreedRate
-      : isNegotiated
-        ? booking.negotiatedRate
-        : agreedRate,
-    qty,
     unit,
-    unitSuffix,
-    unitLabel,
-    currency,
+    hasQty,
+    qty: hasQty ? qty : null,
+    unitLabel:
+      unit === "hours"
+        ? "hour"
+        : unit === "days"
+          ? "day"
+          : unit === "weeks"
+            ? "week"
+            : unit === "months"
+              ? "month"
+              : unit,
+    unitSuffix: suffixForUnit(unit),
+    subtotal,
+  };
+}
+
+function suffixForUnit(unit) {
+  switch (unit) {
+    case "hours":
+      return "/hr";
+    case "days":
+      return "/day";
+    case "weeks":
+      return "/wk";
+    case "months":
+      return "/mo";
+    default:
+      return "";
+  }
+}
+
+/**
+ * Full pricing pipeline. Given a booking, returns:
+ *   { subtotal, hirerFee, grossTotal, workerPayout, currency,
+ *     agreedRate, unit, hasQty, qty, unitLabel, unitSuffix }
+ *
+ * Never throws — bad data yields sensible zeros.
+ */
+export function calcPricing(booking) {
+  if (!booking) {
+    return {
+      subtotal: 0,
+      hirerFee: 0,
+      grossTotal: 0,
+      workerPayout: 0,
+      currency: "NGN",
+      agreedRate: 0,
+      unit: "hours",
+      hasQty: false,
+      qty: null,
+      unitLabel: "hour",
+      unitSuffix: "/hr",
+    };
+  }
+
+  const currency = booking.currency || "NGN";
+  const feeRate = getHirerFeeRate(currency);
+  const q = normalizeQuantity(booking);
+  const subtotal = q.subtotal;
+
+  // Two possible pricing models:
+  //   1. Rate × qty → hirer pays subtotal + fee, worker gets subtotal
+  //   2. Job post / negotiated → total is fixed; worker gets total, hirer
+  //      pays total + fee
+  //
+  // Both cases agree that:
+  //   hirerFee    = feeRate × (what worker receives)
+  //   grossTotal  = worker_receives + hirerFee
+  //
+  // For "rate × qty" case, what the worker receives = subtotal.
+  // For "fixed total" case, what the worker receives = subtotal (agreedRate).
+  const workerPayout = subtotal;
+  const hirerFee = Math.round(workerPayout * feeRate * 100) / 100;
+  const grossTotal = Math.round((workerPayout + hirerFee) * 100) / 100;
+
+  return {
     subtotal,
     hirerFee,
-    workerPayout,
     grossTotal,
-    totalCharged,
-    referralSaving,
-    hasQty: hasQty || unit === "custom" || !!(value || hours),
-    isNegotiated,
-    negotiatedRate: isNegotiated ? booking.negotiatedRate : null,
-    isJobPostBooking,
+    workerPayout,
+    currency,
+    agreedRate: Number(booking.agreedRate) || 0,
+    unit: q.unit,
+    hasQty: q.hasQty,
+    qty: q.qty,
+    unitLabel: q.unitLabel,
+    unitSuffix: q.unitSuffix,
   };
 }

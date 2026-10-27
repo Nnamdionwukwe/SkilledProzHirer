@@ -87,6 +87,38 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  // ✅ Google Sign-In — accepts idToken from the native Google SDK
+  googleSignIn: async ({ idToken, ref }) => {
+    set({ isLoading: true });
+    try {
+      const { data } = await api.post("/auth/google", {
+        idToken,
+        ...(ref ? { ref } : {}),
+      });
+
+      // Backend responses can take two shapes:
+      //   1. { user, accessToken, refreshToken } — existing account
+      //   2. { needsRole: true, googleProfile } — new user, must pick role
+      const payload = data.data || data;
+
+      if (payload.needsRole) {
+        return payload;
+      }
+
+      const { user, accessToken, refreshToken } = payload;
+      if (!user || !accessToken) {
+        throw new Error("Google sign-in response missing tokens");
+      }
+
+      await get().setAuth(user, accessToken, refreshToken);
+      return payload;
+    } catch (err) {
+      throw new Error(getErrorMessage(err, "Google sign-in failed"));
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
   register: async (payload) => {
     set({ isLoading: true });
     try {

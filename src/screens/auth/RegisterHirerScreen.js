@@ -8,9 +8,10 @@ import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
-import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
-import * as AuthSession from "expo-auth-session";
+import {
+  GoogleSignin,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 
 import {
   AuthShell,
@@ -27,12 +28,16 @@ import {
   isStrongEnoughPassword,
 } from "../../utils/validators";
 
-WebBrowser.maybeCompleteAuthSession();
-
 const extra = Constants.expoConfig?.extra || {};
 const GOOGLE_WEB_CLIENT_ID = extra.googleWebClientId || "";
-const GOOGLE_ANDROID_CLIENT_ID = extra.googleAndroidClientId || "";
-const GOOGLE_IOS_CLIENT_ID = extra.googleIosClientId || "";
+
+if (GOOGLE_WEB_CLIENT_ID) {
+  GoogleSignin.configure({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    offlineAccess: false,
+    scopes: ["openid", "email", "profile"],
+  });
+}
 
 export default function RegisterHirerScreen() {
   const { t } = useTranslation();
@@ -63,39 +68,48 @@ export default function RegisterHirerScreen() {
     if (errors[key]) setErrors((p) => ({ ...p, [key]: "" }));
   };
 
-  // ── Google Auth Setup ──────────────────────────────────────────
-  const [request, response, promptAsync] = Google.useAuthRequest(
-    GOOGLE_WEB_CLIENT_ID
-      ? {
-          clientId: GOOGLE_WEB_CLIENT_ID,
-          androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
-          iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
-          scopes: ["openid", "email", "profile"],
-          redirectUri: AuthSession.makeRedirectUri({
-            scheme: "skilledproz",
-            path: "oauth",
-          }),
-        }
-      : { clientId: "disabled" },
-  );
-
-  useEffect(() => {
-    if (!response) return;
-    if (response.type === "success") {
-      const accessToken = response.authentication?.accessToken;
-      if (accessToken) handleGoogleToken(accessToken);
-    } else if (response.type === "error") {
-      setErrors({ api: response.error?.message || "Google sign-in failed." });
-      setGoogleLoading(false);
-    } else if (response.type === "dismiss" || response.type === "cancel") {
-      setGoogleLoading(false);
+  // ── Google Sign-Up (native) ────────────────────────────────────
+  const handleGooglePress = async () => {
+    setErrors({});
+    if (!GOOGLE_WEB_CLIENT_ID) {
+      setErrors({ api: "Google Sign-In is not configured yet." });
+      return;
     }
-  }, [response]);
 
-  const handleGoogleToken = async (accessToken) => {
+    setGoogleLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.idToken || userInfo.data?.idToken;
+
+      if (!idToken) {
+        setErrors({ api: "Google sign-up did not return a token." });
+        setGoogleLoading(false);
+        return;
+      }
+
+      await handleGoogleToken(idToken);
+    } catch (err) {
+      setGoogleLoading(false);
+
+      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User cancelled — do nothing
+      } else if (err.code === statusCodes.IN_PROGRESS) {
+        // Already signing in
+      } else if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        setErrors({
+          api: "Google Play Services not available on this device.",
+        });
+      } else {
+        setErrors({ api: err?.message || "Google sign-up failed." });
+      }
+    }
+  };
+
+  const handleGoogleToken = async (idToken) => {
     try {
       const result = await googleSignIn({
-        accessToken,
+        idToken,
         role: "HIRER", // Force Hirer role since they are on this screen
         ref: form.referralCode.trim() || undefined,
       });
@@ -104,7 +118,7 @@ export default function RegisterHirerScreen() {
         // Edge case: backend still asks for role despite us sending it
         navigation.navigate("Register", {
           googleProfile: result.googleProfile,
-          accessToken,
+          idToken,
           refCode: form.referralCode,
           from: "google",
         });
@@ -116,24 +130,6 @@ export default function RegisterHirerScreen() {
       });
     } finally {
       setGoogleLoading(false);
-    }
-  };
-
-  const handleGooglePress = async () => {
-    setErrors({});
-    if (!GOOGLE_WEB_CLIENT_ID) {
-      setErrors({ api: "Google Sign-In is not configured yet." });
-      return;
-    }
-    setGoogleLoading(true);
-    try {
-      const result = await promptAsync();
-      if (result?.type === "cancel" || result?.type === "dismiss") {
-        setGoogleLoading(false);
-      }
-    } catch (err) {
-      setGoogleLoading(false);
-      setErrors({ api: err?.message || "Google signup failed." });
     }
   };
 
@@ -479,16 +475,16 @@ const styles = StyleSheet.create({
     height: 1,
   },
   form: {
-    gap: 18, // Matches .form { gap: 18px; }
+    gap: 18,
   },
   row: {
     flexDirection: "row",
-    gap: 14, // Matches .row { gap: 14px; }
+    gap: 14,
   },
   checkRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 9, // Matches .checkRow { gap: 9px; }
+    gap: 9,
     marginTop: 4,
   },
   checkbox: {

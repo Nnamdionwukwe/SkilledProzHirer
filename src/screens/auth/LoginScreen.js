@@ -1,16 +1,14 @@
 // src/screens/auth/LoginScreen.js
-//
-// Mirrors the website's Login.jsx 1:1.
-
 import React, { useEffect, useState } from "react";
 import { View, Pressable, ActivityIndicator, Linking } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
-import * as AuthSession from "expo-auth-session"; // <-- IMPORT MOVED HERE
+import {
+  GoogleSignin,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 
 import {
   AuthShell,
@@ -26,13 +24,16 @@ import { useAuthStore } from "../../store/authStore";
 import { isEmail, isNonEmpty } from "../../utils/validators";
 import { Ionicons } from "@expo/vector-icons";
 
-WebBrowser.maybeCompleteAuthSession();
-
-// ── Google client IDs ────────────────────────────────────────────
 const extra = Constants.expoConfig?.extra || {};
 const GOOGLE_WEB_CLIENT_ID = extra.googleWebClientId || "";
-const GOOGLE_ANDROID_CLIENT_ID = extra.googleAndroidClientId || "";
-const GOOGLE_IOS_CLIENT_ID = extra.googleIosClientId || "";
+
+if (GOOGLE_WEB_CLIENT_ID) {
+  GoogleSignin.configure({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    offlineAccess: false,
+    scopes: ["openid", "email", "profile"],
+  });
+}
 
 export default function LoginScreen() {
   const { t } = useTranslation();
@@ -50,7 +51,6 @@ export default function LoginScreen() {
   const [block, setBlock] = useState(null);
   const [refCode, setRefCode] = useState("");
 
-  // ── Referral code from storage ─────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -62,62 +62,17 @@ export default function LoginScreen() {
     })();
   }, []);
 
-  // ── Google auth request ───────────────────────────────────────
-  const [request, response, promptAsync] = Google.useAuthRequest(
-    GOOGLE_WEB_CLIENT_ID
-      ? {
-          clientId: GOOGLE_WEB_CLIENT_ID,
-          androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
-          iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
-          scopes: ["openid", "email", "profile"],
-          // THIS IS THE KEY FIX FOR REDIRECTING:
-          redirectUri: AuthSession.makeRedirectUri({
-            scheme: "skilledproz",
-            path: "oauth",
-          }),
-        }
-      : { clientId: "disabled" },
-  );
-
-  // ── Handle the OAuth response ──────────────────────────────────
-  useEffect(() => {
-    if (!response) return;
-
-    if (response.type === "success") {
-      const accessToken = response.authentication?.accessToken;
-      if (!accessToken) {
-        setError(
-          t("auth.googleNoToken", {
-            defaultValue: "Google sign-in did not return a token.",
-          }),
-        );
-        setGoogleLoading(false);
-        return;
-      }
-      handleGoogleToken(accessToken);
-    } else if (response.type === "error") {
-      setError(
-        response.error?.message ||
-          t("auth.googleFailed", { defaultValue: "Google sign-in failed." }),
-      );
-      setGoogleLoading(false);
-    } else if (response.type === "dismiss" || response.type === "cancel") {
-      setGoogleLoading(false);
-    }
-  }, [response]);
-
-  // ── Send token to backend ──────────────────────────────────────
-  const handleGoogleToken = async (accessToken) => {
+  const handleGoogleToken = async (idToken) => {
     try {
       const result = await googleSignIn({
-        accessToken,
+        idToken,
         ref: refCode || undefined,
       });
 
       if (result?.needsRole) {
         navigation.navigate("Register", {
           googleProfile: result.googleProfile,
-          accessToken,
+          idToken,
           refCode,
           from: "google",
         });
@@ -153,7 +108,6 @@ export default function LoginScreen() {
     }
   };
 
-  // ── Trigger the OAuth flow ─────────────────────────────────────
   const handleGooglePress = async () => {
     setError("");
     setBlock(null);
@@ -170,20 +124,39 @@ export default function LoginScreen() {
 
     setGoogleLoading(true);
     try {
-      const result = await promptAsync();
-      if (result?.type === "cancel" || result?.type === "dismiss") {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.idToken || userInfo.data?.idToken;
+
+      if (!idToken) {
+        setError(
+          t("auth.googleNoToken", {
+            defaultValue: "Google sign-in did not return a token.",
+          }),
+        );
         setGoogleLoading(false);
+        return;
       }
+
+      await handleGoogleToken(idToken);
     } catch (err) {
       setGoogleLoading(false);
-      setError(
-        err?.message ||
-          t("auth.googleFailed", { defaultValue: "Google sign-in failed." }),
-      );
+
+      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User cancelled — do nothing
+      } else if (err.code === statusCodes.IN_PROGRESS) {
+        // Already signing in
+      } else if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        setError("Google Play Services not available on this device.");
+      } else {
+        setError(
+          err?.message ||
+            t("auth.googleFailed", { defaultValue: "Google sign-in failed." }),
+        );
+      }
     }
   };
 
-  // ── Email/password submit ──────────────────────────────────────
   const handleSubmit = async () => {
     setError("");
     setBlock(null);

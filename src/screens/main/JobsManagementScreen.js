@@ -1,10 +1,30 @@
 // src/screens/main/JobsManagementScreen.js
-// Mirrors the website's HirerJobBoardManagement — job cards, filter tabs,
-// status actions, pagination. API: GET /jobs/hirer/me
+//
+// Verbatim port of components/hirer/HirerJobBoardManagement.jsx.
+//
+// Fetch: GET /jobs/hirer/me?page=N&limit=9&status=X
+// Update: PATCH /jobs/:jobId/status with { status: "OPEN"|"FILLED"|"CANCELLED" }
+//
+// Renders:
+//   · Header: "MY JOBS" eyebrow + "Job Board" title + "Post New Job" CTA
+//   · Success / error alerts (dismissible)
+//   · Summary pills: Open / Filled / Cancelled / Total
+//   · Filter tabs: All / Open / Filled / Cancelled
+//   · Job cards with:
+//       - Colored accent bar per status
+//       - Category chip + status badge
+//       - Title + description (clamped)
+//       - Meta row (date, address, duration, job type, location type)
+//       - Budget + applicants count + skills count
+//       - Recent applicant thumbnails (+ more)
+//       - Actions: View Details, Applications, Edit (open), Mark Filled,
+//                  Cancel, Reopen
+//       - Inline confirm row for Mark Filled / Cancel
+//   · Pagination
+//   · PageSkeleton during initial load
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Image,
   Pressable,
   RefreshControl,
@@ -12,462 +32,116 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 
 import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
-import AppButton from "../../components/AppButton";
-import Card from "../../components/Card";
-import ConfirmModal from "../../components/ConfirmModal";
+import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
-import { getMyJobPosts, updateJobStatus } from "../../api/jobs";
+import client from "../../api/client";
+import {
+  FaPlus,
+  FaCalendarAlt,
+  FaMapMarkerAlt,
+  FaBriefcase,
+  FaGlobe,
+  FaHome,
+  FaRandom,
+  FaUsers,
+  FaExclamationTriangle,
+  FaCheckCircle,
+  FaTimes,
+  FaFileAlt,
+  FaEdit,
+  FaChevronLeft,
+  FaChevronRight,
+} from "../../icons/fa";
 
-// ─── Duration label ───────────────────────────────────────────────────────────
-function durationLabel(job) {
-  if (!job.durationType || !job.durationValue) return null;
-  const v = job.durationValue;
-  switch (job.durationType) {
-    case "HOURS":
-      return `${v} hrs`;
-    case "DAYS":
-      return `${v} days`;
-    case "WEEKS":
-      return `${v} weeks`;
-    case "MONTHS":
-      return `${v} months`;
-    case "CUSTOM":
-      return v;
-    default:
-      return null;
-  }
-}
+// ── Constants — verbatim from web ────────────────────────────────────
+const STATUS_TABS = ["ALL", "OPEN", "FILLED", "CANCELLED"];
 
-// ─── Status meta ─────────────────────────────────────────────────────────────
 const STATUS_META = {
-  OPEN: { color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
-  FILLED: { color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
-  CANCELLED: { color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+  OPEN: { label: "Open", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
+  FILLED: { label: "Filled", color: "#818cf8", bg: "rgba(129,140,248,0.12)" },
+  CANCELLED: {
+    label: "Cancelled",
+    color: "#ef4444",
+    bg: "rgba(239,68,68,0.12)",
+  },
 };
 
-// ─── Location icon helper ─────────────────────────────────────────────────────
-function locTypeIcon(type) {
-  if (type === "ON_SITE") return "location-outline";
-  if (type === "HYBRID") return "git-merge-outline";
-  return "globe-outline";
+const BUDGET_TYPE_LABELS = {
+  HOURLY: "/hr",
+  DAILY: "/day",
+  WEEKLY: "/wk",
+  MONTHLY: "/mo",
+  YEARLY: "/yr",
+  CUSTOM: "",
+  FIXED: "",
+};
+
+const JOB_TYPE_LABELS = {
+  FULL_TIME: "Full-time",
+  PART_TIME: "Part-time",
+  CONTRACT: "Contract",
+  TEMPORARY: "Temporary",
+};
+
+const LOCATION_TYPE_LABELS = {
+  REMOTE: "Remote",
+  ON_SITE: "On-site",
+  HYBRID: "Hybrid",
+};
+
+function locIcon(type) {
+  if (type === "REMOTE") return FaGlobe;
+  if (type === "HYBRID") return FaRandom;
+  return FaHome;
 }
 
-// ─── Job Card ─────────────────────────────────────────────────────────────────
-function JobCard({ job, onStatusChange, acting, c, t }) {
-  const navigation = useNavigation();
-  const [modal, setModal] = useState(null);
-  const meta = STATUS_META[job.status] ?? STATUS_META.OPEN;
-  const isOpen = job.status === "OPEN";
-  const dur = durationLabel(job);
-  const appCount = job._count?.applications ?? 0;
-  const previews = job.applications?.slice(0, 3) ?? [];
+// ── Duration label helper ────────────────────────────────────────────
+function formatJobDuration(job) {
+  if (!job) return null;
+  const value = job.estimatedValue;
+  const hours = job.estimatedHours;
+  const unit = job.estimatedUnit || "hours";
 
-  const confirmStatus = (newStatus) => {
-    setModal({
-      title:
-        newStatus === "FILLED"
-          ? t("jobs.markFilledConfirm")
-          : newStatus === "CANCELLED"
-            ? t("jobs.cancelConfirm")
-            : t("jobs.reopenConfirm"),
-      confirmLabel: t("common.yes"),
-      destructive: newStatus === "CANCELLED",
-      onConfirm: () => onStatusChange(job.id, newStatus),
-    });
+  if (unit === "custom") return value || null;
+  if (!value && !hours) return null;
+
+  const UNIT_MAP = {
+    hours: "hour",
+    days: "day",
+    weeks: "week",
+    months: "month",
+    years: "year",
   };
 
-  return (
-    <Card style={styles.jobCard}>
-      {/* Accent bar */}
-      <View style={[styles.accentBar, { backgroundColor: meta.color }]} />
+  if (value) {
+    const num = parseFloat(value);
+    if (isNaN(num) || num <= 0) return String(value);
+    const noun = UNIT_MAP[unit] || unit;
+    const label = noun + (num !== 1 ? "s" : "");
+    return `${num} ${label}`;
+  }
 
-      <View style={styles.cardInner}>
-        {/* Top row: category chip + status badge */}
-        <View style={styles.cardTop}>
-          <View style={[styles.catChip, { backgroundColor: c.orangeDim }]}>
-            {job.category?.icon ? (
-              <AppText variant="small">{job.category.icon}</AppText>
-            ) : null}
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: c.orange, marginLeft: 4 }}
-              numberOfLines={1}
-            >
-              {job.category?.name ?? "General"}
-            </AppText>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: meta.color }}
-            >
-              {job.status}
-            </AppText>
-          </View>
-        </View>
+  if (hours) {
+    const num = parseFloat(hours);
+    if (isNaN(num) || num <= 0) return `${hours} hours`;
+    return `${num} hours`;
+  }
 
-        {/* Job meta tags: type · location · payment type */}
-        <View style={styles.tagsRow}>
-          {job.jobType && (
-            <View
-              style={[
-                styles.tagPill,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <AppText variant="small" tone="dim">
-                {t(`postJob.jobType.${job.jobType}`)}
-              </AppText>
-            </View>
-          )}
-          {job.locationType && (
-            <View
-              style={[
-                styles.tagPill,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <Ionicons
-                name={locTypeIcon(job.locationType)}
-                size={11}
-                color={c.textMuted}
-                style={{ marginRight: 3 }}
-              />
-              <AppText variant="small" tone="dim">
-                {t(`postJob.locationType.${job.locationType}`)}
-              </AppText>
-            </View>
-          )}
-          {job.budgetType && (
-            <View
-              style={[
-                styles.tagPill,
-                { backgroundColor: c.orangeDim, borderColor: c.orange },
-              ]}
-            >
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.orange }}
-              >
-                {t(`postJob.paymentType.${job.budgetType}`)}
-              </AppText>
-            </View>
-          )}
-        </View>
-
-        {/* Title & description */}
-        <AppText
-          variant="title"
-          weight="semibold"
-          style={{ marginTop: 8 }}
-          numberOfLines={2}
-        >
-          {job.title}
-        </AppText>
-        <AppText
-          variant="small"
-          tone="dim"
-          numberOfLines={2}
-          style={{ marginTop: 4 }}
-        >
-          {job.description}
-        </AppText>
-
-        {/* Meta row: date · location · duration */}
-        <View style={styles.metaRow}>
-          <View style={styles.metaItem}>
-            <Ionicons
-              name="calendar-outline"
-              size={12}
-              color={c.textMuted}
-              style={{ marginRight: 4 }}
-            />
-            <AppText variant="small" tone="dim">
-              {new Date(job.scheduledAt).toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}
-            </AppText>
-          </View>
-          {job.address && (
-            <View style={styles.metaItem}>
-              <Ionicons
-                name="location-outline"
-                size={12}
-                color={c.textMuted}
-                style={{ marginRight: 4 }}
-              />
-              <AppText variant="small" tone="dim" numberOfLines={1}>
-                {job.address}
-              </AppText>
-            </View>
-          )}
-          {dur && (
-            <View
-              style={[
-                styles.durBadge,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <Ionicons
-                name="time-outline"
-                size={11}
-                color={c.textMuted}
-                style={{ marginRight: 3 }}
-              />
-              <AppText variant="small" tone="dim">
-                {dur}
-              </AppText>
-            </View>
-          )}
-        </View>
-
-        {/* Budget + applicant count */}
-        <View style={styles.budgetRow}>
-          <AppText
-            variant="title"
-            weight="semibold"
-            style={{ color: c.orange }}
-          >
-            {job.currency} {Number(job.budget).toLocaleString()}
-          </AppText>
-          <Pressable
-            onPress={() =>
-              navigation.navigate("JobApplications", { jobId: job.id })
-            }
-            style={[
-              styles.appCountChip,
-              { backgroundColor: c.bgCard, borderColor: c.border },
-            ]}
-          >
-            <Ionicons
-              name="people-outline"
-              size={13}
-              color={c.textMuted}
-              style={{ marginRight: 4 }}
-            />
-            <AppText variant="small" tone="dim">
-              {appCount}{" "}
-              {appCount === 1 ? t("jobs.applicant") : t("jobs.applicants")}
-            </AppText>
-          </Pressable>
-        </View>
-
-        {/* Skills preview */}
-        {job.skills?.length > 0 && (
-          <View style={styles.skillsPreview}>
-            {job.skills.slice(0, 4).map((sk) => (
-              <View
-                key={sk}
-                style={[
-                  styles.skillPill,
-                  { backgroundColor: c.bgCard, borderColor: c.border },
-                ]}
-              >
-                <AppText variant="small" tone="dim" numberOfLines={1}>
-                  {sk}
-                </AppText>
-              </View>
-            ))}
-            {job.skills.length > 4 && (
-              <View
-                style={[
-                  styles.skillPill,
-                  { backgroundColor: c.bgCard, borderColor: c.border },
-                ]}
-              >
-                <AppText variant="small" tone="dim">
-                  +{job.skills.length - 4}
-                </AppText>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Applicant avatar previews */}
-        {previews.length > 0 && (
-          <View style={styles.previews}>
-            {previews.map((app) => (
-              <View
-                key={app.id}
-                style={[
-                  styles.previewAvatar,
-                  { backgroundColor: c.bgCard, borderColor: c.bgPanel },
-                ]}
-              >
-                {app.worker?.avatar ? (
-                  <Image
-                    source={{ uri: app.worker.avatar }}
-                    style={styles.previewImg}
-                  />
-                ) : (
-                  <AppText
-                    variant="small"
-                    weight="semibold"
-                    style={{ color: c.orange, fontSize: 10 }}
-                  >
-                    {app.worker?.firstName?.[0]}
-                    {app.worker?.lastName?.[0]}
-                  </AppText>
-                )}
-              </View>
-            ))}
-            {appCount > 3 && (
-              <View
-                style={[styles.previewMore, { backgroundColor: c.orangeDim }]}
-              >
-                <AppText
-                  variant="small"
-                  style={{ color: c.orange, fontSize: 10 }}
-                >
-                  +{appCount - 3}
-                </AppText>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Action buttons */}
-        <View style={styles.actions}>
-          <Pressable
-            onPress={() => navigation.navigate("JobDetail", { jobId: job.id })}
-            style={[styles.viewBtn, { borderColor: c.border }]}
-          >
-            <AppText variant="small" weight="semibold">
-              {t("jobs.viewDetails")}
-            </AppText>
-          </Pressable>
-          <Pressable
-            onPress={() =>
-              navigation.navigate("JobApplications", { jobId: job.id })
-            }
-            style={[
-              styles.appsBtn,
-              { backgroundColor: c.orangeDim, borderColor: c.orange },
-            ]}
-          >
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: c.orange }}
-            >
-              {t("jobs.applications.title")}
-            </AppText>
-          </Pressable>
-        </View>
-
-        {/* Status change actions */}
-        {isOpen && (
-          <View style={[styles.statusActions, { borderTopColor: c.border }]}>
-            <Pressable
-              onPress={() => confirmStatus("FILLED")}
-              disabled={acting}
-              style={[
-                styles.fillBtn,
-                {
-                  backgroundColor: "rgba(99,102,241,0.12)",
-                  borderColor: "#6366f1",
-                },
-              ]}
-            >
-              {acting ? (
-                <ActivityIndicator size="small" color="#6366f1" />
-              ) : (
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{ color: "#6366f1" }}
-                >
-                  {t("jobs.markFilled")}
-                </AppText>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={() => confirmStatus("CANCELLED")}
-              disabled={acting}
-              style={[
-                styles.cancelStatusBtn,
-                {
-                  backgroundColor: "rgba(239,68,68,0.10)",
-                  borderColor: "#ef4444",
-                },
-              ]}
-            >
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: "#ef4444" }}
-              >
-                {t("jobs.cancelJob")}
-              </AppText>
-            </Pressable>
-          </View>
-        )}
-
-        {!isOpen && job.status === "CANCELLED" && (
-          <View style={[styles.statusActions, { borderTopColor: c.border }]}>
-            <Pressable
-              onPress={() => confirmStatus("OPEN")}
-              disabled={acting}
-              style={[
-                styles.reopenBtn,
-                {
-                  backgroundColor: "rgba(34,197,94,0.10)",
-                  borderColor: "#22c55e",
-                },
-              ]}
-            >
-              {acting ? (
-                <ActivityIndicator size="small" color="#22c55e" />
-              ) : (
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{ color: "#22c55e" }}
-                >
-                  {t("jobs.reopenJob")}
-                </AppText>
-              )}
-            </Pressable>
-          </View>
-        )}
-      </View>
-      <ConfirmModal
-        visible={!!modal}
-        title={modal?.title ?? ""}
-        confirmLabel={modal?.confirmLabel ?? t("common.yes")}
-        cancelLabel={t("common.no")}
-        destructive={modal?.destructive}
-        onConfirm={() => {
-          modal?.onConfirm?.();
-          setModal(null);
-        }}
-        onCancel={() => setModal(null)}
-      />
-    </Card>
-  );
+  return null;
 }
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-const STATUS_TABS = ["ALL", "OPEN", "FILLED", "CANCELLED"];
 
 export default function JobsManagementScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { theme: th } = useTheme();
+  const { theme } = useTheme();
   const { toast } = useToast();
-  const c = th.colors;
+  const c = theme.colors;
 
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -477,399 +151,998 @@ export default function JobsManagementScreen() {
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [acting, setActing] = useState(null);
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
 
+  // ── Fetch ─────────────────────────────────────────────────────────
   const load = useCallback(
-    async (pg = page, flt = filter) => {
+    async (pg = page, flt = filter, isRefresh = false) => {
+      if (!isRefresh) setLoading(true);
       try {
         const params = { page: pg, limit: 9 };
         if (flt !== "ALL") params.status = flt;
-        const data = await getMyJobPosts(params);
-        setJobs(data.jobPosts ?? []);
-        setTotal(data.total ?? 0);
-        setPages(data.pages ?? 1);
-      } catch {
-        toast.error(t("toast.networkError"));
+        const res = await client.get("/jobs/hirer/me", { params });
+        const data = res?.data?.data || {};
+        setJobs(data.jobPosts || []);
+        setTotal(data.total || 0);
+        setPages(data.pages || 1);
+      } catch (err) {
+        setError("Failed to load jobs.");
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [page, filter, t, toast],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page, filter],
   );
 
   useEffect(() => {
-    load();
-  }, [filter, page]);
+    load(page, filter);
+  }, [filter, page, load]);
 
-  const handleFilterChange = (f) => {
-    setFilter(f);
-    setPage(1);
+  const onRefresh = () => {
+    setRefreshing(true);
+    load(1, filter, true);
   };
 
-  const handleStatusChange = async (jobId, status) => {
+  // ── Update status ─────────────────────────────────────────────────
+  const updateStatus = async (jobId, status) => {
     setActing(jobId);
+    setError("");
+    setSuccess("");
     try {
-      await updateJobStatus(jobId, status);
+      await client.patch(`/jobs/${jobId}/status`, { status });
       setJobs((prev) =>
         prev.map((j) => (j.id === jobId ? { ...j, status } : j)),
       );
-      toast.success(t("jobs.jobUpdated", { status: status.toLowerCase() }));
+      setSuccess(`Job marked as ${status.toLowerCase()}.`);
+      setTimeout(() => setSuccess(""), 3000);
     } catch {
-      toast.error(t("toast.unknownError"));
+      setError("Failed to update job status.");
     } finally {
       setActing(null);
     }
   };
 
-  // Summary counts
+  // ── Summary counts ────────────────────────────────────────────────
   const openCount = jobs.filter((j) => j.status === "OPEN").length;
   const filledCount = jobs.filter((j) => j.status === "FILLED").length;
   const cancelledCount = jobs.filter((j) => j.status === "CANCELLED").length;
 
+  // ── Loading ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <AppScreen scroll={false}>
+        <PageSkeleton variant="list" rows={6} />
+      </AppScreen>
+    );
+  }
+
+  // ═════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═════════════════════════════════════════════════════════════════════
   return (
     <AppScreen
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            load(1, filter);
-          }}
+          onRefresh={onRefresh}
           tintColor={c.orange}
         />
       }
       contentContainerStyle={{ paddingBottom: 40 }}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }}>
           <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange, letterSpacing: 0.8 }}
+            style={{
+              fontSize: 10,
+              fontWeight: "700",
+              color: c.orange,
+              letterSpacing: 1.5,
+              textTransform: "uppercase",
+              marginBottom: 4,
+            }}
           >
-            {t("jobs.myJobs").toUpperCase()}
+            My Jobs
           </AppText>
-         >
+          <AppText
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 24,
+              fontWeight: "800",
+              color: c.text,
+              letterSpacing: -0.4,
+            }}
+          >
+            Job Board
+          </AppText>
         </View>
-        <AppButton
-          title={t("jobs.postNewJob")}
-          fullWidth={false}
+        <Pressable
           onPress={() => navigation.navigate("PostJob")}
-          style={{ paddingHorizontal: 14 }}
-        />
+          style={({ pressed }) => [
+            styles.postBtn,
+            { backgroundColor: c.orange, opacity: pressed ? 0.9 : 1 },
+          ]}
+        >
+          <FaPlus size={10} color={c.bg} />
+          <AppText
+            style={{
+              fontSize: 12,
+              fontWeight: "700",
+              color: c.bg,
+              marginLeft: 5,
+            }}
+          >
+            Post New Job
+          </AppText>
+        </Pressable>
       </View>
 
-      {/* Summary pills */}
+      {/* ── Alerts ──────────────────────────────────────────────── */}
+      {error ? (
+        <Pressable
+          onPress={() => setError("")}
+          style={[
+            styles.alert,
+            { backgroundColor: c.redDim, borderColor: "rgba(239,68,68,0.2)" },
+          ]}
+        >
+          <FaExclamationTriangle size={11} color={c.red} />
+          <AppText
+            style={{ fontSize: 12, color: c.red, flex: 1, marginLeft: 6 }}
+          >
+            {error}
+          </AppText>
+          <FaTimes size={10} color={c.red} />
+        </Pressable>
+      ) : null}
+      {success ? (
+        <Pressable
+          onPress={() => setSuccess("")}
+          style={[
+            styles.alert,
+            {
+              backgroundColor: c.greenDim,
+              borderColor: "rgba(34,197,94,0.2)",
+            },
+          ]}
+        >
+          <FaCheckCircle size={11} color={c.green} />
+          <AppText
+            style={{ fontSize: 12, color: c.green, flex: 1, marginLeft: 6 }}
+          >
+            {success}
+          </AppText>
+          <FaTimes size={10} color={c.green} />
+        </Pressable>
+      ) : null}
+
+      {/* ── Summary pills ───────────────────────────────────────── */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ marginTop: 16 }}
+        style={{ flexGrow: 0, marginTop: 14, marginBottom: 10 }}
         contentContainerStyle={{ gap: 8, paddingRight: 8 }}
       >
-        {[
-          { label: t("jobs.open"), value: openCount, color: "#22c55e" },
-          { label: t("jobs.filled"), value: filledCount, color: "#6366f1" },
-          {
-            label: t("jobs.cancelled"),
-            value: cancelledCount,
-            color: "#ef4444",
-          },
-          { label: t("jobs.total"), value: total, color: c.textMuted },
-        ].map((p) => (
-          <View
-            key={p.label}
-            style={[
-              styles.summaryPill,
-              { backgroundColor: c.bgCard, borderColor: c.border },
-            ]}
-          >
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: p.color }}
-            >
-              {p.value}
-            </AppText>
-            <AppText variant="small" tone="dim" style={{ marginLeft: 6 }}>
-              {p.label}
-            </AppText>
-          </View>
-        ))}
+        <SummaryPill label="Open" value={openCount} color={c.green} c={c} />
+        <SummaryPill label="Filled" value={filledCount} color="#818cf8" c={c} />
+        <SummaryPill
+          label="Cancelled"
+          value={cancelledCount}
+          color={c.red}
+          c={c}
+        />
+        <SummaryPill label="Total" value={total} color={c.textDim} c={c} />
       </ScrollView>
 
-      {/* Filter tabs */}
+      {/* ── Filter tabs ─────────────────────────────────────────── */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ marginTop: 14 }}
-        contentContainerStyle={{ gap: 8, paddingRight: 8 }}
+        style={{ flexGrow: 0, marginBottom: 16 }}
+        contentContainerStyle={{ gap: 6, paddingRight: 8 }}
       >
         {STATUS_TABS.map((s) => {
           const active = filter === s;
           return (
             <Pressable
               key={s}
-              onPress={() => handleFilterChange(s)}
-              style={[
+              onPress={() => {
+                setFilter(s);
+                setPage(1);
+              }}
+              style={({ pressed }) => [
                 styles.filterTab,
                 {
-                  backgroundColor: active ? c.orange : c.bgCard,
+                  backgroundColor: active ? c.orangeDim : c.bgCard,
                   borderColor: active ? c.orange : c.border,
+                  opacity: pressed && !active ? 0.85 : 1,
                 },
               ]}
             >
               <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: active ? "#fff" : c.text }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: active ? c.orange : c.textDim,
+                }}
               >
-                {s === "ALL" ? t("jobs.allJobs") : t(`jobs.${s.toLowerCase()}`)}
+                {s === "ALL" ? "All Jobs" : STATUS_META[s]?.label}
               </AppText>
             </Pressable>
           );
         })}
       </ScrollView>
 
-      {/* Job list */}
-      {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={c.orange} />
-        </View>
-      ) : jobs.length === 0 ? (
-        <Card padded style={styles.emptyCard}>
-          <Ionicons
-            name="document-text-outline"
-            size={36}
-            color={c.textMuted}
-          />
-          <AppText variant="body" weight="semibold" style={{ marginTop: 12 }}>
-            {filter === "ALL"
-              ? t("jobs.noJobs")
-              : t("jobs.noJobsFiltered", { status: filter.toLowerCase() })}
-          </AppText>
-          <AppText
-            variant="small"
-            tone="dim"
-            style={{ marginTop: 6, textAlign: "center" }}
-          >
-            {filter === "ALL" ? t("jobs.postFirstJob") : ""}
-          </AppText>
-          {filter === "ALL" && (
-            <AppButton
-              title={t("jobs.postNewJob")}
-              iconLeft="add"
-              onPress={() => navigation.navigate("PostJob")}
-              style={{ marginTop: 16 }}
-            />
-          )}
-        </Card>
+      {/* ── Grid ────────────────────────────────────────────────── */}
+      {jobs.length === 0 ? (
+        <Empty filter={filter} c={c} navigation={navigation} />
       ) : (
-        <View style={{ marginTop: 16, gap: 12 }}>
+        <View style={{ gap: 12 }}>
           {jobs.map((job) => (
             <JobCard
               key={job.id}
               job={job}
               acting={acting === job.id}
-              onStatusChange={handleStatusChange}
+              onStatusChange={updateStatus}
               c={c}
-              t={t}
+              navigation={navigation}
             />
           ))}
         </View>
       )}
 
-      {/* Pagination */}
-      {pages > 1 && (
-        <View style={[styles.pagination, { borderTopColor: c.border }]}>
+      {/* ── Pagination ──────────────────────────────────────────── */}
+      {pages > 1 ? (
+        <View style={[styles.pager, { borderTopColor: c.border }]}>
           <Pressable
             disabled={page === 1}
-            onPress={() => setPage((p) => p - 1)}
-            style={[
+            onPress={() => setPage((p) => Math.max(1, p - 1))}
+            style={({ pressed }) => [
               styles.pageBtn,
               {
-                backgroundColor: c.bgCard,
+                backgroundColor: c.bgPanel,
                 borderColor: c.border,
-                opacity: page === 1 ? 0.4 : 1,
+                opacity: page === 1 ? 0.35 : pressed ? 0.85 : 1,
               },
             ]}
           >
-            <Ionicons name="arrow-back" size={16} color={c.text} />
+            <FaChevronLeft size={10} color={c.textDim} />
             <AppText
-              variant="small"
-              weight="semibold"
-              style={{ marginLeft: 6 }}
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: c.textDim,
+                marginLeft: 4,
+              }}
             >
               Prev
             </AppText>
           </Pressable>
-          <AppText variant="body" tone="dim">
+          <AppText style={{ fontSize: 12, color: c.textDim }}>
             {page} / {pages}
           </AppText>
           <Pressable
             disabled={page === pages}
-            onPress={() => setPage((p) => p + 1)}
-            style={[
+            onPress={() => setPage((p) => Math.min(pages, p + 1))}
+            style={({ pressed }) => [
               styles.pageBtn,
               {
-                backgroundColor: c.bgCard,
+                backgroundColor: c.bgPanel,
                 borderColor: c.border,
-                opacity: page === pages ? 0.4 : 1,
+                opacity: page === pages ? 0.35 : pressed ? 0.85 : 1,
               },
             ]}
           >
             <AppText
-              variant="small"
-              weight="semibold"
-              style={{ marginRight: 6 }}
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: c.textDim,
+                marginRight: 4,
+              }}
             >
               Next
             </AppText>
-            <Ionicons name="arrow-forward" size={16} color={c.text} />
+            <FaChevronRight size={10} color={c.textDim} />
           </Pressable>
         </View>
-      )}
+      ) : null}
     </AppScreen>
   );
 }
 
+// ── Job card ────────────────────────────────────────────────────────
+function JobCard({ job, acting, onStatusChange, c, navigation }) {
+  const [showConfirm, setShowConfirm] = useState(null);
+  const meta = STATUS_META[job.status] || STATUS_META.OPEN;
+  const isOpen = job.status === "OPEN";
+  const scheduled = new Date(job.scheduledAt);
+  const applicantCount = job._count?.applications || 0;
+  const recentApplicants = job.applications?.slice(0, 3) || [];
+  const skillsCount = job.skills?.length || 0;
+  const budgetSuffix = BUDGET_TYPE_LABELS[job.budgetType];
+  const LocationIcon = locIcon(job.locationType);
+  const dur = formatJobDuration(job);
+
+  return (
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: c.bgPanel, borderColor: c.border },
+      ]}
+    >
+      {/* Accent bar */}
+      <View style={[styles.accentBar, { backgroundColor: meta.color }]} />
+
+      <View style={styles.cardInner}>
+        {/* Top: category + badge */}
+        <View style={styles.cardTop}>
+          <View
+            style={[
+              styles.categoryChip,
+              { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+            ]}
+          >
+            {job.category?.icon ? (
+              <AppText style={{ fontSize: 11 }}>{job.category.icon}</AppText>
+            ) : null}
+            <AppText
+              style={{
+                fontSize: 10,
+                fontWeight: "700",
+                color: c.orange,
+                marginLeft: 4,
+              }}
+              numberOfLines={1}
+            >
+              {job.category?.name || "General"}
+            </AppText>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
+            <AppText
+              style={{
+                fontSize: 9,
+                fontWeight: "700",
+                color: meta.color,
+                letterSpacing: 0.4,
+                textTransform: "uppercase",
+              }}
+            >
+              {meta.label}
+            </AppText>
+          </View>
+        </View>
+
+        {/* Title & description */}
+        <AppText
+          style={{
+            fontFamily: "Syne_700Bold",
+            fontSize: 15,
+            fontWeight: "700",
+            color: c.text,
+            marginTop: 8,
+            lineHeight: 20,
+          }}
+          numberOfLines={2}
+        >
+          {job.title}
+        </AppText>
+        <AppText
+          style={{
+            fontSize: 12,
+            color: c.textDim,
+            marginTop: 4,
+            lineHeight: 18,
+          }}
+          numberOfLines={2}
+        >
+          {job.description}
+        </AppText>
+
+        {/* Meta row */}
+        <View style={styles.metaRow}>
+          <MetaItem
+            icon={<FaCalendarAlt size={10} color={c.textMuted} />}
+            label={scheduled.toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+            c={c}
+          />
+          {job.address ? (
+            <MetaItem
+              icon={<FaMapMarkerAlt size={10} color={c.textMuted} />}
+              label={job.address}
+              c={c}
+              truncate
+            />
+          ) : null}
+          {dur ? (
+            <MetaItem
+              icon={<AppText style={{ fontSize: 9 }}>⏱</AppText>}
+              label={dur}
+              c={c}
+            />
+          ) : null}
+          {JOB_TYPE_LABELS[job.jobType] ? (
+            <MetaItem
+              icon={<FaBriefcase size={10} color={c.textMuted} />}
+              label={JOB_TYPE_LABELS[job.jobType]}
+              c={c}
+            />
+          ) : null}
+          {LOCATION_TYPE_LABELS[job.locationType] ? (
+            <MetaItem
+              icon={
+                LocationIcon ? (
+                  <LocationIcon size={10} color={c.textMuted} />
+                ) : null
+              }
+              label={LOCATION_TYPE_LABELS[job.locationType]}
+              c={c}
+            />
+          ) : null}
+        </View>
+
+        {/* Budget + applicants */}
+        <View
+          style={[
+            styles.statsRow,
+            { borderTopColor: c.border, marginTop: 10, paddingTop: 10 },
+          ]}
+        >
+          <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+            <AppText
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 16,
+                fontWeight: "800",
+                color: c.orange,
+              }}
+            >
+              {job.currency} {Number(job.budget || 0).toLocaleString()}
+            </AppText>
+            {budgetSuffix ? (
+              <AppText
+                style={{ fontSize: 10, color: c.textMuted, marginLeft: 3 }}
+              >
+                {budgetSuffix}
+              </AppText>
+            ) : null}
+          </View>
+          <Pressable
+            onPress={() =>
+              navigation.navigate("JobApplications", { jobId: job.id })
+            }
+            style={[
+              styles.applicantChip,
+              { backgroundColor: c.bgCard, borderColor: c.border },
+            ]}
+          >
+            <FaUsers size={10} color={c.textDim} />
+            <AppText style={{ fontSize: 11, color: c.textDim, marginLeft: 4 }}>
+              {applicantCount} applicant{applicantCount !== 1 ? "s" : ""}
+            </AppText>
+            {skillsCount > 0 ? (
+              <AppText
+                style={{ fontSize: 10, color: c.textMuted, marginLeft: 4 }}
+              >
+                · {skillsCount} skill{skillsCount !== 1 ? "s" : ""}
+              </AppText>
+            ) : null}
+          </Pressable>
+        </View>
+
+        {/* Applicant previews */}
+        {recentApplicants.length > 0 ? (
+          <View style={styles.previewsRow}>
+            {recentApplicants.map((app) => (
+              <View
+                key={app.id}
+                style={[
+                  styles.previewAvatar,
+                  { backgroundColor: c.orangeDim, borderColor: c.bgPanel },
+                ]}
+              >
+                {app.worker?.avatar ? (
+                  <Image
+                    source={{ uri: app.worker.avatar }}
+                    style={styles.previewImg}
+                  />
+                ) : (
+                  <AppText
+                    style={{ fontSize: 9, fontWeight: "700", color: c.orange }}
+                  >
+                    {app.worker?.firstName?.[0]}
+                    {app.worker?.lastName?.[0]}
+                  </AppText>
+                )}
+              </View>
+            ))}
+            {applicantCount > 3 ? (
+              <View style={[styles.previewMore, { backgroundColor: c.bgCard }]}>
+                <AppText
+                  style={{ fontSize: 9, fontWeight: "700", color: c.textDim }}
+                >
+                  +{applicantCount - 3}
+                </AppText>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Actions */}
+        <View style={styles.actionsRow}>
+          <Pressable
+            onPress={() => navigation.navigate("JobDetail", { jobId: job.id })}
+            style={({ pressed }) => [
+              styles.viewBtn,
+              {
+                borderColor: c.border,
+                backgroundColor: c.bgCard,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <AppText
+              style={{ fontSize: 11, fontWeight: "600", color: c.textDim }}
+            >
+              View Details
+            </AppText>
+          </Pressable>
+          <Pressable
+            onPress={() =>
+              navigation.navigate("JobApplications", { jobId: job.id })
+            }
+            style={({ pressed }) => [
+              styles.appsBtn,
+              {
+                backgroundColor: c.orangeDim,
+                borderColor: "rgba(249,115,22,0.25)",
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <AppText
+              style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
+            >
+              Applications
+            </AppText>
+          </Pressable>
+          {isOpen ? (
+            <Pressable
+              onPress={() => navigation.navigate("EditJob", { jobId: job.id })}
+              style={({ pressed }) => [
+                styles.editBtn,
+                {
+                  borderColor: c.border,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <FaEdit size={10} color={c.textDim} />
+              <AppText
+                style={{
+                  fontSize: 11,
+                  fontWeight: "600",
+                  color: c.textDim,
+                  marginLeft: 3,
+                }}
+              >
+                Edit
+              </AppText>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {/* Status actions */}
+        {isOpen && !showConfirm ? (
+          <View style={styles.statusActions}>
+            <Pressable
+              onPress={() => setShowConfirm("FILLED")}
+              disabled={acting}
+              style={({ pressed }) => [
+                styles.fillBtn,
+                {
+                  backgroundColor: "rgba(129,140,248,0.1)",
+                  borderColor: "rgba(129,140,248,0.25)",
+                  opacity: acting ? 0.4 : pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <AppText
+                style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+              >
+                Mark Filled
+              </AppText>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowConfirm("CANCELLED")}
+              disabled={acting}
+              style={({ pressed }) => [
+                styles.cancelBtn,
+                {
+                  backgroundColor: c.redDim,
+                  borderColor: "rgba(239,68,68,0.2)",
+                  opacity: acting ? 0.4 : pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <AppText
+                style={{ fontSize: 11, fontWeight: "700", color: c.red }}
+              >
+                Cancel
+              </AppText>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Confirm row */}
+        {showConfirm ? (
+          <View
+            style={[
+              styles.confirmRow,
+              { backgroundColor: c.bgCard, borderColor: c.border },
+            ]}
+          >
+            <AppText style={{ fontSize: 11, color: c.textDim, flex: 1 }}>
+              {showConfirm === "FILLED"
+                ? "Mark job as filled?"
+                : "Cancel this job?"}
+            </AppText>
+            <Pressable
+              disabled={acting}
+              onPress={() => {
+                onStatusChange(job.id, showConfirm);
+                setShowConfirm(null);
+              }}
+              style={({ pressed }) => [
+                styles.confirmYes,
+                {
+                  backgroundColor:
+                    showConfirm === "CANCELLED" ? c.red : c.green,
+                  opacity: acting ? 0.5 : pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <AppText style={{ fontSize: 11, fontWeight: "700", color: c.bg }}>
+                {acting ? "…" : "Yes"}
+              </AppText>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowConfirm(null)}
+              style={({ pressed }) => [
+                styles.confirmNo,
+                { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <AppText
+                style={{ fontSize: 11, fontWeight: "600", color: c.textDim }}
+              >
+                No
+              </AppText>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {!isOpen ? (
+          <Pressable
+            disabled={acting}
+            onPress={() => onStatusChange(job.id, "OPEN")}
+            style={({ pressed }) => [
+              styles.reopenBtn,
+              {
+                backgroundColor: c.greenDim,
+                borderColor: "rgba(34,197,94,0.25)",
+                opacity: acting ? 0.4 : pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <AppText
+              style={{ fontSize: 11, fontWeight: "700", color: c.green }}
+            >
+              {acting ? "…" : "Reopen Job"}
+            </AppText>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+// ── Sub-components ──────────────────────────────────────────────────
+function SummaryPill({ label, value, color, c }) {
+  return (
+    <View
+      style={[
+        styles.summaryPill,
+        { backgroundColor: c.bgPanel, borderColor: c.border },
+      ]}
+    >
+      <AppText
+        style={{
+          fontFamily: "Syne_800ExtraBold",
+          fontSize: 15,
+          fontWeight: "800",
+          color,
+          lineHeight: 17,
+        }}
+      >
+        {value}
+      </AppText>
+      <AppText style={{ fontSize: 10, color: c.textDim, marginLeft: 6 }}>
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
+function MetaItem({ icon, label, c, truncate }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+      {icon}
+      <AppText
+        style={{ fontSize: 10, color: c.textDim, flexShrink: truncate ? 1 : 0 }}
+        numberOfLines={truncate ? 1 : 1}
+      >
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
+function Empty({ filter, c, navigation }) {
+  return (
+    <View
+      style={[
+        styles.empty,
+        { backgroundColor: c.bgPanel, borderColor: c.border },
+      ]}
+    >
+      <FaFileAlt size={40} color={c.textMuted} />
+      <AppText
+        style={{
+          fontFamily: "Syne_800ExtraBold",
+          fontSize: 17,
+          fontWeight: "800",
+          color: c.text,
+          marginTop: 12,
+        }}
+      >
+        {filter === "ALL"
+          ? "No jobs posted yet"
+          : `No ${filter.toLowerCase()} jobs`}
+      </AppText>
+      <AppText
+        style={{
+          fontSize: 12,
+          color: c.textDim,
+          marginTop: 6,
+          marginBottom: 16,
+          textAlign: "center",
+          lineHeight: 18,
+          maxWidth: 320,
+        }}
+      >
+        {filter === "ALL"
+          ? "Post your first job and start receiving applications from skilled workers."
+          : `You don't have any ${filter.toLowerCase()} jobs right now.`}
+      </AppText>
+      {filter === "ALL" ? (
+        <Pressable
+          onPress={() => navigation.navigate("PostJob")}
+          style={({ pressed }) => [
+            styles.emptyBtn,
+            { backgroundColor: c.orange, opacity: pressed ? 0.9 : 1 },
+          ]}
+        >
+          <AppText style={{ fontSize: 12, fontWeight: "700", color: c.bg }}>
+            Post a Job
+          </AppText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  header: {
+  headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    flexWrap: "wrap",
     gap: 10,
+    flexWrap: "wrap",
+  },
+  postBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  alert: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 12,
   },
   summaryPill: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  filterTab: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
   },
-  loadingWrap: { paddingVertical: 60, alignItems: "center" },
-  emptyCard: { alignItems: "center", paddingVertical: 40, marginTop: 20 },
-
-  // Job card
-  jobCard: { marginBottom: 0, overflow: "hidden", padding: 0 },
-  accentBar: { height: 3, width: "100%" },
+  filterTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  accentBar: {
+    height: 3,
+    width: "100%",
+  },
   cardInner: { padding: 16 },
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
   },
-  catChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    maxWidth: "65%",
-  },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
-  metaItem: { flexDirection: "row", alignItems: "center" },
-  durBadge: {
+  categoryChip: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 20,
     borderWidth: 1,
+    maxWidth: "65%",
   },
-  budgetRow: {
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  statsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexWrap: "wrap",
+    gap: 8,
   },
-  appCountChip: {
+  applicantChip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
   },
-  previews: { flexDirection: "row", gap: 4, marginTop: 10 },
+  previewsRow: {
+    flexDirection: "row",
+    marginTop: 10,
+    gap: 6,
+    alignItems: "center",
+  },
   previewAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
+  previewImg: { width: "100%", height: "100%" },
   previewMore: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
-  previewImg: { width: "100%", height: "100%", borderRadius: 14 },
-  actions: { flexDirection: "row", gap: 8, marginTop: 14 },
+  actionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 12,
+  },
   viewBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
   appsBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
+  },
+  editBtn: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
   },
   statusActions: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 6,
+    marginTop: 8,
   },
   fillBtn: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
-    justifyContent: "center",
   },
-  cancelStatusBtn: {
+  cancelBtn: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
-    justifyContent: "center",
+  },
+  confirmRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  confirmYes: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+    minWidth: 40,
+    alignItems: "center",
+  },
+  confirmNo: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
   },
   reopenBtn: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
+    marginTop: 8,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
-    justifyContent: "center",
   },
-  pagination: {
+  pager: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 20,
+    marginTop: 24,
     paddingTop: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
@@ -877,29 +1150,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 9,
+    borderRadius: 8,
     borderWidth: 1,
   },
-  tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
-  tagPill: {
-    flexDirection: "row",
+  empty: {
     alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
+    justifyContent: "center",
+    paddingVertical: 48,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    marginTop: 12,
   },
-  skillsPreview: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 10,
-  },
-  skillPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
+  emptyBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 10,
   },
 });

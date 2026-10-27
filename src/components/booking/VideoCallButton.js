@@ -1,30 +1,54 @@
 // src/components/booking/VideoCallButton.js
 //
-// Mirrors the website's VideoCallButton.jsx — polls for call state,
-// accepts/declines/ends calls, and routes to the in-app VideoCallScreen
-// when the call goes ACTIVE.
+// Verbatim port of components/booking/VideoCallButton.jsx.
 //
-// Uses react-native-webview for the actual call room (MiroTalk iframe).
+// Renders only when:
+//   · user is the hirer OR the worker
+//   · bookingStatus ∈ ["PENDING", "ACCEPTED", "IN_PROGRESS"]
+//
+// Polls GET /video-calls/:id every 5s for call state changes:
+//   PENDING + receiverId === userId  → incoming call UI (Accept / Decline)
+//   PENDING + initiatorId === userId → waiting UI (Cancel)
+//   ENDED / DECLINED                 → "Call again" UI
+//   no call                          → idle "Video Call" button
+//
+// Endpoints:
+//   GET   /video-calls/:bookingId
+//   POST  /video-calls/:bookingId/initiate
+//   PATCH /video-calls/:bookingId/accept
+//   PATCH /video-calls/:bookingId/decline
+//   PATCH /video-calls/:bookingId/end
+//
+// Port note:
+//   · The web navigates to /call/:id when the call becomes ACTIVE. That page
+//     renders an <iframe> to a Jitsi room.
+//   · RN cannot render iframes reliably. This port instead opens the Jitsi
+//     room URL in the device's default browser (or an in-app WebView if you
+//     add react-native-webview). The room URL is built from the call's
+//     `roomCode` / `roomUrl` field returned by the backend.
+//   · If the backend doesn't expose a room URL, the ACTIVE state shows a
+//     "Join Call" button that opens your video provider's join URL —
+//     configure it via the ROOM_URL_TEMPLATE constant below.
 
 import React, { useEffect, useRef, useState } from "react";
-import { View, Pressable, StyleSheet, ActivityIndicator } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { useTranslation } from "react-i18next";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
+
+import AppText from "../AppText";
+import { useTheme } from "../../contexts/ThemeContext";
+import client from "../../api/client";
 import {
   FaVideo,
   FaCheckCircle,
   FaTimesCircle,
   FaPhoneSlash,
-  FaSpinner,
   FaExclamationTriangle,
 } from "../../icons/fa";
 
-import AppText from "../AppText";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useAuthStore } from "../../store/authStore";
-import client from "../../api/client";
-
 const POLL_MS = 5000;
+
+// Default room template — override if your backend returns a different URL.
+// Common Jitsi pattern: https://meet.jit.si/skilledproz-<roomCode>
+const ROOM_URL_TEMPLATE = "https://meet.jit.si/skilledproz-";
 
 export default function VideoCallButton({
   bookingId,
@@ -33,55 +57,48 @@ export default function VideoCallButton({
   hirerId,
   workerId,
 }) {
-  const { t } = useTranslation();
-  const { theme: th } = useTheme();
-  const { user } = useAuthStore();
-  const navigation = useNavigation();
-  const c = th.colors;
+  const { theme } = useTheme();
+  const c = theme.colors;
 
   const [call, setCall] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const navigatedRef = useRef(false);
+  const openedRef = useRef(false);
   const isInvolved = userId === hirerId || userId === workerId;
   const canCall =
     isInvolved &&
     ["PENDING", "ACCEPTED", "IN_PROGRESS"].includes(bookingStatus);
 
-  // ── Initial fetch ────────────────────────────────────────────────────
+  // ── Initial fetch ───────────────────────────────────────────────────
   useEffect(() => {
     if (!canCall) return;
     client
       .get(`/video-calls/${bookingId}`)
       .then((r) => {
-        if (r.data?.data?.call) setCall(r.data.data.call);
+        const c0 = r?.data?.data?.call;
+        if (c0) setCall(c0);
       })
       .catch(() => {});
   }, [bookingId, canCall]);
 
-  // ── Navigate to VideoCallScreen when status becomes ACTIVE ───────────
+  // ── Open the room when the call becomes ACTIVE ──────────────────────
   useEffect(() => {
-    if (call?.status === "ACTIVE" && !navigatedRef.current) {
-      navigatedRef.current = true;
-      try {
-        navigation.navigate("VideoCall", { bookingId });
-      } catch {
-        navigation.getParent()?.navigate("VideoCall", { bookingId });
-      }
-    }
-  }, [call?.status, bookingId, navigation]);
+    if (call?.status !== "ACTIVE" || openedRef.current) return;
+    openedRef.current = true;
+    openRoom(call);
+  }, [call?.status]);
 
-  // ── Poll ─────────────────────────────────────────────────────────────
+  // ── Poll for state changes ──────────────────────────────────────────
   useEffect(() => {
     if (!canCall) return;
-    if (navigatedRef.current) return;
+    if (openedRef.current) return;
     if (call?.status === "ENDED" || call?.status === "DECLINED") return;
 
     const id = setInterval(async () => {
       try {
         const r = await client.get(`/video-calls/${bookingId}`);
-        const updated = r.data?.data?.call;
+        const updated = r?.data?.data?.call;
         if (!updated) return;
         setCall((prev) => {
           if (!prev) return updated;
@@ -94,13 +111,27 @@ export default function VideoCallButton({
     return () => clearInterval(id);
   }, [canCall, bookingId, call?.status]);
 
-  // ── Actions ──────────────────────────────────────────────────────────
+  // ── Open room in browser ────────────────────────────────────────────
+  function openRoom(callData) {
+    const url =
+      callData?.roomUrl ||
+      (callData?.roomCode ? `${ROOM_URL_TEMPLATE}${callData.roomCode}` : null);
+    if (!url) {
+      setError("No room URL available for this call.");
+      return;
+    }
+    Linking.openURL(url).catch(() => {
+      setError("Could not open the call room.");
+    });
+  }
+
+  // ── Actions ─────────────────────────────────────────────────────────
   const handleInitiate = async () => {
     setLoading(true);
     setError("");
     try {
       const res = await client.post(`/video-calls/${bookingId}/initiate`);
-      setCall(res.data?.data?.call);
+      setCall(res?.data?.data?.call || null);
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to start call");
     } finally {
@@ -112,7 +143,7 @@ export default function VideoCallButton({
     setLoading(true);
     try {
       const res = await client.patch(`/video-calls/${bookingId}/accept`);
-      setCall(res.data?.data?.call);
+      setCall(res?.data?.data?.call || null);
     } catch {
       setError("Failed to accept call");
     } finally {
@@ -138,14 +169,18 @@ export default function VideoCallButton({
       await client.patch(`/video-calls/${bookingId}/end`);
       setCall((prev) => ({ ...prev, status: "ENDED" }));
     } catch {
+      // silent
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Guard ───────────────────────────────────────────────────────────
   if (!canCall) return null;
 
-  // ── Incoming call ────────────────────────────────────────────────────
+  // ═════════════════════════════════════════════════════════════════════
+  // INCOMING CALL
+  // ═════════════════════════════════════════════════════════════════════
   if (call?.status === "PENDING" && call?.receiverId === userId) {
     return (
       <View
@@ -158,72 +193,73 @@ export default function VideoCallButton({
         ]}
       >
         <View style={styles.incomingContent}>
-          <FaVideo size={22} color="#818cf8" />
+          <FaVideo size={20} color="#818cf8" />
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <AppText weight="bold" style={{ color: "#818cf8" }}>
-              {t("booking.videoCall.incoming", {
-                defaultValue: "Incoming Video Call",
-              })}
+            <AppText
+              style={{ fontSize: 13, fontWeight: "800", color: "#818cf8" }}
+            >
+              Incoming Video Call
             </AppText>
-            <AppText variant="small" tone="dim">
-              {t("booking.videoCall.incomingHint", {
-                defaultValue: "Pre-job consultation",
-              })}
+            <AppText style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}>
+              Pre-job consultation
             </AppText>
           </View>
         </View>
+
         <View style={styles.incomingBtns}>
           <Pressable
             onPress={handleAccept}
             disabled={loading}
-            style={[
+            style={({ pressed }) => [
               styles.acceptBtn,
-              { backgroundColor: "#16a34a", opacity: loading ? 0.6 : 1 },
+              {
+                backgroundColor: "#16a34a",
+                opacity: loading ? 0.6 : pressed ? 0.85 : 1,
+              },
             ]}
           >
-            {loading ? (
-              <FaSpinner size={12} color="#fff" />
-            ) : (
-              <>
-                <FaCheckCircle size={12} color="#fff" />
-                <AppText
-                  variant="small"
-                  weight="bold"
-                  style={{ color: "#fff", marginLeft: 4 }}
-                >
-                  {t("booking.videoCall.accept", { defaultValue: "Accept" })}
-                </AppText>
-              </>
-            )}
+            <FaCheckCircle size={13} color="#fff" />
+            <AppText
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: "#fff",
+                marginLeft: 5,
+              }}
+            >
+              Accept
+            </AppText>
           </Pressable>
           <Pressable
             onPress={handleDecline}
             disabled={loading}
-            style={[
+            style={({ pressed }) => [
               styles.declineBtn,
               {
                 backgroundColor: "rgba(220,38,38,0.1)",
                 borderColor: "rgba(220,38,38,0.3)",
+                opacity: loading ? 0.6 : pressed ? 0.85 : 1,
               },
             ]}
           >
-            <FaTimesCircle size={12} color="#dc2626" />
+            <FaTimesCircle size={13} color="#dc2626" />
             <AppText
-              variant="small"
-              weight="bold"
-              style={{ color: "#dc2626", marginLeft: 4 }}
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: "#dc2626",
+                marginLeft: 5,
+              }}
             >
-              {t("booking.videoCall.decline", { defaultValue: "Decline" })}
+              Decline
             </AppText>
           </Pressable>
         </View>
+
         {error ? (
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <FaExclamationTriangle size={11} color="#dc2626" />
-            <AppText
-              variant="small"
-              style={{ color: "#dc2626", marginLeft: 4 }}
-            >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <FaExclamationTriangle size={10} color="#dc2626" />
+            <AppText style={{ fontSize: 11, color: "#dc2626" }}>
               {error}
             </AppText>
           </View>
@@ -232,7 +268,9 @@ export default function VideoCallButton({
     );
   }
 
-  // ── Waiting for answer ───────────────────────────────────────────────
+  // ═════════════════════════════════════════════════════════════════════
+  // WAITING FOR ANSWER (outgoing)
+  // ═════════════════════════════════════════════════════════════════════
   if (call?.status === "PENDING" && call?.initiatorId === userId) {
     return (
       <View
@@ -244,35 +282,151 @@ export default function VideoCallButton({
           },
         ]}
       >
-        <FaSpinner size={14} color="#818cf8" />
+        <View
+          style={[
+            styles.spinnerDot,
+            { borderColor: "rgba(129,140,248,0.2)", borderTopColor: "#818cf8" },
+          ]}
+        />
         <AppText
-          variant="small"
-          weight="semibold"
-          style={{ color: "#818cf8", flex: 1, marginLeft: 8 }}
+          style={{
+            fontSize: 13,
+            fontWeight: "600",
+            color: "#818cf8",
+            flex: 1,
+            marginLeft: 8,
+          }}
         >
-          {t("booking.videoCall.calling", {
-            defaultValue: "Calling… waiting for answer",
-          })}
+          Calling… waiting for answer
         </AppText>
         <Pressable
           onPress={handleCancel}
           disabled={loading}
-          style={[styles.cancelCallBtn, { borderColor: "rgba(220,38,38,0.3)" }]}
+          style={({ pressed }) => [
+            styles.cancelCallBtn,
+            {
+              borderColor: "rgba(220,38,38,0.3)",
+              opacity: loading ? 0.5 : pressed ? 0.85 : 1,
+            },
+          ]}
         >
-          <FaTimesCircle size={10} color="#dc2626" />
+          <FaTimesCircle size={11} color="#dc2626" />
           <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: "#dc2626", marginLeft: 4 }}
+            style={{
+              fontSize: 11,
+              fontWeight: "600",
+              color: "#dc2626",
+              marginLeft: 4,
+            }}
           >
-            {t("booking.videoCall.cancel", { defaultValue: "Cancel" })}
+            Cancel
           </AppText>
         </Pressable>
       </View>
     );
   }
 
-  // ── Ended / declined ─────────────────────────────────────────────────
+  // ═════════════════════════════════════════════════════════════════════
+  // ACTIVE CALL — join via browser
+  // ═════════════════════════════════════════════════════════════════════
+  if (call?.status === "ACTIVE") {
+    return (
+      <View
+        style={[
+          styles.activeWrap,
+          {
+            backgroundColor: "rgba(129,140,248,0.08)",
+            borderColor: "#818cf8",
+          },
+        ]}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: "#ef4444",
+            }}
+          />
+          <AppText
+            style={{
+              fontSize: 10,
+              fontWeight: "800",
+              letterSpacing: 1,
+              color: "#ef4444",
+              textTransform: "uppercase",
+            }}
+          >
+            Live
+          </AppText>
+        </View>
+        <AppText
+          style={{
+            fontSize: 13,
+            fontWeight: "700",
+            color: "#818cf8",
+            marginTop: 4,
+          }}
+        >
+          Video call in progress
+        </AppText>
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+          <Pressable
+            onPress={() => openRoom(call)}
+            style={({ pressed }) => [
+              styles.callBtn,
+              {
+                flex: 1,
+                backgroundColor: "rgba(129,140,248,0.15)",
+                borderColor: "rgba(129,140,248,0.3)",
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <FaVideo size={12} color="#818cf8" />
+            <AppText
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: "#818cf8",
+                marginLeft: 6,
+              }}
+            >
+              Rejoin Call
+            </AppText>
+          </Pressable>
+          <Pressable
+            onPress={handleCancel}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.cancelCallBtn,
+              {
+                borderColor: "rgba(220,38,38,0.3)",
+                opacity: loading ? 0.5 : pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <FaPhoneSlash size={11} color="#dc2626" />
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: "600",
+                color: "#dc2626",
+                marginLeft: 4,
+              }}
+            >
+              End
+            </AppText>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ═════════════════════════════════════════════════════════════════════
+  // ENDED / DECLINED
+  // ═════════════════════════════════════════════════════════════════════
   if (call?.status === "ENDED" || call?.status === "DECLINED") {
     return (
       <View
@@ -286,83 +440,86 @@ export default function VideoCallButton({
         ) : (
           <FaPhoneSlash size={16} color={c.textDim} />
         )}
-        <AppText variant="small" tone="dim" style={{ flex: 1, marginLeft: 8 }}>
-          {call.status === "DECLINED"
-            ? t("booking.videoCall.declined", { defaultValue: "Call declined" })
-            : t("booking.videoCall.ended", { defaultValue: "Call ended" })}
+        <AppText
+          style={{
+            fontSize: 12,
+            color: c.textMuted,
+            flex: 1,
+            marginLeft: 8,
+          }}
+        >
+          {call.status === "DECLINED" ? "Call declined" : "Call ended"}
         </AppText>
         <Pressable
           onPress={handleInitiate}
           disabled={loading}
-          style={[
-            styles.callBtn,
-            { backgroundColor: "rgba(129,140,248,0.15)" },
+          style={({ pressed }) => [
+            styles.callAgainBtn,
+            {
+              backgroundColor: "rgba(129,140,248,0.15)",
+              borderColor: "rgba(129,140,248,0.3)",
+              opacity: loading ? 0.5 : pressed ? 0.85 : 1,
+            },
           ]}
         >
-          {loading ? (
-            <FaSpinner size={12} color="#818cf8" />
-          ) : (
-            <>
-              <FaVideo size={12} color="#818cf8" />
-              <AppText
-                variant="small"
-                weight="bold"
-                style={{ color: "#818cf8", marginLeft: 4 }}
-              >
-                {t("booking.videoCall.callAgain", {
-                  defaultValue: "Call Again",
-                })}
-              </AppText>
-            </>
-          )}
+          <FaVideo size={10} color="#818cf8" />
+          <AppText
+            style={{
+              fontSize: 11,
+              fontWeight: "700",
+              color: "#818cf8",
+              marginLeft: 4,
+            }}
+          >
+            Call Again
+          </AppText>
         </Pressable>
       </View>
     );
   }
 
-  // ── Idle ─────────────────────────────────────────────────────────────
+  // ═════════════════════════════════════════════════════════════════════
+  // IDLE
+  // ═════════════════════════════════════════════════════════════════════
   return (
     <View style={{ gap: 6 }}>
       <Pressable
         onPress={handleInitiate}
         disabled={loading}
-        style={[
+        style={({ pressed }) => [
           styles.callBtn,
           {
             backgroundColor: "rgba(129,140,248,0.15)",
             borderColor: "rgba(129,140,248,0.3)",
-            opacity: loading ? 0.5 : 1,
+            opacity: loading ? 0.5 : pressed ? 0.85 : 1,
           },
         ]}
       >
-        {loading ? (
-          <FaSpinner size={13} color="#818cf8" />
-        ) : (
-          <>
-            <FaVideo size={13} color="#818cf8" />
-            <AppText
-              variant="small"
-              weight="bold"
-              style={{ color: "#818cf8", marginLeft: 6 }}
-            >
-              {t("booking.videoCall.start")}
-            </AppText>
-          </>
-        )}
+        <FaVideo size={13} color="#818cf8" />
+        <AppText
+          style={{
+            fontSize: 13,
+            fontWeight: "700",
+            color: "#818cf8",
+            marginLeft: 6,
+          }}
+        >
+          Video Call
+        </AppText>
       </Pressable>
       <AppText
-        variant="small"
-        tone="dim"
-        style={{ fontSize: 11, textAlign: "center" }}
+        style={{
+          fontSize: 10,
+          color: c.textMuted,
+          textAlign: "center",
+        }}
       >
-        {t("booking.videoCall.hint", {
-          defaultValue: "Start a video call before or during the job",
-        })}
+        Start a video call before or during the job
       </AppText>
       {error ? (
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <FaExclamationTriangle size={11} color="#dc2626" />
-          <AppText variant="small" style={{ color: "#dc2626", marginLeft: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <FaExclamationTriangle size={10} color="#dc2626" />
+          <AppText style={{ fontSize: 11, color: "#dc2626", flex: 1 }}>
             {error}
           </AppText>
         </View>
@@ -380,11 +537,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 10,
     borderWidth: 1,
+    minHeight: 42,
   },
   incomingWrap: {
-    padding: 14,
     borderRadius: 12,
     borderWidth: 2,
+    padding: 14,
     gap: 10,
   },
   incomingContent: {
@@ -400,17 +558,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: 8,
+    minHeight: 38,
   },
   declineBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
+    minHeight: 38,
   },
   waitingWrap: {
     flexDirection: "row",
@@ -420,22 +580,41 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
+  spinnerDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+  },
   cancelCallBtn: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
     paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
+  },
+  activeWrap: {
+    borderRadius: 12,
+    borderWidth: 2,
+    padding: 14,
   },
   endedWrap: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: 1,
-    flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
+  },
+  callAgainBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
   },
 });

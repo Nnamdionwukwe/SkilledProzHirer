@@ -1,21 +1,27 @@
 // src/screens/main/NotificationsScreen.js
 // Endpoint: GET /notifications  |  PATCH /notifications/:id/read
 //           PATCH /notifications/read-all  |  DELETE /notifications/clear-all
-// Mirrors website: All/Unread tabs, mark-all-read, clear-all, detail modal.
-// Full dark/light mode — text always clearly readable on both backgrounds.
+//
+// Changes in this pass:
+//   · Replaced all emoji with Ionicons (react-icons analog)
+//   · Reduced oversized font sizes (page title, type icon, badge)
+//   · Added shimmer skeleton on first load
+// Behavior, API, tabs, modals, i18n keys unchanged.
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Modal,
   Pressable,
   RefreshControl,
-  ScrollView,
+  Animated,
   StyleSheet,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
+
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import AppText from "../../components/AppText";
@@ -26,8 +32,7 @@ import {
   markAllAsRead,
   deleteNotification,
   clearAllNotifications,
-} from "../../api/notifications"; // exported from reviews_notifications_api, rename as needed
-import { Ionicons } from "@expo/vector-icons";
+} from "../../api/notifications";
 
 // ── Time ago ──────────────────────────────────────────────────────────────────
 function timeAgo(d) {
@@ -39,27 +44,29 @@ function timeAgo(d) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-// ── Notification type → emoji ─────────────────────────────────────────────────
-function typeEmoji(type) {
+// ── Notification type → Ionicons name + color ─────────────────────────────────
+// React-icons replacements (app uses @expo/vector-icons Ionicons throughout).
+// Icon size stays 20 — visually balanced with the row's text block.
+function typeIcon(type) {
   const map = {
-    BOOKING_ACCEPTED: "✅",
-    BOOKING_CANCELLED: "❌",
-    BOOKING_COMPLETED: "🎉",
-    BOOKING_IN_PROGRESS: "🔨",
-    PAYMENT_RECEIVED: "💳",
-    PAYMENT_HELD: "🔒",
-    DISPUTE_RAISED: "⚠️",
-    DISPUTE_RESOLVED: "⚖️",
-    POST_COMMENT: "💬",
-    POST_REACTION: "👍",
-    POST_REPOST: "🔄",
-    NEW_LOGIN: "🔐",
-    INSURANCE_PURCHASED: "🛡️",
-    WITHDRAWAL_REQUEST: "💸",
-    BANK_TRANSFER_PROOF: "🏦",
-    CRYPTO_TX_SUBMITTED: "₿",
+    BOOKING_ACCEPTED: { name: "checkmark-circle", color: "#22c55e" },
+    BOOKING_CANCELLED: { name: "close-circle", color: "#ef4444" },
+    BOOKING_COMPLETED: { name: "trophy", color: "#f97316" },
+    BOOKING_IN_PROGRESS: { name: "construct", color: "#818cf8" },
+    PAYMENT_RECEIVED: { name: "card", color: "#22c55e" },
+    PAYMENT_HELD: { name: "lock-closed", color: "#f97316" },
+    DISPUTE_RAISED: { name: "warning", color: "#f87171" },
+    DISPUTE_RESOLVED: { name: "shield-checkmark", color: "#22c55e" },
+    POST_COMMENT: { name: "chatbubble-ellipses", color: "#818cf8" },
+    POST_REACTION: { name: "thumbs-up", color: "#f97316" },
+    POST_REPOST: { name: "repeat", color: "#818cf8" },
+    NEW_LOGIN: { name: "shield", color: "#f97316" },
+    INSURANCE_PURCHASED: { name: "shield-checkmark", color: "#22c55e" },
+    WITHDRAWAL_REQUEST: { name: "cash", color: "#f97316" },
+    BANK_TRANSFER_PROOF: { name: "business", color: "#818cf8" },
+    CRYPTO_TX_SUBMITTED: { name: "logo-bitcoin", color: "#f97316" },
   };
-  return map[type] ?? "🔔";
+  return map[type] ?? { name: "notifications", color: "#f97316" };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +82,8 @@ function DetailModal({ notification, onClose, c, t, modalBg }) {
     (k) => !["ip", "ipAddress", "device", "userAgent"].includes(k),
   );
 
+  const ti = typeIcon(notification.type);
+
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={d.backdrop} onPress={onClose}>
@@ -85,9 +94,11 @@ function DetailModal({ notification, onClose, c, t, modalBg }) {
           {/* Header */}
           <View style={d.header}>
             <View style={d.headerLeft}>
-              <AppText style={{ fontSize: 28, lineHeight: 34 }}>
-                {typeEmoji(notification.type)}
-              </AppText>
+              <View
+                style={[d.typeIconWrap, { backgroundColor: `${ti.color}22` }]}
+              >
+                <Ionicons name={ti.name} size={20} color={ti.color} />
+              </View>
               <View style={{ marginLeft: 12, flex: 1 }}>
                 <AppText
                   variant="body"
@@ -111,7 +122,7 @@ function DetailModal({ notification, onClose, c, t, modalBg }) {
                 { backgroundColor: c.bgInput, borderColor: c.border },
               ]}
             >
-              <AppText style={{ color: c.text, fontSize: 16 }}>✕</AppText>
+              <Ionicons name="close" size={16} color={c.text} />
             </Pressable>
           </View>
 
@@ -120,12 +131,12 @@ function DetailModal({ notification, onClose, c, t, modalBg }) {
           {/* Body */}
           <AppText
             variant="body"
-            style={{ color: c.text, lineHeight: 24, marginBottom: 16 }}
+            style={{ color: c.text, lineHeight: 22, marginBottom: 16 }}
           >
             {notification.body}
           </AppText>
 
-          {/* Details table — for login/security notifications */}
+          {/* Details table */}
           {(hasIp || hasDevice || extraKeys.length > 0) && (
             <View
               style={[
@@ -213,7 +224,7 @@ function DetailModal({ notification, onClose, c, t, modalBg }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function NotifRow({ notif, onPress, onDelete, c }) {
   const unread = !notif.isRead;
-  const { theme: th } = useTheme();
+  const ti = typeIcon(notif.type);
 
   return (
     <Pressable
@@ -228,12 +239,12 @@ function NotifRow({ notif, onPress, onDelete, c }) {
         },
       ]}
     >
-      {/* Unread dot */}
       {unread && <View style={[n.dot, { backgroundColor: c.orange }]} />}
 
-      {/* Icon */}
-      <AppText style={n.emoji}>{typeEmoji(notif.type)}</AppText>
-      {/* <Ionicons name="trash-outline" size={18} color={theme.colors.text} /> */}
+      {/* Type icon */}
+      <View style={[n.iconWrap, { backgroundColor: `${ti.color}22` }]}>
+        <Ionicons name={ti.name} size={18} color={ti.color} />
+      </View>
 
       {/* Content */}
       <View style={n.content}>
@@ -241,21 +252,26 @@ function NotifRow({ notif, onPress, onDelete, c }) {
           <AppText
             variant="body"
             weight="semibold"
-            style={{ color: c.text, flex: 1 }}
+            style={{ color: c.text, flex: 1, fontSize: 14 }}
             numberOfLines={1}
           >
             {notif.title}
           </AppText>
           <AppText
             variant="small"
-            style={{ color: c.textMuted, marginLeft: 8 }}
+            style={{ color: c.textMuted, marginLeft: 8, fontSize: 11 }}
           >
             {timeAgo(notif.createdAt)}
           </AppText>
         </View>
         <AppText
           variant="small"
-          style={{ color: c.textMuted, lineHeight: 18, marginTop: 2 }}
+          style={{
+            color: c.textMuted,
+            lineHeight: 17,
+            marginTop: 2,
+            fontSize: 12,
+          }}
           numberOfLines={2}
         >
           {notif.body}
@@ -268,9 +284,53 @@ function NotifRow({ notif, onPress, onDelete, c }) {
         style={n.deleteBtn}
         hitSlop={10}
       >
-        <AppText style={{ color: "#ef4444", fontSize: 14 }}>✕</AppText>
+        <Ionicons name="close" size={14} color="#ef4444" />
       </Pressable>
     </Pressable>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Skeleton (shimmer) — matches DashboardSkeleton pattern
+// ─────────────────────────────────────────────────────────────────────────────
+function SkeletonRow({ c }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const { width } = useWindowDimensions();
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 1400,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [anim]);
+
+  const translateX = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-width, width],
+  });
+
+  return (
+    <View
+      style={[n.skRow, { backgroundColor: c.bgCard, borderColor: c.border }]}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFillObject, { transform: [{ translateX }] }]}
+      >
+        <View
+          style={{
+            width: "40%",
+            height: "100%",
+            backgroundColor: "rgba(255,255,255,0.05)",
+          }}
+        />
+      </Animated.View>
+    </View>
   );
 }
 
@@ -278,13 +338,7 @@ function Skeleton({ c }) {
   return (
     <View style={{ gap: 8 }}>
       {[1, 2, 3, 4, 5].map((i) => (
-        <View
-          key={i}
-          style={[
-            n.skRow,
-            { backgroundColor: c.bgCard, borderColor: c.border },
-          ]}
-        />
+        <SkeletonRow key={i} c={c} />
       ))}
     </View>
   );
@@ -304,10 +358,9 @@ export default function NotificationsScreen() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState("all"); // "all" | "unread"
-  const [selected, setSelected] = useState(null); // detail modal
-  const [confirm, setConfirm] = useState(null); // confirm modal
-  const { theme } = useTheme();
+  const [tab, setTab] = useState("all");
+  const [selected, setSelected] = useState(null);
+  const [confirm, setConfirm] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -411,11 +464,10 @@ export default function NotificationsScreen() {
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View>
-            {/* Page header */}
             <View style={styles.pageHeader}>
               {unreadCount > 0 && (
                 <AppText
-                  variant="body"
+                  variant="small"
                   style={{ color: c.textMuted, marginTop: 4 }}
                 >
                   {t("notifications.unreadCount", { count: unreadCount })}
@@ -432,7 +484,7 @@ export default function NotificationsScreen() {
                   { backgroundColor: c.bgCard, borderColor: c.border },
                 ]}
               >
-                <AppText style={{ fontSize: 16 }}>✓</AppText>
+                <Ionicons name="checkmark-done" size={16} color={c.text} />
                 <AppText
                   variant="small"
                   weight="semibold"
@@ -448,11 +500,7 @@ export default function NotificationsScreen() {
                   { backgroundColor: c.bgCard, borderColor: c.border },
                 ]}
               >
-                <Ionicons
-                  name="trash-outline"
-                  size={18}
-                  color={theme.colors.text}
-                />
+                <Ionicons name="trash-outline" size={16} color="#ef4444" />
                 <AppText
                   variant="small"
                   weight="semibold"
@@ -463,7 +511,7 @@ export default function NotificationsScreen() {
               </Pressable>
             </View>
 
-            {/* Tabs: All | Unread */}
+            {/* Tabs */}
             <View style={[styles.tabRow, { borderBottomColor: c.border }]}>
               {[
                 { key: "all", label: t("notifications.all"), count: total },
@@ -486,7 +534,10 @@ export default function NotificationsScreen() {
                     <AppText
                       variant="body"
                       weight={active ? "semibold" : "regular"}
-                      style={{ color: active ? c.orange : c.textMuted }}
+                      style={{
+                        color: active ? c.orange : c.textMuted,
+                        fontSize: 14,
+                      }}
                     >
                       {label}
                     </AppText>
@@ -499,7 +550,7 @@ export default function NotificationsScreen() {
                       >
                         <AppText
                           style={{
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: "700",
                             color: active ? "#fff" : c.textMuted,
                           }}
@@ -530,19 +581,19 @@ export default function NotificationsScreen() {
             <View style={styles.empty}>
               <Ionicons
                 name="notifications-outline"
-                size={40}
-                color={theme.colors.text}
+                size={36}
+                color={c.textMuted}
               />
               <AppText
                 variant="body"
                 weight="semibold"
-                style={{ color: c.text, marginTop: 12 }}
+                style={{ color: c.text, marginTop: 12, fontSize: 14 }}
               >
                 {t("notifications.empty")}
               </AppText>
               <AppText
                 variant="small"
-                style={{ color: c.textMuted, marginTop: 6 }}
+                style={{ color: c.textMuted, marginTop: 6, fontSize: 12 }}
               >
                 {t("notifications.emptySub")}
               </AppText>
@@ -552,7 +603,6 @@ export default function NotificationsScreen() {
         ListFooterComponent={<View style={{ height: 40 }} />}
       />
 
-      {/* Detail modal */}
       <DetailModal
         notification={selected}
         onClose={() => setSelected(null)}
@@ -561,7 +611,6 @@ export default function NotificationsScreen() {
         modalBg={th.mode === "dark" ? "#111118" : "#ffffff"}
       />
 
-      {/* Confirm modal */}
       <ConfirmModal
         visible={!!confirm}
         title={confirm?.title}
@@ -582,15 +631,14 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
-  pageHeader: { marginBottom: 16 },
-  pageTitle: { fontSize: 30, fontWeight: "900", letterSpacing: -0.5 },
+  pageHeader: { marginBottom: 12 },
   actionRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
   },
@@ -604,14 +652,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: 2,
   },
   badge: {
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 20,
-    minWidth: 22,
+    minWidth: 20,
     alignItems: "center",
   },
   empty: { alignItems: "center", paddingTop: 60, paddingHorizontal: 32 },
@@ -634,7 +682,15 @@ const n = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  emoji: { fontSize: 24, lineHeight: 44, marginRight: 12, marginTop: 2 },
+  iconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    marginTop: 2,
+  },
   content: { flex: 1 },
   titleRow: { flexDirection: "row", alignItems: "center" },
   deleteBtn: { marginLeft: 10, padding: 4 },
@@ -642,14 +698,14 @@ const n = StyleSheet.create({
     height: 72,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    opacity: 0.5,
+    overflow: "hidden",
   },
 });
 
 const d = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85 )", // was 0.7, bump it up
+    backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     padding: 20,
   },
@@ -665,6 +721,13 @@ const d = StyleSheet.create({
     alignItems: "flex-start",
     flex: 1,
     marginRight: 12,
+  },
+  typeIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
   closeBtn: {
     width: 32,

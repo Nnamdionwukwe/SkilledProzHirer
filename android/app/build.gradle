@@ -2,21 +2,6 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
-// ── Release signing config (reads from android-credentials/credentials.json) ──
-import groovy.json.JsonSlurper
-
-def getKeystoreConfig() {
-    def credFile = rootProject.file("../android-credentials/credentials.json")
-    if (!credFile.exists()) {
-        throw new GradleException("Missing credentials file: ${credFile.absolutePath}")
-    }
-    def json = new JsonSlurper().parseText(credFile.text)
-    return json.android.keystore
-}
-
-def keystoreConfig = getKeystoreConfig()
-def releaseKeystorePath = rootProject.file(keystoreConfig.keystorePath)
-
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
 /**
@@ -119,22 +104,15 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
-        release {
-            storeFile releaseKeystorePath
-            storePassword keystoreConfig.keystorePassword
-            keyAlias keystoreConfig.keyAlias
-            keyPassword keystoreConfig.keyPassword
-        }
-
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Signed with android-credentials/credentials.json
+            // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.release
+            signingConfig signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

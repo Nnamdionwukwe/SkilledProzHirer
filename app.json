@@ -62,14 +62,14 @@
           "photosPermission": "SkilledProz needs access to your photos so you can attach evidence to disputes."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin"
     ],
-
     "extra": {
       "API_URL": "https://api.skilledproz.com/api",
-      "googleWebClientId": "981568518761-ddam93tb23968092932kb1cscrmsrkek.apps.googleusercontent.com",
-      "googleAndroidClientId": "981568518761-ddam93tb23968092932kb1cscrmsrkek.apps.googleusercontent.com",
-      "googleIosClientId": "981568518761-hkiq5eph9liqs32k3kpalu80u3juucdg.apps.googleusercontent.com",
+      "googleWebClientId": "463423346268-avgjuitq3mpr6gier2rn3k3m6akoa3dd.apps.googleusercontent.com",
+      "googleAndroidClientId": "463423346268-akg23v3gtpdepp4v9b21h3279us7e3ng.apps.googleusercontent.com",
+      "googleIosClientId": "463423346268-nb9onu9be5l9efrraj9f248ccj1jk5pm.apps.googleusercontent.com",
       "eas": {
         "projectId": "c4820a3d-3973-4a12-8f9a-06cf60905e00"
       }

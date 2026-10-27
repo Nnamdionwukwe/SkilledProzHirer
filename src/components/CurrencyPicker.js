@@ -1,4 +1,15 @@
 // src/components/CurrencyPicker.js
+//
+// Website reference: HirerDashboard.jsx uses <DashboardCurrencySwitch /> inside
+// .headerActions next to the .ctaBtn. On desktop that pill renders as:
+//   [₦] [NGN] [▾]
+// with no label, borderRadius 8, min-height 40 (matching .ctaBtn), and
+// gap ~6 between symbol/code/chevron. The `compact` prop turns the picker
+// into exactly that. Without `compact`, it keeps the wider "label + symbol +
+// code + chevron" pill used elsewhere in the app (e.g. PostJob currency step).
+//
+// Modal, search, and currency list are unchanged from the original.
+
 import React, { useState, useMemo } from "react";
 import {
   View,
@@ -17,14 +28,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useCurrency } from "../contexts/CurrencyContext";
 import { CURRENCIES } from "../constants/currencies";
 
-/**
- * CurrencyPicker — pill button + modal sheet matching the website's
- * "Viewing in ₦ NGN ▾" control on the dashboard.
- *
- * Tap → modal slides up with a searchable list of all supported currencies.
- * Tap a currency → updates the global currency context and persists.
- */
-export default function CurrencyPicker({ label }) {
+export default function CurrencyPicker({ label, compact = false }) {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const { currency, setCurrencyCode } = useCurrency();
@@ -53,7 +57,7 @@ export default function CurrencyPicker({ label }) {
       <Pressable
         onPress={() => setOpen(true)}
         style={({ pressed }) => [
-          styles.pill,
+          compact ? styles.pillCompact : styles.pill,
           {
             backgroundColor: theme.colors.bgPanel,
             borderColor: theme.colors.border,
@@ -61,20 +65,34 @@ export default function CurrencyPicker({ label }) {
           },
         ]}
       >
-        {label ? (
+        {!compact && label ? (
           <AppText variant="small" tone="dim" style={{ marginRight: 6 }}>
             {label}
           </AppText>
         ) : null}
-        <AppText weight="bold" style={{ color: theme.colors.orange }}>
+
+        <AppText
+          weight="bold"
+          style={{
+            color: theme.colors.orange,
+            fontSize: compact ? 13 : undefined,
+          }}
+        >
           {currency.symbol}
         </AppText>
-        <AppText weight="semibold" tone="brand" style={{ marginLeft: 6 }}>
+        <AppText
+          weight="semibold"
+          tone="brand"
+          style={{
+            marginLeft: 6,
+            fontSize: compact ? 12.25 : undefined,
+          }}
+        >
           {currency.code}
         </AppText>
         <Ionicons
           name="chevron-down"
-          size={14}
+          size={compact ? 12 : 14}
           color={theme.colors.textDim}
           style={{ marginLeft: 6 }}
         />
@@ -197,6 +215,7 @@ export default function CurrencyPicker({ label }) {
 }
 
 const styles = StyleSheet.create({
+  // Default pill (wide, with optional label) — used on PostJob etc.
   pill: {
     flexDirection: "row",
     alignItems: "center",
@@ -204,6 +223,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
+  },
+  // Compact pill — matches .ctaBtn (borderRadius 8, minHeight 40) so it sits
+  // flush next to Post a Job in the dashboard header. No label.
+  pillCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 40,
   },
   backdrop: { flex: 1 },
   sheet: {

@@ -1,6 +1,23 @@
-import React, { useState, useMemo } from "react";
-import { View, Pressable, StyleSheet, LayoutAnimation } from "react-native";
-import { useTranslation } from "react-i18next";
+// src/components/booking/BookingReleaseDetails.js
+//
+// Verbatim port of components/booking/BookingReleaseDetails.jsx.
+//
+// Renders nothing when `payment.releases` is empty (web returns null).
+// Otherwise shows a collapsible card:
+//   · Header — icon + title ("Release Details (N)" or "Payment Fully Released")
+//              + subtitle ("X released · Y still in escrow")
+//              + progress bar + % + chevron
+//   · Body   — summary block (workerPayoutTotal / released / remaining)
+//              + release timeline (each release: amount + latest badge +
+//                date + releasedBy + note + before/after snapshot)
+//
+// Sizes match the web CSS at phone root 14.
+
+import React, { useMemo, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+
+import AppText from "../AppText";
+import { useTheme } from "../../contexts/ThemeContext";
 import {
   FaChevronDown,
   FaChevronUp,
@@ -10,19 +27,24 @@ import {
   FaLock,
   FaCheckCircle,
 } from "../../icons/fa";
-import AppText from "../AppText";
-import { useTheme } from "../../contexts/ThemeContext";
 
 function formatMoney(amount, currency = "NGN") {
   const n = Number(amount);
   if (amount == null || isNaN(n)) return "—";
-  return `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return `${currency} ${n.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function formatDateTime(date) {
   if (!date) return "—";
   const d = new Date(date);
-  return `${d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })} · ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 export default function BookingReleaseDetails({
@@ -30,15 +52,13 @@ export default function BookingReleaseDetails({
   currency: currencyProp,
   defaultOpen = false,
 }) {
-  const { t } = useTranslation();
-  const { theme: th } = useTheme();
-  const c = th.colors;
-  const [open, setOpen] = useState(defaultOpen);
+  const { theme } = useTheme();
+  const c = theme.colors;
 
   const releases = Array.isArray(payment?.releases) ? payment.releases : [];
   const hasReleases = releases.length > 0;
 
-  if (!hasReleases) return null;
+  const [open, setOpen] = useState(defaultOpen);
 
   const currency = currencyProp || payment?.currency || "NGN";
   const workerPayout = Number(payment?.workerPayout) || 0;
@@ -61,19 +81,28 @@ export default function BookingReleaseDetails({
     [releases],
   );
 
-  const toggleOpen = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setOpen((v) => !v);
-  };
+  // Hide the card entirely when there's nothing to show.
+  if (!hasReleases) return null;
 
   return (
     <View
       style={[
-        styles.container,
+        styles.section,
         { backgroundColor: c.bgPanel, borderColor: c.border },
       ]}
     >
-      <Pressable style={styles.header} onPress={toggleOpen}>
+      {/* ─── HEADER ─────────────────────────────────────────────────── */}
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        style={({ pressed }) => [
+          styles.header,
+          pressed && { backgroundColor: "rgba(255,255,255,0.02)" },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={
+          open ? "Hide release details" : "Show release details"
+        }
+      >
         <View style={styles.headerLeft}>
           <View
             style={[
@@ -82,26 +111,34 @@ export default function BookingReleaseDetails({
             ]}
           >
             {isFullyReleased ? (
-              <FaCheckCircle color={c.orange} />
+              <FaCheckCircle size={14} color={c.orange} />
             ) : (
-              <FaMoneyBillWave color={c.orange} />
+              <FaMoneyBillWave size={14} color={c.orange} />
             )}
           </View>
-          <View style={styles.headerTextCol}>
-            <AppText variant="body" weight="bold" style={{ color: c.text }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText
+              style={[styles.headerTitle, { color: c.text }]}
+              numberOfLines={1}
+            >
               {isFullyReleased
-                ? t("booking.release.title")
-                : `${t("booking.release.details")} (${releaseCount})`}
+                ? "Payment Fully Released"
+                : `Release Details (${releaseCount})`}
             </AppText>
-            <AppText variant="small" tone="dim">
-              {formatMoney(releasedAmount, currency)}{" "}
-              {t("booking.release.released")}
-              {!isFullyReleased &&
-                ` · ${formatMoney(remaining, currency)} ${t("booking.release.stillInEscrow")}`}
+            <AppText
+              style={[styles.headerSub, { color: c.textDim }]}
+              numberOfLines={1}
+            >
+              {formatMoney(releasedAmount, currency)} released
+              {!isFullyReleased ? (
+                <> · {formatMoney(remaining, currency)} still in escrow</>
+              ) : null}
             </AppText>
           </View>
         </View>
+
         <View style={styles.headerRight}>
+          {/* Progress bar */}
           <View
             style={[
               styles.progressWrap,
@@ -113,82 +150,121 @@ export default function BookingReleaseDetails({
                 styles.progressBar,
                 {
                   width: `${Math.min(100, releasedPct)}%`,
-                  backgroundColor: isFullyReleased ? "#16a34a" : c.orange,
+                  backgroundColor: isFullyReleased ? c.green : c.orange,
                 },
               ]}
             />
           </View>
-          <AppText variant="small" weight="bold" tone="dim">
+          <AppText style={[styles.progressLabel, { color: c.textDim }]}>
             {releasedPct}%
           </AppText>
           {open ? (
-            <FaChevronUp size={12} color={c.textMuted} />
+            <FaChevronUp size={10} color={c.textMuted} />
           ) : (
-            <FaChevronDown size={12} color={c.textMuted} />
+            <FaChevronDown size={10} color={c.textMuted} />
           )}
         </View>
       </Pressable>
 
+      {/* ─── BODY ───────────────────────────────────────────────────── */}
       {open && (
         <View style={[styles.body, { borderTopColor: c.border }]}>
+          {/* Summary */}
           <View style={styles.summary}>
-            <View style={styles.row}>
-              <AppText tone="dim">
-                {t("booking.release.workerPayoutTotal")}
+            <View style={styles.summaryRow}>
+              <AppText style={{ fontSize: 13, color: c.textDim, flex: 1 }}>
+                Worker payout total
               </AppText>
-              <AppText weight="semibold">
+              <AppText
+                style={{ fontSize: 13, fontWeight: "600", color: c.text }}
+                numberOfLines={1}
+              >
                 {formatMoney(workerPayout, currency)}
               </AppText>
             </View>
-            <View style={styles.row}>
-              <AppText tone="dim">{t("booking.release.releasedSoFar")}</AppText>
-              <AppText weight="semibold" style={{ color: c.orange }}>
+            <View style={styles.summaryRow}>
+              <AppText style={{ fontSize: 13, color: c.textDim, flex: 1 }}>
+                Released so far
+              </AppText>
+              <AppText
+                style={{ fontSize: 13, fontWeight: "600", color: c.orange }}
+                numberOfLines={1}
+              >
                 {formatMoney(releasedAmount, currency)} ({releasedPct}%)
               </AppText>
             </View>
-            <View style={[styles.divider, { backgroundColor: c.border }]} />
-            <View style={styles.row}>
-              <AppText weight="bold">
-                {t("booking.release.remainingInEscrow")}
+            <View
+              style={[styles.summaryDivider, { backgroundColor: c.border }]}
+            />
+            <View style={styles.summaryRow}>
+              <AppText
+                style={{
+                  fontSize: 13,
+                  fontWeight: "700",
+                  color: c.text,
+                  flex: 1,
+                }}
+              >
+                Remaining in escrow
               </AppText>
               <AppText
-                weight="bold"
                 style={{
-                  color: isFullyReleased ? "#16a34a" : c.orange,
-                  fontSize: 16,
+                  fontFamily: "Syne_800ExtraBold",
+                  fontSize: 14,
+                  fontWeight: "800",
+                  color: isFullyReleased ? c.green : c.orange,
                 }}
+                numberOfLines={1}
               >
                 {formatMoney(remaining, currency)}
               </AppText>
             </View>
-            {isFullyReleased && (
+            {isFullyReleased ? (
               <View
                 style={[
-                  styles.noteBox,
-                  { backgroundColor: "#dcfce7", borderColor: "#bbf7d0" },
+                  styles.fullyReleasedNote,
+                  {
+                    backgroundColor: c.greenDim,
+                    borderColor: "rgba(34,197,94,0.3)",
+                  },
                 ]}
               >
-                <FaLock size={12} color="#166534" style={{ marginRight: 6 }} />
-                <AppText style={{ color: "#166534", fontSize: 12 }}>
-                  {t("booking.release.allFunds")}
+                <FaLock size={11} color={c.green} />
+                <AppText
+                  style={{
+                    fontSize: 11,
+                    color: c.green,
+                    fontWeight: "600",
+                    marginLeft: 6,
+                    flex: 1,
+                    lineHeight: 16,
+                  }}
+                >
+                  All funds have been released. This payment is closed.
                 </AppText>
               </View>
-            )}
+            ) : null}
           </View>
 
+          {/* Timeline */}
           <View style={[styles.timelineWrap, { borderTopColor: c.border }]}>
             <AppText
-              variant="small"
-              weight="bold"
-              tone="dim"
-              style={styles.timelineTitle}
+              style={{
+                fontSize: 10,
+                fontWeight: "700",
+                color: c.textMuted,
+                textTransform: "uppercase",
+                letterSpacing: 1,
+                marginBottom: 8,
+                marginTop: 8,
+              }}
             >
-              {t("booking.release.history")}
+              Release history
             </AppText>
             {sortedReleases.map((r, i) => {
               const isLatest = i === 0;
               const by = r.releasedBy;
-              const byLabel = by
+              const releasedByLabel = by
                 ? by.role === "HIRER"
                   ? `Hirer · ${by.firstName ?? ""} ${by.lastName ?? ""}`.trim()
                   : by.role === "ADMIN"
@@ -199,31 +275,43 @@ export default function BookingReleaseDetails({
 
               return (
                 <View key={r.id} style={styles.timelineItem}>
+                  {/* Marker column */}
                   <View style={styles.markerCol}>
                     <View
                       style={[
                         styles.dot,
-                        {
-                          backgroundColor: isLatest ? c.orange : c.orangeDim,
-                          borderColor: c.orange,
-                        },
+                        isLatest
+                          ? { backgroundColor: c.orange }
+                          : {
+                              backgroundColor: c.orangeDim,
+                              borderColor: c.orange,
+                              borderWidth: 2,
+                            },
                       ]}
                     />
-                    {i < sortedReleases.length - 1 && (
+                    {i < sortedReleases.length - 1 ? (
                       <View
-                        style={[styles.line, { backgroundColor: c.border }]}
+                        style={[
+                          styles.connector,
+                          { backgroundColor: c.border },
+                        ]}
                       />
-                    )}
+                    ) : null}
                   </View>
+
+                  {/* Body column */}
                   <View style={styles.timelineBody}>
                     <View style={styles.timelineTopRow}>
-                      <AppText weight="bold" style={{ fontSize: 14 }}>
+                      <AppText
+                        style={[styles.timelineAmount, { color: c.text }]}
+                        numberOfLines={1}
+                      >
                         {formatMoney(r.amount, r.currency || currency)}
                       </AppText>
-                      {isLatest && (
+                      {isLatest ? (
                         <View
                           style={[
-                            styles.badge,
+                            styles.latestBadge,
                             {
                               backgroundColor: c.orangeDim,
                               borderColor: c.orangeGlow,
@@ -232,70 +320,100 @@ export default function BookingReleaseDetails({
                         >
                           <AppText
                             style={{
-                              color: c.orange,
                               fontSize: 9,
-                              fontWeight: "bold",
+                              fontWeight: "800",
+                              color: c.orange,
+                              letterSpacing: 0.5,
+                              textTransform: "uppercase",
                             }}
                           >
-                            {t("booking.release.latest")}
+                            Latest
                           </AppText>
                         </View>
-                      )}
+                      ) : null}
                     </View>
-                    <View style={styles.metaRow}>
-                      <AppText variant="small" tone="dim">
-                        <FaClock size={10} /> {formatDateTime(r.createdAt)}
-                      </AppText>
-                      <AppText variant="small" tone="dim">
-                        <FaUser size={10} /> {byLabel}
-                      </AppText>
+
+                    <View style={styles.timelineMeta}>
+                      <View style={styles.metaItem}>
+                        <FaClock size={9} color={c.textMuted} />
+                        <AppText
+                          style={{
+                            fontSize: 10,
+                            color: c.textDim,
+                            marginLeft: 4,
+                          }}
+                        >
+                          {formatDateTime(r.createdAt)}
+                        </AppText>
+                      </View>
+                      <View style={styles.metaItem}>
+                        <FaUser size={9} color={c.textMuted} />
+                        <AppText
+                          style={{
+                            fontSize: 10,
+                            color: c.textDim,
+                            marginLeft: 4,
+                            flexShrink: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {releasedByLabel}
+                        </AppText>
+                      </View>
                     </View>
-                    {r.note && (
+
+                    {r.note ? (
                       <AppText
-                        variant="small"
-                        tone="dim"
-                        style={{ fontStyle: "italic", marginTop: 4 }}
+                        style={{
+                          fontSize: 11,
+                          color: c.textDim,
+                          fontStyle: "italic",
+                          marginTop: 4,
+                          lineHeight: 16,
+                        }}
                       >
-                        <AppText weight="bold">
-                          {t("booking.release.note")}
-                        </AppText>{" "}
+                        <AppText
+                          style={{
+                            fontStyle: "normal",
+                            fontWeight: "700",
+                            color: c.textMuted,
+                          }}
+                        >
+                          Note:{" "}
+                        </AppText>
                         {r.note}
                       </AppText>
-                    )}
+                    ) : null}
+
                     {(r.remainingBefore != null ||
                       r.remainingAfter != null) && (
                       <View
                         style={[
-                          styles.snapshotBox,
-                          { backgroundColor: c.bgInput, borderColor: c.border },
+                          styles.snapshot,
+                          {
+                            backgroundColor: c.bgInput,
+                            borderColor: c.border,
+                          },
                         ]}
                       >
-                        {r.remainingBefore != null && (
-                          <View style={styles.snapItem}>
-                            <AppText variant="small" tone="dim">
-                              {t("booking.release.before")}
-                            </AppText>
-                            <AppText variant="small" weight="bold">
-                              {formatMoney(
-                                r.remainingBefore,
-                                r.currency || currency,
-                              )}
-                            </AppText>
-                          </View>
-                        )}
-                        {r.remainingAfter != null && (
-                          <View style={styles.snapItem}>
-                            <AppText variant="small" tone="dim">
-                              {t("booking.release.after")}
-                            </AppText>
-                            <AppText variant="small" weight="bold">
-                              {formatMoney(
-                                r.remainingAfter,
-                                r.currency || currency,
-                              )}
-                            </AppText>
-                          </View>
-                        )}
+                        {r.remainingBefore != null ? (
+                          <SnapshotItem
+                            label="Before"
+                            value={formatMoney(
+                              r.remainingBefore,
+                              r.currency || currency,
+                            )}
+                          />
+                        ) : null}
+                        {r.remainingAfter != null ? (
+                          <SnapshotItem
+                            label="After"
+                            value={formatMoney(
+                              r.remainingAfter,
+                              r.currency || currency,
+                            )}
+                          />
+                        ) : null}
                       </View>
                     )}
                   </View>
@@ -309,21 +427,54 @@ export default function BookingReleaseDetails({
   );
 }
 
+function SnapshotItem({ label, value }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  return (
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <AppText
+        style={{
+          fontSize: 9,
+          color: c.textMuted,
+          fontWeight: "700",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          marginBottom: 1,
+        }}
+      >
+        {label}
+      </AppText>
+      <AppText
+        style={{ fontSize: 11, fontWeight: "700", color: c.text }}
+        numberOfLines={1}
+      >
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    borderWidth: 1,
+  section: {
     borderRadius: 14,
-    marginBottom: 16,
+    borderWidth: 1,
     overflow: "hidden",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 14,
     gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
   headerIcon: {
     width: 34,
     height: 34,
@@ -331,60 +482,139 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  headerTextCol: { flex: 1 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerTitle: {
+    fontFamily: "Syne_700Bold",
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 17,
+  },
+  headerSub: {
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 1,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
   progressWrap: {
-    width: 60,
+    width: 80,
     height: 6,
-    borderRadius: 3,
+    borderRadius: 999,
     borderWidth: 1,
     overflow: "hidden",
   },
-  progressBar: { height: "100%", borderRadius: 3 },
-  body: { paddingHorizontal: 14, paddingBottom: 14, borderTopWidth: 1 },
-  summary: { paddingVertical: 12, gap: 8 },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  progressBar: {
+    height: "100%",
+    borderRadius: 999,
   },
-  divider: { height: 1, marginVertical: 4 },
-  noteBox: {
+  progressLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    minWidth: 30,
+    textAlign: "right",
+  },
+  body: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+  },
+  summary: {
+    paddingTop: 12,
+    gap: 6,
+  },
+  summaryRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 8,
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  summaryDivider: {
+    height: 1,
+    marginVertical: 4,
+  },
+  fullyReleasedNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
-    marginTop: 4,
+    marginTop: 6,
   },
-  timelineWrap: { borderTopWidth: 1, paddingTop: 12, marginTop: 8 },
-  timelineTitle: {
-    fontSize: 10,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 12,
+  timelineWrap: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderStyle: "dashed",
+    marginTop: 12,
   },
-  timelineItem: { flexDirection: "row", gap: 10, paddingBottom: 16 },
-  markerCol: { alignItems: "center", width: 10, paddingTop: 4 },
-  dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2 },
-  line: { flex: 1, width: 2, marginTop: 4, minHeight: 20 },
-  timelineBody: { flex: 1, gap: 4 },
-  timelineTopRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  snapshotBox: {
+  timelineItem: {
     flexDirection: "row",
-    gap: 16,
-    padding: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    marginTop: 4,
+    gap: 10,
+    paddingBottom: 10,
   },
-  snapItem: { gap: 2 },
+  markerCol: {
+    width: 10,
+    alignItems: "center",
+    paddingTop: 4,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  connector: {
+    width: 2,
+    flex: 1,
+    marginTop: 4,
+    minHeight: 16,
+  },
+  timelineBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  timelineTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 4,
+  },
+  timelineAmount: {
+    fontFamily: "Syne_800ExtraBold",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  latestBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  timelineMeta: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 2,
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  snapshot: {
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 8,
+  },
 });

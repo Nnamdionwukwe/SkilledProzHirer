@@ -9,14 +9,16 @@ import {
   StyleSheet,
   TextInput,
   View,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import Constants from "expo-constants";
-import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
-import * as AuthSession from "expo-auth-session";
+import {
+  GoogleSignin,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 
 import {
   AuthShell,
@@ -29,12 +31,16 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore";
 import client from "../../api/client";
 
-WebBrowser.maybeCompleteAuthSession();
-
 const extra = Constants.expoConfig?.extra || {};
 const GOOGLE_WEB_CLIENT_ID = extra.googleWebClientId || "";
-const GOOGLE_ANDROID_CLIENT_ID = extra.googleAndroidClientId || "";
-const GOOGLE_IOS_CLIENT_ID = extra.googleIosClientId || "";
+
+if (GOOGLE_WEB_CLIENT_ID) {
+  GoogleSignin.configure({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    offlineAccess: false,
+    scopes: ["openid", "email", "profile"],
+  });
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -43,6 +49,41 @@ const STEPS = [
   { id: "profile", label: "Profile", icon: "hammer-outline" },
   { id: "category", label: "Category", icon: "pricetag-outline" },
   { id: "pricing", label: "Pricing", icon: "wallet-outline" },
+];
+
+const ALL_CURRENCIES = [
+  "USD",
+  "EUR",
+  "GBP",
+  "NGN",
+  "GHS",
+  "KES",
+  "ZAR",
+  "INR",
+  "CAD",
+  "AUD",
+  "JPY",
+  "CNY",
+  "BRL",
+  "MXN",
+  "EGP",
+  "TZS",
+  "UGX",
+  "RWF",
+  "XOF",
+  "MAD",
+  "PHP",
+  "IDR",
+  "VND",
+  "THB",
+  "BDT",
+  "PKR",
+  "AED",
+  "SAR",
+  "QAR",
+  "MYR",
+  "SGD",
+  "HKD",
 ];
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
@@ -107,6 +148,69 @@ function StepIndicator({ current, c }) {
   );
 }
 
+// ─── Currency Picker ─────────────────────────────────────────────────────────
+
+function CurrencyPicker({ value, onChange, c }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        style={[
+          s.selector,
+          { backgroundColor: c.bgInput, borderColor: c.border },
+        ]}
+      >
+        <AppText variant="body" weight="semibold" style={{ color: c.text }}>
+          {value}
+        </AppText>
+        <Ionicons
+          name={open ? "chevron-up" : "chevron-down"}
+          size={16}
+          color={c.textMuted}
+        />
+      </Pressable>
+      {open && (
+        <View
+          style={[
+            s.selectorMenu,
+            { backgroundColor: c.bgPanel, borderColor: c.border },
+          ]}
+        >
+          <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled>
+            {ALL_CURRENCIES.map((cur) => (
+              <Pressable
+                key={cur}
+                onPress={() => {
+                  onChange(cur);
+                  setOpen(false);
+                }}
+                style={[
+                  s.selectorItem,
+                  {
+                    backgroundColor:
+                      cur === value ? c.orangeDim : "transparent",
+                  },
+                ]}
+              >
+                <AppText
+                  variant="body"
+                  style={{
+                    color: cur === value ? c.orange : c.text,
+                    fontWeight: cur === value ? "700" : "500",
+                  }}
+                >
+                  {cur}
+                </AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function WorkerRegisterScreen() {
@@ -121,12 +225,17 @@ export default function WorkerRegisterScreen() {
   const [agreed, setAgreed] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  // Categories
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [categories, setCategories] = useState([]);
+  const [catSearch, setCatSearch] = useState("");
   const [selectedCats, setSelectedCats] = useState([]);
   const [primaryCatId, setPrimaryCatId] = useState("");
+  const [showCustomCat, setShowCustomCat] = useState(false);
+  const [customCatName, setCustomCatName] = useState("");
+  const [addingCat, setAddingCat] = useState(false);
 
-  // Form state — Step 0
   const [account, setAccount] = useState({
     firstName: "",
     lastName: "",
@@ -139,7 +248,6 @@ export default function WorkerRegisterScreen() {
     referralCode: "",
   });
 
-  // Form state — Step 1
   const [profile, setProfile] = useState({
     title: "",
     description: "",
@@ -147,7 +255,6 @@ export default function WorkerRegisterScreen() {
     serviceRadius: "25",
   });
 
-  // Form state — Step 3
   const [pricing, setPricing] = useState({
     currency: "USD",
     hourlyRate: "",
@@ -159,58 +266,72 @@ export default function WorkerRegisterScreen() {
     pricingNote: "",
   });
 
-  // Load categories on mount
   useEffect(() => {
+    let cancelled = false;
     client
       .get("/categories", { params: { limit: 1000 } })
       .then((r) => {
-        const data = r.data.data;
-        setCategories(Array.isArray(data) ? data : (data?.categories ?? []));
+        if (cancelled) return;
+        const data = r.data?.data;
+        const list = Array.isArray(data) ? data : (data?.categories ?? []);
+        setCategories(list);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("Failed to load categories:", err?.message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // ── Google Auth Setup ──────────────────────────────────────────
-  const [request, response, promptAsync] = Google.useAuthRequest(
-    GOOGLE_WEB_CLIENT_ID
-      ? {
-          clientId: GOOGLE_WEB_CLIENT_ID,
-          androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
-          iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
-          scopes: ["openid", "email", "profile"],
-          redirectUri: AuthSession.makeRedirectUri({
-            scheme: "skilledproz",
-            path: "oauth",
-          }),
-        }
-      : { clientId: "disabled" },
-  );
-
-  useEffect(() => {
-    if (!response) return;
-    if (response.type === "success") {
-      const accessToken = response.authentication?.accessToken;
-      if (accessToken) handleGoogleToken(accessToken);
-    } else if (response.type === "error") {
-      setError(response.error?.message || "Google sign-in failed.");
-      setGoogleLoading(false);
-    } else if (response.type === "dismiss" || response.type === "cancel") {
-      setGoogleLoading(false);
+  // ── Google Sign-Up (native) ────────────────────────────────────
+  const handleGooglePress = async () => {
+    setError("");
+    if (!GOOGLE_WEB_CLIENT_ID) {
+      setError("Google Sign-In is not configured yet.");
+      return;
     }
-  }, [response]);
 
-  const handleGoogleToken = async (accessToken) => {
+    setGoogleLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.idToken || userInfo.data?.idToken;
+
+      if (!idToken) {
+        setError("Google sign-up did not return a token.");
+        setGoogleLoading(false);
+        return;
+      }
+
+      await handleGoogleToken(idToken);
+    } catch (err) {
+      setGoogleLoading(false);
+
+      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+        // cancelled
+      } else if (err.code === statusCodes.IN_PROGRESS) {
+        // already in progress
+      } else if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        setError("Google Play Services not available.");
+      } else {
+        setError(err?.message || "Google sign-up failed.");
+      }
+    }
+  };
+
+  const handleGoogleToken = async (idToken) => {
     try {
       const result = await googleSignIn({
-        accessToken,
-        role: "WORKER", // Force Worker role since they are on this screen
+        idToken,
+        role: "WORKER",
         ref: account.referralCode.trim() || undefined,
       });
 
       if (result?.needsRole) {
         navigation.navigate("Register", {
           googleProfile: result.googleProfile,
-          accessToken,
+          idToken,
           refCode: account.referralCode,
           from: "google",
         });
@@ -222,30 +343,11 @@ export default function WorkerRegisterScreen() {
     }
   };
 
-  const handleGooglePress = async () => {
-    setError("");
-    if (!GOOGLE_WEB_CLIENT_ID) {
-      setError("Google Sign-In is not configured yet.");
-      return;
-    }
-    setGoogleLoading(true);
-    try {
-      const result = await promptAsync();
-      if (result?.type === "cancel" || result?.type === "dismiss") {
-        setGoogleLoading(false);
-      }
-    } catch (err) {
-      setGoogleLoading(false);
-      setError(err?.message || "Google signup failed.");
-    }
-  };
-
-  // ── Step Navigation ──────────────────────────────────────────────
   const toggleCat = (cat) => {
     setSelectedCats((prev) => {
-      const exists = prev.find((c) => c.id === cat.id);
+      const exists = prev.find((x) => x.id === cat.id);
       if (exists) {
-        const next = prev.filter((c) => c.id !== cat.id);
+        const next = prev.filter((x) => x.id !== cat.id);
         if (primaryCatId === cat.id) setPrimaryCatId(next[0]?.id ?? "");
         return next;
       }
@@ -254,6 +356,30 @@ export default function WorkerRegisterScreen() {
       if (!primaryCatId) setPrimaryCatId(cat.id);
       return next;
     });
+  };
+
+  const handleAddCustomCategory = async () => {
+    if (!customCatName.trim()) return;
+    setAddingCat(true);
+    try {
+      const res = await client.post("/categories/suggest", {
+        name: customCatName.trim(),
+      });
+      const cat = res.data?.data?.category;
+      if (cat) {
+        setCategories((prev) =>
+          prev.find((x) => x.id === cat.id) ? prev : [...prev, cat],
+        );
+        toggleCat(cat);
+      }
+      setCustomCatName("");
+      setShowCustomCat(false);
+      setCatSearch("");
+    } catch {
+      setError("Failed to add custom category");
+    } finally {
+      setAddingCat(false);
+    }
   };
 
   const validateStep = () => {
@@ -289,12 +415,15 @@ export default function WorkerRegisterScreen() {
     const err = validateStep();
     if (err) return setError(err);
     setError("");
+    Keyboard.dismiss();
     setStep((s) => s + 1);
   };
 
   const handleSubmit = async () => {
     const err = validateStep();
     if (err) return setError(err);
+
+    Keyboard.dismiss();
 
     try {
       await register({
@@ -304,7 +433,7 @@ export default function WorkerRegisterScreen() {
           ...profile,
           yearsExperience: parseInt(profile.yearsExperience) || 0,
           serviceRadius: parseInt(profile.serviceRadius) || 25,
-          ...pricing,
+          currency: pricing.currency,
           hourlyRate: parseFloat(pricing.hourlyRate) || 0,
           dailyRate: pricing.dailyRate ? parseFloat(pricing.dailyRate) : null,
           weeklyRate: pricing.weeklyRate
@@ -316,6 +445,8 @@ export default function WorkerRegisterScreen() {
           customRate: pricing.customRate
             ? parseFloat(pricing.customRate)
             : null,
+          customRateLabel: pricing.customRateLabel || null,
+          pricingNote: pricing.pricingNote || null,
         },
         categories: selectedCats.map((cat) => ({
           categoryId: cat.id,
@@ -328,14 +459,17 @@ export default function WorkerRegisterScreen() {
     }
   };
 
-  // Shorthand setters
   const a = (k, v) => setAccount((p) => ({ ...p, [k]: v }));
   const p = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
   const pr = (k, v) => setPricing((p) => ({ ...p, [k]: v }));
 
+  const filteredCats = categories.filter(
+    (cat) =>
+      !catSearch || cat.name.toLowerCase().includes(catSearch.toLowerCase()),
+  );
+
   return (
     <AuthShell showBack backTo="Register">
-      {/* Header */}
       <View style={{ marginBottom: 24 }}>
         <AppText
           variant="small"
@@ -360,7 +494,6 @@ export default function WorkerRegisterScreen() {
         </AppText>
       </View>
 
-      {/* Step indicator */}
       <StepIndicator current={step} c={c} />
 
       {error ? (
@@ -369,11 +502,9 @@ export default function WorkerRegisterScreen() {
         </View>
       ) : null}
 
-      {/* Card Content */}
       <View
         style={[s.card, { backgroundColor: c.bgPanel, borderColor: c.border }]}
       >
-        {/* ── STEP 0: Account ── */}
         {step === 0 && (
           <View style={s.stepContent}>
             <AppText variant="title" weight="bold" style={s.stepTitle}>
@@ -382,7 +513,6 @@ export default function WorkerRegisterScreen() {
               })}
             </AppText>
 
-            {/* ── Google Sign-Up ── */}
             <Pressable
               onPress={handleGooglePress}
               disabled={googleLoading}
@@ -413,7 +543,6 @@ export default function WorkerRegisterScreen() {
               )}
             </Pressable>
 
-            {/* ── Divider ── */}
             <View style={s.dividerRow}>
               <View style={[s.dividerLine, { backgroundColor: c.border }]} />
               <AppText
@@ -451,6 +580,7 @@ export default function WorkerRegisterScreen() {
               label={t("auth.emailAddress") + " *"}
               placeholder="you@example.com"
               keyboardType="email-address"
+              autoCapitalize="none"
               value={account.email}
               onChangeText={(v) => a("email", v)}
             />
@@ -486,27 +616,35 @@ export default function WorkerRegisterScreen() {
               label={t("auth.referralCode") + " (optional)"}
               placeholder="e.g. SPTEST01"
               autoCapitalize="characters"
+              maxLength={12}
               value={account.referralCode}
-              onChangeText={(v) => a("referralCode", v)}
+              onChangeText={(v) => a("referralCode", v.toUpperCase())}
             />
 
             <AuthField
               label={t("auth.password") + " * (min 8 chars)"}
-              secureTextEntry
+              secureTextEntry={!showPassword}
               value={account.password}
               onChangeText={(v) => a("password", v)}
+              iconRight={{
+                name: showPassword ? "eye-off-outline" : "eye-outline",
+                onPress: () => setShowPassword((v) => !v),
+              }}
             />
 
             <AuthField
               label={t("auth.confirm") + " *"}
-              secureTextEntry
+              secureTextEntry={!showConfirmPassword}
               value={account.confirm}
               onChangeText={(v) => a("confirm", v)}
+              iconRight={{
+                name: showConfirmPassword ? "eye-off-outline" : "eye-outline",
+                onPress: () => setShowConfirmPassword((v) => !v),
+              }}
             />
           </View>
         )}
 
-        {/* ── STEP 1: Profile ── */}
         {step === 1 && (
           <View style={s.stepContent}>
             <AppText variant="title" weight="bold" style={s.stepTitle}>
@@ -571,7 +709,6 @@ export default function WorkerRegisterScreen() {
           </View>
         )}
 
-        {/* ── STEP 2: Categories ── */}
         {step === 2 && (
           <View style={s.stepContent}>
             <AppText variant="title" weight="bold" style={s.stepTitle}>
@@ -589,7 +726,6 @@ export default function WorkerRegisterScreen() {
               })}
             </AppText>
 
-            {/* Selected chips */}
             {selectedCats.length > 0 && (
               <View style={s.selectedCats}>
                 {selectedCats.map((cat) => {
@@ -610,6 +746,7 @@ export default function WorkerRegisterScreen() {
                         weight="semibold"
                         style={{ color: isPrimary ? c.orange : c.text }}
                       >
+                        {cat.icon ? `${cat.icon} ` : ""}
                         {cat.name}
                       </AppText>
                       <Pressable
@@ -640,11 +777,18 @@ export default function WorkerRegisterScreen() {
               </View>
             )}
 
-            {/* Category chips grid (limited height) */}
-            <ScrollView style={{ maxHeight: 280 }}>
+            <AuthField
+              placeholder="Search categories..."
+              iconLeft="search-outline"
+              value={catSearch}
+              onChangeText={setCatSearch}
+            />
+
+            {/* ✅ ScrollView with increased maxHeight and no slice limit */}
+            <ScrollView style={{ maxHeight: 400 }} nestedScrollEnabled>
               <View style={s.catGrid}>
-                {categories.map((cat) => {
-                  const selected = !!selectedCats.find((s) => s.id === cat.id);
+                {filteredCats.map((cat) => {
+                  const selected = !!selectedCats.find((x) => x.id === cat.id);
                   return (
                     <Pressable
                       key={cat.id}
@@ -661,6 +805,7 @@ export default function WorkerRegisterScreen() {
                         variant="small"
                         style={{ color: selected ? c.orange : c.textDim }}
                       >
+                        {cat.icon ? `${cat.icon} ` : ""}
                         {cat.name}
                       </AppText>
                     </Pressable>
@@ -668,14 +813,71 @@ export default function WorkerRegisterScreen() {
                 })}
               </View>
             </ScrollView>
+
+            {!showCustomCat ? (
+              <Pressable
+                onPress={() => setShowCustomCat(true)}
+                style={[s.addCatBtn, { borderColor: c.border }]}
+              >
+                <Ionicons name="add" size={14} color={c.textDim} />
+                <AppText variant="small" weight="semibold" tone="dim">
+                  Add a custom category
+                </AppText>
+              </Pressable>
+            ) : (
+              <View style={s.customCatBox}>
+                <AuthField
+                  autoFocus
+                  placeholder="e.g. Solar Panel Installation"
+                  value={customCatName}
+                  onChangeText={setCustomCatName}
+                />
+                <View style={s.row2}>
+                  <Pressable
+                    onPress={handleAddCustomCategory}
+                    disabled={addingCat || !customCatName.trim()}
+                    style={[
+                      s.primaryBtn,
+                      { backgroundColor: c.orange, flex: 1 },
+                      (addingCat || !customCatName.trim()) && { opacity: 0.5 },
+                    ]}
+                  >
+                    <AppText
+                      variant="body"
+                      weight="bold"
+                      style={{ color: "#fff", textAlign: "center" }}
+                    >
+                      {addingCat ? "Adding..." : "Add Category"}
+                    </AppText>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setShowCustomCat(false);
+                      setCustomCatName("");
+                    }}
+                    style={[s.secondaryBtn, { borderColor: c.border, flex: 1 }]}
+                  >
+                    <AppText
+                      variant="body"
+                      weight="semibold"
+                      tone="dim"
+                      style={{ textAlign: "center" }}
+                    >
+                      Cancel
+                    </AppText>
+                  </Pressable>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
-        {/* ── STEP 3: Pricing ── */}
         {step === 3 && (
           <View style={s.stepContent}>
             <AppText variant="title" weight="bold" style={s.stepTitle}>
-              {t("workerReg.setYourRates", { defaultValue: "Set your rates" })}
+              {t("workerReg.setYourRates", {
+                defaultValue: "Set your rates",
+              })}
             </AppText>
             <AppText
               variant="small"
@@ -687,6 +889,17 @@ export default function WorkerRegisterScreen() {
                   "Leave blank to hide that option from your profile. Set at least one rate.",
               })}
             </AppText>
+
+            <View>
+              <AppText variant="small" weight="semibold" style={s.label}>
+                Currency
+              </AppText>
+              <CurrencyPicker
+                value={pricing.currency}
+                onChange={(v) => pr("currency", v)}
+                c={c}
+              />
+            </View>
 
             <View style={s.row2}>
               <View style={{ flex: 1 }}>
@@ -755,7 +968,115 @@ export default function WorkerRegisterScreen() {
               </View>
             </View>
 
-            {/* Terms Checkbox */}
+            <View>
+              <AppText variant="small" weight="semibold" style={s.label}>
+                Pricing Note (optional)
+              </AppText>
+              <TextInput
+                multiline
+                numberOfLines={3}
+                placeholder="Discounts, terms, travel fees..."
+                placeholderTextColor={c.textMuted}
+                value={pricing.pricingNote}
+                onChangeText={(v) => pr("pricingNote", v)}
+                style={[
+                  s.textarea,
+                  {
+                    color: c.text,
+                    backgroundColor: c.bgInput,
+                    borderColor: c.border,
+                  },
+                ]}
+              />
+            </View>
+
+            {(pricing.hourlyRate ||
+              pricing.dailyRate ||
+              pricing.weeklyRate ||
+              pricing.monthlyRate ||
+              pricing.customRate) && (
+              <View
+                style={[
+                  s.preview,
+                  { backgroundColor: c.bgCard, borderColor: c.border },
+                ]}
+              >
+                <AppText variant="small" weight="bold" tone="muted">
+                  YOUR RATES PREVIEW
+                </AppText>
+                <View style={s.previewPills}>
+                  {pricing.hourlyRate ? (
+                    <View
+                      style={[s.previewPill, { backgroundColor: c.orangeDim }]}
+                    >
+                      <AppText
+                        variant="small"
+                        weight="bold"
+                        style={{ color: c.orange }}
+                      >
+                        {pricing.currency} {pricing.hourlyRate}/hr
+                      </AppText>
+                    </View>
+                  ) : null}
+                  {pricing.dailyRate ? (
+                    <View
+                      style={[s.previewPill, { backgroundColor: c.orangeDim }]}
+                    >
+                      <AppText
+                        variant="small"
+                        weight="bold"
+                        style={{ color: c.orange }}
+                      >
+                        {pricing.currency} {pricing.dailyRate}/day
+                      </AppText>
+                    </View>
+                  ) : null}
+                  {pricing.weeklyRate ? (
+                    <View
+                      style={[s.previewPill, { backgroundColor: c.orangeDim }]}
+                    >
+                      <AppText
+                        variant="small"
+                        weight="bold"
+                        style={{ color: c.orange }}
+                      >
+                        {pricing.currency} {pricing.weeklyRate}/wk
+                      </AppText>
+                    </View>
+                  ) : null}
+                  {pricing.monthlyRate ? (
+                    <View
+                      style={[s.previewPill, { backgroundColor: c.orangeDim }]}
+                    >
+                      <AppText
+                        variant="small"
+                        weight="bold"
+                        style={{ color: c.orange }}
+                      >
+                        {pricing.currency} {pricing.monthlyRate}/mo
+                      </AppText>
+                    </View>
+                  ) : null}
+                  {pricing.customRate ? (
+                    <View
+                      style={[s.previewPill, { backgroundColor: c.orangeDim }]}
+                    >
+                      <AppText
+                        variant="small"
+                        weight="bold"
+                        style={{ color: c.orange }}
+                      >
+                        {pricing.currency} {pricing.customRate}
+                        {pricing.customRateLabel
+                          ? `/${pricing.customRateLabel}`
+                          : "/custom"}
+                      </AppText>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            )}
+
             <Pressable onPress={() => setAgreed(!agreed)} style={s.checkRow}>
               <View
                 style={[
@@ -768,25 +1089,25 @@ export default function WorkerRegisterScreen() {
               >
                 {agreed && <Ionicons name="checkmark" size={14} color="#fff" />}
               </View>
-              <AppText variant="small" tone="dim">
-                {t("auth.agreeToTerms", { defaultValue: "I agree to the" })}{" "}
+              <AppText variant="small" tone="dim" style={{ flex: 1 }}>
+                I agree to the{" "}
                 <AppText variant="small" style={{ color: c.orange }}>
-                  {t("auth.terms", { defaultValue: "Terms" })}
+                  Terms
                 </AppText>{" "}
-                {t("auth.and", { defaultValue: "and" })}{" "}
+                and{" "}
                 <AppText variant="small" style={{ color: c.orange }}>
-                  {t("auth.privacyPolicy", { defaultValue: "Privacy Policy" })}
+                  Privacy Policy
                 </AppText>
               </AppText>
             </Pressable>
           </View>
         )}
 
-        {/* Navigation Row */}
         <View style={[s.navRow, { borderTopColor: c.border }]}>
           {step > 0 && (
             <Pressable
               onPress={() => {
+                Keyboard.dismiss();
                 setStep((s) => s - 1);
                 setError("");
               }}
@@ -832,7 +1153,6 @@ export default function WorkerRegisterScreen() {
         </View>
       </View>
 
-      {/* Footer */}
       <View style={{ alignItems: "center", marginTop: 20 }}>
         <AppText variant="body" tone="dim">
           Already have an account?{" "}
@@ -862,10 +1182,6 @@ export default function WorkerRegisterScreen() {
     </AuthShell>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────────────────────
 
 const si = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "flex-start", marginBottom: 20 },
@@ -952,6 +1268,18 @@ const s = StyleSheet.create({
     borderRadius: 100,
     borderWidth: 1,
   },
+  addCatBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  customCatBox: { gap: 10, marginTop: 8 },
   checkRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -967,7 +1295,41 @@ const s = StyleSheet.create({
     justifyContent: "center",
     marginTop: 2,
   },
-
+  preview: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+  },
+  previewPills: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  previewPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 3,
+    borderRadius: 100,
+  },
+  selector: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  selectorMenu: {
+    borderWidth: 1,
+    borderRadius: 10,
+    marginTop: 4,
+    overflow: "hidden",
+  },
+  selectorItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   navRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
