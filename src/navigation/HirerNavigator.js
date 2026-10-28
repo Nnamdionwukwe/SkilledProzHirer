@@ -45,6 +45,7 @@ import RefundHistoryScreen from "../screens/main/RefundHistoryScreen";
 import RefundDetailScreen from "../screens/main/RefundDetailScreen";
 import EditJobScreen from "../screens/main/EditJobScreen";
 import MyDisputesScreen from "../screens/main/MyDisputesScreen";
+import EditProfileScreen from "../screens/main/EditProfileScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -178,6 +179,10 @@ export default function HirerNavigator() {
       <Drawer.Screen name="EditJob">
         {() => <ScreenWithChrome Screen={EditJobScreen} />}
       </Drawer.Screen>
+      <Drawer.Screen name="EditProfile">
+        {() => <ScreenWithChrome Screen={EditProfileScreen} />}
+      </Drawer.Screen>
+
       <Drawer.Screen
         name="VideoCall"
         component={VideoCallScreen}

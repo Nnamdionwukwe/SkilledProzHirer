@@ -1,1218 +1,2132 @@
 // src/screens/main/BrowseWorkersScreen.js
-// Endpoints: GET /workers/search · GET /search/trending · GET /search/nearby
-// Mirrors website Browse Jobs page exactly.
+//
+// Verbatim port of pages/search/SearchPage.jsx + SearchPage.module.css.
+//
+// Mobile layout mirrors web's ≤767px breakpoint:
+//   · Worker grid = 2 columns via strict 48% width + space-between
+//   · Filter sidebar slides in FROM THE LEFT as a ~300px drawer (Animated)
+//   · Backdrop fades to rgba(0,0,0,0.6) alongside the drawer
+//   · All filter sections stacked vertically (no horizontal pills)
+//   · Category / Distance / Language use bottom-sheet pickers
+//     (RN equivalent of web's <select>)
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-  FlatList,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
   Image,
-  Switch,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   TextInput,
   View,
 } from "react-native";
-import { useTranslation } from "react-i18next";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import * as Location from "expo-location";
+
+import AppScreen from "../../components/AppScreen";
+import AppText from "../../components/AppText";
+import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
-import AppText from "../../components/AppText";
+import { useAuthStore } from "../../store/authStore";
+import client from "../../api/client";
+import useSavedWorker from "../../hooks/useSavedWorker";
 import {
-  searchWorkers,
-  getTrending,
-  getNearbyWorkers,
-  getFilterOptions,
-} from "../../api/workers";
-import * as Location from "expo-location";
-import { Ionicons } from "@expo/vector-icons";
+  FaSearch,
+  FaSlidersH,
+  FaXmark,
+  FaStar,
+  FaInfoCircle,
+  FaFrown,
+  FaArrowLeft,
+  FaArrowRight,
+  FaTool,
+  FaBookmark,
+  FaMapMarkerAlt,
+  FaShieldAlt,
+  FaMicrophone,
+  FaStop,
+} from "../../icons/fa";
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function fmtRate(rate, currency) {
-  if (!rate) return null;
-  return `${currency ?? ""} ${Number(rate).toLocaleString()}`;
-}
+// ── Speech recognition — safe require ─────────────────────────────
+let SR = null;
+try {
+  SR = require("expo-speech-recognition");
+} catch {}
 
-function initials(first, last) {
-  return `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase();
-}
+// ── Constants (verbatim from web) ─────────────────────────────────
+const RATINGS = [
+  { label: "4★ & above", value: 4 },
+  { label: "3★ & above", value: 3 },
+  { label: "Any rating", value: "" },
+];
 
-// ── Worker Card ────────────────────────────────────────────────────────────────
-function WorkerCard({ worker, onPress, c, t, isNew = false }) {
-  const u = worker.user ?? {};
-  const wp = worker; // workerProfile fields live at root from /workers/search
-  // shape differs between /search (workerProfile root) and /search/trending
-  const firstName = u.firstName ?? wp.user?.firstName;
-  const lastName = u.lastName ?? wp.user?.lastName;
-  const avatar = u.avatar ?? wp.user?.avatar;
-  const city = u.city ?? wp.user?.city;
-  const country = u.country ?? wp.user?.country;
-  const title = wp.title;
-  const hourlyRate = wp.hourlyRate;
-  const currency = wp.currency ?? wp.user?.currency;
-  const avgRating = wp.avgRating;
-  const totalReviews = wp.totalReviews ?? 0;
-  const completedJobs = wp.completedJobs ?? 0;
-  const isAvailable = wp.isAvailable;
-  const isVerified = wp.verificationStatus === "VERIFIED";
-  const categories = wp.categories ?? [];
-  const location = [city, country].filter(Boolean).join(", ");
-  const userId = u.id ?? wp.user?.id ?? wp.userId;
+const DISTANCES = [5, 10, 25, 50, 100, 200];
+
+const GENDERS = [
+  { label: "Any", value: "" },
+  { label: "Male", value: "Male" },
+  { label: "Female", value: "Female" },
+  { label: "Non-binary", value: "Non-binary" },
+];
+
+const VERIFICATIONS = [
+  { label: "Any", value: "" },
+  { label: "Verified", value: "VERIFIED" },
+];
+
+const DEFAULT_FILTERS = {
+  category: "",
+  city: "",
+  country: "",
+  minRate: "",
+  maxRate: "",
+  rating: "",
+  available: "true",
+  language: "",
+  gender: "",
+  verification: "",
+  radius: "",
+  lat: "",
+  lng: "",
+};
+
+const DRAWER_WIDTH = Math.min(300, Dimensions.get("window").width * 0.85);
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════
+export default function BrowseWorkersScreen() {
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { theme } = useTheme();
+  const { toast } = useToast();
+  const { user } = useAuthStore();
+  const c = theme.colors;
+
+  const initialQuery = route.params?.q || "";
+
+  const [query, setQuery] = useState(initialQuery);
+  const [input, setInput] = useState(initialQuery);
+  const [workers, setWorkers] = useState([]);
+  const [trending, setTrending] = useState({
+    categories: [],
+    topWorkers: [],
+    recentlyJoined: [],
+  });
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [filterMeta, setFilterMeta] = useState({
+    categories: [],
+    locations: [],
+    rateRange: { min: 0, max: 500 },
+    languages: [],
+    distances: DISTANCES,
+  });
+  const [suggestions, setSuggestions] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [tab, setTab] = useState(initialQuery ? "results" : "trending");
+  const [showFilters, setShowFilters] = useState(false);
+  const [nearbyWorkers, setNearbyWorkers] = useState([]);
+  const [nearbyNote, setNearbyNote] = useState(null);
+  const [nearbyError, setNearbyError] = useState(null);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  // ── Filter drawer animation ────────────────────────────────
+  const drawerAnim = useRef(new Animated.Value(0)).current;
+
+  const openFilters = () => {
+    setShowFilters(true);
+    Animated.timing(drawerAnim, {
+      toValue: 1,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeFilters = () => {
+    Animated.timing(drawerAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setShowFilters(false);
+    });
+  };
+
+  // ── Pickers ────────────────────────────────────────────────
+  const [catPickerOpen, setCatPickerOpen] = useState(false);
+  const [distPickerOpen, setDistPickerOpen] = useState(false);
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
+
+  // ── Voice ──────────────────────────────────────────────────
+  const [listening, setListening] = useState(false);
+  const [voiceAvailable, setVoiceAvailable] = useState(false);
+  const [micPermission, setMicPermission] = useState("undetermined");
+
+  useEffect(() => {
+    (async () => {
+      if (!SR?.ExpoSpeechRecognitionModule) return;
+      try {
+        const mod = SR.ExpoSpeechRecognitionModule;
+        const avail = mod.isRecognitionAvailable?.() ?? false;
+        setVoiceAvailable(!!avail);
+        const perm = await mod.getPermissionsAsync?.();
+        setMicPermission(perm?.status ?? "undetermined");
+      } catch {
+        setVoiceAvailable(false);
+      }
+    })();
+  }, []);
+
+  const startVoice = async () => {
+    if (!SR?.ExpoSpeechRecognitionModule) {
+      toast.info("Voice search is not available on this build.");
+      return;
+    }
+    try {
+      const mod = SR.ExpoSpeechRecognitionModule;
+
+      let perm = await mod.getPermissionsAsync?.();
+      if (perm?.status !== "granted") {
+        perm = await mod.requestPermissionsAsync?.();
+      }
+      if (perm?.status !== "granted") {
+        setMicPermission(perm?.status ?? "denied");
+        toast.info(
+          perm?.canAskAgain === false
+            ? "Microphone permission is disabled. Enable it in Settings → Apps → SkilledProz → Permissions."
+            : "Microphone permission required for voice search.",
+        );
+        return;
+      }
+
+      setMicPermission("granted");
+      mod.start({ lang: "en-US", interimResults: true, continuous: false });
+      setListening(true);
+    } catch {
+      toast.error("Failed to start voice search.");
+      setListening(false);
+    }
+  };
+
+  const stopVoice = () => {
+    try {
+      SR?.ExpoSpeechRecognitionModule?.stop?.();
+    } catch {}
+    setListening(false);
+  };
+
+  useEffect(() => {
+    if (!SR?.ExpoSpeechRecognitionModule) return;
+    const mod = SR.ExpoSpeechRecognitionModule;
+    const onResult = mod.addListener?.("result", (e) => {
+      const t = e?.results?.[0]?.transcript;
+      if (t) setInput(t);
+    });
+    const onEnd = mod.addListener?.("end", () => setListening(false));
+    const onErr = mod.addListener?.("error", () => setListening(false));
+    return () => {
+      onResult?.remove?.();
+      onEnd?.remove?.();
+      onErr?.remove?.();
+    };
+  }, []);
+
+  // ── Initial fetch ──────────────────────────────────────────
+  useEffect(() => {
+    Promise.all([
+      client
+        .get("/search/filters")
+        .then((r) => setFilterMeta(r.data.data || {})),
+      client
+        .get("/search/trending")
+        .then((r) => setTrending(r.data.data || {})),
+    ])
+      .catch(() => {})
+      .finally(() => setInitialLoading(false));
+
+    if (initialQuery) doSearch(initialQuery, DEFAULT_FILTERS, 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Debounced suggestions ──────────────────────────────────
+  useEffect(() => {
+    if (input.length < 2) {
+      setSuggestions(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      client
+        .get("/search", { params: { q: input, type: "suggest" } })
+        .then((r) => setSuggestions(r.data.data?.suggestions || null))
+        .catch(() => {});
+    }, 280);
+    return () => clearTimeout(t);
+  }, [input]);
+
+  async function doSearch(q, f, p) {
+    if (!q || q.trim().length < 2) return;
+    setLoading(true);
+    setTab("results");
+    try {
+      const params = { q, type: "workers", page: p, limit: 12 };
+      [
+        "category",
+        "city",
+        "country",
+        "minRate",
+        "maxRate",
+        "rating",
+        "available",
+        "language",
+        "gender",
+        "verification",
+        "radius",
+        "lat",
+        "lng",
+      ].forEach((k) => {
+        if (f[k]) params[k] = f[k];
+      });
+
+      const res = await client.get("/search", { params });
+      setWorkers(res.data.data?.workers?.data || []);
+      setTotal(res.data.data?.workers?.total || 0);
+      setPages(res.data.data?.workers?.pages || 1);
+    } catch {
+      setWorkers([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSearch() {
+    setSuggestions(null);
+    setPage(1);
+    setQuery(input);
+    doSearch(input, filters, 1);
+  }
+
+  function applyFilter(key, val) {
+    const next = { ...filters, [key]: val };
+    setFilters(next);
+    setPage(1);
+    if (query) doSearch(query, next, 1);
+  }
+
+  function clearFilters() {
+    setFilters(DEFAULT_FILTERS);
+    setPage(1);
+    if (query) doSearch(query, DEFAULT_FILTERS, 1);
+  }
+
+  function changePage(p) {
+    setPage(p);
+    doSearch(query, filters, p);
+  }
+
+  async function findNearby() {
+    setLocating(true);
+    setNearbyLoading(true);
+    setNearbyError(null);
+    setTab("nearby");
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (perm.status !== "granted") {
+        setNearbyError("permission_denied");
+        setNearbyWorkers([]);
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({});
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      setFilters((f) => ({ ...f, lat: String(lat), lng: String(lng) }));
+
+      const params = {
+        lat,
+        lng,
+        radius: filters.radius || 25,
+        ...(filters.category && { category: filters.category }),
+        ...(filters.language && { language: filters.language }),
+        ...(filters.gender && { gender: filters.gender }),
+        ...(filters.verification && { verification: filters.verification }),
+      };
+      const res = await client.get("/search/nearby", { params });
+      setNearbyWorkers(res.data.data?.workers || []);
+      setNearbyNote(res.data.data?.expansionNote || null);
+    } catch (err) {
+      const status = err?.response?.status;
+      setNearbyError(status === 500 ? "backend_error" : "unknown");
+      setNearbyWorkers([]);
+    } finally {
+      setLocating(false);
+      setNearbyLoading(false);
+    }
+  }
+
+  const activeFiltersCount = useMemo(
+    () =>
+      Object.entries(filters).filter(
+        ([k, v]) =>
+          v &&
+          !(k === "available" && v === "true") &&
+          !["lat", "lng"].includes(k),
+      ).length,
+    [filters],
+  );
+
+  // ═════════════════════════════════════════════════════════════
+  // RENDER
+  // ═════════════════════════════════════════════════════════════
+
+  if (initialLoading) {
+    return (
+      <AppScreen scroll={false}>
+        <PageSkeleton variant="list" rows={6} />
+      </AppScreen>
+    );
+  }
 
   return (
-    <Pressable
-      onPress={() => onPress(userId)}
-      style={[
-        styles.card,
-        { backgroundColor: c.bgCard, borderColor: c.border },
-      ]}
-    >
-      {/* Top badges row */}
-      <View style={styles.cardBadgeRow}>
-        {isNew && (
-          <View style={[styles.newBadge, { backgroundColor: "#1e1b4b" }]}>
-            <AppText
-              style={{ color: "#818cf8", fontSize: 11, fontWeight: "700" }}
-            >
-              NEW
-            </AppText>
-          </View>
-        )}
-        {isVerified && (
-          <AppText style={[styles.shieldBadge, { marginLeft: "auto" }]}>
-            <Ionicons name="shield-checkmark" size={21} color="#22c55e" />
-          </AppText>
-        )}
-        {!isNew && !isVerified && <View style={{ flex: 1 }} />}
-      </View>
-
-      {/* Avatar row */}
-      <View style={styles.avatarRow}>
-        <View style={styles.avatarWrap}>
-          <View
-            style={[
-              styles.avatar,
-              { backgroundColor: c.orangeDim, borderColor: c.border },
-            ]}
-          >
-            {avatar ? (
-              <Image source={{ uri: avatar }} style={styles.avatarImg} />
-            ) : (
-              <AppText
-                style={{ color: c.orange, fontWeight: "700", fontSize: 18 }}
-              >
-                {initials(firstName, lastName)}
-              </AppText>
-            )}
-          </View>
-          {/* Available green dot */}
-          <View
-            style={[
-              styles.availDot,
-              { backgroundColor: isAvailable ? "#22c55e" : "#6b7280" },
-            ]}
-          />
-        </View>
-      </View>
-
-      {/* Name + title */}
-      <AppText
-        variant="title"
-        weight="semibold"
-        style={{ color: c.text, marginTop: 8 }}
-      >
-        {firstName} {lastName}
-      </AppText>
-      {!!title && (
-        <AppText variant="body" style={{ color: c.textMuted, marginTop: 2 }}>
-          {title}
-        </AppText>
-      )}
-
-      {/* Primary category chip */}
-      {categories.length > 0 && (
-        <Pressable
-          style={[
-            styles.catChip,
-            { backgroundColor: c.orangeDim, borderColor: c.orange },
-          ]}
-        >
-          {categories[0]?.category?.icon ? (
-            <AppText style={{ fontSize: 13, marginRight: 4 }}>
-              {categories[0].category.icon}
-            </AppText>
-          ) : (
-            <AppText style={{ fontSize: 13, marginRight: 4 }}>🔧</AppText>
-          )}
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange }}
-          >
-            {categories[0]?.category?.name ?? categories[0]?.name}
-          </AppText>
-        </Pressable>
-      )}
-
-      {/* Location */}
-      {!!location && (
-        <AppText variant="small" style={{ color: c.textMuted, marginTop: 6 }}>
-          📍 {location}
-        </AppText>
-      )}
-
-      {/* Rating + jobs */}
-      <View style={styles.ratingRow}>
-        <AppText style={{ fontSize: 14, color: c.orange }}>★</AppText>
-        {avgRating > 0 ? (
-          <AppText
-            variant="body"
-            weight="semibold"
-            style={{ color: c.orange, marginLeft: 4 }}
-          >
-            {Number(avgRating).toFixed(1)}
-          </AppText>
-        ) : (
-          <AppText variant="small" style={{ color: c.orange, marginLeft: 4 }}>
-            {t("browse.new")}
-          </AppText>
-        )}
-        <AppText variant="small" style={{ color: c.textMuted, marginLeft: 4 }}>
-          ({totalReviews})
-        </AppText>
-        <AppText
-          variant="small"
-          style={{ color: c.textMuted, marginLeft: "auto" }}
-        >
-          {completedJobs} {t("browse.jobs")}
-        </AppText>
-      </View>
-
-      {/* Divider */}
-      <View style={[styles.divider, { backgroundColor: c.border }]} />
-
-      {/* Rate + availability */}
-      <View style={styles.rateRow}>
-        <AppText style={{ fontSize: 16, fontWeight: "700", color: c.text }}>
-          {fmtRate(hourlyRate, currency)}
-          <AppText variant="small" style={{ color: c.textMuted }}>
-            /hr
-          </AppText>
-        </AppText>
+    <AppScreen contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* ═══════ SEARCH BAR ═══════ */}
+      <View style={{ marginBottom: 16 }}>
         <View
           style={[
-            styles.availChip,
+            styles.searchBar,
+            { backgroundColor: c.bgPanel, borderColor: c.border },
+          ]}
+        >
+          <FaSearch size={15} color={c.textDim} />
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            onSubmitEditing={handleSearch}
+            placeholder="Search plumbers, electricians, cleaners..."
+            placeholderTextColor={c.textMuted}
+            returnKeyType="search"
+            style={[styles.searchInput, { color: c.text }]}
+          />
+          {input ? (
+            <Pressable onPress={() => setInput("")} hitSlop={8}>
+              <FaXmark size={16} color={c.textMuted} />
+            </Pressable>
+          ) : null}
+          {voiceAvailable ? (
+            <Pressable
+              onPress={listening ? stopVoice : startVoice}
+              hitSlop={6}
+              style={[
+                styles.iconBtn,
+                {
+                  backgroundColor: listening ? c.redDim : c.bgCard,
+                  borderColor: listening ? c.red : c.border,
+                },
+              ]}
+            >
+              {listening ? (
+                <FaStop size={13} color={c.red} />
+              ) : (
+                <FaMicrophone
+                  size={13}
+                  color={micPermission === "denied" ? c.textMuted : c.textDim}
+                />
+              )}
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={findNearby}
+            hitSlop={6}
+            style={[
+              styles.iconBtn,
+              { backgroundColor: c.bgCard, borderColor: c.border },
+            ]}
+          >
+            {locating ? (
+              <ActivityIndicator size="small" color={c.orange} />
+            ) : (
+              <FaMapMarkerAlt size={13} color={c.textDim} />
+            )}
+          </Pressable>
+          <Pressable
+            onPress={handleSearch}
+            style={({ pressed }) => [
+              styles.searchSubmit,
+              { backgroundColor: c.orange, opacity: pressed ? 0.9 : 1 },
+            ]}
+          >
+            <AppText style={{ fontSize: 12, fontWeight: "700", color: c.bg }}>
+              Search
+            </AppText>
+          </Pressable>
+        </View>
+
+        {/* Suggestions */}
+        {suggestions ? (
+          <View
+            style={[
+              styles.suggestions,
+              { backgroundColor: c.bgPanel, borderColor: c.border },
+            ]}
+          >
+            {suggestions.categories?.length > 0 ? (
+              <SugGroup title="Categories" c={c}>
+                {suggestions.categories.map((cat) => (
+                  <Pressable
+                    key={cat.slug}
+                    onPress={() => {
+                      setInput(cat.name);
+                      applyFilter("category", cat.slug);
+                      setSuggestions(null);
+                      handleSearch();
+                    }}
+                    style={styles.sugItem}
+                  >
+                    <FaTool size={13} color={c.textDim} />
+                    <AppText
+                      style={{
+                        fontSize: 13,
+                        color: c.textDim,
+                        marginLeft: 8,
+                        flex: 1,
+                      }}
+                    >
+                      {cat.icon ? `${cat.icon} ` : ""}
+                      {cat.name}
+                    </AppText>
+                  </Pressable>
+                ))}
+              </SugGroup>
+            ) : null}
+            {suggestions.workers?.length > 0 ? (
+              <SugGroup title="Workers" c={c}>
+                {suggestions.workers.map((w) => (
+                  <Pressable
+                    key={w.id}
+                    onPress={() => {
+                      setSuggestions(null);
+                      navigation.navigate("WorkerProfile", { userId: w.id });
+                    }}
+                    style={styles.sugItem}
+                  >
+                    <View
+                      style={[
+                        styles.sugAvatar,
+                        {
+                          backgroundColor: c.orangeDim,
+                          borderColor: c.orangeGlow,
+                        },
+                      ]}
+                    >
+                      {w.avatar ? (
+                        <Image
+                          source={{ uri: w.avatar }}
+                          style={{ width: "100%", height: "100%" }}
+                        />
+                      ) : (
+                        <AppText style={{ fontSize: 10, color: c.orange }}>
+                          {w.firstName?.[0]}
+                          {w.lastName?.[0]}
+                        </AppText>
+                      )}
+                    </View>
+                    <AppText
+                      style={{
+                        fontSize: 13,
+                        color: c.textDim,
+                        marginLeft: 8,
+                        flex: 1,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {w.firstName} {w.lastName}
+                    </AppText>
+                    {w.workerProfile?.title ? (
+                      <AppText
+                        style={{ fontSize: 10, color: c.textMuted }}
+                        numberOfLines={1}
+                      >
+                        {w.workerProfile.title}
+                      </AppText>
+                    ) : null}
+                  </Pressable>
+                ))}
+              </SugGroup>
+            ) : null}
+            {suggestions.cities?.length > 0 ? (
+              <SugGroup title="Cities" c={c}>
+                {suggestions.cities.map((city, i) => (
+                  <Pressable
+                    key={i}
+                    onPress={() => {
+                      setInput(city.city);
+                      applyFilter("city", city.city);
+                      setSuggestions(null);
+                    }}
+                    style={styles.sugItem}
+                  >
+                    <FaMapMarkerAlt size={12} color={c.textDim} />
+                    <AppText
+                      style={{ fontSize: 13, color: c.textDim, marginLeft: 8 }}
+                    >
+                      {city.city}, {city.country}
+                    </AppText>
+                  </Pressable>
+                ))}
+              </SugGroup>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+
+      {/* ═══════ TAB BAR ═══════ */}
+      <View style={styles.tabBar}>
+        <View style={styles.tabs}>
+          {[
+            { key: "trending", label: "Trending" },
             {
-              backgroundColor: isAvailable
-                ? "rgba(34,197,94,0.12)"
-                : "rgba(107,114,128,0.12)",
+              key: "results",
+              label: `Results${total > 0 ? ` (${total})` : ""}`,
+            },
+            { key: "nearby", label: "Nearby" },
+          ].map((t) => {
+            const active = tab === t.key;
+            return (
+              <Pressable
+                key={t.key}
+                onPress={() => setTab(t.key)}
+                style={[
+                  styles.tab,
+                  {
+                    backgroundColor: active ? c.orangeDim : "transparent",
+                    borderColor: active ? c.orange : c.border,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "600",
+                    color: active ? c.orange : c.textDim,
+                  }}
+                  numberOfLines={1}
+                >
+                  {t.label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable
+          onPress={openFilters}
+          style={[
+            styles.mobileFilterBtn,
+            {
+              backgroundColor: c.bgPanel,
+              borderColor: activeFiltersCount > 0 ? c.orange : c.border,
             },
           ]}
         >
+          <FaSlidersH
+            size={11}
+            color={activeFiltersCount > 0 ? c.orange : c.textDim}
+          />
           <AppText
             style={{
               fontSize: 11,
-              fontWeight: "700",
-              color: isAvailable ? "#22c55e" : "#6b7280",
-              letterSpacing: 0.8,
+              fontWeight: "600",
+              color: activeFiltersCount > 0 ? c.orange : c.textDim,
+              marginLeft: 4,
             }}
           >
-            {isAvailable ? t("browse.available") : t("browse.unavailable")}
+            Filters{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ""}
           </AppText>
+        </Pressable>
+      </View>
+
+      {/* ═══════ TRENDING ═══════ */}
+      {tab === "trending" ? (
+        <View style={{ gap: 24 }}>
+          {trending.categories?.length > 0 ? (
+            <View>
+              <AppText style={styles.trendTitle(c)}>Popular Categories</AppText>
+              <View style={styles.catGrid}>
+                {trending.categories.map((cat) => (
+                  <Pressable
+                    key={cat.id}
+                    onPress={() => {
+                      applyFilter("category", cat.slug);
+                      setTab("results");
+                    }}
+                    style={({ pressed }) => [
+                      styles.catCard,
+                      {
+                        backgroundColor: c.bgPanel,
+                        borderColor: c.border,
+                        opacity: pressed ? 0.85 : 1,
+                      },
+                    ]}
+                  >
+                    <AppText style={{ fontSize: 22 }}>
+                      {cat.icon || "🛠️"}
+                    </AppText>
+                    <AppText
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "700",
+                        color: c.text,
+                        textAlign: "center",
+                        marginTop: 4,
+                      }}
+                      numberOfLines={2}
+                    >
+                      {cat.name}
+                    </AppText>
+                    <AppText
+                      style={{ fontSize: 9, color: c.textMuted, marginTop: 2 }}
+                    >
+                      {cat._count?.workers || 0} workers
+                    </AppText>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {trending.topWorkers?.length > 0 ? (
+            <View>
+              <AppText style={styles.trendTitle(c)}>Top Rated Workers</AppText>
+              <View style={styles.workerGrid}>
+                {trending.topWorkers.map((w, i) => (
+                  <WorkerCard
+                    key={w.user?.id || i}
+                    worker={w}
+                    c={c}
+                    navigation={navigation}
+                    currentUser={user}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {trending.recentlyJoined?.length > 0 ? (
+            <View>
+              <AppText style={styles.trendTitle(c)}>New on SkilledProz</AppText>
+              <View style={styles.workerGrid}>
+                {trending.recentlyJoined.map((w, i) => (
+                  <WorkerCard
+                    key={w.user?.id || i}
+                    worker={w}
+                    isNew
+                    c={c}
+                    navigation={navigation}
+                    currentUser={user}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* ═══════ RESULTS ═══════ */}
+      {tab === "results" ? (
+        <>
+          {!query ? (
+            <PromptBlock c={c} />
+          ) : loading ? (
+            <View style={styles.workerGrid}>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <WorkerSkeleton key={i} c={c} />
+              ))}
+            </View>
+          ) : workers.length === 0 ? (
+            <EmptyBlock
+              icon={<FaFrown size={36} color={c.textMuted} />}
+              title={`No workers found for "${query}"`}
+              text="Try different keywords or adjust your filters."
+              ctaLabel="Clear Filters"
+              onCta={clearFilters}
+              c={c}
+            />
+          ) : (
+            <>
+              <AppText style={styles.resultsMeta(c)}>
+                {total} worker{total !== 1 ? "s" : ""} found for "{query}"
+              </AppText>
+              <View style={styles.workerGrid}>
+                {workers.map((w, i) => (
+                  <WorkerCard
+                    key={w.user?.id || i}
+                    worker={w}
+                    showDistance={!!w._distanceKm}
+                    c={c}
+                    navigation={navigation}
+                    currentUser={user}
+                  />
+                ))}
+              </View>
+              {pages > 1 ? (
+                <View style={styles.pager}>
+                  <Pressable
+                    disabled={page === 1}
+                    onPress={() => changePage(page - 1)}
+                    style={[
+                      styles.pageBtn,
+                      {
+                        backgroundColor: c.bgPanel,
+                        borderColor: c.border,
+                        opacity: page === 1 ? 0.35 : 1,
+                      },
+                    ]}
+                  >
+                    <FaArrowLeft size={10} color={c.textDim} />
+                    <AppText
+                      style={{
+                        fontSize: 11,
+                        color: c.textDim,
+                        marginLeft: 4,
+                      }}
+                    >
+                      Prev
+                    </AppText>
+                  </Pressable>
+                  <AppText style={{ fontSize: 11, color: c.textDim }}>
+                    {page} / {pages}
+                  </AppText>
+                  <Pressable
+                    disabled={page === pages}
+                    onPress={() => changePage(page + 1)}
+                    style={[
+                      styles.pageBtn,
+                      {
+                        backgroundColor: c.bgPanel,
+                        borderColor: c.border,
+                        opacity: page === pages ? 0.35 : 1,
+                      },
+                    ]}
+                  >
+                    <AppText
+                      style={{
+                        fontSize: 11,
+                        color: c.textDim,
+                        marginRight: 4,
+                      }}
+                    >
+                      Next
+                    </AppText>
+                    <FaArrowRight size={10} color={c.textDim} />
+                  </Pressable>
+                </View>
+              ) : null}
+            </>
+          )}
+        </>
+      ) : null}
+
+      {/* ═══════ NEARBY ═══════ */}
+      {tab === "nearby" ? (
+        nearbyLoading ? (
+          <View style={styles.workerGrid}>
+            {[0, 1, 2, 3].map((i) => (
+              <WorkerSkeleton key={i} c={c} />
+            ))}
+          </View>
+        ) : nearbyError === "backend_error" ? (
+          <EmptyBlock
+            icon={<FaInfoCircle size={36} color={c.orange} />}
+            title="Nearby search unavailable"
+            text="The server isn't responding to nearby searches right now. Please try again in a moment."
+            ctaLabel="Try Again"
+            onCta={findNearby}
+            c={c}
+          />
+        ) : nearbyError === "permission_denied" ? (
+          <EmptyBlock
+            icon={<FaMapMarkerAlt size={36} color={c.textMuted} />}
+            title="Location permission needed"
+            text="Enable location access in your device settings to find nearby workers."
+            ctaLabel="Retry"
+            onCta={findNearby}
+            c={c}
+          />
+        ) : nearbyWorkers.length === 0 ? (
+          <EmptyBlock
+            icon={<FaMapMarkerAlt size={36} color={c.textMuted} />}
+            title="No nearby workers found"
+            text="Tap the location button in the search bar to find workers near you."
+            ctaLabel="Try Again"
+            onCta={findNearby}
+            c={c}
+          />
+        ) : (
+          <>
+            {nearbyNote ? (
+              <View
+                style={[
+                  styles.expansionNote,
+                  {
+                    backgroundColor: "rgba(59,130,246,0.08)",
+                    borderColor: "rgba(59,130,246,0.2)",
+                  },
+                ]}
+              >
+                <FaInfoCircle size={12} color="#60a5fa" />
+                <AppText
+                  style={{
+                    fontSize: 12,
+                    color: "#60a5fa",
+                    flex: 1,
+                    marginLeft: 6,
+                  }}
+                >
+                  {nearbyNote}
+                </AppText>
+              </View>
+            ) : null}
+            <AppText style={styles.resultsMeta(c)}>
+              {nearbyWorkers.length} worker
+              {nearbyWorkers.length !== 1 ? "s" : ""} within{" "}
+              {filters.radius || 25} km
+            </AppText>
+            <View style={styles.workerGrid}>
+              {nearbyWorkers.map((w, i) => (
+                <WorkerCard
+                  key={w.user?.id || i}
+                  worker={w}
+                  showDistance
+                  c={c}
+                  navigation={navigation}
+                  currentUser={user}
+                />
+              ))}
+            </View>
+          </>
+        )
+      ) : null}
+
+      {/* ═══════ FILTER DRAWER — SLIDES FROM LEFT ═══════ */}
+      <Modal
+        visible={showFilters}
+        animationType="none"
+        transparent
+        onRequestClose={closeFilters}
+      >
+        <View style={styles.filterOverlay}>
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                backgroundColor: "rgba(0,0,0,0.6)",
+                opacity: drawerAnim,
+              },
+            ]}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFillObject}
+              onPress={closeFilters}
+            />
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              styles.filterDrawer,
+              {
+                backgroundColor: c.bgPanel,
+                borderColor: c.border,
+                width: DRAWER_WIDTH,
+                transform: [
+                  {
+                    translateX: drawerAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-DRAWER_WIDTH, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {/* ═══ Filter Header — pushed down for status bar ═══ */}
+            <View style={[styles.filterHeader, { paddingTop: 56 }]}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <AppText
+                  style={{
+                    fontFamily: "Syne_700Bold",
+                    fontSize: 14,
+                    fontWeight: "700",
+                    color: c.text,
+                  }}
+                >
+                  Filters
+                </AppText>
+                {activeFiltersCount > 0 ? (
+                  <View
+                    style={[styles.filterCount, { backgroundColor: c.orange }]}
+                  >
+                    <AppText
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "800",
+                        color: c.bg,
+                      }}
+                    >
+                      {activeFiltersCount}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
+              <View
+                style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
+              >
+                {activeFiltersCount > 0 ? (
+                  <Pressable onPress={clearFilters} hitSlop={6}>
+                    <AppText
+                      style={{
+                        fontSize: 11,
+                        color: c.orange,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Clear all
+                    </AppText>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={closeFilters}
+                  hitSlop={6}
+                  style={[
+                    styles.filterCloseBtn,
+                    { backgroundColor: c.bgCard, borderColor: c.border },
+                  ]}
+                >
+                  <FaXmark size={13} color={c.textDim} />
+                </Pressable>
+              </View>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+              {/* Availability */}
+              <FilterSection title="Availability" c={c}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <AppText style={{ fontSize: 12, color: c.textDim }}>
+                    Available only
+                  </AppText>
+                  <Switch
+                    value={filters.available === "true"}
+                    onValueChange={(v) =>
+                      applyFilter("available", v ? "true" : "false")
+                    }
+                    trackColor={{ false: c.border, true: c.orangeGlow }}
+                    thumbColor={
+                      filters.available === "true" ? c.orange : c.textMuted
+                    }
+                  />
+                </View>
+              </FilterSection>
+
+              {/* Category */}
+              <FilterSection title="Category" c={c}>
+                <Pressable
+                  onPress={() => setCatPickerOpen(true)}
+                  style={({ pressed }) => [
+                    styles.selectBtn,
+                    {
+                      backgroundColor: c.bgInput,
+                      borderColor: c.border,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 12,
+                      color: filters.category ? c.text : c.textMuted,
+                      flex: 1,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {filters.category
+                      ? filterMeta.categories?.find(
+                          (cat) => cat.slug === filters.category,
+                        )?.name || filters.category
+                      : "All categories"}
+                  </AppText>
+                  <AppText style={{ fontSize: 10, color: c.textMuted }}>
+                    ▾
+                  </AppText>
+                </Pressable>
+              </FilterSection>
+
+              {/* City */}
+              <FilterSection title="City" c={c}>
+                <TextInput
+                  value={filters.city}
+                  onChangeText={(v) => applyFilter("city", v)}
+                  placeholder="e.g. Lagos"
+                  placeholderTextColor={c.textMuted}
+                  style={[
+                    styles.filterInput,
+                    {
+                      color: c.text,
+                      borderColor: c.border,
+                      backgroundColor: c.bgInput,
+                    },
+                  ]}
+                />
+              </FilterSection>
+
+              {/* Rate */}
+              <FilterSection title="Hourly Rate" c={c}>
+                <View
+                  style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
+                >
+                  <TextInput
+                    value={filters.minRate}
+                    onChangeText={(v) =>
+                      applyFilter("minRate", v.replace(/[^0-9.]/g, ""))
+                    }
+                    placeholder="Min"
+                    placeholderTextColor={c.textMuted}
+                    keyboardType="decimal-pad"
+                    style={[
+                      styles.filterInput,
+                      {
+                        flex: 1,
+                        color: c.text,
+                        borderColor: c.border,
+                        backgroundColor: c.bgInput,
+                      },
+                    ]}
+                  />
+                  <AppText style={{ color: c.textMuted }}>–</AppText>
+                  <TextInput
+                    value={filters.maxRate}
+                    onChangeText={(v) =>
+                      applyFilter("maxRate", v.replace(/[^0-9.]/g, ""))
+                    }
+                    placeholder="Max"
+                    placeholderTextColor={c.textMuted}
+                    keyboardType="decimal-pad"
+                    style={[
+                      styles.filterInput,
+                      {
+                        flex: 1,
+                        color: c.text,
+                        borderColor: c.border,
+                        backgroundColor: c.bgInput,
+                      },
+                    ]}
+                  />
+                </View>
+              </FilterSection>
+
+              {/* Rating */}
+              <FilterSection title="Minimum Rating" c={c}>
+                <View style={{ gap: 6 }}>
+                  {RATINGS.map((r) => (
+                    <Pressable
+                      key={String(r.value)}
+                      onPress={() => applyFilter("rating", String(r.value))}
+                      style={[
+                        styles.ratingOpt,
+                        {
+                          backgroundColor:
+                            filters.rating === String(r.value)
+                              ? c.orangeDim
+                              : c.bgCard,
+                          borderColor:
+                            filters.rating === String(r.value)
+                              ? c.orange
+                              : c.border,
+                        },
+                      ]}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "600",
+                          color:
+                            filters.rating === String(r.value)
+                              ? c.orange
+                              : c.textDim,
+                        }}
+                      >
+                        {r.label}
+                      </AppText>
+                    </Pressable>
+                  ))}
+                </View>
+              </FilterSection>
+
+              {/* Distance */}
+              <FilterSection title="Max Distance" c={c}>
+                <Pressable
+                  onPress={() => setDistPickerOpen(true)}
+                  style={({ pressed }) => [
+                    styles.selectBtn,
+                    {
+                      backgroundColor: c.bgInput,
+                      borderColor: c.border,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 12,
+                      color: filters.radius ? c.text : c.textMuted,
+                      flex: 1,
+                    }}
+                  >
+                    {filters.radius ? `${filters.radius} km` : "Any distance"}
+                  </AppText>
+                  <AppText style={{ fontSize: 10, color: c.textMuted }}>
+                    ▾
+                  </AppText>
+                </Pressable>
+                {filters.radius && !filters.lat ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      marginTop: 6,
+                    }}
+                  >
+                    <FaMapMarkerAlt size={10} color={c.textMuted} />
+                    <AppText style={{ fontSize: 10, color: c.textMuted }}>
+                      Allow location for distance filter
+                    </AppText>
+                  </View>
+                ) : null}
+              </FilterSection>
+
+              {/* Language */}
+              <FilterSection title="Language" c={c}>
+                <Pressable
+                  onPress={() => setLangPickerOpen(true)}
+                  style={({ pressed }) => [
+                    styles.selectBtn,
+                    {
+                      backgroundColor: c.bgInput,
+                      borderColor: c.border,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 12,
+                      color: filters.language ? c.text : c.textMuted,
+                      flex: 1,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {filters.language || "Any language"}
+                  </AppText>
+                  <AppText style={{ fontSize: 10, color: c.textMuted }}>
+                    ▾
+                  </AppText>
+                </Pressable>
+              </FilterSection>
+
+              {/* Gender */}
+              <FilterSection title="Gender Preference" c={c}>
+                <View style={{ gap: 6 }}>
+                  {GENDERS.map((g) => (
+                    <Pressable
+                      key={g.value}
+                      onPress={() => applyFilter("gender", g.value)}
+                      style={[
+                        styles.ratingOpt,
+                        {
+                          backgroundColor:
+                            filters.gender === g.value ? c.orangeDim : c.bgCard,
+                          borderColor:
+                            filters.gender === g.value ? c.orange : c.border,
+                        },
+                      ]}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "600",
+                          color:
+                            filters.gender === g.value ? c.orange : c.textDim,
+                        }}
+                      >
+                        {g.label}
+                      </AppText>
+                    </Pressable>
+                  ))}
+                </View>
+              </FilterSection>
+
+              {/* Verification */}
+              <FilterSection title="Verification" c={c}>
+                <View style={{ gap: 6 }}>
+                  {VERIFICATIONS.map((v) => (
+                    <Pressable
+                      key={v.value}
+                      onPress={() => applyFilter("verification", v.value)}
+                      style={[
+                        styles.ratingOpt,
+                        {
+                          backgroundColor:
+                            filters.verification === v.value
+                              ? c.orangeDim
+                              : c.bgCard,
+                          borderColor:
+                            filters.verification === v.value
+                              ? c.orange
+                              : c.border,
+                        },
+                      ]}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "600",
+                          color:
+                            filters.verification === v.value
+                              ? c.orange
+                              : c.textDim,
+                        }}
+                      >
+                        {v.label}
+                      </AppText>
+                    </Pressable>
+                  ))}
+                </View>
+              </FilterSection>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      {/* ═══════ PICKERS ═══════ */}
+      <PickerSheet
+        visible={catPickerOpen}
+        onClose={() => setCatPickerOpen(false)}
+        title="Category"
+        c={c}
+        options={[
+          { label: "All categories", value: "" },
+          ...(filterMeta.categories || []).map((cat) => ({
+            label: `${cat.icon ? `${cat.icon} ` : ""}${cat.name}`,
+            value: cat.slug,
+          })),
+        ]}
+        selected={filters.category}
+        onSelect={(v) => {
+          applyFilter("category", v);
+          setCatPickerOpen(false);
+        }}
+      />
+      <PickerSheet
+        visible={distPickerOpen}
+        onClose={() => setDistPickerOpen(false)}
+        title="Max Distance"
+        c={c}
+        options={[
+          { label: "Any distance", value: "" },
+          ...DISTANCES.map((d) => ({ label: `${d} km`, value: String(d) })),
+        ]}
+        selected={filters.radius}
+        onSelect={(v) => {
+          applyFilter("radius", v);
+          if (v && !filters.lat) findNearby();
+          setDistPickerOpen(false);
+        }}
+      />
+      <PickerSheet
+        visible={langPickerOpen}
+        onClose={() => setLangPickerOpen(false)}
+        title="Language"
+        c={c}
+        options={[
+          { label: "Any language", value: "" },
+          ...(filterMeta.languages?.length
+            ? filterMeta.languages
+            : [
+                "English",
+                "French",
+                "Arabic",
+                "Yoruba",
+                "Hausa",
+                "Igbo",
+                "Swahili",
+                "Portuguese",
+              ]
+          ).map((l) => ({ label: l, value: l })),
+        ]}
+        selected={filters.language}
+        onSelect={(v) => {
+          applyFilter("language", v);
+          setLangPickerOpen(false);
+        }}
+      />
+    </AppScreen>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUB-COMPONENTS
+// ═══════════════════════════════════════════════════════════════
+function SugGroup({ title, c, children }) {
+  return (
+    <View style={{ paddingVertical: 6 }}>
+      <AppText
+        style={{
+          fontSize: 9,
+          fontWeight: "700",
+          color: c.textMuted,
+          textTransform: "uppercase",
+          letterSpacing: 0.8,
+          paddingHorizontal: 14,
+          paddingBottom: 4,
+        }}
+      >
+        {title}
+      </AppText>
+      {children}
+    </View>
+  );
+}
+
+function FilterSection({ title, c, children }) {
+  return (
+    <View
+      style={{
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: c.border,
+      }}
+    >
+      <AppText
+        style={{
+          fontSize: 10,
+          fontWeight: "700",
+          color: c.textDim,
+          textTransform: "uppercase",
+          letterSpacing: 0.7,
+          marginBottom: 8,
+        }}
+      >
+        {title}
+      </AppText>
+      {children}
+    </View>
+  );
+}
+
+function PickerSheet({
+  visible,
+  onClose,
+  title,
+  options,
+  selected,
+  onSelect,
+  c,
+}) {
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <View style={styles.sheetOverlay}>
+        <Pressable style={styles.sheetBackdrop} onPress={onClose} />
+        <View
+          style={[
+            styles.sheet,
+            { backgroundColor: c.bgPanel, borderColor: c.border },
+          ]}
+        >
+          <View style={styles.sheetHeader}>
+            <AppText
+              style={{
+                fontFamily: "Syne_700Bold",
+                fontSize: 15,
+                fontWeight: "700",
+                color: c.text,
+              }}
+            >
+              {title}
+            </AppText>
+            <Pressable onPress={onClose} hitSlop={6}>
+              <FaXmark size={16} color={c.textDim} />
+            </Pressable>
+          </View>
+          <ScrollView>
+            {options.map((opt) => (
+              <Pressable
+                key={opt.value}
+                onPress={() => onSelect(opt.value)}
+                style={[
+                  styles.sheetItem,
+                  {
+                    backgroundColor:
+                      selected === opt.value ? c.orangeDim : "transparent",
+                    borderBottomColor: c.border,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    fontWeight: selected === opt.value ? "700" : "500",
+                    color: selected === opt.value ? c.orange : c.text,
+                  }}
+                >
+                  {opt.label}
+                </AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function PromptBlock({ c }) {
+  return (
+    <View style={styles.promptBlock}>
+      <FaSearch size={36} color={c.textMuted} />
+      <AppText
+        style={{
+          fontFamily: "Syne_800ExtraBold",
+          fontSize: 18,
+          fontWeight: "800",
+          color: c.text,
+          marginTop: 12,
+          textAlign: "center",
+        }}
+      >
+        Search for a skilled worker
+      </AppText>
+      <AppText
+        style={{
+          fontSize: 13,
+          color: c.textDim,
+          marginTop: 8,
+          textAlign: "center",
+        }}
+      >
+        Try "plumber Lagos", "electrician", or "house cleaning"
+      </AppText>
+    </View>
+  );
+}
+
+function EmptyBlock({ icon, title, text, ctaLabel, onCta, c }) {
+  return (
+    <View style={styles.emptyBlock}>
+      {icon}
+      <AppText
+        style={{
+          fontFamily: "Syne_800ExtraBold",
+          fontSize: 16,
+          fontWeight: "800",
+          color: c.text,
+          marginTop: 12,
+          textAlign: "center",
+        }}
+      >
+        {title}
+      </AppText>
+      <AppText
+        style={{
+          fontSize: 12,
+          color: c.textDim,
+          marginTop: 8,
+          textAlign: "center",
+          lineHeight: 18,
+        }}
+      >
+        {text}
+      </AppText>
+      {ctaLabel ? (
+        <Pressable
+          onPress={onCta}
+          style={[styles.emptyCta, { backgroundColor: c.orange }]}
+        >
+          <AppText style={{ fontSize: 12, fontWeight: "700", color: c.bg }}>
+            {ctaLabel}
+          </AppText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function WorkerSkeleton({ c }) {
+  return (
+    <View
+      style={[
+        styles.workerSkeleton,
+        { backgroundColor: c.bgPanel, borderColor: c.border },
+      ]}
+    />
+  );
+}
+
+function WorkerCard({
+  worker,
+  showDistance,
+  isNew,
+  c,
+  navigation,
+  currentUser,
+}) {
+  const {
+    user,
+    categories,
+    hourlyRate,
+    currency,
+    avgRating,
+    totalReviews,
+    completedJobs,
+    isAvailable,
+    distanceKm,
+    _distanceKm,
+    verificationStatus,
+  } = worker;
+
+  const dist = _distanceKm ?? distanceKm;
+  const primaryCat =
+    categories?.find((cat) => cat.isPrimary) || categories?.[0];
+  const isHirer = currentUser?.role === "HIRER";
+  const saved = useSavedWorker(user?.id, { enabled: isHirer && !!user?.id });
+
+  return (
+    <Pressable
+      onPress={() => navigation.navigate("WorkerProfile", { userId: user?.id })}
+      style={({ pressed }) => [
+        styles.workerCard,
+        {
+          backgroundColor: c.bgPanel,
+          borderColor: c.border,
+          opacity: pressed ? 0.92 : 1,
+        },
+      ]}
+    >
+      <View style={styles.wcTop}>
+        <View
+          style={[
+            styles.wcAvatar,
+            { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+          ]}
+        >
+          {user?.avatar ? (
+            <Image
+              source={{ uri: user.avatar }}
+              style={{ width: "100%", height: "100%" }}
+            />
+          ) : (
+            <AppText
+              style={{ fontSize: 14, fontWeight: "700", color: c.orange }}
+            >
+              {user?.firstName?.[0]}
+              {user?.lastName?.[0]}
+            </AppText>
+          )}
+          {isAvailable ? (
+            <View
+              style={[
+                styles.wcOnline,
+                { backgroundColor: c.green, borderColor: c.bgPanel },
+              ]}
+            />
+          ) : null}
+        </View>
+        <View
+          style={{
+            flexDirection: "row",
+            gap: 5,
+            alignItems: "center",
+            flexShrink: 1,
+          }}
+        >
+          {isNew ? (
+            <View
+              style={[
+                styles.newBadge,
+                { backgroundColor: "rgba(129,140,248,0.15)" },
+              ]}
+            >
+              <AppText
+                style={{ fontSize: 8, fontWeight: "700", color: "#818cf8" }}
+              >
+                New
+              </AppText>
+            </View>
+          ) : null}
+          {verificationStatus === "VERIFIED" ? (
+            <FaShieldAlt size={13} color={c.green} />
+          ) : null}
+          {showDistance && dist != null ? (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+            >
+              <FaMapMarkerAlt size={9} color={c.textDim} />
+              <AppText style={{ fontSize: 9, color: c.textDim }}>
+                {dist} km
+              </AppText>
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      <AppText
+        style={{ fontSize: 13, fontWeight: "700", color: c.text }}
+        numberOfLines={1}
+      >
+        {user?.firstName} {user?.lastName}
+      </AppText>
+      {worker.title ? (
+        <AppText style={{ fontSize: 11, color: c.textDim }} numberOfLines={1}>
+          {worker.title}
+        </AppText>
+      ) : null}
+      {primaryCat ? (
+        <AppText
+          style={{ fontSize: 10, fontWeight: "600", color: c.orange }}
+          numberOfLines={1}
+        >
+          {primaryCat.category?.icon} {primaryCat.category?.name}
+        </AppText>
+      ) : null}
+
+      {user?.city || user?.country ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+          <FaMapMarkerAlt size={9} color={c.textMuted} />
+          <AppText
+            style={{ fontSize: 10, color: c.textMuted }}
+            numberOfLines={1}
+          >
+            {[user.city, user.country].filter(Boolean).join(", ")}
+          </AppText>
+        </View>
+      ) : null}
+
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+          <FaStar size={10} color="#fbbf24" />
+          <AppText
+            style={{ fontSize: 11, fontWeight: "700", color: "#fbbf24" }}
+          >
+            {avgRating > 0 ? avgRating.toFixed(1) : "New"}
+          </AppText>
+          <AppText style={{ fontSize: 9, color: c.textMuted }}>
+            ({totalReviews})
+          </AppText>
+        </View>
+        <AppText style={{ fontSize: 10, color: c.textDim }}>
+          {completedJobs} jobs
+        </AppText>
+      </View>
+
+      <View style={styles.wcFooter}>
+        <View style={{ flexDirection: "row", alignItems: "baseline", flex: 1 }}>
+          <AppText
+            style={{ fontSize: 13, fontWeight: "800", color: c.text }}
+            numberOfLines={1}
+          >
+            {currency} {hourlyRate?.toLocaleString()}
+          </AppText>
+          <AppText style={{ fontSize: 9, color: c.textDim, marginLeft: 1 }}>
+            /hr
+          </AppText>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <View
+            style={[
+              styles.wcAvail,
+              { backgroundColor: isAvailable ? c.greenDim : c.bgCard },
+            ]}
+          >
+            <AppText
+              style={{
+                fontSize: 8,
+                fontWeight: "700",
+                color: isAvailable ? c.green : c.textMuted,
+                textTransform: "uppercase",
+              }}
+            >
+              {isAvailable ? "Available" : "Busy"}
+            </AppText>
+          </View>
+          {isHirer ? (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation?.();
+                saved.toggle();
+              }}
+              disabled={saved.checking || saved.toggling}
+              style={[
+                styles.wcSaveBtn,
+                {
+                  backgroundColor: saved.isSaved ? c.orangeDim : c.bgCard,
+                  borderColor: saved.isSaved ? c.orangeGlow : c.border,
+                },
+              ]}
+            >
+              <FaBookmark
+                size={10}
+                color={saved.isSaved ? c.orange : c.textDim}
+              />
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </Pressable>
   );
 }
 
-// ── Filter Panel ───────────────────────────────────────────────────────────────
-function FilterPanel({
-  visible,
-  onClose,
-  filters,
-  setFilters,
-  options,
-  c,
-  t,
-  th,
-}) {
-  const [local, setLocal] = useState(filters);
-
-  useEffect(() => {
-    setLocal(filters);
-  }, [filters]);
-
-  const apply = () => {
-    setFilters(local);
-    onClose();
-  };
-  const reset = () => {
-    setLocal({});
-    setFilters({});
-    onClose();
-  };
-  const set = (key, val) => setLocal((f) => ({ ...f, [key]: val }));
-
-  const categories = options.categories ?? [];
-  const languages = options.languages ?? [];
-  const distances = options.distances ?? [5, 10, 25, 50, 100, 200];
-
-  if (!visible) return null;
-
-  return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={fp.backdrop} onPress={onClose}>
-        <Pressable
-          style={[
-            fp.sheet,
-            {
-              backgroundColor: th.mode === "dark" ? "#111118" : "#ffffff",
-              borderTopColor: c.border,
-            },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={[fp.handle, { backgroundColor: c.border }]} />
-          {/* Header */}
-          <View style={fp.header}>
-            <AppText
-              variant="title"
-              weight="semibold"
-              style={{ color: c.text }}
-            >
-              {t("browse.filters")}
-            </AppText>
-            <Pressable
-              onPress={onClose}
-              style={[
-                fp.closeBtn,
-                { backgroundColor: c.bgInput, borderColor: c.border },
-              ]}
-            >
-              <AppText style={{ color: c.text }}>✕</AppText>
-            </Pressable>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-            {/* Availability */}
-            <SectionLabel label={t("browse.filter.availability")} c={c} />
-            <View style={fp.row}>
-              <Switch
-                value={local.available !== "false"}
-                onValueChange={(v) => set("available", v ? "true" : "false")}
-                trackColor={{ true: c.orange, false: c.border }}
-                thumbColor="#fff"
-              />
-              <AppText variant="body" style={{ color: c.text, marginLeft: 12 }}>
-                Available only
-              </AppText>
-            </View>
-
-            {/* Category */}
-            <SectionLabel label={t("browse.filter.category")} c={c} />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                gap: 8,
-                flexDirection: "row",
-                paddingBottom: 4,
-              }}
-            >
-              {[
-                { id: null, name: t("browse.filter.allCategories") },
-                ...categories,
-              ].map((cat) => {
-                const active = (local.category ?? null) === (cat.slug ?? null);
-                return (
-                  <Pressable
-                    key={cat.id ?? "all"}
-                    onPress={() => set("category", cat.slug ?? null)}
-                    style={[
-                      fp.chip,
-                      {
-                        backgroundColor: active ? c.orange : c.bgInput,
-                        borderColor: active ? c.orange : c.border,
-                      },
-                    ]}
-                  >
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: active ? "#fff" : c.text }}
-                    >
-                      {cat.icon ? `${cat.icon} ` : ""}
-                      {cat.name}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* City */}
-            <SectionLabel label={t("browse.filter.city")} c={c} />
-            <TextInput
-              value={local.city ?? ""}
-              onChangeText={(v) => set("city", v)}
-              placeholder={t("browse.filter.cityPlaceholder") || "e.g. Lagos"}
-              placeholderTextColor={c.textMuted}
-              style={[
-                fp.input,
-                {
-                  color: c.text,
-                  backgroundColor: c.bgInput,
-                  borderColor: c.border,
-                },
-              ]}
-            />
-
-            {/* Hourly Rate */}
-            <SectionLabel label={t("browse.filter.hourlyRate")} c={c} />
-            <View
-              style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
-            >
-              <TextInput
-                value={local.minRate ?? ""}
-                onChangeText={(v) => set("minRate", v)}
-                placeholder={t("browse.filter.min")}
-                placeholderTextColor={c.textMuted}
-                keyboardType="numeric"
-                style={[
-                  fp.input,
-                  {
-                    flex: 1,
-                    color: c.text,
-                    backgroundColor: c.bgInput,
-                    borderColor: c.border,
-                  },
-                ]}
-              />
-              <AppText style={{ color: c.textMuted }}>–</AppText>
-              <TextInput
-                value={local.maxRate ?? ""}
-                onChangeText={(v) => set("maxRate", v)}
-                placeholder={t("browse.filter.max")}
-                placeholderTextColor={c.textMuted}
-                keyboardType="numeric"
-                style={[
-                  fp.input,
-                  {
-                    flex: 1,
-                    color: c.text,
-                    backgroundColor: c.bgInput,
-                    borderColor: c.border,
-                  },
-                ]}
-              />
-            </View>
-
-            {/* Min Rating */}
-            <SectionLabel label={t("browse.filter.minRating")} c={c} />
-            {[
-              { label: t("browse.filter.rating4"), val: "4" },
-              { label: t("browse.filter.rating3"), val: "3" },
-              { label: t("browse.filter.anyRating"), val: null },
-            ].map((r) => {
-              const active = (local.rating ?? null) === r.val;
-              return (
-                <Pressable
-                  key={r.label}
-                  onPress={() => set("rating", r.val)}
-                  style={[
-                    fp.optionRow,
-                    {
-                      borderColor: active ? c.orange : c.border,
-                      backgroundColor: active ? `${c.orange}22` : c.bgInput,
-                    },
-                  ]}
-                >
-                  <AppText
-                    variant="body"
-                    style={{ color: active ? c.orange : c.text }}
-                  >
-                    {r.label}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-
-            {/* Max Distance */}
-            <SectionLabel label={t("browse.filter.maxDistance")} c={c} />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                gap: 8,
-                flexDirection: "row",
-                paddingBottom: 4,
-              }}
-            >
-              {[
-                { label: t("browse.filter.anyDistance"), val: null },
-                ...distances.map((d) => ({ label: `${d}km`, val: String(d) })),
-              ].map((d) => {
-                const active = (local.radius ?? null) === d.val;
-                return (
-                  <Pressable
-                    key={d.label}
-                    onPress={() => set("radius", d.val)}
-                    style={[
-                      fp.chip,
-                      {
-                        backgroundColor: active ? c.orange : c.bgInput,
-                        borderColor: active ? c.orange : c.border,
-                      },
-                    ]}
-                  >
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: active ? "#fff" : c.text }}
-                    >
-                      {d.label}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* Language */}
-            <SectionLabel label={t("browse.filter.language")} c={c} />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                gap: 8,
-                flexDirection: "row",
-                paddingBottom: 4,
-              }}
-            >
-              {[t("browse.filter.anyLanguage"), ...languages].map((lang) => {
-                const val =
-                  lang === t("browse.filter.anyLanguage") ? null : lang;
-                const active = (local.language ?? null) === val;
-                return (
-                  <Pressable
-                    key={lang}
-                    onPress={() => set("language", val)}
-                    style={[
-                      fp.chip,
-                      {
-                        backgroundColor: active ? c.orange : c.bgInput,
-                        borderColor: active ? c.orange : c.border,
-                      },
-                    ]}
-                  >
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: active ? "#fff" : c.text }}
-                    >
-                      {lang}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* Gender */}
-            <SectionLabel label={t("browse.filter.gender")} c={c} />
-            {[
-              { label: t("browse.filter.any"), val: null },
-              { label: t("browse.filter.male"), val: t("browse.filter.male") },
-              {
-                label: t("browse.filter.female"),
-                val: t("browse.filter.female"),
-              },
-              {
-                label: t("browse.filter.nonBinary"),
-                val: t("browse.filter.nonBinary"),
-              },
-            ].map((g) => {
-              const active = (local.gender ?? null) === g.val;
-              return (
-                <Pressable
-                  key={g.label}
-                  onPress={() => set("gender", g.val)}
-                  style={[
-                    fp.optionRow,
-                    {
-                      borderColor: active ? c.orange : c.border,
-                      backgroundColor: active ? `${c.orange}22` : c.bgInput,
-                    },
-                  ]}
-                >
-                  <AppText
-                    variant="body"
-                    style={{ color: active ? c.orange : c.text }}
-                  >
-                    {g.label}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-
-            {/* Verification */}
-            <SectionLabel label={t("browse.filter.verification")} c={c} />
-            {[
-              { label: t("browse.filter.any"), val: null },
-              { label: t("browse.filter.verified"), val: "VERIFIED" },
-            ].map((v) => {
-              const active = (local.verification ?? null) === v.val;
-              return (
-                <Pressable
-                  key={v.label}
-                  onPress={() => set("verification", v.val)}
-                  style={[
-                    fp.optionRow,
-                    {
-                      borderColor: active ? c.orange : c.border,
-                      backgroundColor: active ? `${c.orange}22` : c.bgInput,
-                    },
-                  ]}
-                >
-                  <AppText
-                    variant="body"
-                    style={{ color: active ? c.orange : c.text }}
-                  >
-                    {v.label}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-
-            <View style={{ height: 20 }} />
-          </ScrollView>
-
-          {/* Footer buttons */}
-          <View style={fp.footer}>
-            <Pressable
-              onPress={reset}
-              style={[fp.resetBtn, { borderColor: c.border }]}
-            >
-              <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: c.text }}
-              >
-                Reset
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={apply}
-              style={[fp.applyBtn, { backgroundColor: c.orange }]}
-            >
-              <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: "#fff" }}
-              >
-                Apply Filters
-              </AppText>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-function SectionLabel({ label, c }) {
-  return (
-    <AppText
-      variant="small"
-      weight="semibold"
-      style={{
-        color: c.textMuted,
-        letterSpacing: 0.8,
-        marginTop: 20,
-        marginBottom: 10,
-      }}
-    >
-      {label}
-    </AppText>
-  );
-}
-
-// ── Skeleton ───────────────────────────────────────────────────────────────────
-function Skeleton({ c }) {
-  return (
-    <View style={{ gap: 12 }}>
-      {[1, 2, 3].map((i) => (
-        <View
-          key={i}
-          style={[
-            styles.skCard,
-            { backgroundColor: c.bgCard, borderColor: c.border },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
-// ── Main Screen ────────────────────────────────────────────────────────────────
-const TABS = ["trending", "results", "nearby", "filters"];
-
-export default function BrowseWorkersScreen({ navigation }) {
-  const { t } = useTranslation();
-  const { theme: th } = useTheme();
-  const c = th.colors;
-  const toast = useToast();
-
-  const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("trending");
-  const [workers, setWorkers] = useState([]);
-  const [trending, setTrending] = useState({ top: [], newWorkers: [] });
-  const [nearby, setNearby] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filters, setFilters] = useState({});
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterOptions, setFilterOptions] = useState({});
-
-  // ── Load trending on mount ──────────────────────────────────────────────────
-  const loadTrending = useCallback(async () => {
-    try {
-      const data = await getTrending();
-      // Trending may return { workers } or { topRated, newWorkers }
-      const all = data.topWorkers ?? data.workers ?? data.topRated ?? [];
-      const newW = data.recentlyJoined ?? data.newWorkers ?? [];
-      setTrending({ top: all.slice(0, 10), newWorkers: newW.slice(0, 10) });
-    } catch {
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  const loadNearby = useCallback(async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        toast.error(t("browse.filter.locationDenied"));
-        return;
-      }
-      const loc = await Location.getCurrentPositionAsync({});
-      const data = await getNearbyWorkers({
-        lat: loc.coords.latitude,
-        lng: loc.coords.longitude,
-        radius: 25,
-      });
-      setNearby(data.workers ?? []);
-    } catch {
-      toast.error(t("toast.unknownError"));
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadTrending();
-    getFilterOptions()
-      .then(setFilterOptions)
-      .catch(() => {});
-  }, []);
-
-  const handleSearch = async () => {
-    if (!query.trim() && Object.keys(filters).length === 0) return;
-    setActiveTab("results");
-    setLoading(true);
-    try {
-      const data = await searchWorkers({
-        q: query.trim(),
-        ...filters,
-        limit: 30,
-      });
-      setWorkers(data.workers ?? []);
-    } catch {
-      toast.error(t("toast.unknownError"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLocationSearch = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        toast.error(t("browse.filter.locationDenied"));
-        return;
-      }
-      const loc = await Location.getCurrentPositionAsync({});
-      setActiveTab("nearby");
-      loadNearby(loc.coords.latitude, loc.coords.longitude);
-    } catch {
-      toast.error(t("toast.unknownError"));
-    }
-  };
-
-  const handleTabChange = (tab) => {
-    if (tab === "filters") {
-      setShowFilters(true);
-      return;
-    }
-    if (tab === "nearby") {
-      setActiveTab("nearby");
-      loadNearby();
-      return;
-    }
-    setActiveTab(tab);
-    if (tab === "trending" && trending.top.length === 0) {
-      setLoading(true);
-      loadTrending();
-    }
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    if (activeTab === "trending") loadTrending();
-    else if (activeTab === "nearby") {
-      loadNearby();
-      setRefreshing(false);
-    } else {
-      setRefreshing(false);
-    }
-  };
-
-  const goToProfile = (userId) => {
-    navigation.navigate("WorkerProfile", { userId });
-  };
-
-  // Build list data for FlatList
-  const listData =
-    activeTab === "trending"
-      ? [] // trending uses ListHeader sections
-      : activeTab === "results"
-        ? workers
-        : nearby;
-
-  return (
-    <View style={[styles.screen, { backgroundColor: c.bg }]}>
-      <FlatList
-        data={listData}
-        keyExtractor={(item, i) => item.user?.id ?? item.userId ?? String(i)}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={c.orange}
-          />
-        }
-        contentContainerStyle={styles.content}
-        ListHeaderComponent={
-          <View>
-            {/* Search bar */}
-            <View
-              style={[
-                styles.searchBar,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <AppText
-                style={{
-                  color: c.textMuted,
-                  lineHeight: 25,
-                  fontSize: 18,
-                  marginRight: 6,
-                }}
-              >
-                🔍
-              </AppText>
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-                placeholder={t("browse.searchPlaceholder")}
-                placeholderTextColor={c.textMuted}
-                style={[styles.searchInput, { color: c.text }]}
-              />
-              <Pressable
-                style={[
-                  styles.iconBtn,
-                  { backgroundColor: c.bgInput, borderColor: c.border },
-                ]}
-                // In the mic button onPress:
-                onPress={() => toast.error(t("browse.filter.voiceSearch"))}
-              >
-                <AppText>🎤</AppText>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.iconBtn,
-                  { backgroundColor: c.bgInput, borderColor: c.border },
-                ]}
-                onPress={handleLocationSearch}
-              >
-                <AppText>📍</AppText>
-              </Pressable>
-              <Pressable
-                onPress={handleSearch}
-                style={[styles.searchBtn, { backgroundColor: c.orange }]}
-              >
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ color: "#fff" }}
-                >
-                  {t("browse.search")}
-                </AppText>
-              </Pressable>
-            </View>
-
-            {/* Filter tabs */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.tabsScroll}
-              contentContainerStyle={styles.tabsContent}
-            >
-              {[
-                { key: "trending", label: t("browse.trending") },
-                { key: "results", label: t("browse.results") },
-                { key: "nearby", label: t("browse.nearby") },
-                { key: "filters", label: `🔧 ${t("browse.filters")}` },
-              ].map(({ key, label }) => {
-                const active = activeTab === key && key !== "filters";
-                return (
-                  <Pressable
-                    key={key}
-                    onPress={() => handleTabChange(key)}
-                    style={[
-                      styles.tab,
-                      {
-                        backgroundColor: active ? c.orange : c.bgCard,
-                        borderColor: active ? c.orange : c.border,
-                      },
-                    ]}
-                  >
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: active ? "#fff" : c.text }}
-                    >
-                      {label}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* Trending sections */}
-            {activeTab === "trending" &&
-              (loading ? (
-                <Skeleton c={c} />
-              ) : (
-                <View>
-                  {trending.top.length > 0 && (
-                    <>
-                      <AppText style={[styles.sectionTitle, { color: c.text }]}>
-                        {t("browse.topRated")}
-                      </AppText>
-                      {trending.top.map((w, i) => (
-                        <View
-                          key={w.user?.id ?? i}
-                          style={{ marginBottom: 12 }}
-                        >
-                          <WorkerCard
-                            worker={w}
-                            onPress={goToProfile}
-                            c={c}
-                            t={t}
-                          />
-                        </View>
-                      ))}
-                    </>
-                  )}
-                  {trending.newWorkers.length > 0 && (
-                    <>
-                      <AppText
-                        style={[
-                          styles.sectionTitle,
-                          { color: c.text, marginTop: 8 },
-                        ]}
-                      >
-                        {t("browse.newOnPlatform")}
-                      </AppText>
-                      {trending.newWorkers.map((w, i) => (
-                        <View
-                          key={w.user?.id ?? `new${i}`}
-                          style={{ marginBottom: 12 }}
-                        >
-                          <WorkerCard
-                            worker={w}
-                            onPress={goToProfile}
-                            c={c}
-                            t={t}
-                            isNew
-                          />
-                        </View>
-                      ))}
-                    </>
-                  )}
-                  {trending.top.length === 0 &&
-                    trending.newWorkers.length === 0 && (
-                      <EmptyState c={c} t={t} />
-                    )}
-                </View>
-              ))}
-
-            {/* Results/Nearby headings */}
-            {activeTab === "results" && !loading && (
-              <AppText style={[styles.sectionTitle, { color: c.text }]}>
-                {t("browse.searchResults")} ({workers.length})
-              </AppText>
-            )}
-            {activeTab === "nearby" && !loading && (
-              <AppText style={[styles.sectionTitle, { color: c.text }]}>
-                {t("browse.nearbyWorkers")}
-              </AppText>
-            )}
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View style={{ marginBottom: 12 }}>
-            <WorkerCard worker={item} onPress={goToProfile} c={c} t={t} />
-          </View>
-        )}
-        ListEmptyComponent={
-          activeTab !== "trending" ? (
-            loading ? (
-              <Skeleton c={c} />
-            ) : (
-              <EmptyState c={c} t={t} />
-            )
-          ) : null
-        }
-        ListFooterComponent={<View style={{ height: 40 }} />}
-      />
-
-      <FilterPanel
-        visible={showFilters}
-        onClose={() => setShowFilters(false)}
-        filters={filters}
-        setFilters={(f) => {
-          setFilters(f);
-          if (query.trim()) handleSearch();
-        }}
-        options={filterOptions}
-        c={c}
-        t={t}
-        th={th} // ← add this
-      />
-    </View>
-  );
-}
-
-function EmptyState({ c, t }) {
-  return (
-    <View style={styles.empty}>
-      <AppText style={{ fontSize: 44 }}>🔍</AppText>
-      <AppText
-        variant="body"
-        weight="semibold"
-        style={{ color: c.text, marginTop: 12 }}
-      >
-        {t("browse.noResults")}
-      </AppText>
-      <AppText variant="small" style={{ color: c.textMuted, marginTop: 6 }}>
-        {t("browse.noResultsSub")}
-      </AppText>
-    </View>
-  );
-}
-
+// ═══════════════════════════════════════════════════════════════
+// STYLES
+// ═══════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  content: { padding: 16, paddingBottom: 40 },
-
-  // Search bar
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 16,
+    gap: 6,
     borderWidth: 1,
-    padding: 10,
-    marginBottom: 14,
+    borderRadius: 12,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 6,
+    minHeight: 48,
   },
-  searchInput: { flex: 1, fontSize: 15 },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingVertical: 6,
+    minWidth: 0,
+  },
   iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  searchBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
-
-  // Tabs
-  tabsScroll: { flexGrow: 0, marginBottom: 16 },
-  tabsContent: { gap: 8, flexDirection: "row" },
-  tab: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-
-  // Section titles
-  sectionTitle: { fontSize: 20, fontWeight: "800", marginBottom: 12 },
-
-  // Worker card
-  card: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-  },
-  cardBadgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-    minHeight: 24,
-  },
-  newBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  shieldBadge: { fontSize: 18 },
-  avatarWrap: { position: "relative", alignSelf: "flex-start" },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  avatarImg: { width: 64, height: 64 },
-  availDot: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: "#0c0c18",
-  },
-  avatarRow: { flexDirection: "row", alignItems: "center" },
-  catChip: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginTop: 8,
-  },
-  ratingRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
-  divider: { height: StyleSheet.hairlineWidth, marginVertical: 12 },
-  rateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  availChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-
-  skCard: {
-    height: 200,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    opacity: 0.5,
-  },
-  empty: { alignItems: "center", paddingTop: 60, paddingHorizontal: 32 },
-});
-
-const fp = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    height: "85%", // ← was maxHeight: "75%"
-    padding: 20,
-    paddingBottom: 32,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    marginBottom: 4,
-  },
-  ratingBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  applyBtn: {
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  row: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  chip: {
-    paddingHorizontal: 14,
+  searchSubmit: {
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    borderRadius: 8,
+    flexShrink: 0,
+  },
+  suggestions: {
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+    marginTop: 6,
+  },
+  sugItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+  },
+  sugAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  tabBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 14,
+    flexWrap: "wrap",
+  },
+  tabs: {
+    flexDirection: "row",
+    gap: 4,
+    flexWrap: "wrap",
+    flex: 1,
+  },
+  tab: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
+    flexShrink: 0,
   },
-  optionRow: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 8,
-  },
-  footer: {
+  mobileFilterBtn: {
     flexDirection: "row",
-    gap: 12,
-    paddingTop: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    flexShrink: 0,
   },
-  resetBtn: {
-    flex: 1,
-    paddingVertical: 14,
+  trendTitle: (c) => ({
+    fontFamily: "Syne_800ExtraBold",
+    fontSize: 15,
+    fontWeight: "800",
+    color: c.text,
+    marginBottom: 10,
+  }),
+  catGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  catCard: {
+    width: "31%",
+    paddingVertical: 12,
+    paddingHorizontal: 6,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: "center",
+    minWidth: 0,
   },
-  applyBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+  // ── WORKER GRID — 2 per row, no gap issues ──
+  workerGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 10,
+  },
+  resultsMeta: (c) => ({
+    fontSize: 12,
+    color: c.textDim,
+    marginBottom: 10,
+  }),
+  workerCard: {
+    width: "48%", // safely fits 2 per row
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 10,
+    gap: 4,
+  },
+  wcTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 2,
+  },
+  wcAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    position: "relative",
+    flexShrink: 0,
+  },
+  wcOnline: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+  },
+  newBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  wcFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 6,
+    marginTop: 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    gap: 4,
+  },
+  wcAvail: {
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  wcSaveBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  workerSkeleton: {
+    width: "48%",
+    height: 170,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  pager: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 16,
+  },
+  pageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  promptBlock: {
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  emptyBlock: {
+    alignItems: "center",
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyCta: {
+    marginTop: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  expansionNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  // ── Filter drawer — slides from LEFT via Animated.View ──
+  filterOverlay: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  filterDrawer: {
+    borderRightWidth: 1,
+    height: "100%",
+  },
+  filterHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+    // Note: paddingTop is overridden inline in the component to 56
+  },
+  filterCount: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterCloseBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterInput: {
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 12,
+  },
+  selectBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  ratingOpt: {
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  // ── Picker sheet ──
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.6)",
+  },
+  sheet: {
+    maxHeight: "70%",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderTopWidth: 1,
+    paddingBottom: 16,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+  sheetItem: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
 });

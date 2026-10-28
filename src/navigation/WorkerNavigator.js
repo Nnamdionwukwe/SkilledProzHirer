@@ -49,6 +49,7 @@ import RefundDetailScreen from "../screens/main/RefundDetailScreen";
 import MyDisputesScreen from "../screens/main/MyDisputesScreen";
 
 import VideoCallScreen from "../screens/main/VideoCallScreen";
+import EditProfileScreen from "../screens/main/EditProfileScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -231,6 +232,7 @@ function WorkerDrawer() {
       <Stack.Screen name="RefundHistory" component={RefundHistoryScreen} />
       <Stack.Screen name="RefundDetail" component={RefundDetailScreen} />
       <Stack.Screen name="MyDisputes" component={MyDisputesScreen} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
 
       <Stack.Screen
         name="VideoCall"

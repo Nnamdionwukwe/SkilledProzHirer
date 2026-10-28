@@ -20,7 +20,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "SkilledProz uses your location to verify check-in at the job site.",
         "NSPhotoLibraryUsageDescription": "SkilledProz needs access to your photos so you can attach evidence to disputes.",
-        "NSCameraUsageDescription": "SkilledProz uses your camera to attach photos to disputes."
+        "NSCameraUsageDescription": "SkilledProz uses your camera to attach photos to disputes and for video calls.",
+        "NSMicrophoneUsageDescription": "SkilledProz uses your microphone for voice and video calls with hirers and workers."
       }
     },
     "android": {
@@ -44,6 +45,14 @@
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice search.",
+          "speechRecognitionPermission": "Allow $(PRODUCT_NAME) to use speech recognition to search by voice.",
+          "androidSpeechServiceQueries": ["android.speech.RecognitionService"]
+        }
+      ],
       "expo-font",
       "expo-secure-store",
       "expo-localization",
@@ -63,7 +72,8 @@
         }
       ],
       "expo-web-browser",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "expo-video"
     ],
     "extra": {
       "API_URL": "https://api.skilledproz.com/api",

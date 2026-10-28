@@ -1,354 +1,424 @@
 // src/screens/main/VideoCallScreen.js
 //
-// React Native port of VideoCallPage.jsx.
-// Uses react-native-webview to embed the MiroTalk room in an in-app screen.
+// Full-screen conversation-scoped video call. Matches the web
+// ConversationVideoCallPage: same room ID format, same query params,
+// so mobile and web land in the same MiroTalk room.
+//
+// END-CALL HANDLING:
+//   The DB row becoming ENDED is NOT enough to stop the audio. MiroTalk's
+//   RTCPeerConnection lives inside the WebView and only closes when the
+//   page inside the WebView is unloaded. To actually hang up we:
+//     1. Navigate the WebView to about:blank (synchronously releases
+//        camera + microphone; MiroTalk's own beforeunload fires).
+//     2. Bump `webViewKey` to force a full unmount if step 1 was blocked.
+//     3. Fire the PATCH with retry so the other peer sees ENDED fast.
+//     4. Navigate back to Chat.
 
-import React, {
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-  useMemo,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Linking,
   Pressable,
   StyleSheet,
-  SafeAreaView,
-  StatusBar as RNStatusBar,
-  Platform,
-  Linking,
-  ActivityIndicator,
+  View,
 } from "react-native";
-import { WebView } from "react-native-webview";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useTranslation } from "react-i18next";
+import { WebView } from "react-native-webview";
+import AppText from "../../components/AppText";
+import { useAuthStore } from "../../store/authStore";
+import client from "../../api/client";
 import {
   FaPhoneSlash,
   FaExclamationTriangle,
+  FaExpand,
+  FaCompress,
   FaExternalLinkAlt,
-  FaSpinner,
 } from "../../icons/fa";
 
-import AppText from "../../components/AppText";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useAuthStore } from "../../store/authStore";
-import client from "../../api/client";
+const CALL_BASE_URL = "https://call.skilledproz.com";
+const POLL_MS = 1500;
 
-function buildRoomUrl(baseUrl, displayName) {
-  if (!baseUrl) return baseUrl;
-  const sep = baseUrl.includes("?") ? "&" : "?";
-  const nameParam = displayName
-    ? `${sep}name=${encodeURIComponent(displayName)}`
-    : "";
-  const extra = `${baseUrl.includes("?") ? "&" : sep.replace("?", "?")}noti=0`;
-  return `${baseUrl}${nameParam}&noti=0`;
+// MUST match the web ConversationVideoCallPage.buildConversationVideoUrl
+function buildConversationVideoUrl(conversationId, displayName) {
+  if (!conversationId) return null;
+  const roomId = `skp-conv-${conversationId}`;
+  const params = new URLSearchParams();
+  params.set("audio", "1");
+  params.set("video", "1");
+  params.set("notify", "0");
+  params.set("chat", "0");
+  params.set("screen", "0");
+  if (displayName) params.set("name", displayName);
+  return `${CALL_BASE_URL}/${roomId}?${params.toString()}`;
 }
 
 export default function VideoCallScreen() {
-  const { t } = useTranslation();
-  const { theme: th } = useTheme();
-  const { user } = useAuthStore();
   const navigation = useNavigation();
   const route = useRoute();
-  const c = th.colors;
+  const { user } = useAuthStore();
 
-  const bookingId = route.params?.bookingId;
+  const conversationId = route.params?.conversationId;
 
-  const [call, setCall] = useState(null);
-  const [callUrl, setCallUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [endedByRemote, setEndedByRemote] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
+  // Bumping this key unmounts the WebView. That's our fallback if the
+  // about:blank navigation is blocked (rare, but happens on some devices
+  // when a getUserMedia prompt is still pending).
+  const [webViewKey, setWebViewKey] = useState(0);
+
+  const webViewRef = useRef(null);
   const pollRef = useRef(null);
   const inCallRef = useRef(false);
 
-  const displayName = useMemo(() => {
+  const displayName = (() => {
     if (!user) return "";
     const first = user.firstName || user.first_name || "";
     const last = user.lastName || user.last_name || "";
     if (first || last) return `${first} ${last}`.trim();
-    return (
-      user.name ||
-      user.fullName ||
-      user.username ||
-      (user.email ? user.email.split("@")[0] : "") ||
-      ""
-    );
-  }, [user]);
+    return user.name || user.fullName || user.username || "";
+  })();
 
-  const loadCall = useCallback(async () => {
-    try {
-      const res = await client.get(`/video-calls/${bookingId}`);
-      const data = res.data?.data;
-      if (!data?.call) {
-        navigation.goBack();
-        return;
-      }
-      setCall(data.call);
-      setCallUrl(data.callUrl);
-      inCallRef.current = data.call.status === "ACTIVE";
-      if (data.call.status === "ENDED" || data.call.status === "DECLINED") {
-        navigation.goBack();
-      }
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load call");
-    } finally {
-      setLoading(false);
+  const roomUrl = conversationId
+    ? buildConversationVideoUrl(conversationId, displayName)
+    : null;
+
+  const goBackToChat = () => {
+    if (conversationId) {
+      navigation.navigate("Chat", { conversationId });
+    } else {
+      navigation.goBack();
     }
-  }, [bookingId, navigation]);
+  };
 
-  useEffect(() => {
-    loadCall();
-  }, [loadCall]);
+  // ── Kill the WebView's browsing context ──────────────────────────────
+  // Step 1: try to navigate it to about:blank. That unloads MiroTalk
+  // synchronously and its beforeunload handler closes the peer connection
+  // and stops all local mic/camera tracks.
+  // Step 2: bump the key, forcing React to unmount the WebView entirely.
+  //          This is the belt-and-suspenders fallback — it releases all
+  //          native resources even if injectJavaScript was a no-op.
+  const killWebView = () => {
+    try {
+      webViewRef.current?.injectJavaScript?.(
+        "window.location.replace('about:blank'); true;",
+      );
+    } catch {}
+    // Force a re-mount on the next tick. This makes the WebView component
+    // unmount, which releases the native WebView + all media tracks.
+    setTimeout(() => setWebViewKey((k) => k + 1), 0);
+  };
 
+  // ── Fire the PATCH with retry ────────────────────────────────────────
+  const patchEnd = async () => {
+    if (!conversationId) return;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await client.patch(`/voice-calls/${conversationId}/end`);
+        console.log("[VideoCallScreen] end call OK (attempt", attempt, ")");
+        return;
+      } catch (err) {
+        console.warn(
+          "[VideoCallScreen] end call FAILED (attempt",
+          attempt,
+          "):",
+          err.response?.status,
+          err.response?.data || err.message,
+        );
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+    }
+    console.error(
+      "[VideoCallScreen] end call failed 3x — conversation:",
+      conversationId,
+    );
+  };
+
+  // ── Initial load ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (!inCallRef.current) return;
+    if (!conversationId) {
+      setError("Missing conversation");
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await client.get(`/voice-calls/${conversationId}`);
+        const data = res.data.data;
+        const call = data?.call;
+        if (!call) {
+          if (!cancelled) {
+            setError("Call not found");
+            setTimeout(goBackToChat, 1200);
+          }
+          return;
+        }
+        inCallRef.current = true;
+        if (call.status === "ENDED" || call.status === "DECLINED") {
+          setEndedByRemote(true);
+          setTimeout(goBackToChat, 1500);
+        }
+      } catch (err) {
+        if (!cancelled)
+          setError(err.response?.data?.message || "Failed to load call");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
+  // ── Poll for remote end (fast — 1.5s) ────────────────────────────────
+  useEffect(() => {
+    if (!inCallRef.current || !conversationId) return;
     pollRef.current = setInterval(async () => {
       try {
-        const res = await client.get(`/video-calls/${bookingId}`);
-        const updated = res.data?.data?.call;
-        if (!updated) return;
-        if (updated.status === "ENDED" || updated.status === "DECLINED") {
+        const res = await client.get(`/voice-calls/${conversationId}`);
+        const call = res.data.data?.call;
+        if (!call) return;
+        if (call.status === "ENDED" || call.status === "DECLINED") {
+          // Remote ended — kill WebView so we don't keep mic/camera open.
+          try {
+            webViewRef.current?.injectJavaScript?.(
+              "window.location.replace('about:blank'); true;",
+            );
+          } catch {}
+          setWebViewKey((k) => k + 1);
           setEndedByRemote(true);
           clearInterval(pollRef.current);
-          setTimeout(() => navigation.goBack(), 2000);
+          setTimeout(goBackToChat, 1000);
         }
       } catch {}
-    }, 5000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [bookingId, navigation]);
+    }, POLL_MS);
+    return () => clearInterval(pollRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
 
-  const handleEnd = async () => {
+  // ── End ──────────────────────────────────────────────────────────────
+  function handleEnd() {
     if (pollRef.current) clearInterval(pollRef.current);
-    try {
-      await client.patch(`/video-calls/${bookingId}/end`);
-    } catch {}
+    killWebView(); // release camera + microphone synchronously
+    patchEnd(); // fire-and-retry — the actual end-of-call on the backend
     inCallRef.current = false;
-    navigation.goBack();
-  };
+    // Give the WebView a tick to unload before navigating, so the OS
+    // releases the hardware on the same frame the user taps End.
+    setTimeout(goBackToChat, 80);
+  }
 
-  const handleOpenNewTab = () => {
-    if (callUrl) {
-      const branded = buildRoomUrl(callUrl, displayName);
-      Linking.openURL(branded);
-    }
-  };
+  function handleOpenExternal() {
+    if (roomUrl) Linking.openURL(roomUrl).catch(() => {});
+  }
 
-  // ── Loading ──────────────────────────────────────────────────────────
+  // ── Render guards ────────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={[styles.page, { backgroundColor: c.bg }]}>
-        <ActivityIndicator size="large" color={c.orange} />
-        <AppText variant="body" tone="dim" style={{ marginTop: 16 }}>
-          {t("booking.videoCall.connecting", {
-            defaultValue: "Connecting your call…",
-          })}
-        </AppText>
-      </View>
-    );
-  }
-
-  // ── Error ────────────────────────────────────────────────────────────
-  if (error || !call || !callUrl) {
-    return (
-      <View style={[styles.page, { backgroundColor: c.bg }]}>
-        <FaExclamationTriangle size={32} color="#ef4444" />
-        <AppText variant="body" tone="dim" style={{ marginTop: 16 }}>
-          {error || "Call unavailable"}
-        </AppText>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={[styles.primaryBtn, { backgroundColor: c.orange }]}
-        >
-          <AppText variant="small" weight="bold" style={{ color: c.bg }}>
-            Back to Booking
+      <SafeAreaView style={[styles.page, { backgroundColor: "#0a0a0a" }]}>
+        <View style={styles.center}>
+          <ActivityIndicator color="#f97316" size="large" />
+          <AppText style={styles.centerText}>
+            Connecting your video call…
           </AppText>
-        </Pressable>
-      </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  // ── Ended by remote ──────────────────────────────────────────────────
-  if (endedByRemote) {
+  if (error || endedByRemote || !roomUrl) {
     return (
-      <View style={[styles.page, { backgroundColor: c.bg }]}>
-        <FaPhoneSlash size={32} color="#ef4444" />
-        <AppText variant="body" tone="dim" style={{ marginTop: 16 }}>
-          {t("booking.videoCall.endedByOther", {
-            defaultValue: "The other party ended the call",
-          })}
-        </AppText>
-        <AppText variant="small" tone="dim" style={{ marginTop: 4 }}>
-          {t("booking.videoCall.returning", {
-            defaultValue: "Returning to booking…",
-          })}
-        </AppText>
-      </View>
+      <SafeAreaView style={[styles.page, { backgroundColor: "#0a0a0a" }]}>
+        <View style={styles.center}>
+          <FaExclamationTriangle size={32} color="#ef4444" />
+          <AppText style={styles.centerText}>
+            {endedByRemote
+              ? "The other party ended the call"
+              : error || "Call unavailable"}
+          </AppText>
+          {endedByRemote ? (
+            <AppText style={styles.centerSub}>Returning to chat…</AppText>
+          ) : null}
+          <Pressable onPress={goBackToChat} style={styles.primaryBtn}>
+            <AppText style={{ fontSize: 13, fontWeight: "700", color: "#000" }}>
+              Back to Chat
+            </AppText>
+          </Pressable>
+        </View>
+      </SafeAreaView>
     );
   }
-
-  // ── Main call view ───────────────────────────────────────────────────
-  const roomUrl = buildRoomUrl(callUrl, displayName);
 
   return (
     <SafeAreaView
       style={[styles.page, { backgroundColor: "#0a0a0a" }]}
-      edges={["top", "bottom"]}
+      edges={fullscreen ? [] : ["top", "bottom"]}
     >
-      <RNStatusBar barStyle="light-content" backgroundColor="#0a0a0a" />
-
-      {/* Top bar */}
-      <View style={styles.topBar}>
-        <View style={styles.topLeft}>
-          <View style={styles.topMeta}>
-            <AppText
-              weight="bold"
-              style={{ color: "#fff", fontSize: 14, letterSpacing: 0.2 }}
-            >
-              SkilledProz Call
-            </AppText>
-            {displayName ? (
-              <AppText
-                numberOfLines={1}
-                style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}
-              >
-                Signed in as {displayName}
-              </AppText>
-            ) : null}
-          </View>
-          <View style={styles.liveTag}>
-            <View style={styles.liveDot} />
-            <AppText
-              style={{
-                color: "#ef4444",
-                fontSize: 10,
-                fontWeight: "800",
-                letterSpacing: 1,
-              }}
-            >
-              LIVE
-            </AppText>
-          </View>
-        </View>
-        <View style={styles.topRight}>
-          <Pressable onPress={handleOpenNewTab} style={styles.iconBtn}>
-            <FaExternalLinkAlt size={12} color="#fff" />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* WebView stage */}
-      <View style={styles.stage}>
-        <WebView
-          source={{ uri: roomUrl }}
-          style={styles.iframe}
-          allowsInlineMediaPlayback
-          mediaPlaybackRequiresUserAction={false}
-          javaScriptEnabled
-          domStorageEnabled
-          originWhitelist={["*"]}
-          onShouldStartLoadWithRequest={(req) => {
-            // Keep everything inside the WebView except mailto:/tel:
-            if (req.url.startsWith("mailto:") || req.url.startsWith("tel:")) {
-              Linking.openURL(req.url);
-              return false;
-            }
-            return true;
-          }}
-          startInLoadingState
-          renderLoading={() => (
-            <View style={styles.centerBox}>
-              <FaSpinner size={24} color="#f97316" />
-              <AppText
-                style={{ color: "rgba(255,255,255,0.85)", marginTop: 12 }}
-              >
-                Joining call…
-              </AppText>
-            </View>
-          )}
-        />
-      </View>
-
-      {/* Bottom control bar */}
-      <View style={styles.controlBar}>
-        <View style={{ flex: 1 }}>
-          <AppText
+      {!fullscreen ? (
+        <View style={styles.topBar}>
+          <View
             style={{
-              color: "rgba(255,255,255,0.9)",
-              fontSize: 13,
-              fontWeight: "700",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              flex: 1,
+              minWidth: 0,
             }}
           >
-            SkilledProz
-          </AppText>
+            <AppText style={styles.topTitle}>SkilledProz Call</AppText>
+            {displayName ? (
+              <AppText style={styles.topUser} numberOfLines={1}>
+                {displayName}
+              </AppText>
+            ) : null}
+            <View style={styles.liveTag}>
+              <View style={styles.liveDot} />
+              <AppText style={styles.liveText}>LIVE</AppText>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              onPress={() => setFullscreen(true)}
+              style={styles.iconBtn}
+              hitSlop={6}
+            >
+              <FaExpand size={12} color="#fff" />
+            </Pressable>
+            <Pressable
+              onPress={handleOpenExternal}
+              style={styles.iconBtn}
+              hitSlop={6}
+            >
+              <FaExternalLinkAlt size={12} color="#fff" />
+            </Pressable>
+          </View>
         </View>
+      ) : null}
 
-        <Pressable onPress={handleEnd} style={styles.endBtn}>
-          <FaPhoneSlash size={16} color="#fff" />
-          <AppText
-            weight="bold"
-            style={{ color: "#fff", fontSize: 14, marginLeft: 8 }}
+      <View style={{ flex: 1, backgroundColor: "#000", position: "relative" }}>
+        <WebView
+          key={webViewKey}
+          ref={webViewRef}
+          source={{ uri: roomUrl }}
+          style={{ flex: 1 }}
+          mediaPlaybackRequiresUserAction={false}
+          allowsInlineMediaPlayback
+          javaScriptEnabled
+          domStorageEnabled
+          allowsFullscreenVideo
+          originWhitelist={["*"]}
+          onError={() => setError("Could not load call")}
+          // Important on Android: don't let the WebView keep the page
+          // alive after unmount.
+          cacheEnabled={false}
+          incognito={true}
+        />
+        {fullscreen ? (
+          <Pressable
+            onPress={() => setFullscreen(false)}
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.2)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
-            End Call
-          </AppText>
-        </Pressable>
-
-        <View style={{ flex: 1, alignItems: "flex-end" }}>
-          <AppText
-            numberOfLines={1}
-            style={{ color: "rgba(255,255,255,0.4)", fontSize: 10 }}
-          >
-            Secure peer-to-peer
-          </AppText>
-        </View>
+            <FaCompress size={16} color="#fff" />
+          </Pressable>
+        ) : null}
       </View>
+
+      {!fullscreen ? (
+        <View style={styles.controlBar}>
+          <View style={{ flex: 1 }}>
+            <AppText style={styles.controlBrand}>SkilledProz</AppText>
+          </View>
+          <Pressable onPress={handleEnd} style={styles.endBtn} hitSlop={6}>
+            <FaPhoneSlash size={16} color="#fff" />
+            <AppText style={styles.endText}>End Call</AppText>
+          </Pressable>
+          <View style={{ flex: 1 }} />
+        </View>
+      ) : (
+        <Pressable
+          onPress={handleEnd}
+          style={styles.floatingEndBtn}
+          hitSlop={6}
+        >
+          <FaPhoneSlash size={18} color="#fff" />
+        </Pressable>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
+  page: { flex: 1 },
+  center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 16,
+    padding: 24,
+  },
+  centerText: {
+    fontSize: 15,
+    color: "rgba(255,255,255,0.85)",
+    textAlign: "center",
+  },
+  centerSub: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "center",
+  },
+  primaryBtn: {
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#f97316",
+    marginTop: 8,
   },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: "#111",
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.08)",
   },
-  topLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    flex: 1,
-  },
-  topMeta: { flexShrink: 1 },
+  topTitle: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  topUser: { fontSize: 11, color: "rgba(255,255,255,0.5)", flexShrink: 1 },
   liveTag: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 999,
     backgroundColor: "rgba(239,68,68,0.15)",
   },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#ef4444",
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#ef4444" },
+  liveText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#ef4444",
+    letterSpacing: 1,
   },
-  topRight: { flexDirection: "row", gap: 8 },
   iconBtn: {
     width: 34,
     height: 34,
@@ -359,38 +429,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stage: { flex: 1, backgroundColor: "#000" },
-  iframe: { flex: 1, backgroundColor: "#000" },
-  centerBox: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0a0a0a",
-  },
   controlBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: "#111",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255,255,255,0.08)",
+    justifyContent: "center",
     gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#111",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+  },
+  controlBrand: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.9)",
   },
   endBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
+    gap: 8,
     paddingHorizontal: 22,
+    paddingVertical: 11,
     borderRadius: 999,
     backgroundColor: "#ef4444",
   },
-  primaryBtn: {
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 22,
-    borderRadius: 8,
+  endText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  floatingEndBtn: {
+    position: "absolute",
+    bottom: 24,
+    alignSelf: "center",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#ef4444",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 10,
   },
 });

@@ -20,9 +20,13 @@ import {
 import { ThemeProvider } from "./src/contexts/ThemeContext";
 import { CurrencyProvider } from "./src/contexts/CurrencyContext";
 import { ToastProvider } from "./src/contexts/ToastContext";
+import { SubscriptionProvider } from "./src/contexts/SubscriptionContext";
+import { VoiceCallProvider } from "./src/contexts/VoiceCallContext";
+import VoiceCallProviderUI from "./src/components/video/VoiceCallProvider";
+
 import RootNavigator from "./src/navigation/RootNavigator";
 import { initI18n } from "./src/i18n";
-import i18n from "./src/i18n"; // same configured singleton
+import i18n from "./src/i18n";
 import useOTAUpdates from "./src/hooks/useOTAUpdates";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -31,10 +35,6 @@ export default function App() {
   const [i18nReady, setI18nReady] = useState(false);
   const [langKey, setLangKey] = useState("en");
 
-  // ── Silent OTA update check ─────────────────────────────────────────────
-  // Runs on every cold start. If a new JS bundle is available on the
-  // production channel, it downloads in the background and applies on the
-  // next launch. Never blocks UI, never throws.
   useOTAUpdates();
 
   const [fontsLoaded] = useFonts({
@@ -50,10 +50,6 @@ export default function App() {
     initI18n().then(() => {
       setI18nReady(true);
       setLangKey(i18n.language || "en");
-
-      // Your i18n/index.js exports i18n as default (same singleton that
-      // initI18n configures). Listening here guarantees langKey updates
-      // every time changeLanguage() is called anywhere in the app.
       i18n.on("languageChanged", (lng) => setLangKey(lng));
     });
   }, []);
@@ -78,13 +74,18 @@ export default function App() {
         <ThemeProvider>
           <CurrencyProvider>
             <ToastProvider>
-              {/*
-               * key={langKey} — when language changes, React unmounts and
-               * remounts the entire navigator tree. Every screen calls
-               * useTranslation() fresh with the new language.
-               * Contexts above this line survive — user stays logged in.
-               */}
-              <RootNavigator key={langKey} />
+              <SubscriptionProvider>
+                <VoiceCallProvider>
+                  <RootNavigator key={langKey} />
+                  {/*
+                    Only VoiceCallProviderUI stays here — it does NOT use
+                    useNavigation(), so it's safe outside the NavigationContainer.
+                    The two banners use useNavigation(), so they're mounted
+                    inside RootNavigator via the CallBanners screen instead.
+                  */}
+                  <VoiceCallProviderUI />
+                </VoiceCallProvider>
+              </SubscriptionProvider>
             </ToastProvider>
           </CurrencyProvider>
         </ThemeProvider>

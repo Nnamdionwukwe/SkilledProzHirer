@@ -1,64 +1,105 @@
 // src/screens/main/ProfileScreen.js
-// Mobile mirror of the website's UserProfile.jsx
-// Endpoints: GET /users/:id  ·  GET /reviews/hirer/:id  ·  GET /reviews/worker/:id
+//
+// Verbatim port of pages/users/UserProfile.jsx.
+// Fetch: GET /users/:id  (matches web's api.get(`/users/${profileId}`))
+// Fonts: Syne_800ExtraBold for display, DMSans_* for body — same as web.
+// Layout: matches web's 860px / 480px breakpoints exactly.
 
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
-  Linking,
-  RefreshControl,
+  useWindowDimensions,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { useTranslation } from "react-i18next";
 
 import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
-import Card from "../../components/Card";
+import CertMediaViewer from "../../components/CertMediaViewer";
+import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore";
-import { useToast } from "../../contexts/ToastContext";
+import { useSubscription } from "../../contexts/SubscriptionContext";
+import client from "../../api/client";
 import {
-  getUser,
-  getHirerReviews,
-  getWorkerReviews,
-  updateAvatar,
-} from "../../api/profile";
+  FaStar,
+  FaCheckCircle,
+  FaMapMarkerAlt,
+  FaDollarSign,
+  FaClock,
+  FaCalendarAlt,
+  FaBuilding,
+  FaUsers,
+  FaPhone,
+  FaEnvelope,
+  FaGlobe,
+  FaCamera,
+  FaEdit,
+  FaShieldAlt,
+  FaAward,
+  FaImage,
+  FaFileText,
+  FaChevronRight,
+  FaTimes,
+  FaExpand,
+  FaLock,
+  FaPencil,
+  FaSettings,
+  FaBolt,
+  FaBriefcase,
+  FaHardHat,
+  FaAlertCircle,
+  FaMaximize2,
+  FaSparkles,
+  FaCheckCircle2,
+  FaShieldCheck,
+  FaExternalLinkAlt,
+} from "../../icons/fa";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const TABS = {
+  WORKER: ["About", "Portfolio", "Certifications", "Reviews"],
+  HIRER: ["About", "Reviews"],
+};
+
+const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// Font constants — these match the web's Syne + DM Sans stacks
+const FONT_DISPLAY = "Syne_800ExtraBold";
+const FONT_BODY_MED = "DMSans_500Medium";
+const FONT_BODY_BOLD = "DMSans_700Bold";
+const FONT_BODY_REG = "DMSans_400Regular";
+
 function initials(u) {
   if (!u) return "??";
   return `${u.firstName?.[0] ?? ""}${u.lastName?.[0] ?? ""}`.toUpperCase();
 }
 
-function timeAgo(date, t) {
-  if (!date) return t("profile.never");
-  const diff = Date.now() - new Date(date).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return t("profile.justNow");
-  if (m < 60) return t("profile.minutesAgo", { m });
+function timeAgo(date) {
+  if (!date) return "Never";
+  const m = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
+  if (m < 1) return "Just now";
+  if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24) return t("profile.hoursAgo", { h });
+  if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
-  if (d < 30) return t("profile.daysAgo", { d });
+  if (d < 30) return `${d}d ago`;
   return new Date(date).toLocaleDateString();
 }
 
-// ─── Star row ─────────────────────────────────────────────────────────────────
-function Stars({ rating = 0, size = 13, c }) {
+function Stars({ rating = 0, max = 5, c }) {
   return (
     <View style={{ flexDirection: "row", gap: 2 }}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <Ionicons
+      {Array.from({ length: max }, (_, i) => (
+        <FaStar
           key={i}
-          name={i < Math.round(rating) ? "star" : "star-outline"}
-          size={size}
+          size={12}
           color={i < Math.round(rating) ? c.orange : c.textMuted}
         />
       ))}
@@ -66,1021 +107,1460 @@ function Stars({ rating = 0, size = 13, c }) {
   );
 }
 
-// ─── Info chip (location, phone, etc.) ───────────────────────────────────────
-function InfoChip({ icon, label, onPress, c }) {
-  const Inner = (
-    <View
-      style={[
-        styles.chip,
-        { backgroundColor: c.bgCard, borderColor: c.border },
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={13}
-        color={c.orange}
-        style={{ marginRight: 5 }}
-      />
-      <AppText
-        variant="small"
-        numberOfLines={1}
-        style={{ color: c.text, maxWidth: 160 }}
-      >
-        {label}
-      </AppText>
-    </View>
-  );
-  return onPress ? <Pressable onPress={onPress}>{Inner}</Pressable> : Inner;
-}
-
-// ─── Stat cell ────────────────────────────────────────────────────────────────
-function StatCell({ icon, value, label, c }) {
-  return (
-    <View style={[styles.statCell, { borderColor: c.border }]}>
-      <Ionicons
-        name={icon}
-        size={16}
-        color={c.orange}
-        style={{ marginBottom: 6 }}
-      />
-      <AppText variant="body" weight="semibold" numberOfLines={1}>
-        {value}
-      </AppText>
-      <AppText variant="small" tone="dim" numberOfLines={1}>
-        {label}
-      </AppText>
-    </View>
-  );
-}
-
-// ─── Badge pill ───────────────────────────────────────────────────────────────
-function Badge({ icon, label, color, bg }) {
-  return (
-    <View style={[styles.badgePill, { backgroundColor: bg }]}>
-      <Ionicons
-        name={icon}
-        size={12}
-        color={color}
-        style={{ marginRight: 4 }}
-      />
-      <AppText variant="small" weight="semibold" style={{ color }}>
-        {label}
-      </AppText>
-    </View>
-  );
-}
-
-// ─── Review card ──────────────────────────────────────────────────────────────
-function ReviewCard({ review, c }) {
-  const gi = review.giver;
-  const name = `${gi?.firstName ?? ""} ${gi?.lastName ?? ""}`.trim();
-  const role = gi?.role === "HIRER" ? "Hirer" : "Worker";
-  const date = new Date(review.createdAt).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
-  return (
-    <Card padded style={{ marginBottom: 10 }}>
-      <View style={styles.reviewTop}>
-        {/* Avatar */}
-        <View
-          style={[
-            styles.reviewAvatar,
-            { backgroundColor: c.bgCard, borderColor: c.border },
-          ]}
-        >
-          {gi?.avatar ? (
-            <Image source={{ uri: gi.avatar }} style={styles.reviewAvatarImg} />
-          ) : (
-            <AppText variant="small" weight="semibold">
-              {gi?.firstName?.[0] ?? "?"}
-            </AppText>
-          )}
-        </View>
-        {/* Meta */}
-        <View style={{ flex: 1, marginHorizontal: 10 }}>
-          <AppText variant="body" weight="semibold" numberOfLines={1}>
-            {name}{" "}
-            <AppText variant="small" tone="dim">
-              · {role}
-            </AppText>
-          </AppText>
-          {review.booking?.title && (
-            <AppText variant="small" tone="dim" numberOfLines={1}>
-              {review.booking.category?.icon} {review.booking.title}
-            </AppText>
-          )}
-          <AppText variant="small" tone="dim">
-            {date}
-          </AppText>
-        </View>
-        {/* Stars + score */}
-        <View style={{ alignItems: "flex-end", gap: 2 }}>
-          <Stars rating={review.rating} size={12} c={c} />
-          <AppText variant="small" tone="dim">
-            {review.rating}/5
-          </AppText>
-        </View>
+function ProBadge({ isEnterprise, isProTier, c }) {
+  if (isEnterprise) {
+    return (
+      <View style={[styles.proBadge, { backgroundColor: "#7c3aed" }]}>
+        <FaSparkles size={9} color="#fff" />
+        <AppText style={styles.proTextWhite}>ENTERPRISE</AppText>
       </View>
-      {review.comment ? (
-        <View style={[styles.reviewQuote, { borderLeftColor: c.orange }]}>
-          <AppText variant="body" tone="dim" style={{ fontStyle: "italic" }}>
-            "{review.comment}"
-          </AppText>
-        </View>
-      ) : null}
-    </Card>
-  );
+    );
+  }
+  if (isProTier) {
+    return (
+      <View style={[styles.proBadge, { backgroundColor: c.orange }]}>
+        <FaSparkles size={9} color={c.bg} />
+        <AppText style={[styles.proTextWhite, { color: c.bg }]}>PRO</AppText>
+      </View>
+    );
+  }
+  return null;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAIN SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  const route = useRoute();
-  const { t } = useTranslation();
-  const { theme: th } = useTheme();
+  const { theme } = useTheme();
   const { user: me, updateUser } = useAuthStore();
-  const { toast } = useToast();
-  const c = th.colors;
-
-  // userId from route params (viewing someone else) or own profile
-  const routeUserId = route.params?.userId;
-  const profileId = routeUserId || me?.id;
-  const isOwn = !routeUserId || routeUserId === me?.id;
+  const { isEnterprise, isProTier } = useSubscription();
+  const c = theme.colors;
+  const { width } = useWindowDimensions();
+  const isWide = width >= 860;
 
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
-  const [tab, setTab] = useState("about");
-  const [uploading, setUploading] = useState(false);
-
+  const [initialLoading, setInitialLoading] = useState(true);
   const [reviews, setReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
-  const [reviewsTotal, setReviewsTotal] = useState(0);
-  const [reviewsAvg, setReviewsAvg] = useState(0);
+  const [tab, setTab] = useState("About");
+  const [uploading, setUploading] = useState(false);
 
-  // ── Fetch profile ──────────────────────────────────────────────────────────
-  const fetchProfile = useCallback(async () => {
-    if (!profileId) return;
-    try {
-      const data = await getUser(profileId);
-      setUser(data);
-      setError("");
-    } catch {
-      setError(t("profile.userNotFound"));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [profileId, t]);
+  const [avatarLightbox, setAvatarLightbox] = useState(false);
+  const [certMedia, setCertMedia] = useState(null);
+  const [portfolioLightbox, setPortfolioLightbox] = useState(null);
 
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
+  const isWorker = user?.role === "WORKER";
+  const wp = user?.workerProfile;
+  const hp = user?.hirerProfile;
 
-  // ── Fetch reviews when tab opens ──────────────────────────────────────────
-  useEffect(() => {
-    if (tab !== "reviews" || !user) return;
-    setReviewsLoading(true);
-    const fetcher =
-      user.role === "WORKER"
-        ? getWorkerReviews(user.id, { limit: 20 })
-        : getHirerReviews(user.id, { limit: 20 });
-    fetcher
-      .then((d) => {
-        setReviews(d.reviews ?? []);
-        setReviewsTotal(d.total ?? 0);
-        setReviewsAvg(d.avgRating ?? 0);
-      })
-      .catch(() => setReviews([]))
-      .finally(() => setReviewsLoading(false));
-  }, [tab, user]);
+  // ── Fetch the FULL user — GET /users/:id (same endpoint as web) ──
+  useFocusEffect(
+    useCallback(() => {
+      const id = me?.id;
+      if (!id) return;
+      let cancelled = false;
+      client
+        .get(`/users/${id}`)
+        .then((res) => {
+          if (cancelled) return;
+          setUser(res.data.data.user);
+          updateUser?.(res.data.data.user);
+        })
+        .catch(() => {
+          if (!cancelled && me) setUser(me);
+        })
+        .finally(() => {
+          if (!cancelled) setInitialLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [me?.id]),
+  );
 
-  // ── Avatar upload ──────────────────────────────────────────────────────────
-  const handleAvatarPress = async () => {
-    if (!isOwn || uploading) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      toast.error(t("settings.profile.permissionRequired"));
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
+  const handleAvatarChange = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.7,
     });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    const formData = new FormData();
-    formData.append("avatar", {
-      uri: asset.uri,
-      type: asset.mimeType || "image/jpeg",
-      name: "avatar.jpg",
-    });
+    if (res.canceled || !res.assets[0]) return;
+    const uri = res.assets[0].uri;
+    const form = new FormData();
+    form.append("avatar", { uri, name: "avatar.jpg", type: "image/jpeg" });
     setUploading(true);
     try {
-      const updated = await updateAvatar(formData);
-      setUser((u) => ({ ...u, avatar: updated.avatar }));
-      updateUser({ avatar: updated.avatar });
-      toast.success(t("settings.profile.photoUpdated"));
+      const { data } = await client.put("/users/me/avatar", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const newAvatar = data.data.user.avatar;
+      setUser((u) => ({ ...u, avatar: newAvatar }));
+      updateUser?.({ avatar: newAvatar });
     } catch {
-      toast.error(t("settings.profile.photoFailed"));
     } finally {
       setUploading(false);
     }
   };
 
-  // ─── Loading ───────────────────────────────────────────────────────────────
-  if (loading)
+  useEffect(() => {
+    if (tab !== "Reviews" || !user?.id) return;
+    setReviewsLoading(true);
+    const endpoint = isWorker
+      ? `/reviews/worker/${user.id}`
+      : `/reviews/hirer/${user.id}`;
+    client
+      .get(endpoint, { params: { limit: 20 } })
+      .then((res) => setReviews(res.data.data.reviews || []))
+      .catch(() => setReviews([]))
+      .finally(() => setReviewsLoading(false));
+  }, [tab, user?.id, isWorker]);
+
+  if (initialLoading) {
     return (
-      <AppScreen>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={c.orange} />
-          <AppText variant="small" tone="dim" style={{ marginTop: 12 }}>
-            {t("profile.loadingProfile")}
-          </AppText>
-        </View>
+      <AppScreen scroll={false}>
+        <PageSkeleton variant="detail" />
       </AppScreen>
     );
+  }
+  if (!user) return null;
 
-  // ─── Error ─────────────────────────────────────────────────────────────────
-  if (error || !user)
-    return (
-      <AppScreen>
-        <View style={styles.center}>
-          <Ionicons name="alert-circle-outline" size={40} color={c.red} />
-          <AppText variant="body" tone="dim" style={{ marginTop: 10 }}>
-            {error || t("profile.userNotFound")}
-          </AppText>
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={[styles.backPill, { backgroundColor: c.bgCard }]}
-          >
-            <Ionicons name="arrow-back" size={15} color={c.text} />
-            <AppText variant="small" style={{ marginLeft: 6 }}>
-              {t("common.back")}
-            </AppText>
-          </Pressable>
-        </View>
-      </AppScreen>
-    );
+  const tabs = TABS[user.role] ?? ["About"];
 
-  const wp = user.workerProfile;
-  const hp = user.hirerProfile;
-  const hs = user.hirerStats;
-  const tabs =
-    user.role === "WORKER"
-      ? [
-          { key: "about", label: t("profile.tabAbout") },
-          { key: "reviews", label: t("profile.tabReviews") },
-        ]
-      : [
-          { key: "about", label: t("profile.tabAbout") },
-          { key: "reviews", label: t("profile.tabReviews") },
-        ];
+  const handleCall = () => user.phone && Linking.openURL(`tel:${user.phone}`);
+  const handleEmail = () =>
+    user.email && Linking.openURL(`mailto:${user.email}`);
+  const handleWebsite = () => {
+    if (!hp?.website) return;
+    const url = hp.website.startsWith("http")
+      ? hp.website
+      : `https://${hp.website}`;
+    Linking.openURL(url);
+  };
 
-  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <AppScreen scrollable={false}>
-      {/* Top nav */}
-      <View style={[styles.topBar, { borderBottomColor: c.border }]}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          hitSlop={8}
-        >
-          <Ionicons name="arrow-back" size={20} color={c.text} />
-        </Pressable>
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          {isOwn && (
-            <AppText variant="small" tone="dim">
-              {t("profile.yourPublicProfile")}
-            </AppText>
-          )}
-        </View>
-        {isOwn && (
-          <Pressable
-            onPress={() => navigation.navigate("Settings")}
+    <AppScreen contentContainerStyle={{ paddingBottom: 40 }}>
+      <View style={isWide ? styles.layoutWide : styles.layout}>
+        {/* ════════ SIDEBAR ════════ */}
+        <View style={[styles.sidebar, isWide && styles.sidebarWide]}>
+          {/* Hero card */}
+          <View
             style={[
-              styles.settingsBtn,
-              { backgroundColor: c.bgCard, borderColor: c.border },
+              styles.heroCard,
+              { backgroundColor: c.bgPanel, borderColor: c.border },
             ]}
           >
-            <Ionicons
-              name="settings-outline"
-              size={16}
-              color={c.text}
-              style={{ marginRight: 6 }}
+            <View
+              style={[
+                styles.heroBg,
+                { backgroundColor: c.orangeDim, opacity: 0.6 },
+              ]}
             />
-            <AppText variant="small" weight="semibold">
-              {t("nav.settings")}
-            </AppText>
-          </Pressable>
-        )}
-      </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchProfile();
-            }}
-            tintColor={c.orange}
-          />
-        }
-      >
-        {/* ── HERO CARD ─────────────────────────────────────────────────── */}
-        <Card style={styles.heroCard}>
-          {/* Hero background strip */}
-          <View style={[styles.heroBg, { backgroundColor: c.orangeDim }]} />
-
-          {/* Avatar */}
-          <Pressable
-            onPress={handleAvatarPress}
-            disabled={!isOwn}
-            style={styles.avatarWrap}
-          >
-            {user.avatar ? (
-              <Image source={{ uri: user.avatar }} style={styles.avatar} />
-            ) : (
-              <View
-                style={[
-                  styles.avatarFallback,
-                  { backgroundColor: c.bgCard, borderColor: c.border },
-                ]}
+            <View style={styles.avatarWrap}>
+              <Pressable
+                onPress={() => user.avatar && setAvatarLightbox(true)}
+                disabled={!user.avatar}
               >
-                <AppText
-                  variant="display"
-                  weight="displayBlack"
-                  style={{ color: c.orange }}
-                >
-                  {initials(user)}
-                </AppText>
-              </View>
-            )}
-            {isOwn && (
-              <View
+                {user.avatar ? (
+                  <Image
+                    source={{ uri: user.avatar }}
+                    style={styles.avatarImg}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.avatarFallback,
+                      {
+                        backgroundColor: c.orangeDim,
+                        borderColor: c.orangeGlow,
+                      },
+                    ]}
+                  >
+                    <AppText
+                      style={[styles.avatarInitials, { color: c.orange }]}
+                    >
+                      {initials(user)}
+                    </AppText>
+                  </View>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={handleAvatarChange}
+                disabled={uploading}
                 style={[
-                  styles.avatarOverlay,
-                  { backgroundColor: "rgba(0,0,0,0.5)" },
+                  styles.avatarBadge,
+                  { backgroundColor: c.orange, borderColor: c.bgPanel },
                 ]}
               >
                 {uploading ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={c.bg} />
                 ) : (
-                  <Ionicons name="camera" size={16} color="#fff" />
+                  <FaCamera size={12} color={c.bg} />
                 )}
-              </View>
-            )}
-            {!isOwn && (
-              <View
-                style={[
-                  styles.onlineDot,
-                  { backgroundColor: c.green, borderColor: c.bgPanel },
-                ]}
-              />
-            )}
-          </Pressable>
-
-          {/* Name + badges */}
-          <View style={styles.heroInfo}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                flexWrap: "wrap",
-                justifyContent: "center",
-              }}
-            >
-              <AppText variant="displaySm" weight="displayBlack">
-                {user.firstName} {user.lastName}
-              </AppText>
-              {wp?.verificationStatus === "VERIFIED" && (
-                <Ionicons name="shield-checkmark" size={18} color={c.green} />
-              )}
+              </Pressable>
             </View>
 
-            {/* Role pill */}
+            <View style={styles.heroNameRow}>
+              <AppText
+                style={[styles.heroName, { color: c.text }]}
+                numberOfLines={2}
+              >
+                {user.firstName} {user.lastName}
+              </AppText>
+              {(wp?.verificationStatus ?? hp?.verificationStatus) ===
+                "VERIFIED" && <FaShieldAlt size={14} color={c.orange} />}
+            </View>
+
+            <ProBadge isEnterprise={isEnterprise} isProTier={isProTier} c={c} />
+
+            {(wp?.verificationStatus ?? hp?.verificationStatus) ===
+              "VERIFIED" && (
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: c.greenDim, borderColor: c.green },
+                ]}
+              >
+                <FaShieldAlt size={9} color={c.green} />
+                <AppText
+                  style={{ color: c.green, fontSize: 10, marginLeft: 4 }}
+                >
+                  {isWorker ? "Verified Worker" : "Verified Hirer"}
+                </AppText>
+              </View>
+            )}
+            {wp?.backgroundCheck === true && (
+              <View
+                style={[
+                  styles.badge,
+                  {
+                    backgroundColor: "rgba(59,130,246,0.12)",
+                    borderColor: "#60a5fa",
+                  },
+                ]}
+              >
+                <FaAward size={9} color="#60a5fa" />
+                <AppText
+                  style={{ color: "#60a5fa", fontSize: 10, marginLeft: 4 }}
+                >
+                  Background Checked
+                </AppText>
+              </View>
+            )}
+
             <View
               style={[
                 styles.rolePill,
-                { backgroundColor: c.bgCard, borderColor: c.orange },
+                { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
               ]}
             >
-              <Ionicons
-                name={
-                  user.role === "WORKER"
-                    ? "construct-outline"
-                    : "briefcase-outline"
-                }
-                size={12}
-                color={c.orange}
-              />
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.orange, marginLeft: 4 }}
-              >
-                {user.role === "WORKER"
-                  ? t("profile.worker")
-                  : t("profile.hirer")}
+              {isWorker ? (
+                <FaHardHat size={11} color={c.orange} />
+              ) : (
+                <FaBriefcase size={11} color={c.orange} />
+              )}
+              <AppText style={[styles.rolePillText, { color: c.orange }]}>
+                {isWorker ? "Worker" : "Hirer"}
               </AppText>
             </View>
 
-            {/* Worker title */}
-            {wp?.title && (
-              <AppText variant="body" tone="dim" style={{ marginTop: 4 }}>
+            {wp?.title ? (
+              <AppText
+                style={{ fontSize: 12, color: c.textDim, fontStyle: "italic" }}
+              >
                 {wp.title}
               </AppText>
-            )}
+            ) : null}
 
-            {/* Stars (worker) */}
-            {user.role === "WORKER" && wp?.avgRating > 0 && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  marginTop: 6,
-                }}
-              >
+            {wp?.avgRating > 0 ? (
+              <View style={styles.ratingRow}>
                 <Stars rating={wp.avgRating} c={c} />
-                <AppText variant="small" weight="semibold">
+                <AppText
+                  style={{ fontSize: 13, fontWeight: "800", color: c.text }}
+                >
                   {Number(wp.avgRating).toFixed(1)}
                 </AppText>
-                <AppText variant="small" tone="dim">
-                  ({wp.totalReviews ?? 0} {t("profile.reviews")})
+                <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                  ({wp.totalReviews ?? 0} reviews)
                 </AppText>
               </View>
-            )}
-          </View>
-        </Card>
+            ) : null}
 
-        {/* ── STATS ROW ─────────────────────────────────────────────────── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: 12 }}
-          contentContainerStyle={{ gap: 0 }}
-        >
-          <View
-            style={[
-              styles.statsRow,
-              { borderColor: c.border, backgroundColor: c.bgCard },
-            ]}
-          >
-            {user.role === "HIRER" && hs && (
-              <>
-                <StatCell
-                  icon="briefcase-outline"
-                  value={String(hs.totalHires)}
-                  label={t("profile.totalHires")}
-                  c={c}
-                />
-                <StatCell
-                  icon="cash-outline"
-                  value={`${user.currency ?? "USD"} ${Number(hs.totalSpent).toLocaleString()}`}
-                  label={t("profile.totalSpent")}
-                  c={c}
-                />
-                {hs.avgRating > 0 && (
-                  <StatCell
-                    icon="star-outline"
-                    value={`${Number(hs.avgRating).toFixed(1)} (${hs.totalReviews})`}
-                    label={t("profile.rating")}
-                    c={c}
-                  />
-                )}
-              </>
-            )}
-            {user.role === "WORKER" && wp && (
-              <>
-                <StatCell
-                  icon="cash-outline"
-                  value={`${wp.currency ?? user.currency ?? "USD"} ${Number(wp.hourlyRate ?? 0).toLocaleString()}`}
-                  label={t("profile.perHour")}
-                  c={c}
-                />
-                <StatCell
-                  icon="checkmark-circle-outline"
-                  value={String(wp.completedJobs ?? wp.totalJobs ?? 0)}
-                  label={t("profile.jobsDone")}
-                  c={c}
-                />
-                {wp.serviceRadius && (
-                  <StatCell
-                    icon="location-outline"
-                    value={`${wp.serviceRadius}`}
-                    label={t("profile.radius")}
-                    c={c}
-                  />
-                )}
-              </>
-            )}
-            <StatCell
-              icon="time-outline"
-              value={timeAgo(user.lastSeen, t)}
-              label={t("profile.lastSeen")}
-              c={c}
-            />
-            <StatCell
-              icon="calendar-outline"
-              value={new Date(user.createdAt).toLocaleDateString("en", {
-                month: "short",
-                year: "numeric",
-              })}
-              label={t("profile.joined")}
-              c={c}
-            />
-          </View>
-        </ScrollView>
-
-        {/* ── INFO CHIPS ────────────────────────────────────────────────── */}
-        <Card style={{ marginBottom: 12, padding: 14 }}>
-          <View style={styles.chipsWrap}>
-            {hp?.companyName && (
-              <InfoChip icon="business-outline" label={hp.companyName} c={c} />
-            )}
-            {hp?.companySize && (
-              <InfoChip icon="people-outline" label={hp.companySize} c={c} />
-            )}
-            {(user.city || user.country) && (
-              <InfoChip
-                icon="location-outline"
-                label={[user.city, user.country].filter(Boolean).join(", ")}
-                c={c}
-              />
-            )}
-            {user.phone && (
-              <InfoChip
-                icon="call-outline"
-                label={user.phone}
-                onPress={() => Linking.openURL(`tel:${user.phone}`)}
-                c={c}
-              />
-            )}
-            {user.email && isOwn && (
-              <InfoChip
-                icon="mail-outline"
-                label={user.email}
-                onPress={() => Linking.openURL(`mailto:${user.email}`)}
-                c={c}
-              />
-            )}
-            {user.currency && (
-              <InfoChip icon="globe-outline" label={user.currency} c={c} />
-            )}
-            {hp?.website && (
-              <InfoChip
-                icon="link-outline"
-                label={hp.website.replace(/^https?:\/\//, "")}
-                onPress={() =>
-                  Linking.openURL(
-                    hp.website.startsWith("http")
-                      ? hp.website
-                      : `https://${hp.website}`,
-                  )
-                }
-                c={c}
-              />
-            )}
-          </View>
-        </Card>
-
-        {/* ── TAB BAR ───────────────────────────────────────────────────── */}
-        <View style={[styles.tabBar, { borderBottomColor: c.border }]}>
-          {tabs.map((t_) => (
             <Pressable
-              key={t_.key}
-              onPress={() => setTab(t_.key)}
+              onPress={() => navigation.navigate("Settings")}
               style={[
-                styles.tabBtn,
-                tab === t_.key && {
-                  borderBottomColor: c.orange,
-                  borderBottomWidth: 2,
-                },
+                styles.editBtn,
+                { backgroundColor: c.bgCard, borderColor: c.border },
               ]}
             >
+              <FaSettings size={12} color={c.textDim} />
               <AppText
-                variant="body"
-                weight={tab === t_.key ? "semibold" : "regular"}
-                style={{ color: tab === t_.key ? c.orange : c.textMuted }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: c.textDim,
+                  marginLeft: 6,
+                }}
               >
-                {t_.label}
+                Settings
               </AppText>
             </Pressable>
-          ))}
-        </View>
+          </View>
 
-        {/* ════════════ ABOUT TAB ════════════ */}
-        {tab === "about" && (
-          <View style={{ paddingTop: 14, gap: 12 }}>
-            {/* Bio */}
-            {user.bio ? (
-              <Card padded>
+          {/* STATS STRIP */}
+          <View
+            style={[
+              styles.statsWrap,
+              { backgroundColor: c.bgPanel, borderColor: c.border },
+            ]}
+          >
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 4 }}
+              style={{ flexGrow: 0 }}
+            >
+              {wp ? (
+                <>
+                  <Stat
+                    icon={<FaDollarSign size={14} color={c.orange} />}
+                    value={`${wp.currency ?? user.currency ?? "USD"} ${Number(wp.hourlyRate ?? 0).toLocaleString()}`}
+                    label="/hr"
+                    c={c}
+                  />
+                  <Stat
+                    icon={<FaCheckCircle size={14} color={c.orange} />}
+                    value={`${wp.completedJobs ?? 0}`}
+                    label="jobs done"
+                    c={c}
+                  />
+                  <Stat
+                    icon={<FaBolt size={14} color={c.orange} />}
+                    value={`${wp.responseRate ?? 0}%`}
+                    label="response"
+                    c={c}
+                  />
+                  {wp.serviceRadius ? (
+                    <Stat
+                      icon={<FaMapMarkerAlt size={14} color={c.orange} />}
+                      value={`${wp.serviceRadius} km`}
+                      label="radius"
+                      c={c}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+
+              {user.role === "HIRER" && user.hirerStats ? (
+                <>
+                  <Stat
+                    icon={<FaBriefcase size={14} color={c.orange} />}
+                    value={`${user.hirerStats.totalHires}`}
+                    label="hires"
+                    c={c}
+                  />
+                  <Stat
+                    icon={<FaDollarSign size={14} color={c.orange} />}
+                    value={`${user.currency ?? "USD"} ${Number(user.hirerStats.totalSpent).toLocaleString()}`}
+                    label="spent"
+                    c={c}
+                  />
+                  {user.hirerStats.avgRating > 0 ? (
+                    <Stat
+                      icon={<FaStar size={14} color={c.orange} />}
+                      value={`${Number(user.hirerStats.avgRating).toFixed(1)}`}
+                      label={`(${user.hirerStats.totalReviews})`}
+                      c={c}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+
+              <Stat
+                icon={<FaClock size={14} color={c.orange} />}
+                value={timeAgo(user.lastSeen)}
+                label="last seen"
+                c={c}
+              />
+              <Stat
+                icon={<FaCalendarAlt size={14} color={c.orange} />}
+                value={new Date(user.createdAt).toLocaleDateString("en", {
+                  month: "short",
+                  year: "numeric",
+                })}
+                label="joined"
+                c={c}
+              />
+            </ScrollView>
+          </View>
+
+          {/* INFO PILLS */}
+          <View
+            style={[
+              styles.infoCard,
+              { backgroundColor: c.bgPanel, borderColor: c.border },
+            ]}
+          >
+            {hp?.companyName ? (
+              <InfoPill
+                icon={<FaBuilding size={12} color={c.textDim} />}
+                text={hp.companyName}
+                c={c}
+              />
+            ) : null}
+            {hp?.companySize ? (
+              <InfoPill
+                icon={<FaUsers size={12} color={c.textDim} />}
+                text={`${hp.companySize} employees`}
+                c={c}
+              />
+            ) : null}
+            {user.city || user.country ? (
+              <InfoPill
+                icon={<FaMapMarkerAlt size={12} color={c.textDim} />}
+                text={[user.city, user.country].filter(Boolean).join(", ")}
+                c={c}
+              />
+            ) : null}
+            {user.phone ? (
+              <Pressable
+                onPress={handleCall}
+                style={[
+                  styles.infoPill,
+                  { backgroundColor: c.bgCard, borderColor: c.border },
+                ]}
+              >
+                <FaPhone size={12} color={c.orange} />
                 <AppText
-                  variant="small"
-                  weight="semibold"
-                  tone="dim"
-                  style={styles.sectionLabel}
+                  style={{
+                    fontSize: 11,
+                    color: c.orange,
+                    marginLeft: 5,
+                    textDecorationLine: "underline",
+                  }}
                 >
-                  {t("profile.tabAbout").toUpperCase()}
+                  {user.phone}
                 </AppText>
+              </Pressable>
+            ) : null}
+            {user.email ? (
+              <Pressable
+                onPress={handleEmail}
+                style={[
+                  styles.infoPill,
+                  { backgroundColor: c.bgCard, borderColor: c.border },
+                ]}
+              >
+                <FaEnvelope size={12} color={c.orange} />
                 <AppText
-                  variant="body"
-                  style={{ marginTop: 8, lineHeight: 22 }}
+                  style={{
+                    fontSize: 11,
+                    color: c.orange,
+                    marginLeft: 5,
+                    textDecorationLine: "underline",
+                  }}
+                  numberOfLines={1}
                 >
-                  {user.bio}
+                  {user.email}
                 </AppText>
-              </Card>
-            ) : (
-              <Card padded style={styles.emptyCard}>
-                <AppText variant="body" tone="dim">
-                  {t("profile.noBio")}
+              </Pressable>
+            ) : null}
+            {user.currency ? (
+              <InfoPill
+                icon={<FaGlobe size={12} color={c.textDim} />}
+                text={user.currency}
+                c={c}
+              />
+            ) : null}
+            {hp?.website ? (
+              <Pressable
+                onPress={handleWebsite}
+                style={[
+                  styles.infoPill,
+                  { backgroundColor: c.bgCard, borderColor: c.border },
+                ]}
+              >
+                <FaGlobe size={12} color={c.orange} />
+                <AppText
+                  style={{
+                    fontSize: 11,
+                    color: c.orange,
+                    marginLeft: 5,
+                    textDecorationLine: "underline",
+                  }}
+                  numberOfLines={1}
+                >
+                  {hp.website.replace(/^https?:\/\//, "")}
                 </AppText>
-                {isOwn && (
-                  <Pressable
-                    onPress={() => navigation.navigate("Settings")}
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Categories */}
+          {wp?.categories?.length > 0 ? (
+            <View
+              style={[
+                styles.catCard,
+                { backgroundColor: c.bgPanel, borderColor: c.border },
+              ]}
+            >
+              <AppText style={styles.cardLabel(c)}>Specialities</AppText>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {wp.categories.map((cat) => (
+                  <View
+                    key={cat.id}
                     style={[
-                      styles.emptyBtn,
-                      { backgroundColor: c.orangeDim, borderColor: c.orange },
+                      styles.catPill,
+                      { backgroundColor: c.bgCard, borderColor: c.border },
                     ]}
                   >
-                    <Ionicons
-                      name="pencil-outline"
-                      size={13}
-                      color={c.orange}
-                      style={{ marginRight: 6 }}
-                    />
+                    <AppText style={{ fontSize: 11, color: c.textDim }}>
+                      {cat.category?.name ?? cat.name}
+                    </AppText>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        {/* ════════ MAIN ════════ */}
+        <View style={[styles.main, isWide && styles.mainWide]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={[styles.tabBar, { borderBottomColor: c.border }]}
+            contentContainerStyle={{ paddingHorizontal: 4 }}
+          >
+            {tabs.map((t) => {
+              const active = tab === t;
+              return (
+                <Pressable
+                  key={t}
+                  onPress={() => setTab(t)}
+                  style={[
+                    styles.tabBtn,
+                    { borderBottomColor: active ? c.orange : "transparent" },
+                  ]}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 13,
+                      fontWeight: active ? "700" : "500",
+                      color: active ? c.orange : c.textMuted,
+                    }}
+                  >
+                    {t}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* ABOUT */}
+          {tab === "About" && (
+            <View style={{ gap: 12 }}>
+              {user.bio ? (
+                <View
+                  style={[
+                    styles.bioCard,
+                    { backgroundColor: c.bgPanel, borderColor: c.border },
+                  ]}
+                >
+                  <AppText style={styles.cardLabel(c)}>About</AppText>
+                  <AppText
+                    style={{ fontSize: 13, color: c.textDim, lineHeight: 20 }}
+                  >
+                    {user.bio}
+                  </AppText>
+                </View>
+              ) : (
+                <View
+                  style={[
+                    styles.emptyCard,
+                    { backgroundColor: c.bgPanel, borderColor: c.border },
+                  ]}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 13,
+                      color: c.textMuted,
+                      textAlign: "center",
+                    }}
+                  >
+                    Add a bio to tell people about yourself.
+                  </AppText>
+                  <Pressable
+                    onPress={() => navigation.navigate("EditProfile")}
+                    style={[styles.smallBtn, { backgroundColor: c.orangeDim }]}
+                  >
+                    <FaPencil size={11} color={c.orange} />
                     <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: c.orange }}
+                      style={{ fontSize: 12, color: c.orange, marginLeft: 6 }}
                     >
-                      {t("profile.addBio")}
+                      Add bio
                     </AppText>
                   </Pressable>
-                )}
-              </Card>
-            )}
+                </View>
+              )}
 
-            {/* Specialities (worker) */}
-            {wp?.categories?.length > 0 && (
-              <Card padded>
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  tone="dim"
-                  style={styles.sectionLabel}
+              {wp?.availability ? (
+                <View
+                  style={[
+                    styles.availCard,
+                    { backgroundColor: c.bgPanel, borderColor: c.border },
+                  ]}
                 >
-                  {t("profile.specialities").toUpperCase()}
-                </AppText>
-                <View style={styles.chipsWrap}>
-                  {wp.categories.map((cat) => (
-                    <View
-                      key={cat.id}
-                      style={[
-                        styles.catPill,
-                        { backgroundColor: c.orangeDim, borderColor: c.orange },
+                  <AppText style={styles.cardLabel(c)}>Availability</AppText>
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
+                  >
+                    {WEEK_DAYS.map((d) => {
+                      const active = wp.availability?.includes(d);
+                      return (
+                        <View
+                          key={d}
+                          style={[
+                            styles.dayPill,
+                            {
+                              backgroundColor: active ? c.orangeDim : c.bgInput,
+                              borderColor: active ? c.orangeGlow : c.border,
+                            },
+                          ]}
+                        >
+                          <AppText
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "700",
+                              color: active ? c.orange : c.textMuted,
+                            }}
+                          >
+                            {d}
+                          </AppText>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                <Badge
+                  icon={<FaCheckCircle size={11} color={c.green} />}
+                  text={`Email ${user.isEmailVerified ? "Verified" : "Unverified"}`}
+                  color={user.isEmailVerified ? c.green : c.textMuted}
+                  bg={user.isEmailVerified ? c.greenDim : c.bgCard}
+                  c={c}
+                />
+                {(wp?.verificationStatus ?? hp?.verificationStatus) ===
+                "VERIFIED" ? (
+                  <Badge
+                    icon={<FaShieldAlt size={11} color={c.orange} />}
+                    text="ID Verified"
+                    color={c.orange}
+                    bg={c.orangeDim}
+                    c={c}
+                  />
+                ) : null}
+                {wp?.backgroundCheck === true ? (
+                  <Badge
+                    icon={<FaAward size={11} color="#60a5fa" />}
+                    text="Background Checked"
+                    color="#60a5fa"
+                    bg="rgba(59,130,246,0.1)"
+                    c={c}
+                  />
+                ) : null}
+              </View>
+            </View>
+          )}
+
+          {/* PORTFOLIO */}
+          {tab === "Portfolio" && (
+            <View>
+              {wp?.portfolio?.length > 0 ? (
+                <View
+                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}
+                >
+                  {wp.portfolio.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      onPress={() =>
+                        setPortfolioLightbox({
+                          img: item.imageUrl,
+                          title: item.title,
+                        })
+                      }
+                      style={({ pressed }) => [
+                        styles.portfolioCard,
+                        {
+                          backgroundColor: c.bgPanel,
+                          borderColor: c.border,
+                          opacity: pressed ? 0.9 : 1,
+                          width: isWide ? "31%" : "48%",
+                        },
                       ]}
                     >
-                      <AppText
-                        variant="small"
-                        weight="semibold"
-                        style={{ color: c.orange }}
-                      >
-                        {cat.category?.name ?? cat.name}
-                      </AppText>
-                    </View>
+                      {item.imageUrl ? (
+                        <Image
+                          source={{ uri: item.imageUrl }}
+                          style={styles.portfolioImg}
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.portfolioPlaceholder,
+                            { backgroundColor: c.bgInput },
+                          ]}
+                        >
+                          <FaImage size={22} color={c.textMuted} />
+                        </View>
+                      )}
+                      <View style={{ padding: 10 }}>
+                        <AppText
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: c.text,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {item.title}
+                        </AppText>
+                      </View>
+                    </Pressable>
                   ))}
                 </View>
-              </Card>
-            )}
+              ) : (
+                <View
+                  style={[
+                    styles.emptyCard,
+                    { backgroundColor: c.bgPanel, borderColor: c.border },
+                  ]}
+                >
+                  <FaImage size={28} color={c.textMuted} />
+                  <AppText
+                    style={{ fontSize: 13, color: c.textMuted, marginTop: 8 }}
+                  >
+                    Upload your best work to attract clients.
+                  </AppText>
+                </View>
+              )}
+            </View>
+          )}
 
-            {/* Verification badges */}
-            <Card padded>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                <Badge
-                  icon={
-                    user.isEmailVerified ? "checkmark-circle" : "close-circle"
-                  }
-                  label={t("profile.emailVerified")}
-                  color={user.isEmailVerified ? "#22c55e" : "#ef4444"}
-                  bg={
-                    user.isEmailVerified
-                      ? "rgba(34,197,94,0.1)"
-                      : "rgba(239,68,68,0.1)"
-                  }
-                />
-                {wp?.verificationStatus === "VERIFIED" && (
-                  <Badge
-                    icon="shield-checkmark"
-                    label={t("profile.idVerified")}
-                    color="#f97316"
-                    bg="rgba(249,115,22,0.12)"
-                  />
-                )}
-                {wp?.backgroundCheck && (
-                  <Badge
-                    icon="ribbon"
-                    label={t("profile.backgroundChecked")}
-                    color="#3b82f6"
-                    bg="rgba(59,130,246,0.1)"
-                  />
-                )}
-              </View>
-            </Card>
-          </View>
-        )}
-
-        {/* ════════════ REVIEWS TAB ════════════ */}
-        {tab === "reviews" && (
-          <View style={{ paddingTop: 14 }}>
-            {reviewsLoading ? (
-              <View style={styles.center}>
-                <ActivityIndicator color={c.orange} />
-              </View>
-            ) : reviews.length === 0 ? (
-              <Card padded style={styles.emptyCard}>
-                <Ionicons name="star-outline" size={28} color={c.textMuted} />
-                <AppText variant="body" tone="dim" style={{ marginTop: 8 }}>
-                  {t("profile.noReviews")}
-                </AppText>
-              </Card>
-            ) : (
-              <>
-                {/* Summary bar */}
-                <Card padded style={{ marginBottom: 12 }}>
-                  <View style={styles.reviewSummary}>
-                    <AppText
-                      variant="display"
-                      weight="displayBlack"
-                      style={{ color: c.orange, fontSize: 40 }}
+          {/* CERTIFICATIONS */}
+          {tab === "Certifications" && (
+            <View style={{ gap: 10 }}>
+              {wp?.certifications?.length > 0 ? (
+                wp.certifications.map((cert) => (
+                  <Pressable
+                    key={cert.id}
+                    onPress={() =>
+                      cert.documentUrl &&
+                      setCertMedia({
+                        src: cert.documentUrl,
+                        title: cert.name || "Certification",
+                      })
+                    }
+                    style={({ pressed }) => [
+                      styles.certCard,
+                      {
+                        backgroundColor: c.bgPanel,
+                        borderColor: c.border,
+                        opacity: pressed ? 0.9 : 1,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.certIcon,
+                        {
+                          backgroundColor: c.orangeDim,
+                          borderColor: c.orangeGlow,
+                        },
+                      ]}
                     >
-                      {Number(
-                        reviewsAvg ||
+                      <FaAward size={16} color={c.orange} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <AppText
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "700",
+                          color: c.text,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {cert.name}
+                      </AppText>
+                      {cert.issuer ? (
+                        <AppText
+                          style={{
+                            fontSize: 11,
+                            color: c.textDim,
+                            marginTop: 2,
+                          }}
+                        >
+                          Issued by {cert.issuer}
+                        </AppText>
+                      ) : null}
+                    </View>
+                    <View style={{ alignItems: "flex-end", gap: 6 }}>
+                      {cert.verified ? (
+                        <Badge
+                          icon={<FaCheckCircle size={9} color={c.green} />}
+                          text="Verified"
+                          color={c.green}
+                          bg={c.greenDim}
+                          c={c}
+                        />
+                      ) : cert.rejectionReason ? (
+                        <Badge
+                          icon={<FaAlertCircle size={9} color={c.red} />}
+                          text="Rejected"
+                          color={c.red}
+                          bg={c.redDim}
+                          c={c}
+                        />
+                      ) : (
+                        <Badge
+                          icon={<FaClock size={9} color="#eab308" />}
+                          text="Pending"
+                          color="#eab308"
+                          bg="rgba(234,179,8,0.12)"
+                          c={c}
+                        />
+                      )}
+                    </View>
+                  </Pressable>
+                ))
+              ) : (
+                <View
+                  style={[
+                    styles.emptyCard,
+                    { backgroundColor: c.bgPanel, borderColor: c.border },
+                  ]}
+                >
+                  <FaAward size={28} color={c.textMuted} />
+                  <AppText
+                    style={{ fontSize: 13, color: c.textMuted, marginTop: 8 }}
+                  >
+                    Add certifications to build trust with clients.
+                  </AppText>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* REVIEWS */}
+          {tab === "Reviews" && (
+            <View style={{ gap: 10 }}>
+              {reviewsLoading ? (
+                <>
+                  <View
+                    style={[
+                      styles.reviewSummary,
+                      { backgroundColor: c.bgPanel, borderColor: c.border },
+                    ]}
+                  >
+                    <View
+                      style={{
+                        width: 60,
+                        height: 28,
+                        borderRadius: 6,
+                        backgroundColor: c.bgCard,
+                        opacity: 0.5,
+                      }}
+                    />
+                    <View
+                      style={{
+                        width: 80,
+                        height: 12,
+                        borderRadius: 6,
+                        backgroundColor: c.bgCard,
+                        opacity: 0.5,
+                      }}
+                    />
+                  </View>
+                  {[1, 2, 3].map((i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.reviewCard,
+                        { backgroundColor: c.bgPanel, borderColor: c.border },
+                      ]}
+                    >
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <View
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: c.bgCard,
+                            opacity: 0.5,
+                          }}
+                        />
+                        <View style={{ flex: 1, gap: 6 }}>
+                          <View
+                            style={{
+                              width: "50%",
+                              height: 12,
+                              borderRadius: 6,
+                              backgroundColor: c.bgCard,
+                              opacity: 0.5,
+                            }}
+                          />
+                          <View
+                            style={{
+                              width: "30%",
+                              height: 10,
+                              borderRadius: 6,
+                              backgroundColor: c.bgCard,
+                              opacity: 0.5,
+                            }}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              ) : reviews.length === 0 ? (
+                <View
+                  style={[
+                    styles.emptyCard,
+                    { backgroundColor: c.bgPanel, borderColor: c.border },
+                  ]}
+                >
+                  <FaStar size={28} color={c.textMuted} />
+                  <AppText
+                    style={{ fontSize: 13, color: c.textMuted, marginTop: 8 }}
+                  >
+                    No reviews yet.
+                  </AppText>
+                </View>
+              ) : (
+                <>
+                  <View
+                    style={[
+                      styles.reviewSummary,
+                      { backgroundColor: c.bgPanel, borderColor: c.border },
+                    ]}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <AppText
+                        style={{
+                          fontFamily: FONT_DISPLAY,
+                          fontSize: 28,
+                          fontWeight: "800",
+                          color: c.orange,
+                        }}
+                      >
+                        {(
                           reviews.reduce((a, r) => a + r.rating, 0) /
-                            reviews.length,
-                      ).toFixed(1)}
-                    </AppText>
-                    <View style={{ marginLeft: 12 }}>
+                          reviews.length
+                        ).toFixed(1)}
+                      </AppText>
                       <Stars
                         rating={
-                          reviewsAvg ||
                           reviews.reduce((a, r) => a + r.rating, 0) /
-                            reviews.length
+                          reviews.length
                         }
-                        size={18}
                         c={c}
                       />
-                      <AppText
-                        variant="small"
-                        tone="dim"
-                        style={{ marginTop: 4 }}
-                      >
-                        {reviewsTotal}{" "}
-                        {reviewsTotal === 1
-                          ? t("profile.review")
-                          : t("profile.reviews")}
-                      </AppText>
                     </View>
+                    <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                      {reviews.length} review{reviews.length !== 1 ? "s" : ""}
+                    </AppText>
                   </View>
-                </Card>
 
-                {reviews.map((r) => (
-                  <ReviewCard key={r.id} review={r} c={c} />
-                ))}
-              </>
-            )}
-          </View>
-        )}
+                  {reviews.map((r) => (
+                    <View
+                      key={r.id}
+                      style={[
+                        styles.reviewCard,
+                        { backgroundColor: c.bgPanel, borderColor: c.border },
+                      ]}
+                    >
+                      <View style={styles.reviewTop}>
+                        <View
+                          style={[
+                            styles.reviewAvatar,
+                            {
+                              backgroundColor: c.orangeDim,
+                              borderColor: c.orangeGlow,
+                            },
+                          ]}
+                        >
+                          {r.giver?.avatar ? (
+                            <Image
+                              source={{ uri: r.giver.avatar }}
+                              style={{ width: "100%", height: "100%" }}
+                            />
+                          ) : (
+                            <AppText style={{ fontSize: 10, color: c.orange }}>
+                              {r.giver?.firstName?.[0]}
+                              {r.giver?.lastName?.[0]}
+                            </AppText>
+                          )}
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <AppText
+                            style={{
+                              fontSize: 12,
+                              fontWeight: "700",
+                              color: c.text,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {r.giver?.firstName} {r.giver?.lastName}
+                            <AppText
+                              style={{
+                                fontSize: 10,
+                                color: c.textMuted,
+                                fontWeight: "400",
+                              }}
+                            >
+                              {" "}
+                              · {r.giver?.role === "HIRER" ? "Hirer" : "Worker"}
+                            </AppText>
+                          </AppText>
+                          <AppText
+                            style={{
+                              fontSize: 10,
+                              color: c.textMuted,
+                              marginTop: 2,
+                            }}
+                          >
+                            {new Date(r.createdAt).toLocaleDateString("en-GB", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </AppText>
+                        </View>
+                        <Stars rating={r.rating} c={c} />
+                      </View>
+                      {r.comment ? (
+                        <AppText
+                          style={{
+                            fontSize: 12,
+                            color: c.textDim,
+                            fontStyle: "italic",
+                            lineHeight: 18,
+                            marginTop: 8,
+                            paddingLeft: 10,
+                            borderLeftWidth: 2,
+                            borderLeftColor: c.orangeGlow,
+                          }}
+                        >
+                          "{r.comment}"
+                        </AppText>
+                      ) : null}
+                    </View>
+                  ))}
+                </>
+              )}
+            </View>
+          )}
+        </View>
+      </View>
 
-        {/* Book button for non-owner viewing a worker */}
-        {!isOwn && user.role === "WORKER" && (
+      {/* Modals */}
+      <Modal
+        visible={avatarLightbox}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAvatarLightbox(false)}
+      >
+        <Pressable
+          style={styles.lightboxBackdrop}
+          onPress={() => setAvatarLightbox(false)}
+        >
           <Pressable
-            onPress={() =>
-              navigation.navigate("BookingDetail", { workerId: user.id })
-            }
-            style={[styles.bookBtn, { backgroundColor: c.orange }]}
+            onPress={(e) => e.stopPropagation()}
+            style={{ width: "90%", maxWidth: 500, alignItems: "center" }}
           >
-            <AppText variant="body" weight="semibold" style={{ color: "#fff" }}>
-              {t("profile.book")} {user.firstName}
-            </AppText>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color="#fff"
-              style={{ marginLeft: 6 }}
-            />
+            <Pressable
+              onPress={() => setAvatarLightbox(false)}
+              style={styles.lightboxClose}
+            >
+              <FaTimes size={18} color="#fff" />
+            </Pressable>
+            {user.avatar ? (
+              <Image
+                source={{ uri: user.avatar }}
+                style={{ width: "100%", height: 400, borderRadius: 12 }}
+                resizeMode="contain"
+              />
+            ) : null}
           </Pressable>
-        )}
+        </Pressable>
+      </Modal>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      <Modal
+        visible={!!portfolioLightbox}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPortfolioLightbox(null)}
+      >
+        <Pressable
+          style={styles.lightboxBackdrop}
+          onPress={() => setPortfolioLightbox(null)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{ width: "90%", maxWidth: 500, alignItems: "center" }}
+          >
+            <Pressable
+              onPress={() => setPortfolioLightbox(null)}
+              style={styles.lightboxClose}
+            >
+              <FaTimes size={18} color="#fff" />
+            </Pressable>
+            {portfolioLightbox?.img ? (
+              <Image
+                source={{ uri: portfolioLightbox.img }}
+                style={{ width: "100%", height: 400, borderRadius: 12 }}
+                resizeMode="contain"
+              />
+            ) : null}
+            {portfolioLightbox?.title ? (
+              <AppText
+                style={{
+                  fontFamily: FONT_DISPLAY,
+                  fontSize: 14,
+                  fontWeight: "700",
+                  color: "#fff",
+                  marginTop: 12,
+                  textAlign: "center",
+                }}
+              >
+                {portfolioLightbox.title}
+              </AppText>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {certMedia ? (
+        <CertMediaViewer
+          src={certMedia.src}
+          title={certMedia.title}
+          onClose={() => setCertMedia(null)}
+        />
+      ) : null}
     </AppScreen>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 14,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  settingsBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  scroll: { paddingBottom: 24 },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-  },
+function Stat({ icon, value, label, c }) {
+  return (
+    <View style={styles.stat}>
+      {icon}
+      <AppText
+        style={{ fontSize: 13, fontWeight: "700", color: c.text }}
+        numberOfLines={1}
+      >
+        {value}
+      </AppText>
+      <AppText style={{ fontSize: 10, color: c.textMuted, marginLeft: 2 }}>
+        {label}
+      </AppText>
+    </View>
+  );
+}
 
-  // Hero
+function InfoPill({ icon, text, c }) {
+  return (
+    <View
+      style={[
+        styles.infoPill,
+        { backgroundColor: c.bgCard, borderColor: c.border },
+      ]}
+    >
+      {icon}
+      <AppText
+        style={{ fontSize: 11, color: c.textDim, marginLeft: 5 }}
+        numberOfLines={1}
+      >
+        {text}
+      </AppText>
+    </View>
+  );
+}
+
+function Badge({ icon, text, color, bg, c }) {
+  return (
+    <View style={[styles.badge, { backgroundColor: bg, borderColor: color }]}>
+      {icon}
+      <AppText style={{ fontSize: 10, color, marginLeft: 4 }}>{text}</AppText>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  layout: { flexDirection: "column", gap: 12 },
+  layoutWide: { flexDirection: "row", gap: 16, alignItems: "flex-start" },
+  sidebar: { gap: 12 },
+  sidebarWide: { width: 300 },
+  main: { gap: 12 },
+  mainWide: { flex: 1 },
+
   heroCard: {
-    marginBottom: 12,
-    overflow: "hidden",
-    padding: 0,
-    paddingBottom: 24,
-  },
-  heroBg: { height: 80, width: "100%", marginBottom: 0 },
-  avatarWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    alignSelf: "center",
-    marginTop: -44,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 22,
+    alignItems: "center",
+    gap: 10,
     overflow: "hidden",
     position: "relative",
   },
-  avatar: { width: "100%", height: "100%", borderRadius: 44 },
+  heroBg: { position: "absolute", top: 0, left: 0, right: 0, height: 70 },
+  avatarWrap: { position: "relative" },
+  avatarImg: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
   avatarFallback: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 44,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
   },
-  avatarOverlay: {
+  avatarInitials: { fontSize: 26, fontWeight: "800" },
+  avatarBadge: {
     position: "absolute",
-    inset: 0,
+    right: -4,
+    bottom: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 44,
   },
-  onlineDot: {
-    position: "absolute",
-    bottom: 4,
-    right: 4,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-  },
-  heroInfo: {
+  heroNameRow: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    marginTop: 12,
     gap: 6,
+    justifyContent: "center",
+    flexWrap: "wrap",
+  },
+  heroName: {
+    fontFamily: FONT_DISPLAY,
+    fontSize: 19,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  proBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 20,
+  },
+  proTextWhite: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 0.4,
   },
   rolePill: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 4,
+  },
+  rolePillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  editBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 9,
+    borderWidth: 1,
+    width: "100%",
+    marginTop: 6,
+  },
+
+  statsWrap: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  stat: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+
+  infoCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  infoPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    maxWidth: "100%",
+  },
+
+  catCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
+  cardLabel: (c) => ({
+    fontSize: 10,
+    fontWeight: "700",
+    color: c.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  }),
+  catPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
   },
 
-  // Stats
-  statsRow: {
-    flexDirection: "row",
-    borderWidth: StyleSheet.hairlineWidth,
+  tabBar: { borderBottomWidth: 1, marginBottom: 12, flexGrow: 0 },
+  tabBtn: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 2 },
+
+  bioCard: { borderRadius: 14, borderWidth: 1, padding: 16 },
+  emptyCard: {
     borderRadius: 14,
-    overflow: "hidden",
-    marginBottom: 12,
-  },
-  statCell: {
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    minWidth: 90,
-  },
-
-  // Chips
-  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
     borderWidth: 1,
-  },
-  catPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-
-  // Tabs
-  tabBar: {
-    flexDirection: "row",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 0,
-  },
-  tabBtn: {
-    flex: 1,
+    borderStyle: "dashed",
+    padding: 30,
     alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
+    gap: 10,
   },
-
-  // Sections
-  sectionLabel: { letterSpacing: 0.8 },
-  emptyCard: { alignItems: "center", paddingVertical: 24 },
-  emptyBtn: {
+  smallBtn: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
     paddingHorizontal: 14,
     paddingVertical: 8,
+    borderRadius: 8,
+  },
+
+  availCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
+  dayPill: {
+    width: 40,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
   },
-  badgePill: {
-    flexDirection: "row",
+
+  portfolioCard: { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  portfolioImg: { width: "100%", height: 100 },
+  portfolioPlaceholder: {
+    width: "100%",
+    height: 100,
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    justifyContent: "center",
   },
 
-  // Reviews
-  reviewSummary: { flexDirection: "row", alignItems: "center" },
-  reviewTop: {
+  certCard: {
     flexDirection: "row",
+    gap: 10,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: "flex-start",
-    marginBottom: 10,
   },
-  reviewAvatar: {
+  certIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    overflow: "hidden",
+    borderRadius: 10,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  reviewSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    borderRadius: 12,
     borderWidth: 1,
   },
-  reviewAvatarImg: { width: "100%", height: "100%" },
-  reviewQuote: { borderLeftWidth: 3, paddingLeft: 10, marginTop: 4 },
-
-  // Book button
-  bookBtn: {
-    flexDirection: "row",
+  reviewCard: { borderRadius: 12, borderWidth: 1, padding: 12 },
+  reviewTop: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  reviewAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 16,
-    paddingVertical: 16,
-    borderRadius: 14,
+    overflow: "hidden",
+    flexShrink: 0,
   },
-  backPill: {
-    flexDirection: "row",
+
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
     alignItems: "center",
-    marginTop: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    justifyContent: "center",
+    padding: 20,
+  },
+  lightboxClose: {
+    position: "absolute",
+    top: -40,
+    right: 0,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
   },
 });

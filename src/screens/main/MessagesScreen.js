@@ -1,8 +1,6 @@
 // src/screens/main/MessagesScreen.js
-// Endpoint: GET /messages/conversations
-// Shows conversation list with search, avatars, last message, unread count.
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Image,
@@ -12,310 +10,412 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useTranslation } from "react-i18next";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useToast } from "../../contexts/ToastContext";
-import { useAuthStore } from "../../store/authStore";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
+import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
-import { getConversations } from "../../api/messages";
+import { useAuthStore } from "../../store/authStore";
+import { useTheme } from "../../contexts/ThemeContext";
+import client from "../../api/client";
+import { FaSearch, FaComments } from "../../icons/fa";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function initials(first, last) {
-  return `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase();
-}
+const CONVO_POLL_MS = 12000;
 
-function fmtTime(d) {
-  if (!d) return "";
-  const date = new Date(d);
+function formatTime(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
   const now = new Date();
-  const diffDays = Math.floor((now - date) / 86400000);
-  if (diffDays === 0)
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return date.toLocaleDateString([], { weekday: "short" });
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-// ── Conversation Row ──────────────────────────────────────────────────────────
-function ConvoRow({ convo, myId, onPress, c }) {
-  const other = convo.users?.find((u) => u.userId !== myId)?.user ?? {};
-  const lastMsg = convo.messages?.[0];
-  const unread = convo.unreadCount ?? 0;
-
+function Avatar({ user, size = 46 }) {
+  const initials =
+    `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
   return (
-    <Pressable
-      onPress={() => onPress(convo, other)}
-      style={[s.row, { borderBottomColor: c.border }]}
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: "rgba(249,115,22,0.15)",
+        borderWidth: 1,
+        borderColor: "rgba(249,115,22,0.3)",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+      }}
     >
-      {/* Avatar */}
+      {user?.avatar ? (
+        <Image
+          source={{ uri: user.avatar }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      ) : (
+        <AppText
+          style={{ fontSize: size * 0.36, fontWeight: "700", color: "#f97316" }}
+        >
+          {initials || "?"}
+        </AppText>
+      )}
+    </View>
+  );
+}
+
+// ── Skeleton row ────────────────────────────────────────────────────────
+function SkeletonRow({ c }) {
+  return (
+    <View style={styles.skeletonRow}>
       <View
         style={[
-          s.avatar,
-          { backgroundColor: c.orangeDim, borderColor: c.border },
+          styles.skeletonAvatar,
+          { backgroundColor: c.bgCard, borderColor: c.border },
         ]}
-      >
-        {other.avatar ? (
-          <Image source={{ uri: other.avatar }} style={s.avatarImg} />
-        ) : (
-          <AppText style={{ color: c.orange, fontWeight: "700", fontSize: 16 }}>
-            {initials(other.firstName, other.lastName)}
-          </AppText>
-        )}
-        {unread > 0 && (
-          <View style={[s.unreadDot, { backgroundColor: c.orange }]}>
-            <AppText style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>
-              {unread > 9 ? "9+" : unread}
-            </AppText>
-          </View>
-        )}
+      />
+      <View style={{ flex: 1, gap: 8 }}>
+        <View
+          style={[
+            styles.skeletonLine,
+            {
+              width: "55%",
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
+        />
+        <View
+          style={[
+            styles.skeletonLine,
+            {
+              width: "85%",
+              height: 10,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
+        />
       </View>
-
-      {/* Content */}
-      <View style={s.rowContent}>
-        <View style={s.rowTop}>
-          <AppText
-            variant="body"
-            weight={unread > 0 ? "semibold" : "regular"}
-            style={{ color: c.text, flex: 1 }}
-            numberOfLines={1}
-          >
-            {other.firstName} {other.lastName}
-          </AppText>
-          <AppText
-            variant="small"
-            style={{ color: c.textMuted, marginLeft: 8 }}
-          >
-            {fmtTime(convo.updatedAt ?? lastMsg?.createdAt)}
-          </AppText>
-        </View>
-        <AppText
-          variant="small"
-          style={{ color: unread > 0 ? c.text : c.textMuted, marginTop: 2 }}
-          numberOfLines={1}
-        >
-          {lastMsg?.content ?? ""}
-        </AppText>
-      </View>
-    </Pressable>
-  );
-}
-
-function Skeleton({ c }) {
-  return (
-    <View>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <View key={i} style={[s.row, { borderBottomColor: c.border }]}>
-          <View
-            style={[s.avatar, { backgroundColor: c.bgCard, opacity: 0.4 }]}
-          />
-          <View style={{ flex: 1, gap: 8, marginLeft: 12 }}>
-            <View
-              style={{
-                height: 14,
-                borderRadius: 7,
-                backgroundColor: c.bgCard,
-                width: "60%",
-                opacity: 0.4,
-              }}
-            />
-            <View
-              style={{
-                height: 12,
-                borderRadius: 6,
-                backgroundColor: c.bgCard,
-                width: "80%",
-                opacity: 0.3,
-              }}
-            />
-          </View>
-        </View>
-      ))}
     </View>
   );
 }
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
-export default function MessagesScreen({ navigation }) {
-  const { t } = useTranslation();
-  const { theme: th } = useTheme();
-  const c = th.colors;
-  const { toast } = useToast();
+export default function MessagesScreen() {
+  const navigation = useNavigation();
+  const route = useRoute();
   const { user } = useAuthStore();
+  const { theme } = useTheme();
+  const c = theme.colors;
 
   const [conversations, setConversations] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
 
-  const load = useCallback(async () => {
+  const loadConversations = useCallback(async () => {
     try {
-      const data = await getConversations();
-      setConversations(data);
-      setFiltered(data);
-    } catch {
-      toast.error(t("toast.unknownError"));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      const res = await client.get("/messages/conversations", {
+        params: { page: 1, limit: 50, _t: Date.now() },
+      });
+      setConversations(res.data.data.conversations || []);
+    } catch {}
   }, []);
 
-  useEffect(() => {
-    load();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        await loadConversations();
+        if (!cancelled) setLoading(false);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [loadConversations]),
+  );
 
   useEffect(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) {
-      setFiltered(conversations);
-      return;
-    }
-    setFiltered(
-      conversations.filter((convo) => {
-        const other =
-          convo.users?.find((u) => u.userId !== user?.id)?.user ?? {};
-        const name =
-          `${other.firstName ?? ""} ${other.lastName ?? ""}`.toLowerCase();
-        const lastMsg = convo.messages?.[0]?.content?.toLowerCase() ?? "";
-        return name.includes(q) || lastMsg.includes(q);
-      }),
-    );
-  }, [search, conversations]);
+    const id = setInterval(() => {
+      loadConversations();
+    }, CONVO_POLL_MS);
+    return () => clearInterval(id);
+  }, [loadConversations]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    load();
-  };
+  // Deep-link: conversationId or withUserId passed via route
+  useEffect(() => {
+    const convoId = route.params?.conversationId;
+    const withUserId = route.params?.withUserId;
+    const draft = route.params?.draft;
 
-  const handlePress = (convo, other) => {
-    navigation.navigate("Chat", {
-      conversationId: convo.id,
-      receiverId: other.id,
-      receiverName: `${other.firstName ?? ""} ${other.lastName ?? ""}`.trim(),
-      receiverAvatar: other.avatar ?? null,
+    if (!convoId && !withUserId) return;
+
+    navigation.setParams({
+      conversationId: undefined,
+      withUserId: undefined,
+      draft: undefined,
     });
-  };
+
+    navigation.navigate("Chat", {
+      conversationId: convoId,
+      withUserId,
+      draft,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const getOtherUser = (convo) =>
+    convo.users?.find((u) => u.userId !== user?.id)?.user;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((c) => {
+      const o = getOtherUser(c);
+      return `${o?.firstName || ""} ${o?.lastName || ""}`
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [conversations, search, user?.id]);
+
+  const totalUnread = conversations.reduce(
+    (sum, c) => sum + (c.unreadCount || 0),
+    0,
+  );
 
   return (
-    <View style={[s.screen, { backgroundColor: c.bg }]}>
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={c.orange}
-          />
-        }
-        ListHeaderComponent={
-          <View style={s.header}>
-            {/* Search */}
+    <AppScreen scroll={false} contentContainerStyle={{ flex: 1 }}>
+      {/* Header */}
+      <View style={{ marginBottom: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <AppText
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 24,
+              fontWeight: "800",
+              color: c.text,
+            }}
+          >
+            Messages
+          </AppText>
+          {totalUnread > 0 && (
             <View
-              style={[
-                s.searchBar,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
+              style={{
+                minWidth: 22,
+                height: 22,
+                paddingHorizontal: 6,
+                borderRadius: 11,
+                backgroundColor: c.orange,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <AppText style={{ color: c.textMuted, marginRight: 8 }}>
-                🔍
+              <AppText style={{ fontSize: 11, fontWeight: "800", color: c.bg }}>
+                {totalUnread > 99 ? "99+" : totalUnread}
               </AppText>
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder={t("messages.searchPlaceholder")}
-                placeholderTextColor={c.textMuted}
-                style={[s.searchInput, { color: c.text }]}
-                clearButtonMode="while-editing"
-              />
             </View>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <ConvoRow convo={item} myId={user?.id} onPress={handlePress} c={c} />
-        )}
-        ListEmptyComponent={
-          loading ? (
-            <Skeleton c={c} />
-          ) : (
-            <View style={s.empty}>
-              <AppText style={{ fontSize: 44 }}>💬</AppText>
+          )}
+        </View>
+      </View>
+
+      {/* Search */}
+      <View
+        style={[
+          styles.searchWrap,
+          { backgroundColor: c.bgInput, borderColor: c.border },
+        ]}
+      >
+        <FaSearch size={14} color={c.textMuted} />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search conversations..."
+          placeholderTextColor={c.textMuted}
+          style={[styles.searchInput, { color: c.text }]}
+          returnKeyType="search"
+        />
+      </View>
+
+      {/* Skeleton while loading */}
+      {loading ? (
+        <View style={{ flex: 1 }}>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <SkeletonRow key={i} c={c} />
+          ))}
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => String(item.id)}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await loadConversations();
+                setRefreshing(false);
+              }}
+              tintColor={c.orange}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <FaComments size={36} color={c.textMuted} />
               <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: c.text, marginTop: 12 }}
-              >
-                {t("messages.noConversations")}
-              </AppText>
-              <AppText
-                variant="small"
                 style={{
-                  color: c.textMuted,
-                  marginTop: 6,
-                  textAlign: "center",
+                  fontSize: 14,
+                  color: c.textDim,
+                  fontWeight: "600",
+                  marginTop: 10,
                 }}
               >
-                {t("messages.noConversationsSub")}
+                No conversations yet
+              </AppText>
+              <AppText
+                style={{ fontSize: 12, color: c.textMuted, marginTop: 4 }}
+              >
+                Start a booking to begin messaging
               </AppText>
             </View>
-          )
-        }
-        ListFooterComponent={<View style={{ height: 40 }} />}
-      />
-    </View>
+          }
+          renderItem={({ item }) => {
+            const other = getOtherUser(item);
+            const lastMsg = item.messages?.[0];
+            const unread = item.unreadCount || 0;
+            const preview = lastMsg
+              ? lastMsg.senderId === user?.id
+                ? `You: ${lastMsg.content}`
+                : lastMsg.content
+              : "No messages yet";
+
+            return (
+              <Pressable
+                onPress={() =>
+                  navigation.navigate("Chat", { conversationId: item.id })
+                }
+                style={({ pressed }) => [
+                  styles.row,
+                  {
+                    backgroundColor: pressed ? c.bgCard : "transparent",
+                    borderBottomColor: c.border,
+                  },
+                ]}
+              >
+                <Avatar user={other} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <AppText
+                      numberOfLines={1}
+                      style={{
+                        flex: 1,
+                        fontSize: 14,
+                        fontWeight: unread > 0 ? "700" : "600",
+                        color: c.text,
+                      }}
+                    >
+                      {other?.firstName} {other?.lastName}
+                    </AppText>
+                    <AppText style={{ fontSize: 10, color: c.textMuted }}>
+                      {lastMsg ? formatTime(lastMsg.createdAt) : ""}
+                    </AppText>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      marginTop: 3,
+                    }}
+                  >
+                    <AppText
+                      numberOfLines={1}
+                      style={{
+                        flex: 1,
+                        fontSize: 12,
+                        color: unread > 0 ? c.text : c.textDim,
+                        fontWeight: unread > 0 ? "600" : "400",
+                      }}
+                    >
+                      {preview}
+                    </AppText>
+                    {unread > 0 && (
+                      <View
+                        style={{
+                          minWidth: 18,
+                          height: 18,
+                          paddingHorizontal: 4,
+                          borderRadius: 9,
+                          backgroundColor: c.orange,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <AppText
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "800",
+                            color: c.bg,
+                          }}
+                        >
+                          {unread > 9 ? "9+" : unread}
+                        </AppText>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </Pressable>
+            );
+          }}
+        />
+      )}
+    </AppScreen>
   );
 }
 
-const s = StyleSheet.create({
-  screen: { flex: 1 },
-  header: { padding: 16, paddingBottom: 0 },
-  title: {
-    fontSize: 30,
-    fontWeight: "900",
-    letterSpacing: -0.5,
-    marginBottom: 16,
-  },
-  divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
-  searchBar: {
+const styles = StyleSheet.create({
+  searchWrap: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 20,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  searchInput: { flex: 1, fontSize: 15 },
+  searchInput: { flex: 1, fontSize: 13, padding: 0 },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    gap: 12,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  empty: { alignItems: "center", paddingVertical: 80 },
+  skeletonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+  },
+  skeletonAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "visible",
-    position: "relative",
   },
-  avatarImg: { width: 52, height: 52, borderRadius: 26 },
-  unreadDot: {
-    position: "absolute",
-    top: -3,
-    right: -3,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
+  skeletonLine: {
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1,
   },
-  rowContent: { flex: 1, marginLeft: 12 },
-  rowTop: { flexDirection: "row", alignItems: "center" },
-  empty: { alignItems: "center", paddingTop: 60, paddingHorizontal: 32 },
 });
