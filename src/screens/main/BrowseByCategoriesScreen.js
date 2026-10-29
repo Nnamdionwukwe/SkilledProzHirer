@@ -1,577 +1,745 @@
-// src/screens/main/BrowseByCategoriesScreen.js
-// Endpoint: GET /categories?search=&limit=500
-//           POST /categories/suggest
-// Mirrors website Browse Categories page exactly.
-// i18n-ready: add translations under the "categories" key in each locale file.
+// src/screens/main/CategoriesBrowseScreen.js
+//
+// Port of pages/categories/CategoriesBrowse.jsx (verbatim behavior).
+// Debounced search (300ms), stale-response guarding via requestIdRef,
+// pagination via "Show more", add-category form with full error-status
+// branch handling (429/400/401/403/5xx).
+//
+// FIXES vs web:
+//   - Link → useNavigation
+//   - window.scrollTo → listRef.current.scrollToOffset
+//   - <form> submit → Keyboard.submit + button onPress
+//   - Grid → 2-col FlatList grid
+//   - FiX literal space children hardened against RN "Text strings" error
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
-  RefreshControl,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
-import { useTranslation } from "react-i18next";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useToast } from "../../contexts/ToastContext";
+import { useNavigation } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import AppText from "../../components/AppText";
-import { categoriesApi } from "../../api/categories";
+import Skeleton from "../../components/Skeleton";
+import { useTheme } from "../../contexts/ThemeContext";
+import client from "../../api/client";
+import {
+  FaArrowLeft,
+  FaSearch,
+  FaPlus,
+  FaX,
+  FaTag,
+  FaCheckCircle,
+  FaAlertCircle,
+  FaUsers,
+} from "../../icons/fa";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Category Card
-// ─────────────────────────────────────────────────────────────────────────────
-function CategoryCard({ category, onPress, c, t }) {
-  const workerCount = category._count?.workers ?? 0;
-  const workerLabel =
-    workerCount === 1
-      ? t("categories.worker", { count: workerCount })
-      : t("categories.workers", { count: workerCount });
+const PAGE_SIZE = 100;
+const SEARCH_DEBOUNCE = 300;
 
-  return (
-    <Pressable
-      onPress={() => onPress(category)}
-      style={[
-        styles.card,
-        { backgroundColor: c.bgCard, borderColor: c.border },
-      ]}
-    >
-      {/* Icon */}
-      <AppText style={styles.cardIcon}>{category.icon ?? "🔧"}</AppText>
+export default function CategoriesBrowseScreen() {
+  const navigation = useNavigation();
+  const { theme } = useTheme();
+  const c = theme.colors;
 
-      {/* Name */}
-      <AppText style={[styles.cardName, { color: c.text }]} numberOfLines={3}>
-        {category.name}
-      </AppText>
+  const [categories, setCategories] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [page, setPage] = useState(1);
 
-      {/* Worker count */}
-      <AppText style={[styles.cardCount, { color: c.textMuted }]}>
-        {workerLabel}
-      </AppText>
-    </Pressable>
-  );
-}
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Add Category Modal
-// ─────────────────────────────────────────────────────────────────────────────
-function AddCategoryModal({ visible, onClose, onSuccess, c, t, modalBg }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const { toast } = useToast();
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
 
-  const reset = () => {
-    setName("");
-    setDescription("");
-    setSubmitting(false);
-  };
+  // Add-category form state
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [suggestName, setSuggestName] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestMsg, setSuggestMsg] = useState("");
+  const [suggestMsgKind, setSuggestMsgKind] = useState("error");
 
-  const handleClose = () => {
-    reset();
-    onClose();
-  };
+  const requestIdRef = useRef(0);
+  const listRef = useRef(null);
 
-  const handleSubmit = async () => {
-    if (!name.trim()) {
-      toast.error(t("categories.addModal.nameRequired"));
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const result = await categoriesApi.suggest(name.trim());
-      if (result.alreadyExists) {
-        toast.error(t("categories.addModal.alreadyExists"));
-        setSubmitting(false);
-        return; // keep modal open so user can change the name
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Fetch a specific page
+  const fetchPage = useCallback(
+    async (pageToFetch, { replace = false } = {}) => {
+      const myRequestId = ++requestIdRef.current;
+
+      if (replace) setLoading(true);
+      else setLoadingMore(true);
+      setLoadError("");
+
+      try {
+        const res = await client.get("/categories", {
+          params: {
+            page: pageToFetch,
+            limit: PAGE_SIZE,
+            ...(search ? { search } : {}),
+          },
+        });
+
+        if (myRequestId !== requestIdRef.current) return;
+
+        const data = res.data.data || {};
+        const list = data.categories || [];
+
+        setCategories((prev) => (replace ? list : [...prev, ...list]));
+        setTotal(data.total ?? list.length);
+        setPages(data.pages ?? 1);
+        setPage(data.page ?? pageToFetch);
+      } catch (err) {
+        if (myRequestId !== requestIdRef.current) return;
+        if (__DEV__)
+          console.log("[CategoriesBrowse] fetch failed:", err?.message);
+        setLoadError("Couldn't load categories. Please try again.");
+      } finally {
+        if (myRequestId === requestIdRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
-      toast.success(t("categories.addModal.successMessage"));
-      onSuccess();
-      handleClose();
+    },
+    [search],
+  );
+
+  // Load page 1 when search changes
+  useEffect(() => {
+    fetchPage(1, { replace: true });
+    listRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+  }, [search, fetchPage]);
+
+  const hasMore = page < pages;
+
+  const handleShowMore = () => {
+    if (loadingMore || !hasMore) return;
+    fetchPage(page + 1, { replace: false });
+  };
+
+  // Submit category
+  const handleSuggest = async () => {
+    Keyboard.dismiss();
+    if (!suggestName.trim()) return;
+
+    const submitted = suggestName.trim();
+    setSuggesting(true);
+    setSuggestMsg("");
+    setSuggestMsgKind("error");
+
+    try {
+      const res = await client.post("/categories/suggest", { name: submitted });
+
+      const payload = res?.data?.data ?? res?.data ?? {};
+      const category = payload.category ?? payload;
+      const alreadyExists = !!payload.alreadyExists;
+
+      if (!alreadyExists && category && category.id) {
+        const normalised = {
+          id: category.id,
+          name: category.name,
+          slug: category.slug,
+          icon: category.icon ?? "🔧",
+          description: category.description ?? null,
+          isUserSubmitted: category.isUserSubmitted ?? true,
+          _count: category._count ?? { workers: 0, bookings: 0 },
+        };
+
+        const wouldMatch =
+          !search ||
+          normalised.name.toLowerCase().includes(search.toLowerCase());
+
+        if (wouldMatch) {
+          if (page === 1) {
+            setCategories((prev) => [
+              normalised,
+              ...prev.filter((cat) => cat.id !== normalised.id),
+            ]);
+            setTotal((t) => t + 1);
+          } else {
+            await fetchPage(1, { replace: true });
+          }
+        } else {
+          setSearchInput("");
+          setSearch("");
+        }
+
+        listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
+        setSuggestMsg(`✅ "${normalised.name}" added to the platform!`);
+        setSuggestMsgKind("ok");
+      } else if (alreadyExists) {
+        setSuggestMsg(`"${category?.name || submitted}" already exists.`);
+        setSuggestMsgKind("warn");
+      } else {
+        setSuggestMsg("Unexpected response from the server.");
+        setSuggestMsgKind("error");
+      }
+
+      setSuggestName("");
+      setShowSuggest(false);
     } catch (err) {
-      toast.error(err?.response?.data?.message ?? t("toast.unknownError"));
+      const status = err?.response?.status;
+      const serverMsg = err?.response?.data?.message;
+
+      const retryAfterRaw =
+        err?.response?.headers?.["retry-after"] ??
+        err?.response?.data?.retryAfter;
+      const retryAfter = parseInt(retryAfterRaw, 10);
+
+      if (status === 429) {
+        if (!Number.isNaN(retryAfter) && retryAfter > 0) {
+          const minutes = Math.max(1, Math.ceil(retryAfter / 60));
+          setSuggestMsg(
+            `Too many suggestions. Try again in ${minutes} minute${
+              minutes !== 1 ? "s" : ""
+            }.`,
+          );
+        } else {
+          setSuggestMsg(
+            serverMsg ||
+              "Too many suggestions. Please wait a while before trying again.",
+          );
+        }
+        setSuggestMsgKind("warn");
+      } else if (status === 400) {
+        setSuggestMsg(
+          serverMsg || "Please check the category name and try again.",
+        );
+        setSuggestMsgKind("error");
+      } else if (status === 401 || status === 403) {
+        setSuggestMsg(
+          serverMsg || "You are not allowed to add categories right now.",
+        );
+        setSuggestMsgKind("error");
+      } else if (status >= 500) {
+        setSuggestMsg("Server error. Please try again in a moment.");
+        setSuggestMsgKind("error");
+      } else {
+        setSuggestMsg(
+          serverMsg ||
+            "Couldn't reach the server. Check your connection and try again.",
+        );
+        setSuggestMsgKind("error");
+      }
     } finally {
-      setSubmitting(false);
+      setSuggesting(false);
+      setTimeout(() => setSuggestMsg(""), 7000);
     }
   };
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
+  const msgStyles = {
+    ok: { bg: c.greenDim, color: c.green, border: "rgba(34,197,94,0.2)" },
+    warn: {
+      bg: "rgba(251,191,36,0.12)",
+      color: "#fbbf24",
+      border: "rgba(251,191,36,0.25)",
+    },
+    error: { bg: c.redDim, color: c.red, border: "rgba(239,68,68,0.2)" },
+  };
+  const activeMsgStyle = msgStyles[suggestMsgKind] || msgStyles.error;
+
+  const goBack = () => navigation.goBack();
+
+  const headerBlock = (
+    <View style={{ gap: 16, marginBottom: 20 }}>
+      {/* Back */}
+      <Pressable
+        onPress={goBack}
+        style={({ pressed }) => [
+          {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: c.orange,
+            alignSelf: "flex-start",
+            opacity: pressed ? 0.8 : 1,
+          },
+        ]}
       >
-        <Pressable style={m.backdrop} onPress={handleClose}>
+        <FaArrowLeft size={14} color={c.orange} />
+        <AppText style={{ fontSize: 13, fontWeight: "500", color: c.orange }}>
+          Back
+        </AppText>
+      </Pressable>
+
+      {/* Title */}
+      <View style={{ alignItems: "center" }}>
+        <AppText
+          style={{
+            fontFamily: "Syne_800ExtraBold",
+            fontSize: 28,
+            fontWeight: "700",
+            color: c.text,
+            textAlign: "center",
+          }}
+        >
+          Browse Categories
+        </AppText>
+        <AppText
+          style={{
+            fontSize: 15,
+            color: c.textDim,
+            textAlign: "center",
+            marginTop: 6,
+          }}
+        >
+          {total > 0
+            ? `${total} ${search ? "matching " : ""}categor${
+                total === 1 ? "y" : "ies"
+              }`
+            : "All categories"}{" "}
+          — search or add yours
+        </AppText>
+      </View>
+
+      {/* Control row */}
+      <View style={{ gap: 10 }}>
+        {/* Search */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: c.bgCard,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 10,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+          }}
+        >
+          <FaSearch size={16} color={c.textMuted} />
+          <TextInput
+            placeholder="Search categories..."
+            placeholderTextColor={c.textMuted}
+            value={searchInput}
+            onChangeText={setSearchInput}
+            style={{
+              flex: 1,
+              marginLeft: 8,
+              color: c.text,
+              fontSize: 14,
+              paddingVertical: 6,
+            }}
+          />
+          {searchInput ? (
+            <Pressable onPress={() => setSearchInput("")} hitSlop={6}>
+              <FaX size={14} color={c.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {/* Suggest trigger OR form */}
+        {!showSuggest ? (
           <Pressable
-            style={[
-              m.sheet,
-              { backgroundColor: modalBg, borderTopColor: c.border },
+            onPress={() => setShowSuggest(true)}
+            style={({ pressed }) => [
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                backgroundColor: c.orangeDim,
+                borderWidth: 1,
+                borderColor: c.orangeGlow,
+                borderRadius: 10,
+                opacity: pressed ? 0.85 : 1,
+              },
             ]}
-            onPress={Keyboard.dismiss}
           >
-            {/* Handle */}
-            <View style={[m.handle, { backgroundColor: c.border }]} />
-
-            {/* Header */}
-            <View style={m.header}>
-              <View style={{ flex: 1 }}>
-                <AppText style={[m.title, { color: c.text }]}>
-                  {t("categories.addModal.title")}
-                </AppText>
-                <AppText style={[m.subtitle, { color: c.textMuted }]}>
-                  {t("categories.addModal.subtitle")}
-                </AppText>
-              </View>
-              <Pressable
-                onPress={handleClose}
-                style={[
-                  m.closeBtn,
-                  { backgroundColor: c.bgInput, borderColor: c.border },
-                ]}
-              >
-                <AppText style={{ color: c.text }}>✕</AppText>
-              </Pressable>
-            </View>
-
-            {/* Name input */}
+            <FaPlus size={14} color={c.orange} />
+            <AppText
+              style={{ fontSize: 13, fontWeight: "700", color: c.orange }}
+            >
+              Add Category
+            </AppText>
+          </Pressable>
+        ) : (
+          <View style={{ gap: 8 }}>
             <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder={t("categories.addModal.namePlaceholder")}
+              autoFocus
+              placeholder="e.g. Drone Operator, Solar Engineer..."
               placeholderTextColor={c.textMuted}
-              style={[
-                m.input,
-                {
-                  color: c.text,
-                  backgroundColor: c.bgInput,
-                  borderColor: name.trim() ? c.orange : c.border,
-                },
-              ]}
-              maxLength={80}
-              returnKeyType="next"
+              value={suggestName}
+              onChangeText={setSuggestName}
+              onSubmitEditing={handleSuggest}
+              returnKeyType="done"
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                backgroundColor: c.bgCard,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 10,
+                color: c.text,
+                fontSize: 14,
+              }}
             />
-
-            {/* Description input */}
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder={t("categories.addModal.descriptionPlaceholder")}
-              placeholderTextColor={c.textMuted}
-              style={[
-                m.input,
-                m.inputMulti,
-                {
-                  color: c.text,
-                  backgroundColor: c.bgInput,
-                  borderColor: c.border,
-                },
-              ]}
-              multiline
-              numberOfLines={3}
-              maxLength={200}
-            />
-
-            {/* Footer */}
-            <View style={m.footer}>
+            <View style={{ flexDirection: "row", gap: 8 }}>
               <Pressable
-                onPress={handleClose}
-                style={[m.cancelBtn, { borderColor: c.border }]}
-              >
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ color: c.text }}
-                >
-                  {t("categories.addModal.cancel")}
-                </AppText>
-              </Pressable>
-              <Pressable
-                onPress={handleSubmit}
-                disabled={submitting}
-                style={[
-                  m.submitBtn,
+                onPress={handleSuggest}
+                disabled={suggesting || !suggestName.trim()}
+                style={({ pressed }) => [
                   {
+                    flex: 1,
+                    paddingVertical: 10,
                     backgroundColor: c.orange,
-                    opacity: submitting ? 0.7 : 1,
+                    borderRadius: 10,
+                    alignItems: "center",
+                    opacity:
+                      suggesting || !suggestName.trim()
+                        ? 0.5
+                        : pressed
+                          ? 0.85
+                          : 1,
                   },
                 ]}
               >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                {suggesting ? (
+                  <ActivityIndicator size="small" color="#000" />
                 ) : (
                   <AppText
-                    variant="body"
-                    weight="semibold"
-                    style={{ color: "#fff" }}
+                    style={{ fontSize: 13, fontWeight: "700", color: "#000" }}
                   >
-                    {t("categories.addModal.submit")}
+                    Add
                   </AppText>
                 )}
               </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Skeleton
-// ─────────────────────────────────────────────────────────────────────────────
-function Skeleton({ c }) {
-  return (
-    <View style={styles.grid}>
-      {[1, 2, 3, 4, 5, 6].map((i) => (
-        <View
-          key={i}
-          style={[
-            styles.card,
-            styles.skCard,
-            { backgroundColor: c.bgCard, borderColor: c.border },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main Screen
-// ─────────────────────────────────────────────────────────────────────────────
-export default function BrowseByCategoriesScreen({ navigation }) {
-  const { t } = useTranslation();
-  const { theme: th } = useTheme();
-  const c = th.colors;
-  const { toast } = useToast();
-
-  const modalBg = th.mode === "dark" ? "#111118" : "#ffffff";
-
-  const [categories, setCategories] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-
-  // ── Fetch ───────────────────────────────────────────────────────────────────
-  const load = useCallback(async (isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
-    try {
-      const data = await categoriesApi.getAll({ limit: 500 });
-      setCategories(data ?? []);
-      setFiltered(data ?? []); // ← keep this
-    } catch {
-      toast.error(t("toast.unknownError"));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  // Replace the search useEffect with this:
-  const searchTimer = useRef(null);
-
-  useEffect(() => {
-    const q = search.trim();
-
-    // Clear pending search
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-
-    if (!q) {
-      // Empty query — reload full list
-      load();
-      return;
-    }
-
-    // Debounce 400ms then hit backend
-    searchTimer.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const data = await categoriesApi.getAll({ search: q, limit: 500 });
-        setFiltered(data ?? []);
-      } catch {
-        toast.error(t("toast.unknownError"));
-      } finally {
-        setLoading(false);
-      }
-    }, 400);
-
-    return () => clearTimeout(searchTimer.current);
-  }, [search]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    load(true);
-  };
-
-  // ── Navigate to workers filtered by category ────────────────────────────────
-  const handleCategoryPress = (category) => {
-    navigation.navigate("CategoryDetail", { slug: category.slug });
-  };
-
-  // ── After a new category is added, prepend it ───────────────────────────────
-  const handleNewCategory = () => {
-    setTimeout(() => load(), 600); // give backend time to commit
-  };
-
-  const totalCount = categories.length;
-
-  return (
-    <View style={[styles.screen, { backgroundColor: c.bg }]}>
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={c.orange}
-          />
-        }
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={
-          <View>
-            {/* Page heading */}
-            <View style={styles.heading}>
-              <AppText style={[styles.subtitle, { color: c.textMuted }]}>
-                {t("categories.subtitle", {
-                  count: totalCount > 0 ? totalCount : 500,
-                })}
-              </AppText>
-            </View>
-
-            {/* Search + Add row */}
-            <View style={styles.controlsRow}>
-              <View
-                style={[
-                  styles.searchWrap,
-                  { backgroundColor: c.bgCard, borderColor: c.border },
+              <Pressable
+                onPress={() => {
+                  setShowSuggest(false);
+                  setSuggestName("");
+                }}
+                style={({ pressed }) => [
+                  {
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                    paddingVertical: 10,
+                    borderWidth: 1,
+                    borderColor: c.border,
+                    borderRadius: 10,
+                    opacity: pressed ? 0.85 : 1,
+                  },
                 ]}
               >
-                <AppText style={{ color: c.textMuted, marginRight: 8 }}>
-                  🔍
-                </AppText>
-                <TextInput
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder={t("categories.searchPlaceholder")}
-                  placeholderTextColor={c.textMuted}
-                  style={[styles.searchInput, { color: c.text }]}
-                  returnKeyType="search"
-                  clearButtonMode="while-editing"
-                />
-              </View>
-              <Pressable
-                onPress={() => setShowAdd(true)}
-                style={[styles.addBtn, { backgroundColor: c.orange }]}
-              >
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ color: "#fff" }}
-                >
-                  {t("categories.addCategory")}
+                <FaX size={12} color={c.textDim} />
+                <AppText style={{ fontSize: 13, color: c.textDim }}>
+                  Cancel
                 </AppText>
               </Pressable>
             </View>
-
-            {/* Section divider */}
-            <View style={[styles.divider, { backgroundColor: c.border }]} />
           </View>
-        }
-        renderItem={({ item }) => (
-          <CategoryCard
-            category={item}
-            onPress={handleCategoryPress}
-            c={c}
-            t={t}
-          />
         )}
+      </View>
+
+      {/* Suggest message */}
+      {suggestMsg ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            backgroundColor: activeMsgStyle.bg,
+            borderWidth: 1,
+            borderColor: activeMsgStyle.border,
+            borderRadius: 10,
+          }}
+        >
+          {suggestMsgKind === "ok" ? (
+            <FaCheckCircle size={14} color={activeMsgStyle.color} />
+          ) : (
+            <FaAlertCircle size={14} color={activeMsgStyle.color} />
+          )}
+          <AppText
+            style={{
+              flex: 1,
+              fontSize: 13,
+              fontWeight: "600",
+              color: activeMsgStyle.color,
+            }}
+          >
+            {suggestMsg}
+          </AppText>
+        </View>
+      ) : null}
+
+      {/* Load error */}
+      {loadError && !loading ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            backgroundColor: c.redDim,
+            borderWidth: 1,
+            borderColor: "rgba(239,68,68,0.2)",
+            borderRadius: 10,
+          }}
+        >
+          <FaAlertCircle size={14} color={c.red} />
+          <AppText
+            style={{
+              flex: 1,
+              fontSize: 13,
+              fontWeight: "600",
+              color: c.red,
+            }}
+          >
+            {loadError}
+          </AppText>
+          <Pressable
+            onPress={() => fetchPage(1, { replace: true })}
+            style={({ pressed }) => [
+              {
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderWidth: 1,
+                borderColor: c.red,
+                borderRadius: 6,
+                opacity: pressed ? 0.75 : 1,
+              },
+            ]}
+          >
+            <AppText style={{ fontSize: 11, fontWeight: "700", color: c.red }}>
+              Retry
+            </AppText>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const renderCard = ({ item }) => (
+    <Pressable
+      onPress={() => navigation.navigate("CategoryDetail", { slug: item.slug })}
+      style={({ pressed }) => [
+        {
+          flex: 1,
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          padding: 20,
+          margin: 6,
+          backgroundColor: pressed ? c.bgPanel : c.bgCard,
+          borderWidth: 1,
+          borderColor: pressed ? c.orange : c.border,
+          borderRadius: 12,
+        },
+      ]}
+    >
+      {item.icon ? (
+        <AppText style={{ fontSize: 34 }}>{item.icon}</AppText>
+      ) : null}
+      <AppText
+        style={{
+          fontFamily: "Syne_700Bold",
+          fontSize: 15,
+          fontWeight: "600",
+          color: c.text,
+          textAlign: "center",
+        }}
+        numberOfLines={2}
+      >
+        {item.name}
+      </AppText>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 5,
+        }}
+      >
+        <FaUsers size={11} color={c.textDim} />
+        <AppText style={{ fontSize: 12, color: c.textDim }}>
+          {`${item._count?.workers || 0} workers`}
+        </AppText>
+      </View>
+      {item.isUserSubmitted ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 3,
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+            backgroundColor: c.orangeDim,
+            borderRadius: 100,
+          }}
+        >
+          <FaTag size={9} color={c.orange} />
+          <AppText style={{ fontSize: 10, fontWeight: "700", color: c.orange }}>
+            Community
+          </AppText>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+
+  return (
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      edges={["top", "left", "right"]}
+    >
+      <FlatList
+        ref={listRef}
+        data={loading ? [] : categories}
+        keyExtractor={(item) => String(item.id)}
+        numColumns={2}
+        columnWrapperStyle={{ marginHorizontal: -6 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+        ListHeaderComponent={headerBlock}
+        renderItem={renderCard}
         ListEmptyComponent={
           loading ? (
-            <Skeleton c={c} />
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                marginHorizontal: -6,
+              }}
+            >
+              {[...Array(12)].map((_, i) => (
+                <View key={i} style={{ width: "50%", padding: 6 }}>
+                  <Skeleton
+                    width="100%"
+                    height={140}
+                    radius={12}
+                    style={{ backgroundColor: c.bgCard }}
+                  />
+                </View>
+              ))}
+            </View>
           ) : (
-            <View style={styles.empty}>
-              <AppText style={{ fontSize: 44 }}>🗂️</AppText>
+            <View
+              style={{
+                alignItems: "center",
+                paddingVertical: 48,
+                gap: 12,
+              }}
+            >
+              <FaSearch size={44} color={c.textMuted} />
               <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: c.text, marginTop: 12 }}
+                style={{
+                  fontSize: 14,
+                  color: c.textDim,
+                  textAlign: "center",
+                }}
               >
-                {t("categories.noResults")}
+                {search
+                  ? `No categories found for "${search}".`
+                  : "No categories found."}
               </AppText>
-              <AppText
-                variant="small"
-                style={{ color: c.textMuted, marginTop: 6 }}
-              >
-                {t("categories.noResultsSub")}
-              </AppText>
+              {search ? (
+                <Pressable
+                  onPress={() => {
+                    setSuggestName(search);
+                    setShowSuggest(true);
+                    setSearchInput("");
+                    setSearch("");
+                  }}
+                  style={({ pressed }) => [
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      backgroundColor: c.orangeDim,
+                      borderWidth: 1,
+                      borderColor: c.orangeGlow,
+                      borderRadius: 10,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <FaPlus size={14} color={c.orange} />
+                  <AppText
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: c.orange,
+                    }}
+                  >
+                    {`Add "${search}" as a new category`}
+                  </AppText>
+                </Pressable>
+              ) : null}
             </View>
           )
         }
-        ListFooterComponent={<View style={{ height: 40 }} />}
+        ListFooterComponent={
+          !loading && categories.length > 0 ? (
+            <View
+              style={{ alignItems: "center", paddingVertical: 20, gap: 12 }}
+            >
+              {hasMore ? (
+                <Pressable
+                  onPress={handleShowMore}
+                  disabled={loadingMore}
+                  style={({ pressed }) => [
+                    {
+                      paddingVertical: 12,
+                      paddingHorizontal: 24,
+                      backgroundColor: c.bgCard,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      borderRadius: 10,
+                      opacity: loadingMore ? 0.5 : pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <AppText
+                    style={{ fontSize: 13, fontWeight: "600", color: c.text }}
+                  >
+                    {loadingMore
+                      ? "Loading..."
+                      : `Show more (${total - categories.length} remaining)`}
+                  </AppText>
+                </Pressable>
+              ) : (
+                <AppText
+                  style={{
+                    fontSize: 12,
+                    color: c.textMuted,
+                    textAlign: "center",
+                  }}
+                >
+                  {`That's all ${total} ${search ? "matching " : ""}categor${
+                    total === 1 ? "y" : "ies"
+                  }.`}
+                </AppText>
+              )}
+            </View>
+          ) : null
+        }
       />
-
-      {/* Add Category modal */}
-      <AddCategoryModal
-        visible={showAdd}
-        onClose={() => setShowAdd(false)}
-        onSuccess={handleNewCategory}
-        c={c}
-        t={t}
-        modalBg={modalBg}
-      />
-    </View>
+    </SafeAreaView>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  content: { padding: 16, paddingBottom: 40 },
-
-  // Heading
-  heading: { alignItems: "center", marginBottom: 24, paddingTop: 8 },
-  title: {
-    fontSize: 30,
-    fontWeight: "900",
-    letterSpacing: -0.5,
-    textAlign: "center",
-  },
-  subtitle: { fontSize: 15, marginTop: 6, textAlign: "center" },
-
-  // Controls
-  controlsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 20,
-    alignItems: "center",
-  },
-  searchWrap: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  searchInput: { flex: 1, fontSize: 15 },
-  addBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderRadius: 12,
-  },
-
-  divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
-
-  // Grid
-  row: { gap: 12, marginBottom: 12 },
-  card: {
-    flex: 1,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    minHeight: 140,
-    justifyContent: "flex-start",
-  },
-  cardIcon: { fontSize: 32, lineHeight: 44, marginBottom: 6 },
-  cardName: {
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22,
-    marginBottom: 8,
-  },
-  cardCount: { fontSize: 13 },
-  skCard: { minHeight: 140, opacity: 0.4 },
-
-  // Empty
-  empty: { alignItems: "center", paddingTop: 60, paddingHorizontal: 32 },
-
-  // Dummy grid for skeleton
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-});
-
-// Modal styles
-const m = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    padding: 20,
-    paddingBottom: 40,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 20,
-  },
-  title: { fontSize: 20, fontWeight: "800" },
-  subtitle: { fontSize: 13, marginTop: 4 },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 15,
-    marginBottom: 12,
-  },
-  inputMulti: {
-    height: 80,
-    textAlignVertical: "top",
-  },
-  footer: { flexDirection: "row", gap: 10, marginTop: 8 },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  submitBtn: {
-    flex: 2,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-});

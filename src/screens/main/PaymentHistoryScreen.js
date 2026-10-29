@@ -1,62 +1,95 @@
 // src/screens/main/PaymentHistoryScreen.js
-// Mirrors the website's HirerPaymentHistory component exactly.
-// Endpoint: GET /payments/hirer  (with status/currency/page filters)
+//
+// Port of pages/hirer/HirerPaymentHistory.jsx.
+//
+// Currency switcher: uses `format` from useCurrency() — the SAME function
+// DashboardScreen uses. `format` reads `currencyCode` (set by CurrencyPicker
+// via setCurrencyCode), so tapping the picker changes every displayed amount
+// here immediately, identical to the Dashboard.
+//
+// `fmt` from useCurrency reads `dashboardCurrency` — a separate state field
+// CurrencyPicker does NOT change. Using `fmt` was why the switcher had no
+// effect. We use `format` throughout.
+//
+// Receipt modal + receipt HTML deliberately use the payment's OWN currency
+// (payment.currency), because a receipt must reflect the actual transaction,
+// not the user's display preference.
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Modal,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
-import { useTranslation } from "react-i18next";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useToast } from "../../contexts/ToastContext";
-import AppText from "../../components/AppText";
-import ConfirmModal from "../../components/ConfirmModal";
-import CurrencyPicker from "../../components/CurrencyPicker";
-import { getHirerPayments, releasePayment } from "../../api/payments";
-import { useCurrency } from "../../contexts/CurrencyContext";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as Print from "expo-print";
 
-// ── Currency symbol lookup ────────────────────────────────────────────────────
-const CURRENCY_SYMBOL = {
-  USD: "$",
-  EUR: "€",
-  GBP: "£",
-  NGN: "₦",
-  GHS: "₵",
-  KES: "KSh",
-  ZAR: "R",
-  INR: "₹",
-  CAD: "CA$",
-  AUD: "A$",
-  JPY: "¥",
-  CNY: "¥",
-  BRL: "R$",
-  AED: "د.إ",
-  SAR: "﷼",
-  USDC: "◈",
-  USDT: "₮",
+import AppText from "../../components/AppText";
+import Skeleton from "../../components/Skeleton";
+import CurrencyPicker from "../../components/CurrencyPicker";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useCurrency, CURRENCY_META } from "../../contexts/CurrencyContext";
+import { getHirerFeeRate } from "../../utils/pricing";
+import client from "../../api/client";
+import {
+  FaSearch,
+  FaTimes,
+  FaCheckCircle,
+  FaChevronLeft,
+  FaChevronRight,
+  FaInbox,
+} from "../../icons/fa";
+
+const LIMIT = 10;
+
+// ── Status config ───────────────────────────────────────────────────────
+const STATUS_META = {
+  HELD: { label: "In Escrow", key: "escrow" },
+  RELEASED: { label: "Released", key: "released" },
+  PENDING: { label: "Pending", key: "pending" },
+  REFUNDED: { label: "Refunded", key: "refunded" },
+  FAILED: { label: "Failed", key: "failed" },
 };
 
-function getCurrencySymbol(currencyCode) {
-  if (!currencyCode) return "DH"; // Fix: Return default symbol for undefined
-  return CURRENCY_SYMBOL[currencyCode] || currencyCode;
-}
+const BOOKING_STATUS_META = {
+  COMPLETED: { label: "Completed", key: "released" },
+  IN_PROGRESS: { label: "In Progress", key: "escrow" },
+  CANCELLED: { label: "Cancelled", key: "failed" },
+  DISPUTED: { label: "Disputed", key: "pending" },
+};
 
-// Helper function to format amount with symbol only
-function formatWithSymbol(amount, currencyCode) {
-  const symbol = getCurrencySymbol(currencyCode);
-  return `${symbol}${Number(amount ?? 0).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+const STATUS_CONFIG_LABEL = {
+  PENDING: "Pending Review",
+  PROCESSING: "Processing",
+  COMPLETED: "Completed",
+  SUCCESS: "Success",
+  FAILED: "Failed",
+  REVERSED: "Reversed",
+  CANCELLED: "Cancelled",
+  INITIATED: "Initiated",
+  HELD: "In Escrow",
+  RELEASED: "Released",
+  REFUNDED: "Refunded",
+};
+
+// ── Utility ─────────────────────────────────────────────────────────────
+function fmtMoneyNative(amount, currency) {
+  // ALWAYS native currency — used only by the receipt.
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
+      minimumFractionDigits: 2,
+    }).format(amount ?? 0);
+  } catch {
+    return `${currency || "USD"} ${Number(amount ?? 0).toFixed(2)}`;
+  }
 }
 
 function fmtDate(d) {
@@ -80,839 +113,1170 @@ function fmtDateTime(d) {
 }
 
 function initials(first, last) {
-  return `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase();
+  return `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase() || "?";
 }
 
-// ── Status config ─────────────────────────────────────────────────────────────
-const STATUS_META = {
-  HELD: { label: "In Escrow", color: "#f97316" },
-  RELEASED: { label: "Released", color: "#22c55e" },
-  PENDING: { label: "Pending", color: "#f97316" },
-  REFUNDED: { label: "Refunded", color: "#6366f1" },
-  FAILED: { label: "Failed", color: "#ef4444" },
-};
+function formatDateLong(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-const BOOKING_STATUS_META = {
-  COMPLETED: { label: "Completed", color: "#22c55e" },
-  IN_PROGRESS: { label: "In Progress", color: "#6366f1" },
-  CANCELLED: { label: "Cancelled", color: "#ef4444" },
-  DISPUTED: { label: "Disputed", color: "#f97316" },
-};
+function getPaymentChannel(tx) {
+  if (tx.provider === "PAYSTACK" || tx.provider?.includes("PAYSTACK")) {
+    return { label: "Card (Paystack)" };
+  }
+  if (tx.provider === "FLUTTERWAVE" || tx.provider?.includes("FLUTTERWAVE")) {
+    return { label: "Card / Mobile Money" };
+  }
+  return { label: tx.provider || "Payment" };
+}
 
-const STATUS_TABS = [
-  "ALL",
-  "HELD",
-  "RELEASED",
-  "PENDING",
-  "REFUNDED",
-  "FAILED",
-];
-const LIMIT = 10;
+// Rough luminance — used only to pick dark/light receipt colors.
+function bgLuminance(color) {
+  if (!color) return 0.5;
+  let r = 0,
+    g = 0,
+    b = 0;
+  if (color.startsWith("#")) {
+    const hex = color.replace("#", "");
+    if (hex.length === 3) {
+      r = parseInt(hex[0] + hex[0], 16);
+      g = parseInt(hex[1] + hex[1], 16);
+      b = parseInt(hex[2] + hex[2], 16);
+    } else if (hex.length >= 6) {
+      r = parseInt(hex.slice(0, 2), 16);
+      g = parseInt(hex.slice(2, 4), 16);
+      b = parseInt(hex.slice(4, 6), 16);
+    }
+  } else if (color.startsWith("rgb")) {
+    const m = color.match(/[\d.]+/g);
+    if (m) {
+      r = Number(m[0]);
+      g = Number(m[1]);
+      b = Number(m[2]);
+    }
+  }
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Receipt Modal
-// ─────────────────────────────────────────────────────────────────────────────
-function ReceiptModal({ payment, onClose, c, modalBg }) {
+function statusColors(key, c) {
+  switch (key) {
+    case "escrow":
+      return { bg: "rgba(234,179,8,0.12)", fg: "#eab308" };
+    case "released":
+      return { bg: c.greenDim, fg: c.green };
+    case "pending":
+      return { bg: c.orangeDim, fg: c.orange };
+    case "refunded":
+      return { bg: "rgba(139,92,246,0.12)", fg: "#a78bfa" };
+    case "failed":
+      return { bg: c.redDim, fg: c.red };
+    default:
+      return { bg: c.orangeDim, fg: c.orange };
+  }
+}
+
+// ── Receipt HTML — native currency ──────────────────────────────────────
+function generateReceiptHTML(payment, isDark) {
+  const channel = getPaymentChannel(payment);
+  const feeRate = getHirerFeeRate(payment.currency);
+  const feePercent = Math.round(feeRate * 100);
+
+  const bg = isDark ? "#080810" : "#f8f9fa";
+  const panel = isDark ? "#0c0c18" : "#ffffff";
+  const text = isDark ? "#ffffff" : "#1a1a2e";
+  const textDim = isDark ? "#a1a1aa" : "#6b7280";
+  const border = isDark ? "rgba(255,255,255,0.08)" : "#e5e7eb";
+  const borderDash = isDark ? "rgba(255,255,255,0.15)" : "#e5e7eb";
+  const footerBg = isDark ? "#0c0c18" : "#f9fafb";
+
+  const statusLabel =
+    STATUS_CONFIG_LABEL[payment.status] || payment.status || "—";
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receipt - ${payment.id}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${bg}; color: ${text}; display: flex; justify-content: center; align-items: flex-start; padding: 20px; }
+    .receipt { max-width: 520px; width: 100%; background: ${panel}; border-radius: 16px; overflow: hidden; border: 1px solid ${border}; }
+    .receipt-header { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #ffffff; padding: 32px 32px 24px; text-align: center; }
+    .receipt-header h1 { font-size: 24px; font-weight: 800; color: #fff; }
+    .receipt-header .subtitle { font-size: 13px; opacity: 0.9; margin-top: 4px; color: #fff; }
+    .receipt-status { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; padding: 6px 16px; background: rgba(255,255,255,0.2); border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #fff; }
+    .receipt-amount { text-align: center; padding: 28px 32px 24px; border-bottom: 2px dashed ${borderDash}; }
+    .receipt-amount .label { font-size: 12px; color: ${textDim}; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+    .receipt-amount .value { font-size: 36px; font-weight: 800; margin-top: 8px; }
+    .receipt-amount .value.debit { color: #ef4444; }
+    .receipt-amount .channel { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 4px 12px; background: rgba(249,115,22,0.15); color: #f97316; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .receipt-body { padding: 24px 32px; }
+    .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid ${border}; gap: 16px; }
+    .row:last-child { border-bottom: none; }
+    .row .label { color: ${textDim}; font-size: 13px; font-weight: 500; flex-shrink: 0; }
+    .row .value { color: ${text}; font-size: 13px; font-weight: 600; text-align: right; word-break: break-word; }
+    .row .value.mono { font-family: 'SF Mono', Menlo, monospace; font-size: 12px; }
+    .row.section-title { padding-top: 18px; padding-bottom: 6px; border-bottom: none; }
+    .row.section-title .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: ${textDim}; font-weight: 800; }
+    .fee-row { color: #f97316; }
+    .net-row { margin-top: 8px; padding-top: 16px; border-top: 2px solid ${border}; border-bottom: none; }
+    .net-row .label { font-weight: 700; color: ${text}; }
+    .net-row .value { font-size: 16px; font-weight: 800; color: #22c55e; }
+    .receipt-footer { padding: 24px 32px; background: ${footerBg}; text-align: center; font-size: 12px; color: ${textDim}; }
+    .receipt-footer strong { color: ${text}; }
+  </style>
+</head>
+<body>
+  <div class="receipt">
+    <div class="receipt-header">
+      <h1>SkilledProz</h1>
+      <p class="subtitle">Transaction Receipt</p>
+      <div class="receipt-status">${statusLabel}</div>
+    </div>
+    <div class="receipt-amount">
+      <div class="label">Amount Charged</div>
+      <div class="value debit">- ${fmtMoneyNative(payment.amount, payment.currency)}</div>
+      <div class="channel">${channel.label}</div>
+    </div>
+    <div class="receipt-body">
+      <div class="row section-title"><span class="label">Transaction</span></div>
+      <div class="row"><span class="label">Receipt ID</span><span class="value mono">#${String(payment.id).slice(0, 12).toUpperCase()}</span></div>
+      <div class="row"><span class="label">Type</span><span class="value">Payment</span></div>
+      <div class="row"><span class="label">Date</span><span class="value">${formatDateLong(payment.createdAt)}</span></div>
+      <div class="row section-title"><span class="label">Booking Details</span></div>
+      <div class="row"><span class="label">Service</span><span class="value">${payment.booking?.title || "—"}</span></div>
+      <div class="row"><span class="label">Worker</span><span class="value">${payment.booking?.worker?.firstName || ""} ${payment.booking?.worker?.lastName || ""}</span></div>
+      <div class="row"><span class="label">Hirer</span><span class="value">${payment.booking?.hirer?.firstName || ""} ${payment.booking?.hirer?.lastName || ""}</span></div>
+      <div class="row section-title"><span class="label">Breakdown</span></div>
+      <div class="row"><span class="label">Worker's Earnings</span><span class="value">${fmtMoneyNative(payment.workerPayout || payment.amount * (1 - feeRate), payment.currency)}</span></div>
+      <div class="row fee-row"><span class="label">Platform Fee (${feePercent}%)</span><span class="value">+ ${fmtMoneyNative(payment.platformFee || payment.amount * feeRate, payment.currency)}</span></div>
+      <div class="row net-row"><span class="label">Total Paid</span><span class="value">${fmtMoneyNative(payment.amount, payment.currency)}</span></div>
+      ${
+        payment.provider || payment.providerRef
+          ? `
+      <div class="row section-title"><span class="label">Payment Details</span></div>
+      <div class="row"><span class="label">Provider</span><span class="value">${payment.provider || "—"}</span></div>
+      ${payment.providerRef ? `<div class="row"><span class="label">Provider Ref</span><span class="value mono">${payment.providerRef}</span></div>` : ""}
+      `
+          : ""
+      }
+    </div>
+    <div class="receipt-footer">
+      <p>Thank you for using <strong>SkilledProz</strong></p>
+      <p style="margin-top: 6px;">This is an electronically generated receipt. No signature required.</p>
+      <p style="margin-top: 8px; font-size: 11px;">skilledproz.com · support@skilledproz.com</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// ── Receipt Modal ───────────────────────────────────────────────────────
+function ReceiptModal({ payment, onClose, c, isDark }) {
+  const [printing, setPrinting] = useState(false);
   if (!payment) return null;
 
   const { booking } = payment;
   const hirer = booking?.hirer ?? {};
   const worker = booking?.worker ?? {};
-  const meta = STATUS_META[payment.status] ?? {
+  const statusMeta = STATUS_META[payment.status] ?? {
     label: payment.status,
-    color: "#888",
+    key: "pending",
   };
+  const sc = statusColors(statusMeta.key, c);
 
-  // Platform fee is 5% - worker gets 100%
-  const platformFeePercent = 5;
-  const workerPayout = payment.workerPayout ?? payment.amount * 0.95;
-  const platformFee = payment.platformFee ?? payment.amount * 0.05;
+  const feeRate = getHirerFeeRate(payment.currency);
+  const feePercent = Math.round(feeRate * 100);
+  const workerPayout = payment.workerPayout ?? payment.amount * (1 - feeRate);
+  const platformFee = payment.platformFee ?? payment.amount * feeRate;
 
-  const isCrypto = ["USDC", "USDT"].includes(payment.currency);
-
-  const formatAmount = (amount, currency) => {
-    const symbol = getCurrencySymbol(currency);
-    return `${symbol}${Number(amount ?? 0).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+  const handlePrint = async () => {
+    setPrinting(true);
+    try {
+      await Print.printAsync({
+        html: generateReceiptHTML(payment, isDark),
+      });
+    } catch (err) {
+      Alert.alert(
+        "Print failed",
+        err?.message || "Could not open the print dialog.",
+      );
+    } finally {
+      setPrinting(false);
+    }
   };
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[styles.backdrop]} onPress={onClose}>
-        <Pressable
-          style={[
-            styles.receiptSheet,
-            { backgroundColor: modalBg, borderTopColor: c.border },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Header */}
-            <View style={styles.receiptHeader}>
-              <View style={styles.receiptLogoRow}>
-                <View style={[styles.logoMark, { backgroundColor: c.orange }]}>
-                  <AppText
-                    variant="small"
-                    weight="semibold"
-                    style={{ color: "#fff" }}
+      <View style={{ flex: 1, backgroundColor: "rgba(8,8,16,0.9)" }}>
+        <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+          <ScrollView
+            contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View
+              style={{
+                backgroundColor: c.bgPanel,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: c.border,
+                padding: 20,
+                gap: 18,
+              }}
+            >
+              {/* Header */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <View
+                    style={{
+                      backgroundColor: c.orange,
+                      paddingHorizontal: 6,
+                      paddingVertical: 3,
+                      borderRadius: 5,
+                    }}
                   >
-                    SP
+                    <AppText
+                      style={{
+                        fontFamily: "Syne_800ExtraBold",
+                        fontSize: 11,
+                        fontWeight: "700",
+                        color: "#000",
+                      }}
+                    >
+                      SP
+                    </AppText>
+                  </View>
+                  <AppText
+                    style={{
+                      fontFamily: "Syne_700Bold",
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: c.text,
+                    }}
+                  >
+                    SkilledProz
                   </AppText>
                 </View>
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ marginLeft: 8 }}
+                <Pressable
+                  onPress={onClose}
+                  style={({ pressed }) => [
+                    {
+                      width: 30,
+                      height: 30,
+                      borderRadius: 6,
+                      backgroundColor: c.bgInput || c.bgCard,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
                 >
-                  SkilledPro
-                </AppText>
+                  <FaTimes size={13} color={c.textDim} />
+                </Pressable>
               </View>
-              <Pressable
-                onPress={onClose}
-                style={[
-                  styles.closeBtn,
-                  { backgroundColor: c.bgInput, borderColor: c.border },
-                ]}
-              >
-                <AppText variant="body" tone="dim">
-                  ✕
-                </AppText>
-              </Pressable>
-            </View>
 
-            {/* Title + status */}
-            <View style={styles.receiptTitleRow}>
-              <AppText variant="title" weight="semibold">
-                Payment Receipt
-              </AppText>
+              {/* Title + status pill */}
               <View
-                style={[
-                  styles.statusPill,
-                  {
-                    backgroundColor: `${meta.color}22`,
-                    borderColor: `${meta.color}55`,
-                  },
-                ]}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
               >
                 <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{ color: meta.color }}
+                  style={{
+                    fontFamily: "Syne_800ExtraBold",
+                    fontSize: 20,
+                    fontWeight: "700",
+                    color: c.text,
+                  }}
                 >
-                  {meta.label}
+                  Payment Receipt
                 </AppText>
-              </View>
-            </View>
-
-            {/* Meta grid */}
-            <View
-              style={[
-                styles.metaGrid,
-                { borderColor: c.border, backgroundColor: c.bgInput },
-              ]}
-            >
-              {[
-                {
-                  label: "RECEIPT ID",
-                  value: `#${payment.id.slice(0, 12).toUpperCase()}`,
-                },
-                { label: "DATE", value: fmtDateTime(payment.createdAt) },
-                { label: "PROVIDER", value: payment.provider ?? "—" },
-                payment.providerRef && {
-                  label: "REF",
-                  value: payment.providerRef,
-                },
-              ]
-                .filter(Boolean)
-                .map((row) => (
-                  <View key={row.label} style={styles.metaItem}>
-                    <AppText
-                      variant="small"
-                      tone="dim"
-                      style={styles.metaLabel}
-                    >
-                      {row.label}
-                    </AppText>
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={styles.metaValue}
-                      numberOfLines={2}
-                    >
-                      {row.value}
-                    </AppText>
-                  </View>
-                ))}
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: c.border }]} />
-
-            {/* Parties */}
-            <View style={styles.partiesRow}>
-              <View style={styles.partyBox}>
-                <AppText variant="small" tone="dim" style={styles.partyLabel}>
-                  FROM (HIRER)
-                </AppText>
-                <AppText variant="body" weight="semibold">
-                  {hirer.firstName} {hirer.lastName}
-                </AppText>
-                {hirer.email && (
-                  <AppText variant="small" tone="dim">
-                    {hirer.email}
-                  </AppText>
-                )}
-              </View>
-              <AppText
-                variant="title"
-                style={{ color: c.orange, marginHorizontal: 8 }}
-              >
-                →
-              </AppText>
-              <View style={styles.partyBox}>
-                <AppText variant="small" tone="dim" style={styles.partyLabel}>
-                  TO (WORKER)
-                </AppText>
-                <AppText variant="body" weight="semibold">
-                  {worker.firstName} {worker.lastName}
-                </AppText>
-                {worker.email && (
-                  <AppText variant="small" tone="dim">
-                    {worker.email}
-                  </AppText>
-                )}
-              </View>
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: c.border }]} />
-
-            {/* Job details */}
-            {booking && (
-              <View style={styles.jobSection}>
-                <AppText variant="small" tone="dim" style={styles.sectionLabel}>
-                  JOB
-                </AppText>
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ marginTop: 4 }}
+                <View
+                  style={{
+                    backgroundColor: sc.bg,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                  }}
                 >
-                  {booking.title}
-                </AppText>
-                {booking.category?.name && (
-                  <View
-                    style={[
-                      styles.catChip,
-                      { backgroundColor: c.orangeDim, borderColor: c.orange },
-                    ]}
+                  <AppText
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "700",
+                      color: sc.fg,
+                      letterSpacing: 0.5,
+                    }}
                   >
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: c.orange }}
-                    >
-                      {booking.category.name}
+                    {statusMeta.label}
+                  </AppText>
+                </View>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: c.border }} />
+
+              {/* Meta grid */}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+                <MetaItem
+                  label="Receipt ID"
+                  value={`#${String(payment.id).slice(0, 12).toUpperCase()}`}
+                  c={c}
+                />
+                <MetaItem
+                  label="Date"
+                  value={fmtDateTime(payment.createdAt)}
+                  c={c}
+                />
+                <MetaItem
+                  label="Provider"
+                  value={payment.provider ?? "—"}
+                  c={c}
+                />
+                {payment.providerRef ? (
+                  <MetaItem label="Ref" value={payment.providerRef} c={c} />
+                ) : null}
+              </View>
+
+              <View style={{ height: 1, backgroundColor: c.border }} />
+
+              {/* Parties */}
+              <View style={{ gap: 12 }}>
+                <View>
+                  <AppText style={labelStyle(c)}>FROM (HIRER)</AppText>
+                  <AppText
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "500",
+                      color: c.text,
+                      marginTop: 2,
+                    }}
+                  >
+                    {`${hirer.firstName || ""} ${hirer.lastName || ""}`.trim() ||
+                      "—"}
+                  </AppText>
+                  {hirer.email ? (
+                    <AppText style={{ fontSize: 12, color: c.textDim }}>
+                      {hirer.email}
                     </AppText>
-                  </View>
-                )}
-                {booking.scheduledAt && (
-                  <AppText variant="small" tone="dim" style={{ marginTop: 6 }}>
-                    Scheduled: {fmtDate(booking.scheduledAt)}
-                  </AppText>
-                )}
-                {booking.completedAt && (
-                  <AppText variant="small" tone="dim">
-                    Completed: {fmtDate(booking.completedAt)}
-                  </AppText>
-                )}
-              </View>
-            )}
-
-            <View style={[styles.divider, { backgroundColor: c.border }]} />
-
-            {/* Breakdown */}
-            <View style={[styles.breakdown, { borderColor: c.border }]}>
-              <View style={styles.breakdownRow}>
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ color: "#22c55e" }}
+                  ) : null}
+                </View>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
                 >
-                  Worker's earnings (100%)
-                </AppText>
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ color: "#22c55e" }}
+                  <View
+                    style={{ flex: 1, height: 1, backgroundColor: c.border }}
+                  />
+                  <AppText style={{ fontSize: 14, color: c.orange }}>→</AppText>
+                  <View
+                    style={{ flex: 1, height: 1, backgroundColor: c.border }}
+                  />
+                </View>
+                <View>
+                  <AppText style={labelStyle(c)}>TO (WORKER)</AppText>
+                  <AppText
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "500",
+                      color: c.text,
+                      marginTop: 2,
+                    }}
+                  >
+                    {`${worker.firstName || ""} ${worker.lastName || ""}`.trim() ||
+                      "—"}
+                  </AppText>
+                  {worker.email ? (
+                    <AppText style={{ fontSize: 12, color: c.textDim }}>
+                      {worker.email}
+                    </AppText>
+                  ) : null}
+                </View>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: c.border }} />
+
+              {/* Job */}
+              {booking ? (
+                <View>
+                  <AppText style={labelStyle(c)}>JOB</AppText>
+                  <AppText
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "500",
+                      color: c.text,
+                      marginTop: 4,
+                    }}
+                  >
+                    {booking.title || "—"}
+                  </AppText>
+                  {booking.category?.name ? (
+                    <View
+                      style={{
+                        alignSelf: "flex-start",
+                        marginTop: 6,
+                        backgroundColor: c.orangeDim,
+                        paddingHorizontal: 10,
+                        paddingVertical: 3,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 12,
+                          color: c.orange,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {booking.category.name}
+                      </AppText>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              <View style={{ height: 1, backgroundColor: c.border }} />
+
+              {/* Breakdown — native currency (actual transaction) */}
+              <View style={{ gap: 10 }}>
+                <View style={rowBetween}>
+                  <AppText style={dimText(c)}>Worker's earnings</AppText>
+                  <AppText
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: c.green,
+                    }}
+                  >
+                    {fmtMoneyNative(workerPayout, payment.currency)}
+                  </AppText>
+                </View>
+                <View style={rowBetween}>
+                  <AppText style={dimText(c)}>
+                    Platform fee ({feePercent}%)
+                  </AppText>
+                  <AppText
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: c.red,
+                    }}
+                  >
+                    {`+ ${fmtMoneyNative(platformFee, payment.currency)}`}
+                  </AppText>
+                </View>
+                <View
+                  style={{
+                    borderTopWidth: 1,
+                    borderTopColor: c.border,
+                    paddingTop: 10,
+                    marginTop: 4,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
                 >
-                  {formatAmount(workerPayout, payment.currency)}
-                </AppText>
+                  <AppText
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "700",
+                      color: c.text,
+                    }}
+                  >
+                    Total you paid
+                  </AppText>
+                  <AppText
+                    style={{
+                      fontFamily: "Syne_800ExtraBold",
+                      fontSize: 18,
+                      fontWeight: "800",
+                      color: c.orange,
+                    }}
+                  >
+                    {fmtMoneyNative(payment.amount, payment.currency)}
+                  </AppText>
+                </View>
               </View>
-              <View style={styles.breakdownRow}>
-                <AppText variant="body" tone="dim">
-                  Platform fee (5%)
-                </AppText>
-                <AppText variant="body" style={{ color: "#f97316" }}>
-                  + {formatAmount(platformFee, payment.currency)}
-                </AppText>
-              </View>
+
+              {/* Worker gets 100% note */}
               <View
-                style={[styles.breakdownTotal, { borderTopColor: c.border }]}
-              >
-                <AppText variant="body" weight="semibold">
-                  Total you paid
-                </AppText>
-                <AppText
-                  variant="display"
-                  weight="displayBlack"
-                  style={{ color: c.orange, fontSize: 26 }}
-                >
-                  {formatAmount(payment.amount, payment.currency)}
-                </AppText>
-              </View>
-            </View>
-
-            {/* Worker gets 100% note */}
-            <View
-              style={[
-                styles.workerNote,
-                {
+                style={{
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  gap: 8,
                   backgroundColor: "rgba(34,197,94,0.08)",
+                  borderWidth: 1,
                   borderColor: "rgba(34,197,94,0.2)",
-                },
-              ]}
-            >
-              <AppText style={{ fontSize: 16, marginRight: 8 }}>✅</AppText>
-              <AppText variant="small" tone="dim" style={{ flex: 1 }}>
-                Worker receives{" "}
-                <AppText weight="semibold" style={{ color: "#22c55e" }}>
-                  100%
-                </AppText>{" "}
-                of the job amount (
-                {formatAmount(workerPayout, payment.currency)})
-              </AppText>
-            </View>
-
-            {/* Currency badge */}
-            <View style={styles.currencyBadgeRow}>
-              <View
-                style={[
-                  styles.currencyBadge,
-                  {
-                    backgroundColor: isCrypto
-                      ? "rgba(139,92,246,0.12)"
-                      : c.orangeDim,
-                    borderColor: isCrypto ? "#a78bfa" : c.orange,
-                  },
-                ]}
+                  borderRadius: 8,
+                  padding: 10,
+                }}
               >
+                <FaCheckCircle size={16} color={c.green} />
                 <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{ color: isCrypto ? "#a78bfa" : c.orange }}
+                  style={{
+                    flex: 1,
+                    fontSize: 12,
+                    color: c.textDim,
+                    lineHeight: 17,
+                  }}
                 >
-                  {payment.currency}
+                  Worker receives{" "}
+                  <AppText style={{ fontWeight: "700", color: c.green }}>
+                    100%
+                  </AppText>{" "}
+                  of the job amount (
+                  {fmtMoneyNative(workerPayout, payment.currency)})
                 </AppText>
               </View>
-            </View>
 
-            {/* Footer */}
-            <View style={[styles.receiptFooter, { borderTopColor: c.border }]}>
-              <AppText variant="small" tone="dim">
-                SkilledPro · Global Skills Marketplace
-              </AppText>
+              {payment.escrowReleasedAt ? (
+                <View
+                  style={{
+                    backgroundColor: c.greenDim,
+                    borderWidth: 1,
+                    borderColor: "rgba(34,197,94,0.2)",
+                    borderRadius: 8,
+                    padding: 10,
+                  }}
+                >
+                  <AppText style={{ fontSize: 12, color: c.green }}>
+                    Funds released to worker on{" "}
+                    {fmtDateTime(payment.escrowReleasedAt)}
+                  </AppText>
+                </View>
+              ) : null}
+
+              {payment.refundedAt ? (
+                <View
+                  style={{
+                    backgroundColor: "rgba(139,92,246,0.1)",
+                    borderWidth: 1,
+                    borderColor: "rgba(139,92,246,0.2)",
+                    borderRadius: 8,
+                    padding: 10,
+                  }}
+                >
+                  <AppText style={{ fontSize: 12, color: "#a78bfa" }}>
+                    Refunded on {fmtDateTime(payment.refundedAt)}
+                  </AppText>
+                </View>
+              ) : null}
+
+              {/* Footer */}
+              <View
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: c.border,
+                  paddingTop: 14,
+                  gap: 10,
+                }}
+              >
+                <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                  SkilledPro · Global Skills Marketplace
+                </AppText>
+                <Pressable
+                  onPress={handlePrint}
+                  disabled={printing}
+                  style={({ pressed }) => [
+                    {
+                      backgroundColor: c.orangeDim,
+                      borderWidth: 1,
+                      borderColor: c.orangeGlow,
+                      borderRadius: 8,
+                      paddingVertical: 10,
+                      alignItems: "center",
+                      opacity: printing ? 0.5 : pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: c.orange,
+                    }}
+                  >
+                    {printing ? "Preparing…" : "Print / Save PDF"}
+                  </AppText>
+                </Pressable>
+              </View>
             </View>
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </SafeAreaView>
+      </View>
     </Modal>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Summary Card - Shows currency symbol only, changes with viewing currency
-// ─────────────────────────────────────────────────────────────────────────────
-function SummaryCard({ label, value, sub, accent, c, viewingCurrency }) {
-  // Fix: Use a fallback currency if viewingCurrency is undefined
-  const safeCurrency = viewingCurrency || "DH";
-  const formattedValue = formatWithSymbol(value, safeCurrency);
-
+function MetaItem({ label, value, c }) {
   return (
-    <View
-      style={[
-        styles.summaryCard,
-        {
-          backgroundColor: c.bgCard,
-          borderColor: accent ? c.orange : c.border,
-          borderWidth: accent ? 1 : StyleSheet.hairlineWidth,
-        },
-      ]}
-    >
+    <View style={{ flexBasis: "45%", minWidth: 120 }}>
+      <AppText style={labelStyle(c)}>{label}</AppText>
       <AppText
-        variant="small"
-        weight="semibold"
-        tone="dim"
-        style={styles.summaryLabel}
+        style={{
+          fontFamily: "Syne_700Bold",
+          fontSize: 12,
+          color: c.textDim,
+          marginTop: 2,
+        }}
       >
-        {label.toUpperCase()}
+        {value}
       </AppText>
-      <AppText
-        variant="display"
-        weight={accent ? "displayBlack" : "semibold"}
-        style={[styles.summaryValue, { color: accent ? c.orange : c.text }]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-      >
-        {formattedValue}
-      </AppText>
-      {sub && (
-        <AppText variant="small" tone="dim">
-          {sub}
-        </AppText>
-      )}
     </View>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Payment Card (list row) - Shows in original payment currency with symbol
-// ─────────────────────────────────────────────────────────────────────────────
-function PaymentCard({ payment, onReceipt, onRelease, releasing, c }) {
-  const payMeta = STATUS_META[payment.status] ?? {
-    label: payment.status,
-    color: "#888",
-  };
-  const bookingMeta = BOOKING_STATUS_META[payment.booking?.status] ?? null;
-  const worker = payment.booking?.worker ?? {};
+const rowBetween = {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+};
 
-  const formatAmount = (amount) => {
-    const symbol = getCurrencySymbol(payment.currency);
-    return `${symbol}${Number(amount ?? 0).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+const labelStyle = (c) => ({
+  fontSize: 10,
+  fontWeight: "700",
+  color: c.textMuted,
+  letterSpacing: 0.7,
+  textTransform: "uppercase",
+});
+
+const dimText = (c) => ({
+  fontSize: 14,
+  color: c.textDim,
+});
+
+// ── Summary card ────────────────────────────────────────────────────────
+function SummaryCard({ label, value, sub, accent, c }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        minWidth: 140,
+        backgroundColor: accent ? "rgba(249,115,22,0.06)" : c.bgCard,
+        borderWidth: 1,
+        borderColor: accent ? c.orangeGlow : c.border,
+        borderRadius: 12,
+        padding: 16,
+        gap: 4,
+      }}
+    >
+      <AppText
+        style={{
+          fontSize: 11,
+          color: c.textDim,
+          letterSpacing: 0.7,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </AppText>
+      <AppText
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        style={{
+          fontFamily: "Syne_800ExtraBold",
+          fontSize: 20,
+          fontWeight: "700",
+          color: accent ? c.orange : c.text,
+          marginTop: 2,
+        }}
+      >
+        {value}
+      </AppText>
+      {sub ? (
+        <AppText style={{ fontSize: 11, color: c.textMuted }}>{sub}</AppText>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Payment card ────────────────────────────────────────────────────────
+// `format` comes straight from useCurrency() — it reads `currencyCode`,
+// which CurrencyPicker changes via setCurrencyCode. This is the exact same
+// function DashboardScreen uses on its Total Spent card.
+function PaymentCard({ payment, onOpenReceipt, c, format }) {
+  const statusMeta = STATUS_META[payment.status] ?? {
+    label: payment.status,
+    key: "pending",
   };
+  const sc = statusColors(statusMeta.key, c);
+  const worker = payment.booking?.worker ?? {};
+  const bookingStatus = BOOKING_STATUS_META[payment.booking?.status];
+  const rowFeePercent = Math.round(getHirerFeeRate(payment.currency) * 100);
 
   return (
     <View
-      style={[
-        styles.payCard,
-        { backgroundColor: c.bgCard, borderColor: c.border },
-      ]}
+      style={{
+        backgroundColor: c.bgPanel,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 12,
+        padding: 14,
+        gap: 12,
+      }}
     >
-      {/* Job row */}
-      <View style={styles.payCardTop}>
-        <AppText
-          variant="body"
-          weight="semibold"
-          style={{ flex: 1 }}
-          numberOfLines={1}
-        >
-          {payment.booking?.title ?? "—"}
-        </AppText>
-        <View
-          style={[
-            styles.statusPill,
-            {
-              backgroundColor: `${payMeta.color}22`,
-              borderColor: `${payMeta.color}55`,
-            },
-          ]}
-        >
+      {/* Top row: job + status */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          gap: 10,
+        }}
+      >
+        <View style={{ flex: 1, minWidth: 0 }}>
           <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: payMeta.color }}
+            numberOfLines={1}
+            style={{ fontSize: 14, fontWeight: "600", color: c.text }}
           >
-            {payMeta.label}
+            {payment.booking?.title ?? "—"}
+          </AppText>
+          {payment.booking?.category?.name ? (
+            <AppText
+              numberOfLines={1}
+              style={{ fontSize: 11, color: c.textDim, marginTop: 2 }}
+            >
+              {payment.booking.category.name}
+            </AppText>
+          ) : null}
+          {bookingStatus ? (
+            <View
+              style={{
+                alignSelf: "flex-start",
+                marginTop: 6,
+                backgroundColor: statusColors(bookingStatus.key, c).bg,
+                paddingHorizontal: 7,
+                paddingVertical: 2,
+                borderRadius: 999,
+              }}
+            >
+              <AppText
+                style={{
+                  fontSize: 9,
+                  fontWeight: "700",
+                  color: statusColors(bookingStatus.key, c).fg,
+                }}
+              >
+                {bookingStatus.label}
+              </AppText>
+            </View>
+          ) : null}
+        </View>
+        <View
+          style={{
+            alignSelf: "flex-start",
+            backgroundColor: sc.bg,
+            paddingHorizontal: 9,
+            paddingVertical: 3,
+            borderRadius: 999,
+          }}
+        >
+          <AppText style={{ fontSize: 10, fontWeight: "700", color: sc.fg }}>
+            {statusMeta.label}
           </AppText>
         </View>
       </View>
 
-      {/* Category + booking status */}
-      <View style={styles.chipRow}>
-        {payment.booking?.category?.name && (
+      {/* Worker + date */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
           <View
-            style={[
-              styles.catChip,
-              { backgroundColor: c.bgInput, borderColor: c.border },
-            ]}
-          >
-            <AppText variant="small" tone="dim">
-              {payment.booking.category.name}
-            </AppText>
-          </View>
-        )}
-        {bookingMeta && (
-          <View
-            style={[
-              styles.catChip,
-              {
-                backgroundColor: `${bookingMeta.color}22`,
-                borderColor: `${bookingMeta.color}55`,
-              },
-            ]}
-          >
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: bookingMeta.color }}
-            >
-              {bookingMeta.label}
-            </AppText>
-          </View>
-        )}
-      </View>
-
-      {/* Worker + date row */}
-      <View style={styles.payCardMeta}>
-        <View style={styles.workerRow}>
-          <View
-            style={[
-              styles.workerAvatar,
-              { backgroundColor: c.orangeDim, borderColor: c.orange },
-            ]}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 14,
+              backgroundColor: c.orangeDim,
+              borderWidth: 1,
+              borderColor: c.orangeGlow,
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+              flexShrink: 0,
+            }}
           >
             {worker.avatar ? (
               <Image
                 source={{ uri: worker.avatar }}
-                style={styles.workerAvatarImg}
+                style={{ width: "100%", height: "100%" }}
               />
             ) : (
               <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.orange }}
+                style={{
+                  fontSize: 10,
+                  fontWeight: "700",
+                  color: c.orange,
+                }}
               >
                 {initials(worker.firstName, worker.lastName)}
               </AppText>
             )}
           </View>
-          <AppText variant="body" style={{ marginLeft: 8 }}>
-            {worker.firstName} {worker.lastName}
+          <AppText
+            numberOfLines={1}
+            style={{ fontSize: 13, color: c.text, flex: 1 }}
+          >
+            {`${worker.firstName || ""} ${worker.lastName || ""}`.trim() || "—"}
           </AppText>
         </View>
-        <AppText variant="small" tone="dim">
+        <AppText style={{ fontSize: 12, color: c.textDim }}>
           {fmtDate(payment.createdAt)}
         </AppText>
       </View>
 
-      {/* Amount row - Shows in original payment currency with symbol */}
-      <View style={[styles.amountRow, { borderTopColor: c.border }]}>
-        <View>
-          <AppText variant="title" weight="semibold" style={styles.amountText}>
-            {formatAmount(payment.amount)}
-          </AppText>
-          <AppText variant="small" style={{ color: "#22c55e" }}>
-            Worker gets <AppText weight="semibold">100%</AppText> (
-            {formatAmount(payment.workerPayout)})
-          </AppText>
-          <AppText variant="small" style={{ color: "#f97316", fontSize: 11 }}>
-            Platform fee: 5%
-          </AppText>
-        </View>
-
-        {/* Action buttons */}
-        <View style={styles.actionsRow}>
-          <Pressable
-            style={[
-              styles.actionBtn,
-              { borderColor: c.border, backgroundColor: c.bgInput },
-            ]}
-            onPress={() => onReceipt(payment)}
-          >
-            <AppText variant="small" weight="semibold">
-              Receipt
-            </AppText>
-          </Pressable>
-          {payment.status === "HELD" && (
-            <Pressable
-              style={[
-                styles.actionBtn,
-                {
-                  borderColor: "#22c55e",
-                  backgroundColor: "rgba(34,197,94,0.1)",
-                },
-              ]}
-              onPress={() => onRelease(payment.bookingId)}
-              disabled={releasing === payment.bookingId}
-            >
-              {releasing === payment.bookingId ? (
-                <ActivityIndicator size="small" color="#22c55e" />
-              ) : (
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{ color: "#22c55e" }}
-                >
-                  Release
-                </AppText>
-              )}
-            </Pressable>
-          )}
-        </View>
+      {/* Amount block — uses format(amount), which reflects currencyCode */}
+      <View
+        style={{
+          backgroundColor: c.bgCard,
+          borderRadius: 9,
+          borderWidth: 1,
+          borderColor: c.border,
+          padding: 10,
+          gap: 4,
+        }}
+      >
+        <AppText
+          style={{
+            fontFamily: "Syne_700Bold",
+            fontSize: 15,
+            fontWeight: "600",
+            color: c.text,
+          }}
+        >
+          {format(payment.amount)}
+        </AppText>
+        <AppText style={{ fontSize: 11, color: c.textMuted }}>
+          Worker gets{" "}
+          <AppText style={{ fontWeight: "700", color: c.green }}>100%</AppText>{" "}
+          ({format(payment.workerPayout)})
+        </AppText>
+        <AppText style={{ fontSize: 10, color: c.orange, fontWeight: "600" }}>
+          {`Platform fee: ${rowFeePercent}%`}
+        </AppText>
       </View>
+
+      {/* Actions */}
+      <Pressable
+        onPress={onOpenReceipt}
+        style={({ pressed }) => [
+          {
+            alignSelf: "flex-start",
+            backgroundColor: c.bgInput || c.bgCard,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 7,
+            paddingHorizontal: 14,
+            paddingVertical: 6,
+            opacity: pressed ? 0.75 : 1,
+          },
+        ]}
+      >
+        <AppText style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}>
+          Receipt
+        </AppText>
+      </Pressable>
     </View>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Skeleton
-// ─────────────────────────────────────────────────────────────────────────────
-function Skeleton({ c }) {
+// ── Skeleton rows ───────────────────────────────────────────────────────
+function SkeletonRows({ c }) {
   return (
-    <View style={{ gap: 12, padding: 16 }}>
-      {[1, 2, 3].map((i) => (
-        <View
+    <View style={{ gap: 10 }}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Skeleton
           key={i}
-          style={[
-            styles.skCard,
-            { backgroundColor: c.bgCard, borderColor: c.border },
-          ]}
+          width="100%"
+          height={150}
+          radius={12}
+          style={{ backgroundColor: c.bgPanel }}
         />
       ))}
     </View>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main Screen
-// ─────────────────────────────────────────────────────────────────────────────
-export default function PaymentHistoryScreen({ navigation }) {
-  const { t } = useTranslation();
-  const { theme: th } = useTheme();
-  const c = th.colors;
-  const toast = useToast();
-  const { dashboardCurrency } = useCurrency();
+// ── Empty state ─────────────────────────────────────────────────────────
+function EmptyState({ c }) {
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        paddingVertical: 56,
+        paddingHorizontal: 20,
+        backgroundColor: c.bgPanel,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 14,
+        gap: 8,
+      }}
+    >
+      <FaInbox size={40} color={c.textMuted} />
+      <AppText style={{ fontSize: 15, fontWeight: "600", color: c.textDim }}>
+        No transactions yet
+      </AppText>
+      <AppText
+        style={{
+          fontSize: 12,
+          color: c.textMuted,
+          textAlign: "center",
+          maxWidth: 300,
+        }}
+      >
+        Your payment history will appear here once you book a worker.
+      </AppText>
+    </View>
+  );
+}
+
+// ── Main screen ─────────────────────────────────────────────────────────
+export default function PaymentHistoryScreen() {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const isDark = bgLuminance(c.bg) < 0.5;
+
+  // `format` is the SAME currency formatter DashboardScreen uses.
+  // It reads `currencyCode` under the hood (via CurrencyContext's `code`),
+  // which CurrencyPicker updates through setCurrencyCode. That's why
+  // tapping the picker changes every displayed amount below.
+  const { format } = useCurrency();
 
   const [payments, setPayments] = useState([]);
   const [summary, setSummary] = useState(null);
-  const [currencies, setCurrencies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [currFilter, setCurrFilter] = useState("ALL");
-  const [search, setSearch] = useState("");
+  const [error, setError] = useState(null);
   const [receipt, setReceipt] = useState(null);
-  const [releasing, setReleasing] = useState(null);
-  const [modal, setModal] = useState(null);
-  const [viewingCurrency, setViewingCurrency] = useState(
-    dashboardCurrency || "DH",
-  );
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [statusFilter, setStatus] = useState("ALL");
+  const [search, setSearch] = useState("");
+  const [currencyFilter, setCurrency] = useState("ALL");
+  const [availableCurrencies, setAvailableCurrencies] = useState([]);
 
-  // ── Log viewingCurrency changes ──────────────────────────────────────────
+  // Fetch
   useEffect(() => {
-    console.log("viewingCurrency changed to:", viewingCurrency);
-  }, [viewingCurrency]);
+    setLoading(true);
+    setError(null);
+    const params = { page, limit: LIMIT };
+    if (statusFilter !== "ALL") params.status = statusFilter;
+    if (currencyFilter !== "ALL") params.currency = currencyFilter;
 
-  // ── Sync with dashboardCurrency changes ──────────────────────────────────
-  useEffect(() => {
-    if (dashboardCurrency) {
-      console.log("dashboardCurrency from context:", dashboardCurrency);
-      setViewingCurrency(dashboardCurrency);
-    }
-  }, [dashboardCurrency]);
+    client
+      .get("/payments/hirer", { params })
+      .then((res) => {
+        const d = res.data.data ?? res.data;
+        setPayments(d.payments ?? []);
+        setTotal(d.total ?? 0);
+        setTotalPages(d.pages ?? 1);
+        setSummary(d.summary ?? null);
+        setAvailableCurrencies(d.availableCurrencies ?? []);
+      })
+      .catch(() => setError("Failed to load payment history."))
+      .finally(() => setLoading(false));
+  }, [page, statusFilter, currencyFilter]);
 
-  // ── Fetch ───────────────────────────────────────────────────────────────────
-  const fetchPayments = useCallback(
-    async (pg = 1, replace = true) => {
-      if (replace) setLoading(true);
-      try {
-        const params = { page: pg, limit: LIMIT };
-        if (statusFilter !== "ALL") params.status = statusFilter;
-        if (currFilter !== "ALL") params.currency = currFilter;
-
-        const data = await getHirerPayments(params);
-        const list = data.payments ?? [];
-        setPayments(replace ? list : (prev) => [...prev, ...list]);
-        setTotal(data.total ?? 0);
-        setTotalPages(data.pages ?? 1);
-        setSummary(data.summary ?? null);
-        setCurrencies(data.availableCurrencies ?? []);
-      } catch {
-        toast.error(t("toast.unknownError"));
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [statusFilter, currFilter],
-  );
-
-  useEffect(() => {
-    setPage(1);
-    fetchPayments(1, true);
-  }, [statusFilter, currFilter]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    setPage(1);
-    fetchPayments(1, true);
-  };
-
-  // ── Release escrow ──────────────────────────────────────────────────────────
-  const handleRelease = (bookingId) => {
-    setModal({
-      title: "Release Payment",
-      message: "Release payment to worker? This confirms the job is complete.",
-      confirmLabel: "Release",
-      onConfirm: async () => {
-        setReleasing(bookingId);
-        try {
-          await releasePayment(bookingId);
-          toast.success("Payment released to worker!");
-          setPayments((prev) =>
-            prev.map((p) =>
-              p.bookingId === bookingId ? { ...p, status: "RELEASED" } : p,
-            ),
-          );
-        } catch (err) {
-          toast.error(err?.response?.data?.message ?? t("toast.unknownError"));
-        } finally {
-          setReleasing(null);
-        }
-      },
-    });
-  };
-
-  // ── Filtered (client-side search on top of server filter) ──────────────────
-  const visible = payments.filter((p) => {
-    if (!search.trim()) return true;
+  // Client-side search
+  const visible = useMemo(() => {
+    if (!search.trim()) return payments;
     const q = search.toLowerCase();
-    return (
-      p.booking?.title?.toLowerCase().includes(q) ||
-      p.booking?.worker?.firstName?.toLowerCase().includes(q) ||
-      p.booking?.worker?.lastName?.toLowerCase().includes(q) ||
-      p.id?.toLowerCase().includes(q)
+    return payments.filter(
+      (p) =>
+        p.booking?.title?.toLowerCase().includes(q) ||
+        p.booking?.worker?.firstName?.toLowerCase().includes(q) ||
+        p.booking?.worker?.lastName?.toLowerCase().includes(q) ||
+        p.id?.toLowerCase().includes(q),
     );
-  });
+  }, [payments, search]);
 
-  // ── Summary values ──────────────────────────────────────────────────────────
-  const totalSpent = summary?.totalSpent ?? 0;
-  const inEscrow = summary?.inEscrow ?? 0;
-  const totalRefunds = summary?.totalRefunds ?? 0;
+  // Derived summary (client-side fallback if summary omitted)
+  const totalSpent =
+    summary?.totalSpent ??
+    payments
+      .filter((p) => p.status === "RELEASED")
+      .reduce((s, p) => s + (p.amount ?? 0), 0);
+  const inEscrow =
+    summary?.inEscrow ??
+    payments
+      .filter((p) => p.status === "HELD")
+      .reduce((s, p) => s + (p.amount ?? 0), 0);
+  const totalRefunds =
+    summary?.totalRefunds ??
+    payments
+      .filter((p) => p.status === "REFUNDED")
+      .reduce((s, p) => s + (p.amount ?? 0), 0);
 
-  // ── Handle currency change ──────────────────────────────────────────────────
-  const handleCurrencyChange = (currencyCode) => {
-    console.log("Currency selected in PaymentHistory:", currencyCode);
-    console.log("Type of currencyCode:", typeof currencyCode);
-    if (currencyCode) {
-      setViewingCurrency(currencyCode);
-    } else {
-      // If currencyCode is null/undefined, try to get it from the picker differently
-      console.warn("CurrencyPicker returned null/undefined");
-    }
-  };
+  const statusTabList = ["ALL", "HELD", "RELEASED", "REFUNDED", "FAILED"];
 
   return (
-    <View style={[styles.screen, { backgroundColor: c.bg }]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      edges={["top", "left", "right"]}
+    >
       <FlatList
-        data={visible}
-        keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={c.orange}
-          />
-        }
+        data={loading ? [] : visible}
+        keyExtractor={(p) => String(p.id)}
+        contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 10 }}
         ListHeaderComponent={
-          <View style={styles.listHeader}>
-            {/* Page Header with Currency Picker */}
-            <View style={styles.pageHeader}>
-              <View>
-                <AppText variant="title" weight="bold" style={styles.pageTitle}>
+          <View style={{ gap: 16, marginBottom: 10 }}>
+            {/* Page header */}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <AppText
+                  style={{
+                    fontFamily: "Syne_800ExtraBold",
+                    fontSize: 22,
+                    fontWeight: "700",
+                    color: c.text,
+                    letterSpacing: -0.3,
+                  }}
+                >
                   Payment History
                 </AppText>
-                <AppText variant="small" tone="dim" style={styles.pageSubtitle}>
+                <AppText
+                  style={{ fontSize: 12, color: c.textDim, marginTop: 2 }}
+                >
                   All transactions and receipts
                 </AppText>
               </View>
-              <View style={styles.headerRight}>
-                <CurrencyPicker
-                  label="Viewing in"
-                  onCurrencyChange={handleCurrencyChange}
-                />
-              </View>
+              <CurrencyPicker compact />
             </View>
 
-            {/* Summary cards - formatted with viewing currency */}
-            <SummaryCard
-              label="Total Spent"
-              value={totalSpent}
-              sub={`${total} transaction${total !== 1 ? "s" : ""}`}
-              accent
-              c={c}
-              viewingCurrency={viewingCurrency}
-            />
-            <SummaryCard
-              label="In Escrow"
-              value={inEscrow}
-              sub="Awaiting release"
-              c={c}
-              viewingCurrency={viewingCurrency}
-            />
-            <SummaryCard
-              label="Refunded"
-              value={totalRefunds}
-              sub="Returned to you"
-              c={c}
-              viewingCurrency={viewingCurrency}
-            />
-
-            {/* Search */}
-            <View
-              style={[
-                styles.searchRow,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <AppText style={{ color: c.textMuted, marginRight: 8 }}>
-                🔍
-              </AppText>
-              <TextInput
-                style={[styles.searchInput, { color: c.text }]}
-                placeholder="Search by job, worker, or ID…"
-                placeholderTextColor={c.textMuted}
-                value={search}
-                onChangeText={setSearch}
+            {/* Summary row — uses format(), same as Dashboard Total Spent */}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              <SummaryCard
+                label="Total Spent"
+                value={format(totalSpent)}
+                sub={`${total} transaction${total !== 1 ? "s" : ""}`}
+                accent
+                c={c}
+              />
+              <SummaryCard
+                label="In Escrow"
+                value={format(inEscrow)}
+                sub="Awaiting release"
+                c={c}
+              />
+              <SummaryCard
+                label="Refunded"
+                value={format(totalRefunds)}
+                sub="Returned to you"
+                c={c}
               />
             </View>
 
-            {/* Status filter tabs */}
+            {/* Search */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: c.bgInput || c.bgCard,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 9,
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+              }}
+            >
+              <FaSearch size={14} color={c.textDim} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search by job, worker, or ID…"
+                placeholderTextColor={c.textMuted}
+                style={{
+                  flex: 1,
+                  marginLeft: 8,
+                  color: c.text,
+                  fontSize: 13,
+                  paddingVertical: 8,
+                }}
+              />
+              {search ? (
+                <Pressable onPress={() => setSearch("")} hitSlop={6}>
+                  <FaTimes size={14} color={c.textDim} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            {/* Status tabs */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={styles.tabsScroll}
-              contentContainerStyle={styles.tabsContent}
+              contentContainerStyle={{ gap: 6, paddingRight: 8 }}
             >
-              {STATUS_TABS.map((s) => {
+              {statusTabList.map((s) => {
                 const active = statusFilter === s;
                 const label =
                   s === "ALL" ? "All" : (STATUS_META[s]?.label ?? s);
                 return (
                   <Pressable
                     key={s}
-                    style={[
-                      styles.tab,
-                      {
-                        backgroundColor: active ? c.orange : c.bgCard,
-                        borderColor: active ? c.orange : c.border,
-                      },
-                    ]}
                     onPress={() => {
-                      setStatusFilter(s);
+                      setStatus(s);
                       setPage(1);
                     }}
+                    style={({ pressed }) => [
+                      {
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: active ? c.orange : c.border,
+                        backgroundColor: active ? c.orangeDim : "transparent",
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
                   >
                     <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: active ? "#fff" : c.text }}
+                      style={{
+                        fontSize: 12,
+                        color: active ? c.orange : c.textDim,
+                        fontWeight: "600",
+                      }}
                     >
                       {label}
                     </AppText>
@@ -921,445 +1285,185 @@ export default function PaymentHistoryScreen({ navigation }) {
               })}
             </ScrollView>
 
-            {/* Currency filter tabs */}
-            {currencies.length > 0 && (
-              <View style={styles.currencyRow}>
+            {/* Currency filter — server-side filter, independent of picker */}
+            {availableCurrencies.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  gap: 6,
+                  alignItems: "center",
+                  paddingRight: 8,
+                }}
+              >
                 <AppText
-                  variant="small"
-                  weight="semibold"
-                  tone="dim"
-                  style={{ marginRight: 8 }}
+                  style={{
+                    fontSize: 11,
+                    color: c.textMuted,
+                    fontWeight: "600",
+                    marginRight: 4,
+                  }}
                 >
                   Currency:
                 </AppText>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 6, flexDirection: "row" }}
+                <Pressable
+                  onPress={() => {
+                    setCurrency("ALL");
+                    setPage(1);
+                  }}
+                  style={({ pressed }) => [
+                    {
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor:
+                        currencyFilter === "ALL" ? c.orange : c.border,
+                      backgroundColor:
+                        currencyFilter === "ALL" ? c.orangeDim : "transparent",
+                      opacity: pressed ? 0.8 : 1,
+                    },
+                  ]}
                 >
-                  {["ALL", ...currencies].map((cur) => {
-                    const active = currFilter === cur;
-                    const symbol = getCurrencySymbol(cur);
-                    const label = cur === "ALL" ? "All" : `${symbol} ${cur}`;
-                    return (
-                      <Pressable
-                        key={cur}
-                        style={[
-                          styles.tab,
-                          {
-                            backgroundColor: active ? c.orange : c.bgCard,
-                            borderColor: active ? c.orange : c.border,
-                          },
-                        ]}
-                        onPress={() => {
-                          setCurrFilter(cur);
-                          setPage(1);
+                  <AppText
+                    style={{
+                      fontSize: 12,
+                      color: currencyFilter === "ALL" ? c.orange : c.textDim,
+                      fontWeight: "600",
+                    }}
+                  >
+                    All
+                  </AppText>
+                </Pressable>
+                {availableCurrencies.map((cur) => {
+                  const active = currencyFilter === cur;
+                  return (
+                    <Pressable
+                      key={cur}
+                      onPress={() => {
+                        setCurrency(cur);
+                        setPage(1);
+                      }}
+                      style={({ pressed }) => [
+                        {
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: active ? c.orange : c.border,
+                          backgroundColor: active ? c.orangeDim : "transparent",
+                          opacity: pressed ? 0.8 : 1,
+                        },
+                      ]}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 12,
+                          color: active ? c.orange : c.textDim,
+                          fontWeight: "600",
                         }}
                       >
-                        <AppText
-                          variant="small"
-                          weight="semibold"
-                          style={{ color: active ? "#fff" : c.text }}
-                        >
-                          {label}
-                        </AppText>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
+                        {`${CURRENCY_META?.[cur]?.symbol || ""} ${cur}`.trim()}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => (
           <PaymentCard
             payment={item}
-            onReceipt={setReceipt}
-            onRelease={handleRelease}
-            releasing={releasing}
+            onOpenReceipt={() => setReceipt(item)}
             c={c}
+            format={format}
           />
         )}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          loading ? (
-            <Skeleton c={c} />
-          ) : (
-            <View style={styles.empty}>
-              <AppText variant="title" style={{ textAlign: "center" }}>
-                💳
-              </AppText>
-              <AppText
-                variant="body"
-                weight="semibold"
-                style={{ textAlign: "center", marginTop: 8 }}
-              >
-                No transactions yet
-              </AppText>
-              <AppText
-                variant="small"
-                tone="dim"
-                style={{ textAlign: "center", marginTop: 4 }}
-              >
-                Your payment history will appear here once you book a worker.
-              </AppText>
+          error ? (
+            <View style={{ padding: 40, alignItems: "center" }}>
+              <AppText style={{ fontSize: 13, color: c.red }}>{error}</AppText>
             </View>
+          ) : loading ? (
+            <SkeletonRows c={c} />
+          ) : (
+            <EmptyState c={c} />
           )
         }
         ListFooterComponent={
           !loading && totalPages > 1 ? (
-            <View style={styles.pagination}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 16,
+                marginTop: 20,
+              }}
+            >
               <Pressable
-                style={[
-                  styles.pageBtn,
-                  { borderColor: c.border, opacity: page === 1 ? 0.4 : 1 },
-                ]}
+                onPress={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                onPress={() => {
-                  const p = page - 1;
-                  setPage(p);
-                  fetchPayments(p, true);
-                }}
-              >
-                <AppText variant="small" weight="semibold">
-                  ← Prev
-                </AppText>
-              </Pressable>
-              <AppText variant="small" tone="dim">
-                Page {page} of {totalPages}
-              </AppText>
-              <Pressable
-                style={[
-                  styles.pageBtn,
+                style={({ pressed }) => [
                   {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    backgroundColor: c.bgCard,
+                    borderWidth: 1,
                     borderColor: c.border,
-                    opacity: page === totalPages ? 0.4 : 1,
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    opacity: page === 1 ? 0.35 : pressed ? 0.75 : 1,
                   },
                 ]}
-                disabled={page === totalPages}
-                onPress={() => {
-                  const p = page + 1;
-                  setPage(p);
-                  fetchPayments(p, true);
-                }}
               >
-                <AppText variant="small" weight="semibold">
-                  Next →
+                <FaChevronLeft size={11} color={c.textDim} />
+                <AppText style={{ fontSize: 12, color: c.textDim }}>
+                  Prev
                 </AppText>
+              </Pressable>
+              <AppText style={{ fontSize: 12, color: c.textDim }}>
+                {`Page ${page} of ${totalPages}`}
+              </AppText>
+              <Pressable
+                onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={({ pressed }) => [
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    backgroundColor: c.bgCard,
+                    borderWidth: 1,
+                    borderColor: c.border,
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    opacity: page === totalPages ? 0.35 : pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <AppText style={{ fontSize: 12, color: c.textDim }}>
+                  Next
+                </AppText>
+                <FaChevronRight size={11} color={c.textDim} />
               </Pressable>
             </View>
           ) : null
         }
       />
 
-      {/* Receipt modal */}
-      <ReceiptModal
-        payment={receipt}
-        onClose={() => setReceipt(null)}
-        c={c}
-        modalBg={th.mode === "dark" ? "#111118" : "#ffffff"}
-      />
-
-      {/* Confirm modal (for release) */}
-      <ConfirmModal
-        visible={!!modal}
-        title={modal?.title}
-        message={modal?.message}
-        confirmLabel={modal?.confirmLabel}
-        onConfirm={() => {
-          modal?.onConfirm?.();
-          setModal(null);
-        }}
-        onCancel={() => setModal(null)}
-      />
-    </View>
+      {receipt ? (
+        <ReceiptModal
+          payment={receipt}
+          onClose={() => setReceipt(null)}
+          c={c}
+          isDark={isDark}
+        />
+      ) : null}
+    </SafeAreaView>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  listContent: { padding: 16, paddingBottom: 40 },
-  listHeader: { gap: 12, marginBottom: 16 },
-
-  // Page Header
-  pageHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  pageTitle: {
-    fontSize: 22,
-    lineHeight: 28,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-  },
-  headerRight: {
-    flexShrink: 0,
-  },
-
-  // Summary cards
-  summaryCard: {
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 4,
-  },
-  summaryLabel: { letterSpacing: 0.8, marginBottom: 2 },
-  summaryValue: {
-    fontSize: 28,
-    lineHeight: 34,
-  },
-
-  // Search
-  searchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  searchInput: { flex: 1, fontSize: 15 },
-
-  // Filter tabs
-  tabsScroll: { flexGrow: 0 },
-  tabsContent: { gap: 6, flexDirection: "row" },
-  tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  currencyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 4,
-  },
-
-  // Payment card
-  payCard: {
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-  },
-  payCardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 14,
-    paddingBottom: 6,
-  },
-  chipRow: {
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingBottom: 8,
-    flexWrap: "wrap",
-  },
-  payCardMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingBottom: 12,
-  },
-  workerRow: { flexDirection: "row", alignItems: "center" },
-  workerAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  workerAvatarImg: { width: 32, height: 32, borderRadius: 16 },
-  amountRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 14,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  amountText: {
-    fontSize: 18,
-  },
-  actionsRow: { flexDirection: "row", gap: 8 },
-  actionBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-
-  // Status / category chips
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  catChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-
-  // Pagination
-  pagination: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: 20,
-  },
-  pageBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-
-  // Empty state
-  empty: {
-    alignItems: "center",
-    paddingTop: 60,
-    paddingBottom: 40,
-    paddingHorizontal: 32,
-  },
-
-  // Skeleton
-  skCard: {
-    height: 120,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    opacity: 0.5,
-  },
-
-  // Receipt modal
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  receiptSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    maxHeight: "92%",
-    paddingBottom: 32,
-  },
-  receiptHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 20,
-    paddingBottom: 12,
-  },
-  receiptLogoRow: { flexDirection: "row", alignItems: "center" },
-  logoMark: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  receiptTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  metaGrid: {
-    marginHorizontal: 20,
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  metaItem: { width: "47%", gap: 2 },
-  metaLabel: { letterSpacing: 0.6, marginBottom: 2 },
-  metaValue: { fontSize: 12 },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginHorizontal: 20,
-    marginVertical: 16,
-  },
-  partiesRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    gap: 4,
-  },
-  partyBox: { flex: 1, gap: 2 },
-  partyLabel: { letterSpacing: 0.6, marginBottom: 2 },
-  jobSection: { paddingHorizontal: 20, gap: 4 },
-  sectionLabel: { letterSpacing: 0.8 },
-  breakdown: {
-    marginHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    gap: 10,
-  },
-  breakdownRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  breakdownTotal: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 4,
-  },
-  workerNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 20,
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  currencyBadgeRow: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    marginTop: 12,
-  },
-  currencyBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  receiptFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    marginTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-});

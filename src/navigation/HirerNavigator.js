@@ -47,6 +47,8 @@ import RefundDetailScreen from "../screens/main/RefundDetailScreen";
 import EditJobScreen from "../screens/main/EditJobScreen";
 import MyDisputesScreen from "../screens/main/MyDisputesScreen";
 import EditProfileScreen from "../screens/main/EditProfileScreen";
+import HirerWalletScreen from "../screens/main/HirerWalletScreen";
+import WalletTransactionDetailScreen from "../screens/main/WalletTransactionDetailScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -183,6 +185,12 @@ export default function HirerNavigator() {
         </Drawer.Screen>
         <Drawer.Screen name="EditProfile">
           {() => <ScreenWithChrome Screen={EditProfileScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Wallet">
+          {() => <ScreenWithChrome Screen={HirerWalletScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="WalletTransactionDetail">
+          {() => <ScreenWithChrome Screen={WalletTransactionDetailScreen} />}
         </Drawer.Screen>
 
         <Drawer.Screen

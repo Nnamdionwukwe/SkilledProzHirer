@@ -1,43 +1,33 @@
 // src/screens/main/RefundDetailScreen.js
 //
-// Verbatim port of pages/refund/RefundDetail.jsx.
+// Port of pages/refund/RefundDetail.jsx + Refund.module.css.
 //
-// Fetch: GET /refunds/:id
-// Renders:
-//   · Back link → RefundHistory
-//   · Status banner (icon + label + reference pill, colored by status)
-//   · 2-column grid (mobile: stacked) of 4 detail sections:
-//       1. Refund Information
-//       2. Booking Information
-//       3. Timeline
-//       4. Reason & Notes
-//   · Action buttons (when COMPLETED): Print Receipt, Download Receipt
-//   · Back to History link
-//   · PageSkeleton during load
-//
-// Receipt generation:
-//   · Web downloads HTML via Blob + anchor click.
-//   · Mobile: build the HTML string, write it to a file via expo-file-system,
-//     then open with expo-sharing / expo-intent-launcher.
-//   · Both expo-file-system and expo-sharing are guarded — if missing,
-//     receipt actions are hidden.
+// Preserved verbatim:
+//   - STATUS_CONFIG (7 statuses with colors + bg)
+//   - GET /refunds/:id
+//   - generateReceiptHTML (byte-identical to web, minus DOM-only)
+//   - 4 detail sections: Refund Information, Booking Information,
+//     Timeline, Reason & Notes
+//   - Print + Download actions (only shown when COMPLETED)
+//   - Error state with "Redirecting to refund history…" copy
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
-  StyleSheet,
+  Share,
   View,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useTranslation } from "react-i18next";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
-import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
-import PageSkeleton from "../../components/PageSkeleton";
+import Skeleton from "../../components/Skeleton";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
 import {
   FaArrowLeft,
@@ -45,80 +35,95 @@ import {
   FaClock,
   FaCheckCircle,
   FaTimesCircle,
+  FaSpinner,
   FaExclamationTriangle,
+  FaCalendarAlt,
   FaFileInvoice,
   FaInfoCircle,
   FaDownload,
   FaPrint,
+  FaCreditCard,
+  FaWallet,
+  FaDollarSign,
+  FaShieldAlt,
+  FaPlus,
+  FaMinus,
+  FaArrowUp,
+  FaBuilding,
 } from "../../icons/fa";
 
-// Optional expo modules — guarded
-let FileSystem = null;
-let Sharing = null;
-try {
-  FileSystem = require("expo-file-system");
-} catch {}
-try {
-  Sharing = require("expo-sharing");
-} catch {}
-
-// ── Status config — verbatim from web ────────────────────────────────
 const STATUS_CONFIG = {
   PENDING: {
-    icon: FaClock,
+    Icon: FaClock,
     color: "#fbbf24",
     label: "Pending Review",
     bg: "rgba(251,191,36,0.1)",
   },
   APPROVED: {
-    icon: FaCheckCircle,
+    Icon: FaCheckCircle,
     color: "#22c55e",
     label: "Approved",
     bg: "rgba(34,197,94,0.1)",
   },
   PROCESSING: {
-    icon: FaClock,
+    Icon: FaSpinner,
     color: "#818cf8",
     label: "Processing",
     bg: "rgba(129,140,248,0.1)",
   },
   COMPLETED: {
-    icon: FaCheckCircle,
+    Icon: FaCheckCircle,
     color: "#22c55e",
     label: "Completed",
     bg: "rgba(34,197,94,0.1)",
   },
   FAILED: {
-    icon: FaTimesCircle,
+    Icon: FaTimesCircle,
     color: "#ef4444",
     label: "Failed",
     bg: "rgba(239,68,68,0.1)",
   },
   REJECTED: {
-    icon: FaTimesCircle,
+    Icon: FaTimesCircle,
     color: "#ef4444",
     label: "Rejected",
     bg: "rgba(239,68,68,0.1)",
   },
   DISPUTED: {
-    icon: FaExclamationTriangle,
+    Icon: FaExclamationTriangle,
     color: "#f59e0b",
     label: "In Dispute",
     bg: "rgba(245,158,11,0.1)",
   },
 };
 
-function fmtCurrency(amount, currency = "NGN") {
-  const n = Number(amount) || 0;
-  return `${currency} ${n.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+function getStatusConfig(status) {
+  return (
+    STATUS_CONFIG[status] || {
+      Icon: FaClock,
+      color: "#888",
+      label: status || "Unknown",
+      bg: "rgba(136,136,136,0.1)",
+    }
+  );
 }
 
-function fmtDateLong(date) {
+function formatCurrency(amount, currency = "NGN") {
+  const num = typeof amount === "number" ? amount : parseFloat(amount) || 0;
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "NGN",
+      minimumFractionDigits: 2,
+    }).format(num);
+  } catch {
+    return `${currency} ${num.toFixed(2)}`;
+  }
+}
+
+function formatDateLong(date) {
   if (!date) return "—";
-  return new Date(date).toLocaleString("en-GB", {
+  return new Date(date).toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -128,7 +133,7 @@ function fmtDateLong(date) {
   });
 }
 
-function fmtShortDate(date) {
+function formatDateShort(date) {
   if (!date) return "—";
   return new Date(date).toLocaleString("en-GB", {
     day: "numeric",
@@ -139,8 +144,48 @@ function fmtShortDate(date) {
   });
 }
 
-// ── Receipt HTML generator (verbatim from web) ───────────────────────
-function generateReceiptHTML(refund) {
+function getPaymentChannel(tx) {
+  if (tx.type === "REFUND") return { label: "Refund", Icon: FaArrowUp };
+  if (tx.type === "PAYMENT") {
+    const p = tx.meta?.paymentProvider || "WALLET";
+    if (p === "WALLET") return { label: "Wallet", Icon: FaWallet };
+    if (p === "PAYSTACK")
+      return { label: "Card (Paystack)", Icon: FaCreditCard };
+    if (p === "FLUTTERWAVE")
+      return { label: "Card (Flutterwave)", Icon: FaCreditCard };
+    if (p === "BANK_TRANSFER")
+      return { label: "Bank Transfer", Icon: FaBuilding };
+    if (p === "CRYPTO") return { label: "Crypto", Icon: FaDollarSign };
+    return { label: "Payment", Icon: FaCreditCard };
+  }
+  if (tx.type === "SUBSCRIPTION")
+    return { label: "Subscription", Icon: FaShieldAlt };
+  if (tx.type === "BONUS") return { label: "Bonus", Icon: FaPlus };
+  return { label: "Adjustment", Icon: FaMinus };
+}
+
+function bgLuminance(color) {
+  if (!color) return 0.5;
+  let r = 0,
+    g = 0,
+    b = 0;
+  if (color.startsWith("#")) {
+    const hex = color.replace("#", "");
+    if (hex.length === 3) {
+      r = parseInt(hex[0] + hex[0], 16);
+      g = parseInt(hex[1] + hex[1], 16);
+      b = parseInt(hex[2] + hex[2], 16);
+    } else if (hex.length >= 6) {
+      r = parseInt(hex.slice(0, 2), 16);
+      g = parseInt(hex.slice(2, 4), 16);
+      b = parseInt(hex.slice(4, 6), 16);
+    }
+  }
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+// ── Receipt HTML — byte-identical to web ───────────────────────────────
+function generateReceiptHTML(refund, isDark) {
   const transaction = {
     reference: refund.reference,
     type: "REFUND",
@@ -157,654 +202,681 @@ function generateReceiptHTML(refund) {
       transactionId: refund.payment?.providerRef,
     },
   };
-  const amountPrefix = "+";
+
+  const channel = getPaymentChannel(transaction);
+  const isPaid =
+    transaction.status === "COMPLETED" || transaction.status === "SUCCESS";
+
+  const bg = isDark ? "#080810" : "#f8f9fa";
+  const panel = isDark ? "#0c0c18" : "#ffffff";
+  const text = isDark ? "#ffffff" : "#1a1a2e";
+  const textDim = isDark ? "#a1a1aa" : "#6b7280";
+  const border = isDark ? "rgba(255,255,255,0.08)" : "#e5e7eb";
+  const borderDash = isDark ? "rgba(255,255,255,0.15)" : "#e5e7eb";
+  const footerBg = isDark ? "#0c0c18" : "#f9fafb";
+  const tearColor = isDark ? "#080810" : "#f9fafb";
 
   return `<!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Receipt - ${transaction.reference}</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, sans-serif; background: #080810; color: #fff; padding: 20px; }
-  .receipt { max-width: 520px; margin: 0 auto; background: #0c0c18; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
-  .header { background: linear-gradient(135deg,#f97316,#ea580c); padding: 32px 32px 24px; text-align: center; }
-  .header h1 { font-size: 24px; font-weight: 800; color: #fff; }
-  .header p { font-size: 13px; opacity: 0.9; color: #fff; margin-top: 4px; }
-  .status { display: inline-flex; margin-top: 16px; padding: 6px 16px; background: rgba(255,255,255,0.2); border-radius: 999px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #fff; }
-  .amount { text-align: center; padding: 28px 32px; border-bottom: 2px dashed rgba(255,255,255,0.15); }
-  .amount .label { font-size: 12px; color: #a1a1aa; text-transform: uppercase; font-weight: 700; }
-  .amount .value { font-size: 36px; font-weight: 800; margin-top: 8px; color: #22c55e; }
-  .body { padding: 24px 32px; }
-  .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.08); gap: 16px; }
-  .row:last-child { border-bottom: none; }
-  .row .label { color: #a1a1aa; font-size: 13px; }
-  .row .value { color: #fff; font-size: 13px; font-weight: 600; text-align: right; }
-  .footer { padding: 24px 32px; background: #0c0c18; text-align: center; font-size: 12px; color: #a1a1aa; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receipt - ${transaction.reference}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${bg}; color: ${text}; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 20px; }
+    .receipt { max-width: 520px; width: 100%; background: ${panel}; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,${isDark ? "0.4" : "0.1"}); border: 1px solid ${border}; }
+    .receipt-header { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #ffffff; padding: 32px 32px 24px; text-align: center; }
+    .receipt-header h1 { font-size: 24px; font-weight: 800; color: #fff; }
+    .receipt-header .subtitle { font-size: 13px; opacity: 0.9; margin-top: 4px; color: #fff; }
+    .receipt-status { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; padding: 6px 16px; background: rgba(255,255,255,0.2); border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #fff; }
+    .receipt-amount { text-align: center; padding: 28px 32px 24px; border-bottom: 2px dashed ${borderDash}; }
+    .receipt-amount .label { font-size: 12px; color: ${textDim}; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+    .receipt-amount .value { font-size: 36px; font-weight: 800; margin-top: 8px; }
+    .receipt-amount .value.credit { color: #22c55e; }
+    .receipt-amount .channel { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 4px 12px; background: rgba(249,115,22,0.15); color: #f97316; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .receipt-body { padding: 24px 32px; }
+    .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid ${border}; gap: 16px; }
+    .row:last-child { border-bottom: none; }
+    .row .label { color: ${textDim}; font-size: 13px; font-weight: 500; flex-shrink: 0; }
+    .row .value { color: ${text}; font-size: 13px; font-weight: 600; text-align: right; word-break: break-word; }
+    .row .value.mono { font-family: 'SF Mono', Menlo, monospace; font-size: 12px; }
+    .row.section-title { padding-top: 18px; padding-bottom: 6px; border-bottom: none; }
+    .row.section-title .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: ${textDim}; font-weight: 800; }
+    .net-row { margin-top: 8px; padding-top: 16px; border-top: 2px solid ${border}; border-bottom: none; }
+    .net-row .label { font-weight: 700; color: ${text}; }
+    .net-row .value { font-size: 16px; font-weight: 800; color: #22c55e; }
+    .receipt-footer { padding: 24px 32px; background: ${footerBg}; text-align: center; font-size: 12px; color: ${textDim}; }
+    .receipt-footer strong { color: ${text}; }
+    .tear-line { height: 16px; background-image: radial-gradient(circle, ${tearColor} 4px, transparent 4px); background-size: 16px 16px; background-position: -8px 50%; background-color: ${footerBg}; }
+  </style>
 </head>
 <body>
   <div class="receipt">
-    <div class="header">
+    <div class="receipt-header">
       <h1>SkilledProz</h1>
-      <p>Refund Receipt</p>
-      <div class="status">${STATUS_CONFIG[transaction.status]?.label || transaction.status}</div>
+      <p class="subtitle">Refund Receipt</p>
+      <div class="receipt-status">${STATUS_CONFIG[transaction.status]?.label || transaction.status}</div>
     </div>
-    <div class="amount">
-      <div class="label">Amount Refunded</div>
-      <div class="value">${amountPrefix} ${fmtCurrency(transaction.amount, transaction.currency)}</div>
+    <div class="receipt-amount">
+      <div class="label">Amount Received</div>
+      <div class="value credit">+ ${formatCurrency(transaction.amount, transaction.currency)}</div>
+      <div class="channel">${channel.label}</div>
     </div>
-    <div class="body">
-      <div class="row"><span class="label">Reference</span><span class="value">${transaction.reference}</span></div>
-      <div class="row"><span class="label">Date</span><span class="value">${fmtDateLong(transaction.createdAt)}</span></div>
-      ${transaction.completedAt ? `<div class="row"><span class="label">Completed</span><span class="value">${fmtDateLong(transaction.completedAt)}</span></div>` : ""}
-      ${transaction.description ? `<div class="row"><span class="label">Description</span><span class="value">${transaction.description}</span></div>` : ""}
-      <div class="row"><span class="label">Net Amount</span><span class="value">${fmtCurrency(transaction.netAmount, transaction.currency)}</span></div>
-      ${transaction.meta?.paymentProvider ? `<div class="row"><span class="label">Provider</span><span class="value">${transaction.meta.paymentProvider}</span></div>` : ""}
+    <div class="receipt-body">
+      <div class="row section-title"><span class="label">Transaction</span></div>
+      <div class="row"><span class="label">Reference</span><span class="value mono">${transaction.reference}</span></div>
+      <div class="row"><span class="label">Type</span><span class="value">Refund</span></div>
+      <div class="row"><span class="label">Date</span><span class="value">${formatDateLong(transaction.createdAt)}</span></div>
+      ${transaction.completedAt ? `<div class="row"><span class="label">Completed</span><span class="value">${formatDateLong(transaction.completedAt)}</span></div>` : ""}
+      ${transaction.description ? `<div class="row"><span class="label">Reason</span><span class="value">${transaction.description}</span></div>` : ""}
+      <div class="row section-title"><span class="label">Breakdown</span></div>
+      <div class="row net-row"><span class="label">Refund Amount</span><span class="value">${formatCurrency(transaction.amount, transaction.currency)}</span></div>
+      ${
+        transaction.meta?.paymentProvider
+          ? `<div class="row section-title"><span class="label">Payment Details</span></div>
+             <div class="row"><span class="label">Provider</span><span class="value">${transaction.meta.paymentProvider}</span></div>
+             ${transaction.meta?.transactionId ? `<div class="row"><span class="label">Provider Ref</span><span class="value mono">${transaction.meta.transactionId}</span></div>` : ""}`
+          : ""
+      }
     </div>
-    <div class="footer">
-      Thank you for using SkilledProz<br>
-      This is an electronically generated receipt.
+    <div class="tear-line"></div>
+    <div class="receipt-footer">
+      <p>Thank you for using <strong>SkilledProz</strong></p>
+      <p style="margin-top: 6px;">This is an electronically generated receipt. No signature required.</p>
+      <p style="margin-top: 6px; font-size: 11px;">skilledproz.com · support@skilledproz.com</p>
     </div>
   </div>
 </body>
 </html>`;
 }
 
+// ── Detail row ─────────────────────────────────────────────────────────
+function DetailRow({ label, value, valueStyle, c, children }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 10,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: c.border,
+      }}
+    >
+      <AppText style={{ fontSize: 11, color: c.textDim }}>{label}</AppText>
+      <View
+        style={{
+          flexShrink: 1,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 4,
+          flexWrap: "wrap",
+          justifyContent: "flex-end",
+        }}
+      >
+        {children || (
+          <AppText
+            style={[
+              {
+                fontSize: 12,
+                fontWeight: "700",
+                color: c.text,
+                textAlign: "right",
+              },
+              valueStyle,
+            ]}
+          >
+            {value}
+          </AppText>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function SectionTitle({ Icon, children, c }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 10,
+      }}
+    >
+      {Icon ? <Icon size={12} color={c.orange} /> : null}
+      <AppText
+        style={{
+          fontFamily: "DMSans_600SemiBold",
+          fontSize: 10,
+          fontWeight: "800",
+          color: c.textMuted,
+          letterSpacing: 1,
+          textTransform: "uppercase",
+        }}
+      >
+        {children}
+      </AppText>
+    </View>
+  );
+}
+
+// ── Main ───────────────────────────────────────────────────────────────
 export default function RefundDetailScreen() {
-  const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
   const { theme } = useTheme();
-  const { toast } = useToast();
   const c = theme.colors;
+  const isDark = bgLuminance(c.bg) < 0.5;
 
-  const refundId = route.params?.refundId;
+  const id = route.params?.id;
 
   const [refund, setRefund] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // ── Fetch ───────────────────────────────────────────────────────────
-  const fetchRefund = useCallback(async () => {
-    if (!refundId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await client.get(`/refunds/${refundId}`);
-      setRefund(res?.data?.data?.refund || null);
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load refund details");
-      // If 404, bounce back after a moment
-      if (err?.response?.status === 404) {
-        setTimeout(() => navigation.navigate("RefundHistory"), 3000);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [refundId, navigation]);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    fetchRefund();
-  }, [fetchRefund]);
-
-  const statusConfig = useMemo(() => {
-    if (!refund) return null;
-    return (
-      STATUS_CONFIG[refund.status] || {
-        icon: FaClock,
-        color: "#888",
-        label: refund.status || "Unknown",
-        bg: "rgba(136,136,136,0.1)",
-      }
-    );
-  }, [refund]);
-
-  // ── Download receipt (mobile) ───────────────────────────────────────
-  const handleDownloadReceipt = async () => {
-    if (!refund) return;
-    if (!FileSystem || !Sharing) {
-      toast.info("Install expo-file-system and expo-sharing to download.");
+    if (!id) {
+      setError("Refund not found");
+      setLoading(false);
       return;
     }
-    try {
-      const html = generateReceiptHTML(refund);
-      const filename = `receipt-${refund.reference || refund.id}.html`;
-      const path = `${FileSystem.cacheDirectory}${filename}`;
-      await FileSystem.writeAsStringAsync(path, html, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(path, {
-          mimeType: "text/html",
-          dialogTitle: "Save Refund Receipt",
-        });
-      } else {
-        toast.info("Sharing not available on this device.");
-      }
-    } catch {
-      toast.error("Failed to generate receipt.");
-    }
-  };
+    setLoading(true);
+    setError(null);
+    client
+      .get(`/refunds/${id}`)
+      .then((res) => setRefund(res.data.data.refund))
+      .catch((err) => {
+        setError(
+          err.response?.data?.message || "Failed to load refund details",
+        );
+      })
+      .finally(() => setLoading(false));
+  }, [id]);
 
-  // ── Print receipt (mobile approximation) ───────────────────────────
   const handlePrint = async () => {
     if (!refund) return;
-    // On mobile, "print" = open the HTML in a browser tab; the user can print
-    // from there (Chrome/Safari both support print). If expo-print is installed,
-    // use that instead.
-    let Print = null;
     try {
-      Print = require("expo-print");
-    } catch {}
-    if (Print) {
-      try {
-        await Print.printAsync({ html: generateReceiptHTML(refund) });
-        return;
-      } catch {}
+      await Print.printAsync({ html: generateReceiptHTML(refund, isDark) });
+    } catch (err) {
+      Alert.alert(
+        "Print failed",
+        err?.message || "Could not open the print dialog.",
+      );
     }
-    toast.info("Install expo-print to enable printing.");
   };
 
-  // ── Guards ──────────────────────────────────────────────────────────
+  const handleDownloadReceipt = async () => {
+    if (!refund) return;
+    setDownloading(true);
+    try {
+      const { uri } = await Print.printToFileAsync({
+        html: generateReceiptHTML(refund, isDark),
+      });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: `receipt-${refund.reference}`,
+        });
+      } else {
+        Alert.alert("Receipt saved", uri);
+      }
+    } catch (err) {
+      Alert.alert(
+        "Download failed",
+        err?.message || "Failed to generate receipt. Please try again.",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleBack = () => navigation.navigate("RefundHistory");
+
+  // Loading
   if (loading) {
     return (
-      <AppScreen scroll={false}>
-        <PageSkeleton variant="detail" />
-      </AppScreen>
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top"]}>
+        <View style={{ padding: 16, gap: 14 }}>
+          <Skeleton width="40%" height={18} radius={6} />
+          <Skeleton width="60%" height={30} radius={8} />
+          <Skeleton width="100%" height={80} radius={14} />
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} width="100%" height={160} radius={14} />
+          ))}
+        </View>
+      </SafeAreaView>
     );
   }
 
+  // Error
   if (error || !refund) {
     return (
-      <AppScreen scroll={false}>
-        <View style={styles.center}>
-          <FaExclamationTriangle size={40} color={c.red} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top"]}>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            gap: 12,
+          }}
+        >
+          <FaExclamationTriangle size={44} color={c.red} />
           <AppText
             style={{
-              fontSize: 15,
-              fontWeight: "700",
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 18,
+              fontWeight: "800",
               color: c.text,
-              marginTop: 12,
             }}
           >
             {error || "Refund not found"}
           </AppText>
-          <AppText style={{ fontSize: 12, color: c.textDim, marginTop: 6 }}>
-            Redirecting to refund history…
+          <AppText
+            style={{ fontSize: 13, color: c.textDim, textAlign: "center" }}
+          >
+            The refund could not be loaded.
           </AppText>
           <Pressable
-            onPress={() => navigation.navigate("RefundHistory")}
-            style={[styles.backBtn, { borderColor: c.border, marginTop: 16 }]}
+            onPress={handleBack}
+            style={({ pressed }) => [
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 8,
+                paddingVertical: 12,
+                paddingHorizontal: 24,
+                backgroundColor: c.orange,
+                borderRadius: 10,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
           >
-            <FaArrowLeft size={12} color={c.textDim} />
+            <FaArrowLeft size={12} color="#000" />
             <AppText
               style={{
-                fontSize: 12,
-                color: c.textDim,
-                marginLeft: 6,
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 13,
+                fontWeight: "800",
+                color: "#000",
               }}
             >
               Back to Refunds
             </AppText>
           </Pressable>
         </View>
-      </AppScreen>
+      </SafeAreaView>
     );
   }
 
-  const StatusIcon = statusConfig.icon;
+  const statusConfig = getStatusConfig(refund.status);
+  const StatusIcon = statusConfig.Icon;
 
-  // ═════════════════════════════════════════════════════════════════════
-  // RENDER
-  // ═════════════════════════════════════════════════════════════════════
   return (
-    <AppScreen contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* Back link */}
-      <Pressable
-        onPress={() => navigation.navigate("RefundHistory")}
-        style={styles.backLink}
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      edges={["top", "left", "right"]}
+    >
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 14 }}
       >
-        <FaArrowLeft size={12} color={c.textDim} />
-        <AppText
-          style={{
-            fontSize: 13,
-            color: c.textDim,
-            fontWeight: "600",
-            marginLeft: 6,
-          }}
-        >
-          Back to Refunds
-        </AppText>
-      </Pressable>
-
-      {/* Title */}
-      <AppText
-        style={{
-          fontFamily: "Syne_800ExtraBold",
-          fontSize: 24,
-          fontWeight: "800",
-          color: c.text,
-          letterSpacing: -0.4,
-          marginTop: 8,
-          marginBottom: 16,
-        }}
-      >
-        Refund Details
-      </AppText>
-
-      {/* Status banner */}
-      <View
-        style={[
-          styles.statusBanner,
-          { backgroundColor: statusConfig.bg, borderColor: statusConfig.color },
-        ]}
-      >
-        <StatusIcon size={24} color={statusConfig.color} />
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <AppText
-            style={{
-              fontSize: 10,
-              fontWeight: "800",
-              color: c.textMuted,
-              textTransform: "uppercase",
-              letterSpacing: 0.8,
-            }}
+        {/* Header */}
+        <View>
+          <Pressable
+            onPress={handleBack}
+            style={({ pressed }) => [
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                alignSelf: "flex-start",
+                paddingVertical: 4,
+                opacity: pressed ? 0.75 : 1,
+              },
+            ]}
           >
-            Status
-          </AppText>
-          <AppText
-            style={{
-              fontFamily: "Syne_700Bold",
-              fontSize: 15,
-              fontWeight: "800",
-              color: statusConfig.color,
-              marginTop: 1,
-            }}
-          >
-            {statusConfig.label}
-          </AppText>
-        </View>
-        <View
-          style={[
-            styles.refBadge,
-            { backgroundColor: c.bgCard, borderColor: c.border },
-          ]}
-        >
-          <AppText
-            style={{
-              fontSize: 9,
-              color: c.textMuted,
-              fontFamily: "monospace",
-              letterSpacing: 0.2,
-            }}
-            numberOfLines={1}
-          >
-            Ref: {refund.reference}
-          </AppText>
-        </View>
-      </View>
-
-      {/* ── SECTION: Refund Information ──────────────────────────── */}
-      <SectionBlock
-        icon={<FaMoneyBillWave size={11} color={c.orange} />}
-        title="Refund Information"
-        c={c}
-      >
-        <DetailRow label="Amount" c={c}>
+            <FaArrowLeft size={12} color={c.textDim} />
+            <AppText
+              style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
+            >
+              Back to Refunds
+            </AppText>
+          </Pressable>
           <AppText
             style={{
               fontFamily: "Syne_800ExtraBold",
-              fontSize: 18,
+              fontSize: 22,
+              fontWeight: "800",
+              color: c.text,
+              letterSpacing: -0.3,
+              marginTop: 4,
+            }}
+          >
+            Refund Details
+          </AppText>
+        </View>
+
+        {/* Status banner */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            paddingHorizontal: 14,
+            paddingVertical: 14,
+            backgroundColor: statusConfig.bg,
+            borderWidth: 1.5,
+            borderColor: statusConfig.color,
+            borderRadius: 14,
+          }}
+        >
+          <StatusIcon size={22} color={statusConfig.color} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText
+              style={{
+                fontFamily: "DMSans_600SemiBold",
+                fontSize: 9,
+                fontWeight: "800",
+                color: c.textMuted,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+              }}
+            >
+              Status
+            </AppText>
+            <AppText
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 16,
+                fontWeight: "800",
+                color: statusConfig.color,
+                marginTop: 2,
+              }}
+            >
+              {statusConfig.label}
+            </AppText>
+          </View>
+          <View
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              backgroundColor: c.bgCard,
+              borderWidth: 1,
+              borderColor: c.border,
+              borderRadius: 999,
+              maxWidth: 160,
+            }}
+          >
+            <AppText
+              numberOfLines={1}
+              style={{
+                fontSize: 9,
+                color: c.textMuted,
+                fontFamily: "monospace",
+              }}
+            >
+              {`Ref: ${refund.reference}`}
+            </AppText>
+          </View>
+        </View>
+
+        {/* Refund Information */}
+        <Section Icon={FaMoneyBillWave} title="REFUND INFORMATION" c={c}>
+          <DetailRow
+            label="Amount"
+            value={`${refund.currency} ${Number(refund.amount).toLocaleString()}`}
+            valueStyle={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 16,
               fontWeight: "800",
               color: c.orange,
             }}
-          >
-            {refund.currency} {Number(refund.amount || 0).toLocaleString()}
-          </AppText>
-        </DetailRow>
-        <DetailRow label="Type" c={c}>
-          <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-            {(refund.refundType || "N/A").replace("_", " ")}
-          </AppText>
-        </DetailRow>
-        {refund.percentage != null ? (
-          <DetailRow label="Percentage" c={c}>
-            <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-              {refund.percentage}%
-            </AppText>
-          </DetailRow>
-        ) : null}
-        <DetailRow label="Platform Fee Refunded" c={c}>
-          <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-            {refund.currency}{" "}
-            {Number(refund.platformFeeRefunded || 0).toLocaleString()}
-          </AppText>
-        </DetailRow>
-        <DetailRow label="Worker Deducted" c={c}>
-          <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-            {refund.currency}{" "}
-            {Number(refund.workerAmountDeducted || 0).toLocaleString()}
-          </AppText>
-        </DetailRow>
-      </SectionBlock>
+            c={c}
+          />
+          <DetailRow
+            label="Type"
+            value={refund.refundType?.replace("_", " ") || "N/A"}
+            c={c}
+          />
+          {refund.percentage ? (
+            <DetailRow
+              label="Percentage"
+              value={`${refund.percentage}%`}
+              c={c}
+            />
+          ) : null}
+          <DetailRow
+            label="Platform Fee Refunded"
+            value={`${refund.currency} ${Number(refund.platformFeeRefunded || 0).toLocaleString()}`}
+            c={c}
+          />
+          <DetailRow
+            label="Worker Deducted"
+            value={`${refund.currency} ${Number(refund.workerAmountDeducted || 0).toLocaleString()}`}
+            c={c}
+          />
+        </Section>
 
-      {/* ── SECTION: Booking Information ─────────────────────────── */}
-      <SectionBlock
-        icon={<FaFileInvoice size={11} color={c.orange} />}
-        title="Booking Information"
-        c={c}
-      >
-        <DetailRow label="Booking" c={c}>
-          <Pressable
-            onPress={() =>
-              refund.booking?.id &&
-              navigation.navigate("BookingDetail", {
-                bookingId: refund.booking.id,
-              })
-            }
-          >
-            <AppText
-              style={{
-                fontSize: 13,
-                fontWeight: "700",
-                color: c.orange,
-                textDecorationLine: "underline",
-              }}
-              numberOfLines={1}
+        {/* Booking Information */}
+        <Section Icon={FaFileInvoice} title="BOOKING INFORMATION" c={c}>
+          <DetailRow label="Booking" c={c}>
+            <Pressable
+              onPress={() =>
+                refund.booking?.id &&
+                navigation.navigate("BookingDetail", {
+                  bookingId: refund.booking.id,
+                })
+              }
             >
-              {refund.booking?.title || "N/A"}
-            </AppText>
-          </Pressable>
-        </DetailRow>
-        <DetailRow label="Hirer" c={c}>
-          <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-            {refund.hirer?.firstName} {refund.hirer?.lastName}
-          </AppText>
-        </DetailRow>
-        <DetailRow label="Worker" c={c}>
-          <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-            {refund.worker?.firstName} {refund.worker?.lastName}
-          </AppText>
-        </DetailRow>
-        <DetailRow label="Original Payment" c={c}>
-          <AppText
-            style={{ fontSize: 13, fontWeight: "700", color: c.text }}
-            numberOfLines={1}
-          >
-            {refund.payment?.provider || "N/A"} -{" "}
-            {refund.payment?.providerRef || "N/A"}
-          </AppText>
-        </DetailRow>
-      </SectionBlock>
-
-      {/* ── SECTION: Timeline ────────────────────────────────────── */}
-      <SectionBlock
-        icon={<FaClock size={11} color={c.orange} />}
-        title="Timeline"
-        c={c}
-      >
-        <DetailRow label="Requested" c={c}>
-          <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-            {fmtShortDate(refund.createdAt)}
-          </AppText>
-        </DetailRow>
-        {refund.autoApprovedAt ? (
-          <DetailRow label="Auto-Approved" c={c}>
-            <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-              {fmtShortDate(refund.autoApprovedAt)}
-            </AppText>
-          </DetailRow>
-        ) : null}
-        {refund.processedAt ? (
-          <DetailRow label="Processed" c={c}>
-            <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-              {fmtShortDate(refund.processedAt)}
-            </AppText>
-          </DetailRow>
-        ) : null}
-        {refund.status === "COMPLETED" ? (
-          <DetailRow label="Completed" c={c}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-            >
-              <FaCheckCircle size={11} color={c.green} />
               <AppText
-                style={{ fontSize: 13, fontWeight: "700", color: c.green }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: c.orange,
+                  textAlign: "right",
+                }}
               >
-                Done
+                {refund.booking?.title || "N/A"}
               </AppText>
-            </View>
+            </Pressable>
           </DetailRow>
-        ) : null}
-      </SectionBlock>
+          <DetailRow
+            label="Hirer"
+            value={
+              `${refund.hirer?.firstName || ""} ${refund.hirer?.lastName || ""}`.trim() ||
+              "N/A"
+            }
+            c={c}
+          />
+          <DetailRow
+            label="Worker"
+            value={
+              `${refund.worker?.firstName || ""} ${refund.worker?.lastName || ""}`.trim() ||
+              "N/A"
+            }
+            c={c}
+          />
+          <DetailRow
+            label="Original Payment"
+            value={`${refund.payment?.provider || "N/A"} - ${refund.payment?.providerRef || "N/A"}`}
+            c={c}
+          />
+        </Section>
 
-      {/* ── SECTION: Reason & Notes ──────────────────────────────── */}
-      <SectionBlock
-        icon={<FaInfoCircle size={11} color={c.orange} />}
-        title="Reason & Notes"
-        c={c}
-      >
-        <View style={{ paddingVertical: 4 }}>
-          <AppText style={{ fontSize: 11, color: c.textDim, marginBottom: 4 }}>
-            Reason
-          </AppText>
-          <AppText
-            style={{ fontSize: 13, color: c.text, lineHeight: 20 }}
-            numberOfLines={6}
-          >
-            {refund.reason || "N/A"}
-          </AppText>
-        </View>
-        {refund.adminNotes ? (
-          <View
-            style={{
-              paddingVertical: 8,
-              paddingTop: 12,
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderTopColor: c.border,
-              marginTop: 8,
-            }}
-          >
-            <AppText
-              style={{ fontSize: 11, color: c.textDim, marginBottom: 4 }}
-            >
-              Admin Notes
-            </AppText>
-            <AppText
-              style={{ fontSize: 13, color: c.text, lineHeight: 20 }}
-              numberOfLines={6}
-            >
-              {refund.adminNotes}
-            </AppText>
-          </View>
-        ) : null}
-      </SectionBlock>
+        {/* Timeline */}
+        <Section Icon={FaClock} title="TIMELINE" c={c}>
+          <DetailRow
+            label="Requested"
+            value={formatDateShort(refund.createdAt)}
+            c={c}
+          />
+          {refund.autoApprovedAt ? (
+            <DetailRow
+              label="Auto-Approved"
+              value={formatDateShort(refund.autoApprovedAt)}
+              c={c}
+            />
+          ) : null}
+          {refund.processedAt ? (
+            <DetailRow
+              label="Processed"
+              value={formatDateShort(refund.processedAt)}
+              c={c}
+            />
+          ) : null}
+          {refund.status === "COMPLETED" ? (
+            <DetailRow label="Completed" c={c}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+              >
+                <FaCheckCircle size={12} color="#22c55e" />
+                <AppText
+                  style={{ fontSize: 12, fontWeight: "700", color: "#22c55e" }}
+                >
+                  Done
+                </AppText>
+              </View>
+            </DetailRow>
+          ) : null}
+        </Section>
 
-      {/* ── Actions ──────────────────────────────────────────────── */}
-      {refund.status === "COMPLETED" ? (
-        <View style={styles.actionsRow}>
+        {/* Reason & Notes */}
+        <Section Icon={FaInfoCircle} title="REASON & NOTES" c={c}>
+          <DetailRow
+            label="Reason"
+            value={refund.reason || "N/A"}
+            valueStyle={{ maxWidth: "65%" }}
+            c={c}
+          />
+          {refund.adminNotes ? (
+            <DetailRow
+              label="Admin Notes"
+              value={refund.adminNotes}
+              valueStyle={{ maxWidth: "65%" }}
+              c={c}
+            />
+          ) : null}
+        </Section>
+
+        {/* Actions */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {refund.status === "COMPLETED" ? (
+            <>
+              <Pressable
+                onPress={handlePrint}
+                style={({ pressed }) => [
+                  {
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    paddingVertical: 12,
+                    backgroundColor: c.bgCard,
+                    borderWidth: 1,
+                    borderColor: c.border,
+                    borderRadius: 10,
+                    opacity: pressed ? 0.85 : 1,
+                    minWidth: 100,
+                  },
+                ]}
+              >
+                <FaPrint size={13} color={c.text} />
+                <AppText
+                  style={{
+                    fontFamily: "Syne_800ExtraBold",
+                    fontSize: 13,
+                    fontWeight: "800",
+                    color: c.text,
+                  }}
+                >
+                  Print
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={handleDownloadReceipt}
+                disabled={downloading}
+                style={({ pressed }) => [
+                  {
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    paddingVertical: 12,
+                    backgroundColor: c.orange,
+                    borderRadius: 10,
+                    opacity: downloading ? 0.5 : pressed ? 0.85 : 1,
+                    minWidth: 120,
+                  },
+                ]}
+              >
+                {downloading ? (
+                  <ActivityIndicator size="small" color="#000" />
+                ) : (
+                  <FaDownload size={13} color="#000" />
+                )}
+                <AppText
+                  style={{
+                    fontFamily: "Syne_800ExtraBold",
+                    fontSize: 13,
+                    fontWeight: "800",
+                    color: "#000",
+                  }}
+                >
+                  {downloading ? "Generating..." : "Download"}
+                </AppText>
+              </Pressable>
+            </>
+          ) : null}
           <Pressable
-            onPress={handlePrint}
+            onPress={handleBack}
             style={({ pressed }) => [
-              styles.secondaryBtn,
-              { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
+              {
+                flexBasis: "100%",
+                alignItems: "center",
+                paddingVertical: 12,
+                backgroundColor: c.bgCard,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 10,
+                opacity: pressed ? 0.85 : 1,
+              },
             ]}
           >
-            <FaPrint size={12} color={c.text} />
             <AppText
-              style={{
-                fontSize: 13,
-                fontWeight: "700",
-                color: c.text,
-                marginLeft: 6,
-              }}
+              style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
             >
-              Print Receipt
-            </AppText>
-          </Pressable>
-          <Pressable
-            onPress={handleDownloadReceipt}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              { backgroundColor: c.orange, opacity: pressed ? 0.9 : 1 },
-            ]}
-          >
-            <FaDownload size={12} color="#fff" />
-            <AppText
-              style={{
-                fontSize: 13,
-                fontWeight: "700",
-                color: "#fff",
-                marginLeft: 6,
-              }}
-            >
-              Download Receipt
+              View All Refunds
             </AppText>
           </Pressable>
         </View>
-      ) : null}
-
-      <Pressable
-        onPress={() => navigation.navigate("RefundHistory")}
-        style={{ paddingVertical: 16, alignItems: "center" }}
-      >
-        <AppText
-          style={{
-            fontSize: 13,
-            fontWeight: "600",
-            color: c.textDim,
-            textDecorationLine: "underline",
-          }}
-        >
-          View All Refunds
-        </AppText>
-      </Pressable>
-    </AppScreen>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-// ── Sub-components ───────────────────────────────────────────────────
-function SectionBlock({ icon, title, children, c }) {
+// ── Section wrapper ────────────────────────────────────────────────────
+function Section({ Icon, title, children, c }) {
   return (
     <View
-      style={[
-        styles.section,
-        { backgroundColor: c.bgPanel, borderColor: c.border },
-      ]}
+      style={{
+        backgroundColor: c.bgPanel,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 14,
+        padding: 14,
+      }}
     >
-      <View style={styles.sectionHeader}>
-        {icon}
-        <AppText
-          style={{
-            fontSize: 10,
-            fontWeight: "800",
-            color: c.textMuted,
-            textTransform: "uppercase",
-            letterSpacing: 1,
-            marginLeft: 6,
-          }}
-        >
-          {title}
-        </AppText>
-      </View>
+      <SectionTitle Icon={Icon} c={c}>
+        {title}
+      </SectionTitle>
       {children}
     </View>
   );
 }
-
-function DetailRow({ label, children, c }) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingVertical: 8,
-        gap: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: c.border,
-      }}
-    >
-      <AppText style={{ fontSize: 12, color: c.textDim, flexShrink: 1 }}>
-        {label}
-      </AppText>
-      <View style={{ flex: 1, alignItems: "flex-end" }}>{children}</View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  backLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-  },
-  statusBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    marginBottom: 14,
-  },
-  refBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    maxWidth: 150,
-  },
-  section: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "transparent",
-  },
-  actionsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 8,
-  },
-  primaryBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  secondaryBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-});

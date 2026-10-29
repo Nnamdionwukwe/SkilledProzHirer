@@ -25,6 +25,8 @@ const MAP = {
   FaPencil: "pencil",
   FaArrowLeft: "arrow-back",
   FaArrowRight: "arrow-forward",
+  FaArrowUp: "arrow-up",
+  FaArrowDown: "arrow-down",
   FaArrowUpRightFromSquare: "open-outline",
   FaExclamationTriangle: "warning",
   FaExclamationCircle: "alert-circle",
@@ -124,6 +126,7 @@ const MAP = {
   FaCircle: "ellipse",
   FaSpinnerAlt: "sync",
   FaPlus: "add",
+  FaMinus: "remove",
   FaTarget: "locate",
   FaRefreshCw: "refresh",
   FaInbox: "file-tray-outline",
@@ -141,6 +144,7 @@ const MAP = {
   FaMicrophoneSlash: "mic-off",
   FaStop: "stop",
   FaShareNodes: "share-social",
+  FaShareAlt: "share-social",
   FaHeart: "heart",
   FaThumbsUp: "thumbs-up",
   FaRepeat: "repeat",
@@ -175,6 +179,8 @@ const make = (ionName) =>
 
 export const FaArrowLeft = make(MAP.FaArrowLeft);
 export const FaArrowRight = make(MAP.FaArrowRight);
+export const FaArrowUp = make(MAP.FaArrowUp);
+export const FaArrowDown = make(MAP.FaArrowDown);
 export const FaArrowUpRightFromSquare = make(MAP.FaArrowUpRightFromSquare);
 export const FaExclamationTriangle = make(MAP.FaExclamationTriangle);
 export const FaExclamationCircle = make(MAP.FaExclamationCircle);
@@ -273,6 +279,7 @@ export const FaEdit = make(MAP.FaEdit);
 export const FaSignOutAlt = make(MAP.FaSignOutAlt);
 export const FaCircle = make(MAP.FaCircle);
 export const FaPlus = make(MAP.FaPlus);
+export const FaMinus = make(MAP.FaMinus);
 export const FaTarget = make(MAP.FaTarget);
 export const FaRefreshCw = make(MAP.FaRefreshCw);
 export const FaInbox = make(MAP.FaInbox);
@@ -290,6 +297,7 @@ export const FaMicrophone = make(MAP.FaMicrophone);
 export const FaMicrophoneSlash = make(MAP.FaMicrophoneSlash);
 export const FaStop = make(MAP.FaStop);
 export const FaShareNodes = make(MAP.FaShareNodes);
+export const FaShareAlt = make(MAP.FaShareAlt);
 export const FaHeart = make(MAP.FaHeart);
 export const FaThumbsUp = make(MAP.FaThumbsUp);
 export const FaRepeat = make(MAP.FaRepeat);
