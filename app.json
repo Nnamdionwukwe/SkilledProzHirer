@@ -53,6 +53,15 @@
           "androidSpeechServiceQueries": ["android.speech.RecognitionService"]
         }
       ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./src/assets/logo.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#080810"
+        }
+      ],
       "expo-font",
       "expo-secure-store",
       "expo-localization",

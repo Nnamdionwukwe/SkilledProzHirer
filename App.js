@@ -1,7 +1,7 @@
 // App.js
 import "react-native-gesture-handler";
 import React, { useEffect, useState } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
@@ -23,6 +23,7 @@ import { ToastProvider } from "./src/contexts/ToastContext";
 import { SubscriptionProvider } from "./src/contexts/SubscriptionContext";
 import { VoiceCallProvider } from "./src/contexts/VoiceCallContext";
 import VoiceCallProviderUI from "./src/components/video/VoiceCallProvider";
+import LoadingScreen from "./src/components/LoadingScreen";
 
 import RootNavigator from "./src/navigation/RootNavigator";
 import { initI18n } from "./src/i18n";
@@ -61,11 +62,7 @@ export default function App() {
   }, [fontsLoaded, i18nReady]);
 
   if (!fontsLoaded || !i18nReady) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#f97316" />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   return (
@@ -77,12 +74,6 @@ export default function App() {
               <SubscriptionProvider>
                 <VoiceCallProvider>
                   <RootNavigator key={langKey} />
-                  {/*
-                    Only VoiceCallProviderUI stays here — it does NOT use
-                    useNavigation(), so it's safe outside the NavigationContainer.
-                    The two banners use useNavigation(), so they're mounted
-                    inside RootNavigator via the CallBanners screen instead.
-                  */}
                   <VoiceCallProviderUI />
                 </VoiceCallProvider>
               </SubscriptionProvider>
@@ -96,10 +87,4 @@ export default function App() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  loading: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#080810",
-  },
 });
