@@ -1,4 +1,12 @@
 // src/screens/main/ChatScreen.js
+//
+// Chat pane. Tick states:
+//   • msg.pending             → one grey tick (uploading to server)
+//   • msg.delivered === true  → two grey ticks (receiver's app fetched it)
+//   • msg.isRead === true     → two blue ticks (receiver opened the chat)
+//
+// If the backend doesn't send `delivered`, two grey never renders — the
+// message goes straight from one grey to two blue when the receiver reads.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -108,19 +116,58 @@ function formatDateDivider(dateStr) {
   });
 }
 
-function DoubleTick({ read, color }) {
+// ── Tick states ────────────────────────────────────────────────────────
+// pending      → one grey check
+// !pending
+//   !read & delivered  → two grey checks
+//   read               → two blue checks
+//   !pending & !read & !delivered → one grey check (delivered unknown)
+function Ticks({ pending, delivered, read, color }) {
+  const grey = "rgba(255,255,255,0.55)";
+  const baseColor = color || grey;
+  const blue = "#3b82f6";
+
+  if (pending) {
+    // One check — message queued/sending
+    return (
+      <View style={{ flexDirection: "row", marginLeft: 4 }}>
+        <FaCheck size={10} color={baseColor} style={{ opacity: 0.85 }} />
+      </View>
+    );
+  }
+
+  if (read) {
+    // Two blue checks — message read by receiver
+    return (
+      <View style={{ flexDirection: "row", marginLeft: 4 }}>
+        <FaCheck size={10} color={blue} style={{ opacity: 0.95 }} />
+        <FaCheck
+          size={10}
+          color={blue}
+          style={{ opacity: 0.95, marginLeft: -3 }}
+        />
+      </View>
+    );
+  }
+
+  if (delivered) {
+    // Two grey checks — receiver's client has fetched the message
+    return (
+      <View style={{ flexDirection: "row", marginLeft: 4 }}>
+        <FaCheck size={10} color={baseColor} style={{ opacity: 0.85 }} />
+        <FaCheck
+          size={10}
+          color={baseColor}
+          style={{ opacity: 0.85, marginLeft: -3 }}
+        />
+      </View>
+    );
+  }
+
+  // Sent, delivered unknown — one grey check
   return (
-    <View style={{ flexDirection: "row", marginLeft: 3 }}>
-      <FaCheck
-        size={9}
-        color={read ? "#3b82f6" : color}
-        style={{ opacity: 0.85 }}
-      />
-      <FaCheck
-        size={9}
-        color={read ? "#3b82f6" : color}
-        style={{ opacity: 0.85, marginLeft: -3 }}
-      />
+    <View style={{ flexDirection: "row", marginLeft: 4 }}>
+      <FaCheck size={10} color={baseColor} style={{ opacity: 0.85 }} />
     </View>
   );
 }
@@ -276,7 +323,6 @@ function Avatar({ user, size = 28 }) {
   );
 }
 
-// ── Skeleton message bubble ─────────────────────────────────────────────
 function SkeletonBubble({ c, mine }) {
   return (
     <View
@@ -344,6 +390,7 @@ export default function ChatScreen() {
   const pollRef = useRef(null);
   const initiatingRef = useRef(false);
   const lastIdRef = useRef(null);
+  const markingReadRef = useRef(false);
 
   const activeOther = useMemo(() => {
     if (convoMeta) {
@@ -389,19 +436,41 @@ export default function ChatScreen() {
     };
   }, [withUserId]);
 
-  const loadMessages = useCallback(async (convoId, silent = false) => {
-    if (!convoId) return;
-    if (!silent) setLoadingMessages(true);
-    try {
-      const res = await client.get(`/messages/${convoId}`, {
-        params: { page: 1, limit: 100, _t: Date.now() },
+  const markRead = useCallback((convoId) => {
+    if (!convoId || markingReadRef.current) return;
+    markingReadRef.current = true;
+    client
+      .patch(`/messages/${convoId}/read`)
+      .catch(() => {})
+      .finally(() => {
+        markingReadRef.current = false;
       });
-      setMessages(res.data.data.messages || []);
-    } catch {
-      if (!silent) setMessages([]);
-    }
-    if (!silent) setLoadingMessages(false);
   }, []);
+
+  const loadMessages = useCallback(
+    async (convoId, silent = false) => {
+      if (!convoId) return;
+      if (!silent) setLoadingMessages(true);
+      try {
+        const res = await client.get(`/messages/${convoId}`, {
+          params: { page: 1, limit: 100, _t: Date.now() },
+        });
+        const msgs = res.data.data.messages || [];
+
+        // Auto-mark unread from other as read on every poll
+        const hasUnreadFromOther = msgs.some(
+          (m) => m.senderId !== user?.id && !m.isRead,
+        );
+        if (hasUnreadFromOther) markRead(convoId);
+
+        setMessages(msgs);
+      } catch {
+        if (!silent) setMessages([]);
+      }
+      if (!silent) setLoadingMessages(false);
+    },
+    [user?.id, markRead],
+  );
 
   useEffect(() => {
     if (!activeConvoId) {
@@ -411,7 +480,7 @@ export default function ChatScreen() {
     }
 
     loadMessages(activeConvoId);
-    client.patch(`/messages/${activeConvoId}/read`).catch(() => {});
+    markRead(activeConvoId);
 
     clearInterval(pollRef.current);
     pollRef.current = setInterval(
@@ -419,7 +488,7 @@ export default function ChatScreen() {
       MSG_POLL_MS,
     );
     return () => clearInterval(pollRef.current);
-  }, [activeConvoId, loadMessages]);
+  }, [activeConvoId, loadMessages, markRead]);
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -493,7 +562,6 @@ export default function ChatScreen() {
     }
   };
 
-  // ── Upload helper ────────────────────────────────────────────────────
   const uploadAsset = async (asset) => {
     const receiverId = resolveReceiver();
     if (!receiverId || !asset?.uri) return;
@@ -567,7 +635,6 @@ export default function ChatScreen() {
     ]);
   };
 
-  // ── Call initiation ──────────────────────────────────────────────────
   const confirmStartCall = async () => {
     const callType = pendingCallType;
     setPendingCallType(null);
@@ -802,10 +869,18 @@ export default function ChatScreen() {
             >
               {msg.pending ? "sending…" : formatTime(msg.createdAt)}
             </AppText>
-            {isMine && !msg.pending && (
-              <DoubleTick
+            {isMine && (
+              <Ticks
+                pending={!!msg.pending}
+                delivered={!!msg.delivered}
                 read={!!msg.isRead}
-                color={isMine ? "rgba(8,8,16,0.6)" : c.textMuted}
+                color={
+                  msg.pending
+                    ? "rgba(8,8,16,0.5)"
+                    : msg.isRead
+                      ? "#3b82f6"
+                      : "rgba(8,8,16,0.6)"
+                }
               />
             )}
           </View>
@@ -823,7 +898,6 @@ export default function ChatScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        {/* Header */}
         <View
           style={{
             flexDirection: "row",
@@ -871,7 +945,6 @@ export default function ChatScreen() {
           )}
         </View>
 
-        {/* Messages */}
         <View style={{ flex: 1, position: "relative" }}>
           {loadingMessages ? (
             <View style={{ flex: 1, padding: 16 }}>
@@ -955,7 +1028,6 @@ export default function ChatScreen() {
           )}
         </View>
 
-        {/* Composer */}
         <View
           style={{
             borderTopWidth: StyleSheet.hairlineWidth,
@@ -1067,7 +1139,6 @@ export default function ChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Call confirm modal */}
       <Modal
         visible={!!pendingCallType && !isOnCall}
         transparent
@@ -1153,11 +1224,7 @@ export default function ChatScreen() {
                 }}
               >
                 <AppText
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "700",
-                    color: c.textDim,
-                  }}
+                  style={{ fontSize: 13, fontWeight: "700", color: c.textDim }}
                 >
                   Cancel
                 </AppText>
@@ -1188,7 +1255,6 @@ export default function ChatScreen() {
         </Pressable>
       </Modal>
 
-      {/* Lightbox */}
       <Modal
         visible={!!lightboxSrc}
         transparent

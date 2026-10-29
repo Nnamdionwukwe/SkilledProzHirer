@@ -6,6 +6,7 @@ import { createDrawerNavigator } from "@react-navigation/drawer";
 
 import TopBar from "../components/TopBar";
 import DrawerContent from "../components/DrawerContent";
+import CallBannersOverlay from "./CallBannersOverlay";
 import { useTheme } from "../contexts/ThemeContext";
 
 import DashboardScreen from "../screens/main/DashboardScreen";
@@ -54,141 +55,144 @@ export default function HirerNavigator() {
   const screenWidth = Dimensions.get("window").width;
 
   return (
-    <Drawer.Navigator
-      initialRouteName="Dashboard"
-      drawerContent={(props) => <DrawerContent {...props} />}
-      screenOptions={{
-        headerShown: false,
-        drawerType: "front",
-        drawerStyle: {
-          width: Math.min(320, screenWidth * 0.85),
-          backgroundColor: theme.colors.bgPanel,
-          borderRightColor: theme.colors.border,
-          borderRightWidth: StyleSheet.hairlineWidth,
-        },
-        sceneContainerStyle: { backgroundColor: theme.colors.bg },
-        overlayColor: "rgba(0,0,0,0.5)",
-        swipeEdgeWidth: 60,
-      }}
-    >
-      <Drawer.Screen name="Dashboard">
-        {() => <ScreenWithChrome Screen={DashboardScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Bookings">
-        {() => <ScreenWithChrome Screen={BookingsScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="CreateBooking">
-        {() => <ScreenWithChrome Screen={CreateBookingScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="BookingDetail">
-        {() => <ScreenWithChrome Screen={BookingDetailScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="PaymentHistory">
-        {() => <ScreenWithChrome Screen={PaymentHistoryScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="PostJob">
-        {() => <ScreenWithChrome Screen={PostJobScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="JobsManagement">
-        {() => <ScreenWithChrome Screen={JobsManagementScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="JobDetail">
-        {() => <ScreenWithChrome Screen={JobDetailScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="JobApplications">
-        {() => <ScreenWithChrome Screen={JobApplicationsScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="MyPosts">
-        {() => <ScreenWithChrome Screen={MyPostsScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Disputes">
-        {() => <ScreenWithChrome Screen={DisputesScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="SavedWorkers">
-        {() => <ScreenWithChrome Screen={SavedWorkersScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="BrowseWorkers">
-        {() => <ScreenWithChrome Screen={BrowseWorkersScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="WorkerProfile">
-        {() => <ScreenWithChrome Screen={WorkerPublicProfileScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="BrowseByCategories">
-        {() => <ScreenWithChrome Screen={BrowseByCategoriesScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="CategoryDetail">
-        {() => <ScreenWithChrome Screen={CategoryDetailScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Messages">
-        {() => <ScreenWithChrome Screen={MessagesScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Chat">
-        {() => <ScreenWithChrome Screen={ChatScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="ReviewsReceived">
-        {() => <ScreenWithChrome Screen={ReviewsReceivedScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="ReviewsGiven">
-        {() => <ScreenWithChrome Screen={ReviewsGivenScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="CommunityFeed">
-        {() => <ScreenWithChrome Screen={CommunityFeedScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Notifications">
-        {() => <ScreenWithChrome Screen={NotificationsScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Verification">
-        {() => <ScreenWithChrome Screen={VerificationScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Profile">
-        {() => <ScreenWithChrome Screen={ProfileScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Subscriptions">
-        {() => <ScreenWithChrome Screen={SubscriptionsScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="FeaturedBoost">
-        {() => <ScreenWithChrome Screen={FeaturedBoostScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="ReferralDashboard">
-        {() => <ScreenWithChrome Screen={ReferralDashboardScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="MyReports">
-        {() => <ScreenWithChrome Screen={MyReportsScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Campaign">
-        {() => <ScreenWithChrome Screen={CampaignDashboardScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Settings">
-        {() => <ScreenWithChrome Screen={SettingsScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="WorkerDetail">
-        {() => <ScreenWithChrome Screen={WorkerPublicProfileScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="HirerDetail">
-        {() => <ScreenWithChrome Screen={HirerPublicProfileScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="RefundHistory">
-        {() => <ScreenWithChrome Screen={RefundHistoryScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="RefundDetail">
-        {() => <ScreenWithChrome Screen={RefundDetailScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="MyDisputes">
-        {() => <ScreenWithChrome Screen={MyDisputesScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="EditJob">
-        {() => <ScreenWithChrome Screen={EditJobScreen} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="EditProfile">
-        {() => <ScreenWithChrome Screen={EditProfileScreen} />}
-      </Drawer.Screen>
+    <View style={{ flex: 1 }}>
+      <Drawer.Navigator
+        initialRouteName="Dashboard"
+        drawerContent={(props) => <DrawerContent {...props} />}
+        screenOptions={{
+          headerShown: false,
+          drawerType: "front",
+          drawerStyle: {
+            width: Math.min(320, screenWidth * 0.85),
+            backgroundColor: theme.colors.bgPanel,
+            borderRightColor: theme.colors.border,
+            borderRightWidth: StyleSheet.hairlineWidth,
+          },
+          sceneContainerStyle: { backgroundColor: theme.colors.bg },
+          overlayColor: "rgba(0,0,0,0.5)",
+          swipeEdgeWidth: 60,
+        }}
+      >
+        <Drawer.Screen name="Dashboard">
+          {() => <ScreenWithChrome Screen={DashboardScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Bookings">
+          {() => <ScreenWithChrome Screen={BookingsScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="CreateBooking">
+          {() => <ScreenWithChrome Screen={CreateBookingScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="BookingDetail">
+          {() => <ScreenWithChrome Screen={BookingDetailScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="PaymentHistory">
+          {() => <ScreenWithChrome Screen={PaymentHistoryScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="PostJob">
+          {() => <ScreenWithChrome Screen={PostJobScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="JobsManagement">
+          {() => <ScreenWithChrome Screen={JobsManagementScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="JobDetail">
+          {() => <ScreenWithChrome Screen={JobDetailScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="JobApplications">
+          {() => <ScreenWithChrome Screen={JobApplicationsScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="MyPosts">
+          {() => <ScreenWithChrome Screen={MyPostsScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Disputes">
+          {() => <ScreenWithChrome Screen={DisputesScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="SavedWorkers">
+          {() => <ScreenWithChrome Screen={SavedWorkersScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="BrowseWorkers">
+          {() => <ScreenWithChrome Screen={BrowseWorkersScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="WorkerProfile">
+          {() => <ScreenWithChrome Screen={WorkerPublicProfileScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="BrowseByCategories">
+          {() => <ScreenWithChrome Screen={BrowseByCategoriesScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="CategoryDetail">
+          {() => <ScreenWithChrome Screen={CategoryDetailScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Messages">
+          {() => <ScreenWithChrome Screen={MessagesScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Chat">
+          {() => <ScreenWithChrome Screen={ChatScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="ReviewsReceived">
+          {() => <ScreenWithChrome Screen={ReviewsReceivedScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="ReviewsGiven">
+          {() => <ScreenWithChrome Screen={ReviewsGivenScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="CommunityFeed">
+          {() => <ScreenWithChrome Screen={CommunityFeedScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Notifications">
+          {() => <ScreenWithChrome Screen={NotificationsScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Verification">
+          {() => <ScreenWithChrome Screen={VerificationScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Profile">
+          {() => <ScreenWithChrome Screen={ProfileScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Subscriptions">
+          {() => <ScreenWithChrome Screen={SubscriptionsScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="FeaturedBoost">
+          {() => <ScreenWithChrome Screen={FeaturedBoostScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="ReferralDashboard">
+          {() => <ScreenWithChrome Screen={ReferralDashboardScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="MyReports">
+          {() => <ScreenWithChrome Screen={MyReportsScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Campaign">
+          {() => <ScreenWithChrome Screen={CampaignDashboardScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="Settings">
+          {() => <ScreenWithChrome Screen={SettingsScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="WorkerDetail">
+          {() => <ScreenWithChrome Screen={WorkerPublicProfileScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="HirerDetail">
+          {() => <ScreenWithChrome Screen={HirerPublicProfileScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="RefundHistory">
+          {() => <ScreenWithChrome Screen={RefundHistoryScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="RefundDetail">
+          {() => <ScreenWithChrome Screen={RefundDetailScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="MyDisputes">
+          {() => <ScreenWithChrome Screen={MyDisputesScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="EditJob">
+          {() => <ScreenWithChrome Screen={EditJobScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="EditProfile">
+          {() => <ScreenWithChrome Screen={EditProfileScreen} />}
+        </Drawer.Screen>
 
-      <Drawer.Screen
-        name="VideoCall"
-        component={VideoCallScreen}
-        options={{ headerShown: false, swipeEnabled: false }}
-      />
-    </Drawer.Navigator>
+        <Drawer.Screen
+          name="VideoCall"
+          component={VideoCallScreen}
+          options={{ headerShown: false, swipeEnabled: false }}
+        />
+      </Drawer.Navigator>
+      <CallBannersOverlay />
+    </View>
   );
 }
 

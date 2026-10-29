@@ -1,12 +1,16 @@
 // src/components/video/VoiceCallProvider.js
 //
-// Persistent voice-call widget. Runs the WebRTC session, polls the call
-// status, and renders the fullscreen/mini UI.
+// Persistent voice-call widget. Runs the WebRTC session, polls call status,
+// renders fullscreen/mini UI.
 //
-// THE OFFER-RACE FIX: the receiver's PC is created asynchronously (after
-// getUserMedia resolves). The caller's offer can arrive in that window and
-// be silently dropped — leaving both peers stuck at "connecting" forever.
-// This version buffers the offer if it arrives before the PC is ready.
+// AUDIO ROUTING FIX: InCallManager.start() must run when rtc.status ===
+// "connected", not just when the DB says ACTIVE. Otherwise the audio
+// session opens before the peer connection exists, and Android/iOS never
+// re-route the remote track once it starts flowing.
+//
+// Additionally, toggling setForceSpeakerphoneOn(true) → false after a
+// short delay forces the Android audio system to re-evaluate the route —
+// a known workaround for "WebRTC connected but no audio" on some devices.
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import InCallManager from "react-native-incall-manager";
@@ -19,8 +23,15 @@ import VoiceCallMini from "./VoiceCallMini";
 
 const POLL_MS = 3000;
 
+const DEBUG = true;
+function log(...args) {
+  if (!DEBUG) return;
+  const ts = new Date().toISOString().slice(11, 23);
+  console.log(`[VCP ${ts}]`, ...args);
+}
+
 export default function VoiceCallProvider() {
-  const { user, accessToken, isHydrated } = useAuthStore();
+  const { user, isHydrated } = useAuthStore();
   const { call, mode, updateCall, endCall } = useVoiceCall();
 
   const inFlightRef = useRef(false);
@@ -57,25 +68,58 @@ export default function VoiceCallProvider() {
     getIsInitiator,
   });
 
-  // Audio routing — required for the mobile speaker/earpiece to actually
-  // produce sound. Must run while the call is ACTIVE.
+  // ── Audio routing ───────────────────────────────────────────────────
+  // Runs when the peer connection is CONNECTED — not just when the DB row
+  // flips to ACTIVE. This is what makes the mobile speaker produce sound.
   useEffect(() => {
-    if (isActive) {
-      InCallManager.start({ media: "audio" });
-      InCallManager.setForceSpeakerphoneOn(false);
-      InCallManager.setKeepScreenOn(true);
-    } else {
-      InCallManager.stop();
-      InCallManager.setKeepScreenOn(false);
+    if (!isActive) {
+      log("audio: not active — stopping");
+      try {
+        InCallManager.stop();
+        InCallManager.setKeepScreenOn(false);
+      } catch {}
+      return;
     }
-    return () => {
-      InCallManager.stop();
-    };
-  }, [isActive]);
 
-  // Poll for status
+    if (rtc.status !== "connected") {
+      log("audio: active but peer not connected — waiting", {
+        rtcStatus: rtc.status,
+      });
+      return;
+    }
+
+    log("audio: peer connected — starting InCallManager");
+    try {
+      // 1. Start the audio session (acquires the audio route)
+      InCallManager.start({ media: "audio" });
+
+      // 2. Force speaker on, then off after a short delay — this forces
+      //    the Android AudioManager to re-evaluate the routing and pick
+      //    up the WebRTC audio stream. Skip the second step to keep
+      //    speaker on; call setForceSpeakerphoneOn(false) to use earpiece.
+      InCallManager.setForceSpeakerphoneOn(true);
+      const t = setTimeout(() => {
+        try {
+          InCallManager.setForceSpeakerphoneOn(false);
+        } catch {}
+      }, 250);
+      InCallManager.setKeepScreenOn(true);
+
+      return () => {
+        clearTimeout(t);
+        try {
+          InCallManager.stop();
+          InCallManager.setKeepScreenOn(false);
+        } catch {}
+      };
+    } catch (err) {
+      log("audio: InCallManager failed", err?.message);
+    }
+  }, [isActive, rtc.status]);
+
+  // ── Poll for status ────────────────────────────────────────────────
   useEffect(() => {
-    if (!isHydrated || !accessToken || !user) return;
+    if (!isHydrated || !user) return;
     if (!call?.conversationId) return;
 
     let cancelled = false;
@@ -106,6 +150,7 @@ export default function VoiceCallProvider() {
           current.receiverId !== data.call.receiverId;
 
         if (changed) {
+          log("poll: status changed →", data.call.status);
           updateCall(data.call);
         }
       } catch {
@@ -121,7 +166,7 @@ export default function VoiceCallProvider() {
       clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHydrated, accessToken, user?.id, call?.conversationId]);
+  }, [isHydrated, user?.id, call?.conversationId]);
 
   if (!call || mode === "hidden") return null;
 

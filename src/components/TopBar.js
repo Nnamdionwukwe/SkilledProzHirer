@@ -1,9 +1,15 @@
 // src/components/TopBar.js
+//
 // Shared between Hirer and Worker navigators.
+//
 // Props:
-//   title      – screen title (translated string from navigator)
-//   subtitle   – screen subtitle (optional)
-//   showBack   – true = back arrow ←, false/omitted = hamburger ☰
+//   title     – screen title (translated string from navigator)
+//   subtitle  – screen subtitle (optional)
+//   showBack  – true = back arrow ←, false/omitted = hamburger ☰
+//
+// Drawer actions are dispatched via navigationRef + DrawerActions so they
+// work regardless of how deeply the Drawer is nested:
+//   RootStack → RootBranch → Branch → HirerNavigator (Drawer)
 
 import React, { useEffect, useState } from "react";
 import { View, Pressable, StyleSheet } from "react-native";
@@ -17,10 +23,13 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAuthStore } from "../store/authStore";
 import { hirerApi } from "../api/hirer";
 import client from "../api/client";
+import { FaCommentDots } from "../icons/fa";
+import {
+  openDrawer,
+  navigate as globalNavigate,
+} from "../navigation/navigationRef";
 
-// ─── English fallback map (used when navigator doesn't pass title prop) ───────
-// These are intentionally plain strings — TopBar is not translated itself;
-// translating title/subtitle is the navigator's responsibility.
+// ─── English fallback map ────────────────────────────────────────────────────
 const SCREEN_FALLBACK = {
   Dashboard: { title: "Dashboard", subtitle: "Your work at a glance" },
   Bookings: { title: "My Bookings", subtitle: "Manage your bookings" },
@@ -106,7 +115,6 @@ export default function TopBar({
   const { user } = useAuthStore();
   const [unread, setUnread] = useState(0);
 
-  // Fallback: derive title from route name if no prop passed
   const routeName = useNavigationState(
     (state) => state?.routes?.[state.index]?.name,
   );
@@ -114,7 +122,7 @@ export default function TopBar({
   const title = titleProp ?? fallback.title ?? prettyTitle(routeName);
   const resolvedSub = subtitleProp ?? fallback.subtitle ?? null;
 
-  // Role-aware notification polling — 30 s
+  // ── Role-aware notification polling — 30s ────────────────────────────
   useEffect(() => {
     let cancelled = false;
     let timer;
@@ -131,9 +139,7 @@ export default function TopBar({
           count = data?.unread ?? 0;
         }
         if (!cancelled) setUnread(count);
-      } catch {
-        /* silent */
-      }
+      } catch {}
     };
     fetchUnread();
     timer = setInterval(fetchUnread, 30_000);
@@ -143,22 +149,40 @@ export default function TopBar({
     };
   }, [user?.role]);
 
-  // ── Left button ─────────────────────────────────────────────────────────────
+  // ── Left button ──────────────────────────────────────────────────────
   const handleLeft = () => {
     if (showBack) {
       if (navigation.canGoBack()) navigation.goBack();
-      else navigation.getParent()?.openDrawer?.();
+      else openDrawer();
     } else {
-      if (navigation.openDrawer) navigation.openDrawer();
-      else navigation.getParent()?.openDrawer?.();
+      openDrawer();
     }
   };
 
-  const openNotifications = () => navigation.navigate("Notifications");
-  const openProfile = () =>
-    user?.role === "WORKER"
-      ? navigation.navigate("WorkerProfile")
-      : navigation.navigate("Profile");
+  const openNotifications = () => {
+    try {
+      navigation.navigate("Notifications");
+    } catch {
+      globalNavigate("Notifications");
+    }
+  };
+
+  const openMessages = () => {
+    try {
+      navigation.navigate("Messages");
+    } catch {
+      globalNavigate("Messages");
+    }
+  };
+
+  const openProfile = () => {
+    const target = user?.role === "WORKER" ? "WorkerProfile" : "Profile";
+    try {
+      navigation.navigate(target);
+    } catch {
+      globalNavigate(target);
+    }
+  };
 
   return (
     <View
@@ -172,7 +196,6 @@ export default function TopBar({
       ]}
     >
       <View style={styles.row}>
-        {/* Left button: ← back OR ☰ hamburger */}
         <Pressable
           onPress={handleLeft}
           hitSlop={10}
@@ -187,25 +210,47 @@ export default function TopBar({
         >
           <Ionicons
             name={showBack ? "arrow-back" : "menu"}
-            size={20}
+            size={18}
             color={theme.colors.text}
           />
         </Pressable>
 
-        {/* Title + optional subtitle */}
-        <View style={{ flex: 1, marginLeft: 4 }}>
-          <AppText variant="title" weight="bold" numberOfLines={1}>
+        <View style={{ flex: 1, marginLeft: 2 }}>
+          <AppText
+            weight="bold"
+            numberOfLines={1}
+            style={{ fontSize: 15, color: theme.colors.text }}
+          >
             {title}
           </AppText>
           {resolvedSub ? (
-            <AppText variant="small" tone="dim" numberOfLines={1}>
+            <AppText
+              numberOfLines={1}
+              style={{ fontSize: 11, color: theme.colors.textDim }}
+            >
               {resolvedSub}
             </AppText>
           ) : null}
         </View>
 
-        {/* Notification bell + avatar */}
         <View style={styles.rightCluster}>
+          {/* Messages icon */}
+          <Pressable
+            onPress={openMessages}
+            hitSlop={6}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              {
+                backgroundColor: theme.colors.bgPanel,
+                borderColor: theme.colors.border,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <FaCommentDots size={18} color={theme.colors.text} />
+          </Pressable>
+
+          {/* Notifications bell */}
           <Pressable
             onPress={openNotifications}
             hitSlop={6}
@@ -220,7 +265,7 @@ export default function TopBar({
           >
             <Ionicons
               name="notifications-outline"
-              size={20}
+              size={18}
               color={theme.colors.text}
             />
             {unread > 0 && (
@@ -229,7 +274,7 @@ export default function TopBar({
               >
                 <AppText
                   weight="bold"
-                  style={{ color: "#0f0f1a", fontSize: 10, lineHeight: 12 }}
+                  style={{ color: "#0f0f1a", fontSize: 9, lineHeight: 10 }}
                 >
                   {unread > 9 ? "9+" : String(unread)}
                 </AppText>
@@ -237,6 +282,7 @@ export default function TopBar({
             )}
           </Pressable>
 
+          {/* Avatar */}
           <Pressable
             onPress={openProfile}
             hitSlop={6}
@@ -246,7 +292,7 @@ export default function TopBar({
               uri={user?.avatar}
               firstName={user?.firstName}
               lastName={user?.lastName}
-              size={40}
+              size={34}
             />
           </Pressable>
         </View>
@@ -263,29 +309,29 @@ function prettyTitle(route) {
 const styles = StyleSheet.create({
   wrap: { borderBottomWidth: StyleSheet.hairlineWidth },
   row: {
-    height: 56,
+    height: 52,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    gap: 10,
+    paddingHorizontal: 10,
+    gap: 8,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
   },
-  rightCluster: { flexDirection: "row", alignItems: "center", gap: 10 },
+  rightCluster: { flexDirection: "row", alignItems: "center", gap: 8 },
   badge: {
     position: "absolute",
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 4,
+    top: -3,
+    right: -3,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
     alignItems: "center",
     justifyContent: "center",
   },

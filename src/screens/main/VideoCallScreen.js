@@ -1,18 +1,6 @@
 // src/screens/main/VideoCallScreen.js
 //
-// Full-screen conversation-scoped video call. Matches the web
-// ConversationVideoCallPage: same room ID format, same query params,
-// so mobile and web land in the same MiroTalk room.
-//
-// END-CALL HANDLING:
-//   The DB row becoming ENDED is NOT enough to stop the audio. MiroTalk's
-//   RTCPeerConnection lives inside the WebView and only closes when the
-//   page inside the WebView is unloaded. To actually hang up we:
-//     1. Navigate the WebView to about:blank (synchronously releases
-//        camera + microphone; MiroTalk's own beforeunload fires).
-//     2. Bump `webViewKey` to force a full unmount if step 1 was blocked.
-//     3. Fire the PATCH with retry so the other peer sees ENDED fast.
-//     4. Navigate back to Chat.
+// Full-screen conversation-scoped video call.
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -39,7 +27,6 @@ import {
 const CALL_BASE_URL = "https://call.skilledproz.com";
 const POLL_MS = 1500;
 
-// MUST match the web ConversationVideoCallPage.buildConversationVideoUrl
 function buildConversationVideoUrl(conversationId, displayName) {
   if (!conversationId) return null;
   const roomId = `skp-conv-${conversationId}`;
@@ -64,10 +51,6 @@ export default function VideoCallScreen() {
   const [error, setError] = useState("");
   const [endedByRemote, setEndedByRemote] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-
-  // Bumping this key unmounts the WebView. That's our fallback if the
-  // about:blank navigation is blocked (rare, but happens on some devices
-  // when a getUserMedia prompt is still pending).
   const [webViewKey, setWebViewKey] = useState(0);
 
   const webViewRef = useRef(null);
@@ -94,52 +77,29 @@ export default function VideoCallScreen() {
     }
   };
 
-  // ── Kill the WebView's browsing context ──────────────────────────────
-  // Step 1: try to navigate it to about:blank. That unloads MiroTalk
-  // synchronously and its beforeunload handler closes the peer connection
-  // and stops all local mic/camera tracks.
-  // Step 2: bump the key, forcing React to unmount the WebView entirely.
-  //          This is the belt-and-suspenders fallback — it releases all
-  //          native resources even if injectJavaScript was a no-op.
   const killWebView = () => {
     try {
       webViewRef.current?.injectJavaScript?.(
-        "window.location.replace('about:blank'); true;",
+        "window.location.replace('about:blank'); true;"
       );
     } catch {}
-    // Force a re-mount on the next tick. This makes the WebView component
-    // unmount, which releases the native WebView + all media tracks.
     setTimeout(() => setWebViewKey((k) => k + 1), 0);
   };
 
-  // ── Fire the PATCH with retry ────────────────────────────────────────
   const patchEnd = async () => {
     if (!conversationId) return;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         await client.patch(`/voice-calls/${conversationId}/end`);
-        console.log("[VideoCallScreen] end call OK (attempt", attempt, ")");
         return;
       } catch (err) {
-        console.warn(
-          "[VideoCallScreen] end call FAILED (attempt",
-          attempt,
-          "):",
-          err.response?.status,
-          err.response?.data || err.message,
-        );
         if (attempt < 3) {
           await new Promise((r) => setTimeout(r, 400));
         }
       }
     }
-    console.error(
-      "[VideoCallScreen] end call failed 3x — conversation:",
-      conversationId,
-    );
   };
 
-  // ── Initial load ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!conversationId) {
       setError("Missing conversation");
@@ -174,10 +134,8 @@ export default function VideoCallScreen() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
-  // ── Poll for remote end (fast — 1.5s) ────────────────────────────────
   useEffect(() => {
     if (!inCallRef.current || !conversationId) return;
     pollRef.current = setInterval(async () => {
@@ -186,10 +144,9 @@ export default function VideoCallScreen() {
         const call = res.data.data?.call;
         if (!call) return;
         if (call.status === "ENDED" || call.status === "DECLINED") {
-          // Remote ended — kill WebView so we don't keep mic/camera open.
           try {
             webViewRef.current?.injectJavaScript?.(
-              "window.location.replace('about:blank'); true;",
+              "window.location.replace('about:blank'); true;"
             );
           } catch {}
           setWebViewKey((k) => k + 1);
@@ -200,17 +157,13 @@ export default function VideoCallScreen() {
       } catch {}
     }, POLL_MS);
     return () => clearInterval(pollRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
-  // ── End ──────────────────────────────────────────────────────────────
   function handleEnd() {
     if (pollRef.current) clearInterval(pollRef.current);
-    killWebView(); // release camera + microphone synchronously
-    patchEnd(); // fire-and-retry — the actual end-of-call on the backend
+    killWebView();
+    patchEnd();
     inCallRef.current = false;
-    // Give the WebView a tick to unload before navigating, so the OS
-    // releases the hardware on the same frame the user taps End.
     setTimeout(goBackToChat, 80);
   }
 
@@ -218,7 +171,6 @@ export default function VideoCallScreen() {
     if (roomUrl) Linking.openURL(roomUrl).catch(() => {});
   }
 
-  // ── Render guards ────────────────────────────────────────────────────
   if (loading) {
     return (
       <SafeAreaView style={[styles.page, { backgroundColor: "#0a0a0a" }]}>
@@ -314,8 +266,6 @@ export default function VideoCallScreen() {
           allowsFullscreenVideo
           originWhitelist={["*"]}
           onError={() => setError("Could not load call")}
-          // Important on Android: don't let the WebView keep the page
-          // alive after unmount.
           cacheEnabled={false}
           incognito={true}
         />

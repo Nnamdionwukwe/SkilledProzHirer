@@ -1,16 +1,11 @@
 // src/navigation/RootNavigator.js
 //
-// Top-level navigator.
+// Top-level navigator. Four-way branch: auth / verify / hirer / worker.
 //
-// A top-level Stack wraps the four possible "roots" (auth / verify /
-// worker / hirer) plus an invisible CallBanners overlay screen mounted
-// on top. The banner screen has presentation: "transparentModal" so it
-// renders above everything without blocking touches.
-//
-// Why a Stack: banners use useNavigation(), which throws if the caller
-// is not inside a NavigationContainer. Mounting them as siblings of the
-// container (in App.js) broke navigation. Putting them in a Stack.Screen
-// inside the container fixes that while keeping the four-way auth split.
+// The incoming-call banners are mounted INSIDE HirerNavigator and
+// WorkerNavigator (see CallOverlay there) so they render above the drawer
+// without stealing focus. Mounting them as a separate RootStack screen
+// broke every drawer action because RootStack couldn't handle openDrawer.
 
 import React, { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
@@ -19,19 +14,17 @@ import {
   DarkTheme,
   DefaultTheme,
 } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import AuthNavigator from "./AuthNavigator";
 import HirerNavigator from "./HirerNavigator";
 import WorkerNavigator from "./WorkerNavigator";
-import CallBannersScreen from "./CallBannersScreen";
 import VerifyEmailScreen from "../screens/auth/VerifyEmailScreen";
 import { navigationRef } from "./navigationRef";
 import { useAuthStore } from "../store/authStore";
 import { useTheme } from "../contexts/ThemeContext";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 const VerifyStack = createNativeStackNavigator();
-const RootStack = createNativeStackNavigator();
 
 function VerifyGate() {
   return (
@@ -41,19 +34,8 @@ function VerifyGate() {
   );
 }
 
-// Wraps the current "root branch" as a single RootStack screen so that
-// the CallBanners overlay can live as a sibling on top of it.
-function RootBranchScreen() {
-  const { user } = useAuthStore();
-
-  if (!user) return <AuthNavigator />;
-  if (!user.isEmailVerified) return <VerifyGate />;
-  if (user.role === "WORKER") return <WorkerNavigator />;
-  return <HirerNavigator />;
-}
-
 export default function RootNavigator() {
-  const { isHydrated, hydrate } = useAuthStore();
+  const { user, isHydrated, hydrate } = useAuthStore();
   const { theme, effectiveMode } = useTheme();
 
   useEffect(() => {
@@ -80,28 +62,15 @@ export default function RootNavigator() {
     },
   };
 
+  let stack;
+  if (!user) stack = <AuthNavigator />;
+  else if (!user.isEmailVerified) stack = <VerifyGate />;
+  else if (user.role === "WORKER") stack = <WorkerNavigator />;
+  else stack = <HirerNavigator />;
+
   return (
     <NavigationContainer ref={navigationRef} theme={navTheme}>
-      <RootStack.Navigator
-        screenOptions={{
-          headerShown: false,
-          // Don't animate transitions on the root branch — auth changes
-          // (login, verify, role switch) should feel instant, not slide.
-          animation: "none",
-        }}
-      >
-        <RootStack.Screen name="RootBranch" component={RootBranchScreen} />
-        <RootStack.Screen
-          name="CallBanners"
-          component={CallBannersScreen}
-          options={{
-            headerShown: false,
-            presentation: "transparentModal",
-            animation: "none",
-            contentStyle: { backgroundColor: "transparent" },
-          }}
-        />
-      </RootStack.Navigator>
+      {stack}
     </NavigationContainer>
   );
 }

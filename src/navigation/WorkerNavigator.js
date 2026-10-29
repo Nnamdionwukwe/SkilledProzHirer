@@ -1,18 +1,20 @@
 // src/navigation/WorkerNavigator.js
-// TopBar applied at navigator level — no screen needs its own TopBar.
-// SCREEN_META defined INSIDE the component functions so t() can be called.
-// Drawer screens → showBack omitted (hamburger ☰)
-// Stack screens  → showBack prop   (back arrow ←)
+//
+// Fixed: <Stack.Screen> elements were previously inside <Drawer.Navigator>,
+// which is invalid. Moved them to <Stack.Navigator>.
+// CallBannersOverlay is a sibling of the Stack.Navigator (wrapped in a View)
+// so incoming call banners render above every screen.
 
 import React from "react";
+import { View } from "react-native";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useTranslation } from "react-i18next";
 
 import WorkerDrawerContent from "../components/WorkerDrawerContent";
 import TopBar from "../components/TopBar";
+import CallBannersOverlay from "./CallBannersOverlay";
 
-// ── Worker screens ─────────────────────────────────────────────────────────────
 import WorkerDashboardScreen from "../screens/main/worker/WorkerDashboardScreen";
 import WorkerJobsScreen from "../screens/main/worker/WorkerJobsScreen";
 import WorkerJobDetailScreen from "../screens/main/worker/WorkerJobDetailScreen";
@@ -27,7 +29,6 @@ import WorkerCertificationsScreen from "../screens/main/worker/WorkerCertificati
 import WorkerCategoriesScreen from "../screens/main/worker/WorkerCategoriesScreen";
 import WorkerAvailabilityScreen from "../screens/main/worker/WorkerAvailabilityScreen";
 
-// ── Shared screens ─────────────────────────────────────────────────────────────
 import BookingDetailScreen from "../screens/main/BookingDetailScreen";
 import HirerPublicProfileScreen from "../screens/main/HirerPublicProfileScreen";
 import MessagesScreen from "../screens/main/MessagesScreen";
@@ -42,24 +43,18 @@ import FeaturedBoostScreen from "../screens/main/FeaturedBoostScreen";
 import ReferralDashboardScreen from "../screens/main/ReferralDashboardScreen";
 import CampaignDashboardScreen from "../screens/main/CampaignDashboardScreen";
 import MyReportsScreen from "../screens/main/MyReportsScreen";
-
-// Near the other imports
 import RefundHistoryScreen from "../screens/main/RefundHistoryScreen";
 import RefundDetailScreen from "../screens/main/RefundDetailScreen";
 import MyDisputesScreen from "../screens/main/MyDisputesScreen";
-
 import VideoCallScreen from "../screens/main/VideoCallScreen";
 import EditProfileScreen from "../screens/main/EditProfileScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
 
-// ── Drawer navigator ───────────────────────────────────────────────────────────
 function WorkerDrawer() {
   const { t } = useTranslation();
 
-  // Translated screen titles & subtitles for drawer screens.
-  // Defined INSIDE the component so t() is valid.
   const DRAWER_META = {
     Dashboard: {
       title: t("nav.dashboard"),
@@ -144,24 +139,6 @@ function WorkerDrawer() {
       title: t("nav.myreports"),
       subtitle: t("screenSub.myreports"),
     },
-    RefundHistory: {
-      title: t("nav.refundHistory", { defaultValue: "Refund History" }),
-      subtitle: null,
-    },
-    RefundDetail: {
-      title: t("booking.refund.detailTitle", {
-        defaultValue: "Refund Details",
-      }),
-      subtitle: null,
-    },
-    MyDisputes: {
-      title: t("disputes.title", { defaultValue: "My Disputes" }),
-      subtitle: null,
-    },
-    VideoCall: {
-      title: "SkilledProz Call",
-      subtitle: null,
-    },
   };
 
   const drawerMeta = (name) =>
@@ -228,24 +205,10 @@ function WorkerDrawer() {
       />
       <Drawer.Screen name="Campaign" component={CampaignDashboardScreen} />
       <Drawer.Screen name="MyReports" component={MyReportsScreen} />
-
-      <Stack.Screen name="RefundHistory" component={RefundHistoryScreen} />
-      <Stack.Screen name="RefundDetail" component={RefundDetailScreen} />
-      <Stack.Screen name="MyDisputes" component={MyDisputesScreen} />
-      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-
-      <Stack.Screen
-        name="VideoCall"
-        component={VideoCallScreen}
-        options={{ headerShown: false, presentation: "fullScreenModal" }}
-      />
     </Drawer.Navigator>
   );
 }
 
-// ── Stack navigator ────────────────────────────────────────────────────────────
-// WorkerHome = the entire Drawer (header hidden — drawer owns it).
-// Every push screen gets a TopBar with showBack=true.
 function WorkerStack() {
   const { t } = useTranslation();
 
@@ -272,29 +235,43 @@ function WorkerStack() {
     };
 
   return (
-    <Stack.Navigator
-      screenOptions={({ route }) => {
-        if (route.name === "WorkerHome") {
-          return { headerShown: false };
-        }
-        const m = stackMeta(route.name);
-        return {
-          headerShown: true,
-          header: () => (
-            <TopBar title={m.title} subtitle={m.subtitle} showBack />
-          ),
-        };
-      }}
-    >
-      <Stack.Screen name="WorkerHome" component={WorkerDrawer} />
-      <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
-      <Stack.Screen
-        name="HirerPublicProfile"
-        component={HirerPublicProfileScreen}
-      />
-      <Stack.Screen name="WorkerJobDetail" component={WorkerJobDetailScreen} />
-      <Stack.Screen name="Chat" component={ChatScreen} />
-    </Stack.Navigator>
+    <View style={{ flex: 1 }}>
+      <Stack.Navigator
+        screenOptions={({ route }) => {
+          if (route.name === "WorkerHome") {
+            return { headerShown: false };
+          }
+          if (route.name === "VideoCall") {
+            return { headerShown: false, presentation: "fullScreenModal" };
+          }
+          const m = stackMeta(route.name);
+          return {
+            headerShown: true,
+            header: () => (
+              <TopBar title={m.title} subtitle={m.subtitle} showBack />
+            ),
+          };
+        }}
+      >
+        <Stack.Screen name="WorkerHome" component={WorkerDrawer} />
+        <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
+        <Stack.Screen
+          name="HirerPublicProfile"
+          component={HirerPublicProfileScreen}
+        />
+        <Stack.Screen
+          name="WorkerJobDetail"
+          component={WorkerJobDetailScreen}
+        />
+        <Stack.Screen name="Chat" component={ChatScreen} />
+        <Stack.Screen name="RefundHistory" component={RefundHistoryScreen} />
+        <Stack.Screen name="RefundDetail" component={RefundDetailScreen} />
+        <Stack.Screen name="MyDisputes" component={MyDisputesScreen} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen name="VideoCall" component={VideoCallScreen} />
+      </Stack.Navigator>
+      <CallBannersOverlay />
+    </View>
   );
 }
 
