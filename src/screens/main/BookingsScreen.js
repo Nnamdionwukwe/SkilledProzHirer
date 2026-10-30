@@ -103,6 +103,15 @@ const STATUS_META = {
   DISPUTED: { color: "#fb7185", bg: "rgba(251,113,133,0.12)" },
 };
 
+// ── Payment status palette (mirrors BookingList.module.css payTag_*) ──
+const PAY_STATUS_META = {
+  PENDING: { bg: "rgba(251,191,36,0.1)", fg: "#fbbf24" },
+  HELD: { bg: "rgba(129,140,248,0.1)", fg: "#818cf8" },
+  RELEASED: { bg: "rgba(34,197,94,0.12)", fg: "#22c55e" },
+  REFUNDED: { bg: "rgba(239,68,68,0.12)", fg: "#ef4444" },
+  FAILED: { bg: "rgba(239,68,68,0.12)", fg: "#ef4444" },
+};
+
 // ── Skeleton card ──────────────────────────────────────────────────────
 function BookingCardSkeleton() {
   const { theme: th } = useTheme();
@@ -119,7 +128,6 @@ function BookingCardSkeleton() {
         gap: 10,
       }}
     >
-      {/* Avatar + badge row */}
       <View
         style={{
           flexDirection: "row",
@@ -130,20 +138,15 @@ function BookingCardSkeleton() {
         <Skeleton.Circle size={36} />
         <Skeleton width={70} height={20} radius={10} />
       </View>
-      {/* Title */}
       <Skeleton.Line width="80%" height={16} />
-      {/* Party */}
       <Skeleton.Line width="50%" height={11} />
-      {/* Meta chips */}
       <View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
         <Skeleton width={80} height={18} radius={9} />
         <Skeleton width={60} height={18} radius={9} />
         <Skeleton width={70} height={18} radius={9} />
       </View>
-      {/* Date + address */}
       <Skeleton.Line width="65%" height={11} />
       <Skeleton.Line width="90%" height={11} />
-      {/* Footer */}
       <View
         style={{
           flexDirection: "row",
@@ -173,6 +176,14 @@ function BookingCard({ booking }) {
   const isPast = scheduled < new Date();
   const dur = formatDuration(booking);
 
+  // Mirrors the web: booking.payments?.[0]
+  const primaryPayment = Array.isArray(booking.payments)
+    ? booking.payments[0]
+    : booking.payment; // fallback for older shape
+
+  const paymentStatus = primaryPayment?.status;
+  const payMeta = paymentStatus ? PAY_STATUS_META[paymentStatus] : null;
+
   const jobTypeLabel = (type) => {
     if (!type) return null;
     return type
@@ -180,6 +191,8 @@ function BookingCard({ booking }) {
       .replace("_", " ")
       .replace(/\b\w/g, (l) => l.toUpperCase());
   };
+
+  const isRemote = booking.locationType === "REMOTE";
 
   return (
     <Pressable
@@ -365,7 +378,8 @@ function BookingCard({ booking }) {
               })}
             </AppText>
           </View>
-          {booking.address && (
+          {/* Hide address for remote jobs — mirrors web */}
+          {!isRemote && booking.address ? (
             <View style={styles.detailRow}>
               <FaMapMarkerAlt size={10} color={c.textMuted} />
               <AppText
@@ -377,7 +391,7 @@ function BookingCard({ booking }) {
                 {booking.address}
               </AppText>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Footer: rate + payment status */}
@@ -393,35 +407,22 @@ function BookingCard({ booking }) {
               {Number(booking.agreedRate || 0).toLocaleString()}
             </AppText>
           </View>
-          {booking.payment && (
-            <View
-              style={[
-                styles.payTag,
-                {
-                  backgroundColor:
-                    booking.payment.status === "RELEASED"
-                      ? "rgba(34,197,94,0.12)"
-                      : "rgba(249,115,22,0.12)",
-                },
-              ]}
-            >
+          {payMeta ? (
+            <View style={[styles.payTag, { backgroundColor: payMeta.bg }]}>
               <AppText
                 variant="small"
                 weight="bold"
                 style={{
-                  color:
-                    booking.payment.status === "RELEASED"
-                      ? "#22c55e"
-                      : c.orange,
+                  color: payMeta.fg,
                   fontSize: 9,
                   letterSpacing: 0.4,
                   textTransform: "uppercase",
                 }}
               >
-                {booking.payment.status}
+                {paymentStatus}
               </AppText>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
     </Pressable>
@@ -686,7 +687,6 @@ export default function BookingsScreen() {
 
 // ── Styles ─────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  // Edge-to-edge wrapper — only 8px horizontal
   outer: {
     paddingHorizontal: 8,
     paddingTop: 8,
