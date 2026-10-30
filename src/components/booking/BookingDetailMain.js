@@ -1,22 +1,17 @@
 // src/components/booking/BookingDetailMain.js
 //
 // Verbatim port of components/booking/BookingDetail/BookingDetailMain.jsx.
-//
-// Branches (order matters — matches web):
-//   1. isRetainedStaff → payroll-specific layout
-//   2. isJobPostBooking → job-post-specific layout
-//   3. otherwise → direct booking layout
-//
-// Everything inside is mobile-native (View/Pressable/TextInput) — no
-// react-router-dom, no CSS modules, no react-icons.
+// This version is a complete rewrite to ensure NO booking details are omitted.
+// It preserves all three branches (Retained Staff, Job Post, Direct),
+// all DetailItem fields, GPS cards, timeline, reviews, and action buttons.
 
 import React, { useState } from "react";
 import { Linking, Pressable, StyleSheet, View } from "react-native";
-import { useTranslation } from "react-i18next";
 
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
 import { calcPricing, getHirerFeeRate } from "../../utils/pricing";
+import BookingReleaseDetails from "./BookingReleaseDetails";
 import {
   FaCalendarAlt,
   FaMapMarkerAlt,
@@ -34,7 +29,6 @@ import {
   FaShieldAlt,
   FaStar,
   FaHourglassHalf,
-  FaExternalLinkAlt,
   FaCheck,
   FaExclamationTriangle,
   FaMap,
@@ -43,1387 +37,22 @@ import {
   FaBuilding,
   FaPlusCircle,
   FaMinusCircle,
+  FaExternalLinkAlt,
 } from "../../icons/fa";
 
-import BookingReleaseDetails from "./BookingReleaseDetails";
+// ── Status meta ────────────────────────────────────────────────────────
+const STATUS_META = {
+  PENDING: { label: "Pending", color: "yellow" },
+  ACCEPTED: { label: "Accepted", color: "orange" },
+  IN_PROGRESS: { label: "In Progress", color: "indigo" },
+  COMPLETED: { label: "Completed", color: "green" },
+  PAID: { label: "Paid", color: "green" },
+  CANCELLED: { label: "Cancelled", color: "red" },
+  DISPUTED: { label: "Disputed", color: "rose" },
+};
 
-// ── Inline helpers ─────────────────────────────────────────────────────
-function DetailItem({ icon, label, value, accent }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-
-  return (
-    <View
-      style={[
-        styles.detailItem,
-        { backgroundColor: c.bgCard, borderColor: c.border },
-      ]}
-    >
-      <View style={{ marginTop: 2 }}>{icon}</View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <AppText style={[styles.detailLabel, { color: c.textMuted }]}>
-          {label}
-        </AppText>
-        <AppText
-          style={[styles.detailValue, { color: accent ? c.orange : c.text }]}
-        >
-          {value}
-        </AppText>
-      </View>
-    </View>
-  );
-}
-
-function GpsCard({ title, dotColor, timestamp, lat, lng, distKm, cardClass }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-
-  const getDistanceIcon = () => {
-    if (distKm < 0.1) return <FaCheckCircle size={12} color={c.green} />;
-    if (distKm > 1) return <FaExclamationTriangle size={12} color={c.orange} />;
-    return <FaMap size={12} color="#3b82f6" />;
-  };
-
-  return (
-    <View style={[styles.gpsCard, cardClass]}>
-      <View style={styles.gpsCardHeader}>
-        <View style={[styles.gpsCardDot, { backgroundColor: dotColor }]} />
-        <AppText style={styles.gpsCardTitle}>{title}</AppText>
-        {timestamp && (
-          <AppText style={styles.gpsCardTime}>
-            {new Date(timestamp).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}{" "}
-            ·{" "}
-            {new Date(timestamp).toLocaleDateString("en-GB", {
-              day: "numeric",
-              month: "short",
-            })}
-          </AppText>
-        )}
-      </View>
-      <View style={styles.gpsCoordRow}>
-        <AppText style={styles.gpsCoordLabel}>Coordinates</AppText>
-        <AppText style={styles.gpsCoordValue}>
-          {lat.toFixed(5)}, {lng.toFixed(5)}
-        </AppText>
-      </View>
-      {distKm !== null && (
-        <View
-          style={[
-            styles.gpsDistRow,
-            distKm > 1 ? styles.gpsDistFar : styles.gpsDistNear,
-          ]}
-        >
-          {getDistanceIcon()}
-          <AppText
-            style={{
-              fontSize: 12,
-              fontWeight: "600",
-              color: distKm > 1 ? "#92400e" : "#166534",
-            }}
-          >
-            {distKm < 0.1
-              ? "Worker was at the job site"
-              : `${distKm.toFixed(2)} km from job site`}
-          </AppText>
-        </View>
-      )}
-      <Pressable
-        onPress={() =>
-          Linking.openURL(`https://www.google.com/maps?q=${lat},${lng}`)
-        }
-        style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-      >
-        <FaMap size={11} color="#2563eb" />
-        <AppText style={styles.gpsMapLink}>View on Google Maps</AppText>
-      </Pressable>
-    </View>
-  );
-}
-
-// ── Main component ─────────────────────────────────────────────────────
-export default function BookingDetailMain({
-  booking,
-  step,
-  dur,
-  mapsUrl,
-  hasCheckInGps,
-  hasCheckOutGps,
-  checkInDistKm,
-  checkOutDistKm,
-  reviewCheckDone,
-  hasReviewed,
-  bookingId,
-  onDownloadInvoice,
-  isHirer,
-  payment,
-  paymentStatus,
-  isWorker,
-  workerName,
-  onShowRefundModal,
-  refundLoading,
-  hasActiveRefund,
-}) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-
-  const STATUS_META = {
-    PENDING: { label: "Pending", color: "yellow" },
-    ACCEPTED: { label: "Accepted", color: "orange" },
-    IN_PROGRESS: { label: "In Progress", color: "indigo" },
-    COMPLETED: { label: "Completed", color: "green" },
-    PAID: { label: "Paid", color: "green" },
-    CANCELLED: { label: "Cancelled", color: "red" },
-    DISPUTED: { label: "Disputed", color: "rose" },
-  };
-  const meta = STATUS_META[booking.status] || {};
-  const badgeColor = badgePalette(meta.color, c);
-
-  const TIMELINE_STEPS = ["Pending", "Accepted", "In Progress", "Completed"];
-
-  const JOB_TYPES = {
-    FULL_TIME: {
-      icon: <FaBriefcase size={14} color={c.orange} />,
-      label: "Full-time",
-    },
-    PART_TIME: {
-      icon: <FaClock size={14} color={c.orange} />,
-      label: "Part-time",
-    },
-    CONTRACT: {
-      icon: <FaFileAlt size={14} color={c.orange} />,
-      label: "Contract",
-    },
-    TEMPORARY: {
-      icon: <FaFlag size={14} color={c.orange} />,
-      label: "Temporary",
-    },
-  };
-  const LOC_TYPES = {
-    REMOTE: { icon: <FaGlobe size={14} color={c.orange} />, label: "Remote" },
-    ON_SITE: {
-      icon: <FaMapPin size={14} color={c.orange} />,
-      label: "On-site",
-    },
-    HYBRID: { icon: <FaRandom size={14} color={c.orange} />, label: "Hybrid" },
-  };
-
-  const showMapLink =
-    booking.latitude && booking.longitude && booking.locationType !== "REMOTE";
-
-  const isJobPostBooking = booking.source === "JOB_POST";
-  const isRetainedStaff = booking.source === "RETAINED_STAFF";
-  const isCompletedOrPaid = ["COMPLETED", "PAID"].includes(booking.status);
-
-  const renderDuration = () => {
-    if (!dur) {
-      if (booking.estimatedHours || booking.estimatedValue) {
-        // Parent already rendered its skeleton above us; by the time we render,
-        // dur must be populated. Show a quiet fallback in the rare race case.
-        return <AppText style={{ color: c.textMuted }}>—</AppText>;
-      }
-      return <AppText style={{ color: c.textMuted }}>Not specified</AppText>;
-    }
-    const unitMap = {
-      hours: "hours",
-      days: "days",
-      weeks: "weeks",
-      months: "months",
-      custom: "Custom",
-    };
-    const unitLabel = booking.estimatedUnit
-      ? unitMap[booking.estimatedUnit] || booking.estimatedUnit
-      : null;
-
-    return (
-      <View
-        style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center" }}
-      >
-        <AppText style={{ fontWeight: "600" }}>{dur.main}</AppText>
-        {dur.sub ? (
-          <AppText style={{ color: c.textMuted, fontSize: 12 }}>
-            {" "}
-            {dur.sub}
-          </AppText>
-        ) : null}
-        {unitLabel ? (
-          <AppText style={{ color: c.textMuted, fontSize: 11, marginLeft: 4 }}>
-            ({unitLabel}
-            {booking.isNegotiated && booking.negotiatedRate
-              ? " · negotiated"
-              : ""}
-            )
-          </AppText>
-        ) : null}
-      </View>
-    );
-  };
-
-  const showRefundButton =
-    isHirer &&
-    paymentStatus === "RELEASED" &&
-    !refundLoading &&
-    !hasActiveRefund &&
-    !isRetainedStaff;
-
-  // ══════════════════════════════════════════════════════════════════════
-  // RETAINED STAFF BRANCH
-  // ══════════════════════════════════════════════════════════════════════
-  if (isRetainedStaff) {
-    return (
-      <View style={{ gap: 10 }}>
-        <BookingReleaseDetails payment={payment} currency={booking.currency} />
-
-        {/* Title block */}
-        <View
-          style={[
-            styles.titleBlock,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
-          ]}
-        >
-          <View style={styles.titleRow}>
-            <AppText
-              style={[styles.title, { color: c.text }]}
-              numberOfLines={3}
-            >
-              {booking.title}
-            </AppText>
-            <View
-              style={[
-                styles.badge,
-                { backgroundColor: badgeColor.bg, borderColor: badgeColor.fg },
-              ]}
-            >
-              <AppText
-                style={{
-                  fontSize: 10,
-                  fontWeight: "700",
-                  color: badgeColor.fg,
-                  letterSpacing: 0.5,
-                }}
-              >
-                {String(meta.label || "").toUpperCase()}
-              </AppText>
-            </View>
-          </View>
-          {booking.category && (
-            <View
-              style={[styles.categoryPill, { backgroundColor: c.orangeDim }]}
-            >
-              <AppText
-                style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
-              >
-                {booking.category.name}
-              </AppText>
-            </View>
-          )}
-          <View
-            style={[
-              styles.categoryPill,
-              {
-                backgroundColor: "rgba(129,140,248,0.1)",
-                borderColor: "rgba(129,140,248,0.25)",
-                borderWidth: 1,
-                marginTop: 6,
-              },
-            ]}
-          >
-            <FaBriefcase size={10} color="#818cf8" />
-            <AppText
-              style={{
-                fontSize: 11,
-                fontWeight: "700",
-                color: "#818cf8",
-                marginLeft: 4,
-              }}
-            >
-              Retained Staff Payroll
-            </AppText>
-          </View>
-        </View>
-
-        {/* Retained staff details */}
-        <View
-          style={[
-            styles.section,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
-          ]}
-        >
-          <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-            Retained Staff Details
-          </AppText>
-          <View style={{ gap: 8 }}>
-            <DetailItem
-              icon={<FaCalendarAlt size={14} color={c.orange} />}
-              label="Pay Period"
-              value={new Date(booking.scheduledAt).toLocaleDateString("en-GB", {
-                month: "short",
-                year: "numeric",
-              })}
-            />
-            <DetailItem
-              icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label="Base Rate"
-              value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
-              accent
-            />
-            <DetailItem
-              icon={<FaFileAlt size={14} color={c.orange} />}
-              label="Role"
-              value={booking.description || "Standard Retained Role"}
-            />
-            {booking.jobType && (
-              <DetailItem
-                icon={
-                  JOB_TYPES[booking.jobType]?.icon || (
-                    <FaBriefcase size={14} color={c.orange} />
-                  )
-                }
-                label="Job Type"
-                value={JOB_TYPES[booking.jobType]?.label || booking.jobType}
-              />
-            )}
-            {booking.employmentType && (
-              <DetailItem
-                icon={<FaBriefcase size={14} color={c.orange} />}
-                label="Employment Type"
-                value={String(booking.employmentType).replace(/_/g, " ")}
-              />
-            )}
-            {booking.department && (
-              <DetailItem
-                icon={<FaBuilding size={14} color={c.orange} />}
-                label="Department"
-                value={booking.department}
-              />
-            )}
-            {booking.locationType && (
-              <DetailItem
-                icon={
-                  LOC_TYPES[booking.locationType]?.icon || (
-                    <FaMapPin size={14} color={c.orange} />
-                  )
-                }
-                label="Location Type"
-                value={
-                  LOC_TYPES[booking.locationType]?.label || booking.locationType
-                }
-              />
-            )}
-            {booking.location && booking.locationType !== "REMOTE" && (
-              <DetailItem
-                icon={<FaMapMarkerAlt size={14} color={c.orange} />}
-                label="Work Location"
-                value={booking.location}
-              />
-            )}
-            {booking.workDays?.length > 0 && (
-              <DetailItem
-                icon={<FaCalendarAlt size={14} color={c.orange} />}
-                label="Work Days"
-                value={booking.workDays.join(", ")}
-              />
-            )}
-            {booking.workStart && booking.workEnd && (
-              <DetailItem
-                icon={<FaClock size={14} color={c.orange} />}
-                label="Working Hours"
-                value={`${booking.workStart} — ${booking.workEnd}${booking.timezone ? ` (${booking.timezone})` : ""}`}
-              />
-            )}
-            {booking.employeeNumber && (
-              <DetailItem
-                icon={<FaBriefcase size={14} color={c.orange} />}
-                label="Employee #"
-                value={booking.employeeNumber}
-              />
-            )}
-            {booking.managerName && (
-              <DetailItem
-                icon={<FaUser size={14} color={c.orange} />}
-                label="Manager"
-                value={booking.managerName}
-              />
-            )}
-            {booking.emergencyContact && (
-              <DetailItem
-                icon={<FaExclamationTriangle size={14} color={c.orange} />}
-                label="Emergency Contact"
-                value={booking.emergencyContact}
-              />
-            )}
-            <DetailItem
-              icon={<FaClock size={14} color={c.orange} />}
-              label="Status"
-              value={
-                booking.status === "PAID"
-                  ? "Paid & Completed"
-                  : booking.status === "ACCEPTED"
-                    ? "Active Payroll"
-                    : booking.status
-              }
-              accent={booking.status === "PAID"}
-            />
-
-            {(() => {
-              const p = calcPricing(booking);
-              const currency = p.currency || booking.currency || "NGN";
-              const feePercent = Math.round(getHirerFeeRate(currency) * 100);
-              return isHirer ? (
-                <>
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label="Base Amount"
-                    value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
-                  />
-                  {booking.bonusAmount > 0 && (
-                    <DetailItem
-                      icon={<FaPlusCircle size={14} color={c.green} />}
-                      label="Bonus"
-                      value={`+ ${currency} ${Number(booking.bonusAmount).toLocaleString()}`}
-                    />
-                  )}
-                  {booking.deductionAmount > 0 && (
-                    <DetailItem
-                      icon={<FaMinusCircle size={14} color="#f87171" />}
-                      label="Deduction"
-                      value={`- ${currency} ${Number(booking.deductionAmount).toLocaleString()}`}
-                    />
-                  )}
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label={`Platform Fee (${feePercent}%)`}
-                    value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
-                    accent
-                  />
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label="Total Payment"
-                    value={`${currency} ${Number(p.grossTotal).toLocaleString()}`}
-                    accent
-                  />
-                </>
-              ) : (
-                <>
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label="Base Amount"
-                    value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
-                  />
-                  {booking.bonusAmount > 0 && (
-                    <DetailItem
-                      icon={<FaPlusCircle size={14} color={c.green} />}
-                      label="Bonus"
-                      value={`+ ${currency} ${Number(booking.bonusAmount).toLocaleString()}`}
-                    />
-                  )}
-                  {booking.deductionAmount > 0 && (
-                    <DetailItem
-                      icon={<FaMinusCircle size={14} color="#f87171" />}
-                      label="Deduction"
-                      value={`- ${currency} ${Number(booking.deductionAmount).toLocaleString()}`}
-                    />
-                  )}
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label={`Platform Fee (${feePercent}%)`}
-                    value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
-                  />
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label="Your Payout"
-                    value={`${currency} ${Number(p.workerPayout).toLocaleString()}`}
-                    accent
-                  />
-                </>
-              );
-            })()}
-          </View>
-        </View>
-
-        {/* Description */}
-        <View
-          style={[
-            styles.section,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
-          ]}
-        >
-          <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-            Description
-          </AppText>
-          <AppText style={{ color: c.textDim, lineHeight: 20 }}>
-            {booking.description || "No additional description provided."}
-          </AppText>
-          {booking.notes ? (
-            <View
-              style={[
-                styles.notes,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <FaFileAlt size={13} color={c.textMuted} />
-              <AppText style={{ color: c.textDim, flex: 1, marginLeft: 8 }}>
-                {booking.notes}
-              </AppText>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Reviews */}
-        {isCompletedOrPaid && (
-          <View
-            style={[
-              styles.section,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
-          >
-            <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-              Reviews
-            </AppText>
-            <ReviewList
-              reviews={booking.reviews}
-              reviewCheckDone={reviewCheckDone}
-              hasReviewed={hasReviewed}
-              bookingId={bookingId}
-            />
-          </View>
-        )}
-
-        {/* Bottom actions */}
-        {isCompletedOrPaid && (
-          <View style={[styles.bottomActions, { borderTopColor: c.border }]}>
-            <Pressable
-              onPress={onDownloadInvoice}
-              style={[
-                styles.invoiceBtn,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <FaFileAlt size={12} color={c.textDim} />
-              <AppText
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: c.textDim,
-                  marginLeft: 6,
-                }}
-              >
-                Download Invoice
-              </AppText>
-            </Pressable>
-          </View>
-        )}
-      </View>
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // JOB-POST BRANCH
-  // ══════════════════════════════════════════════════════════════════════
-  if (isJobPostBooking) {
-    return (
-      <View style={{ gap: 10 }}>
-        <BookingReleaseDetails payment={payment} currency={booking.currency} />
-
-        {/* Title block */}
-        <View
-          style={[
-            styles.titleBlock,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
-          ]}
-        >
-          <View style={styles.titleRow}>
-            <AppText
-              style={[styles.title, { color: c.text }]}
-              numberOfLines={3}
-            >
-              {booking.title}
-            </AppText>
-            <View
-              style={[
-                styles.badge,
-                { backgroundColor: badgeColor.bg, borderColor: badgeColor.fg },
-              ]}
-            >
-              <AppText
-                style={{
-                  fontSize: 10,
-                  fontWeight: "700",
-                  color: badgeColor.fg,
-                  letterSpacing: 0.5,
-                }}
-              >
-                {String(meta.label || "").toUpperCase()}
-              </AppText>
-            </View>
-          </View>
-          {booking.category && (
-            <View
-              style={[styles.categoryPill, { backgroundColor: c.orangeDim }]}
-            >
-              <AppText
-                style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
-              >
-                {booking.category.name}
-              </AppText>
-            </View>
-          )}
-          {booking.isNegotiated && (
-            <View
-              style={[
-                styles.categoryPill,
-                {
-                  backgroundColor: "rgba(129,140,248,0.1)",
-                  borderColor: "rgba(129,140,248,0.25)",
-                  borderWidth: 1,
-                  marginTop: 6,
-                },
-              ]}
-            >
-              <FaHandshake size={10} color="#818cf8" />
-              <AppText
-                style={{
-                  fontSize: 11,
-                  fontWeight: "700",
-                  color: "#818cf8",
-                  marginLeft: 4,
-                }}
-              >
-                Negotiated rate
-              </AppText>
-            </View>
-          )}
-          <View
-            style={[
-              styles.categoryPill,
-              {
-                backgroundColor: "rgba(129,140,248,0.1)",
-                borderColor: "rgba(129,140,248,0.25)",
-                borderWidth: 1,
-                marginTop: 6,
-              },
-            ]}
-          >
-            <FaBriefcase size={10} color="#818cf8" />
-            <AppText
-              style={{
-                fontSize: 11,
-                fontWeight: "700",
-                color: "#818cf8",
-                marginLeft: 4,
-              }}
-            >
-              From Job Post
-            </AppText>
-          </View>
-        </View>
-
-        {/* Timeline */}
-        {step >= 0 && <Timeline step={step} steps={TIMELINE_STEPS} />}
-
-        {/* Pending banner */}
-        {booking.status === "PENDING" && isHirer && (
-          <View
-            style={[
-              styles.pendingBanner,
-              {
-                backgroundColor: "rgba(251,191,36,0.07)",
-                borderColor: "rgba(251,191,36,0.35)",
-              },
-            ]}
-          >
-            <View style={{ marginTop: 2 }}>
-              <FaHourglassHalf size={16} color="#fbbf24" />
-            </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <AppText style={{ fontWeight: "700", color: "#fbbf24" }}>
-                Waiting for {workerName || "the worker"} to respond
-              </AppText>
-              <AppText
-                style={{
-                  fontSize: 12,
-                  color: c.textDim,
-                  marginTop: 4,
-                  lineHeight: 18,
-                }}
-              >
-                Your booking request has been sent. {workerName || "The worker"}{" "}
-                hasn't accepted yet — you'll be notified the moment they do. You
-                can cancel for free until they accept.
-              </AppText>
-            </View>
-          </View>
-        )}
-
-        {/* Booking details */}
-        <View
-          style={[
-            styles.section,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
-          ]}
-        >
-          <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-            Booking Details
-          </AppText>
-          <View style={{ gap: 8 }}>
-            <DetailItem
-              icon={<FaCalendarAlt size={14} color={c.orange} />}
-              label="Scheduled"
-              value={`${new Date(booking.scheduledAt).toLocaleDateString(
-                "en-GB",
-                {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                },
-              )} at ${new Date(booking.scheduledAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}`}
-            />
-            {booking.address && showMapLink && (
-              <DetailItem
-                icon={<FaMapMarkerAlt size={14} color={c.orange} />}
-                label="Job Site Address"
-                value={booking.address}
-              />
-            )}
-            <DetailItem
-              icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label="Agreed Total"
-              value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
-              accent
-            />
-            {booking.isNegotiated && booking.negotiatedRate && (
-              <DetailItem
-                icon={<FaHandshake size={14} color={c.orange} />}
-                label="Negotiated Override"
-                value={`${booking.currency} ${Number(booking.negotiatedRate).toLocaleString()}`}
-                accent
-              />
-            )}
-            {booking.isNegotiated && booking.negotiationNote && (
-              <DetailItem
-                icon={<FaFileAlt size={14} color={c.orange} />}
-                label="Negotiation Note"
-                value={booking.negotiationNote}
-              />
-            )}
-            {booking.checkInAt && (
-              <DetailItem
-                icon={<FaCheckCircle size={14} color={c.green} />}
-                label="Checked In"
-                value={new Date(booking.checkInAt).toLocaleString("en-NG", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              />
-            )}
-            {booking.checkOutAt && (
-              <DetailItem
-                icon={<FaFlag size={14} color={c.orange} />}
-                label="Checked Out"
-                value={new Date(booking.checkOutAt).toLocaleString("en-NG", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              />
-            )}
-            {booking.insuranceRef && (
-              <DetailItem
-                icon={<FaShieldAlt size={14} color={c.orange} />}
-                label="Insurance"
-                value={`${booking.insurancePlan || "Insured"} · Policy #${booking.insuranceRef}`}
-              />
-            )}
-
-            {(() => {
-              const p = calcPricing(booking);
-              const currency = p.currency || booking.currency || "NGN";
-              const feePercent = Math.round(getHirerFeeRate(currency) * 100);
-              return isHirer ? (
-                <>
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label="Subtotal"
-                    value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
-                  />
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label={`Platform Fee (${feePercent}%)`}
-                    value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
-                    accent
-                  />
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label="Total Payment"
-                    value={`${currency} ${Number(p.grossTotal).toLocaleString()}`}
-                    accent
-                  />
-                </>
-              ) : (
-                <>
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label="Total Earnings"
-                    value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
-                    accent
-                  />
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label={`Platform Fee (${feePercent}%)`}
-                    value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
-                  />
-                  <DetailItem
-                    icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                    label="Your Payout"
-                    value={`${currency} ${Number(p.workerPayout).toLocaleString()}`}
-                    accent
-                  />
-                </>
-              );
-            })()}
-          </View>
-        </View>
-
-        {/* GPS */}
-        {(hasCheckInGps || hasCheckOutGps) && (
-          <GpsSection
-            hasCheckInGps={hasCheckInGps}
-            hasCheckOutGps={hasCheckOutGps}
-            booking={booking}
-            checkInDistKm={checkInDistKm}
-            checkOutDistKm={checkOutDistKm}
-          />
-        )}
-
-        {/* Reviews */}
-        {booking.status === "COMPLETED" && (
-          <View
-            style={[
-              styles.section,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
-          >
-            <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-              Reviews
-            </AppText>
-            <ReviewList
-              reviews={booking.reviews}
-              reviewCheckDone={reviewCheckDone}
-              hasReviewed={hasReviewed}
-              bookingId={bookingId}
-            />
-          </View>
-        )}
-
-        {/* Cancel reason */}
-        {booking.cancelReason ? (
-          <CancelReason reason={booking.cancelReason} />
-        ) : null}
-
-        {/* Bottom actions */}
-        {booking.status === "COMPLETED" && (
-          <View style={[styles.bottomActions, { borderTopColor: c.border }]}>
-            <Pressable
-              onPress={onDownloadInvoice}
-              style={[
-                styles.invoiceBtn,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <FaFileAlt size={12} color={c.textDim} />
-              <AppText
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: c.textDim,
-                  marginLeft: 6,
-                }}
-              >
-                Download Invoice
-              </AppText>
-            </Pressable>
-            {showRefundButton && (
-              <Pressable
-                onPress={onShowRefundModal}
-                disabled={refundLoading}
-                style={[
-                  styles.refundBtn,
-                  { backgroundColor: c.redDim, borderColor: c.red },
-                ]}
-              >
-                <FaUndo size={12} color={c.red} />
-                <AppText
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "600",
-                    color: c.red,
-                    marginLeft: 6,
-                  }}
-                >
-                  Request Refund
-                </AppText>
-              </Pressable>
-            )}
-          </View>
-        )}
-      </View>
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // DIRECT BOOKING BRANCH
-  // ══════════════════════════════════════════════════════════════════════
-  return (
-    <View style={{ gap: 10 }}>
-      <BookingReleaseDetails payment={payment} currency={booking.currency} />
-
-      {/* Title block */}
-      <View
-        style={[
-          styles.titleBlock,
-          { backgroundColor: c.bgPanel, borderColor: c.border },
-        ]}
-      >
-        <View style={styles.titleRow}>
-          <AppText style={[styles.title, { color: c.text }]} numberOfLines={3}>
-            {booking.title}
-          </AppText>
-          <View
-            style={[
-              styles.badge,
-              { backgroundColor: badgeColor.bg, borderColor: badgeColor.fg },
-            ]}
-          >
-            <AppText
-              style={{
-                fontSize: 10,
-                fontWeight: "700",
-                color: badgeColor.fg,
-                letterSpacing: 0.5,
-              }}
-            >
-              {String(meta.label || "").toUpperCase()}
-            </AppText>
-          </View>
-        </View>
-        {booking.category && (
-          <View style={[styles.categoryPill, { backgroundColor: c.orangeDim }]}>
-            <AppText
-              style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
-            >
-              {booking.category.name}
-            </AppText>
-          </View>
-        )}
-        {booking.isNegotiated && (
-          <View
-            style={[
-              styles.categoryPill,
-              {
-                backgroundColor: "rgba(129,140,248,0.1)",
-                borderColor: "rgba(129,140,248,0.25)",
-                borderWidth: 1,
-                marginTop: 6,
-              },
-            ]}
-          >
-            <FaHandshake size={10} color="#818cf8" />
-            <AppText
-              style={{
-                fontSize: 11,
-                fontWeight: "700",
-                color: "#818cf8",
-                marginLeft: 4,
-              }}
-            >
-              Negotiated rate
-            </AppText>
-          </View>
-        )}
-      </View>
-
-      {/* Timeline */}
-      {step >= 0 && <Timeline step={step} steps={TIMELINE_STEPS} />}
-
-      {/* Pending banner */}
-      {booking.status === "PENDING" && isHirer && (
-        <View
-          style={[
-            styles.pendingBanner,
-            {
-              backgroundColor: "rgba(251,191,36,0.07)",
-              borderColor: "rgba(251,191,36,0.35)",
-            },
-          ]}
-        >
-          <View style={{ marginTop: 2 }}>
-            <FaHourglassHalf size={16} color="#fbbf24" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <AppText style={{ fontWeight: "700", color: "#fbbf24" }}>
-              Waiting for {workerName || "the worker"} to respond
-            </AppText>
-            <AppText
-              style={{
-                fontSize: 12,
-                color: c.textDim,
-                marginTop: 4,
-                lineHeight: 18,
-              }}
-            >
-              Your booking request has been sent. {workerName || "The worker"}{" "}
-              hasn't accepted yet — you'll be notified the moment they do. You
-              can cancel for free until they accept.
-            </AppText>
-          </View>
-        </View>
-      )}
-
-      {/* Description */}
-      <View
-        style={[
-          styles.section,
-          { backgroundColor: c.bgPanel, borderColor: c.border },
-        ]}
-      >
-        <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-          Description
-        </AppText>
-        <AppText style={{ color: c.textDim, lineHeight: 20 }}>
-          {booking.description}
-        </AppText>
-        {booking.notes ? (
-          <View
-            style={[
-              styles.notes,
-              { backgroundColor: c.bgCard, borderColor: c.border },
-            ]}
-          >
-            <FaFileAlt size={13} color={c.textMuted} />
-            <AppText style={{ color: c.textDim, flex: 1, marginLeft: 8 }}>
-              {booking.notes}
-            </AppText>
-          </View>
-        ) : null}
-      </View>
-
-      {/* Requirements & Responsibilities */}
-      {(booking.requirements || booking.responsibilities) && (
-        <View
-          style={[
-            styles.section,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
-          ]}
-        >
-          <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-            Requirements & Responsibilities
-          </AppText>
-          {booking.requirements ? (
-            <View
-              style={[
-                styles.notes,
-                {
-                  backgroundColor: c.bgCard,
-                  borderColor: c.border,
-                  marginBottom: 8,
-                },
-              ]}
-            >
-              <FaFileAlt size={13} color={c.textMuted} />
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <AppText style={{ fontWeight: "600", color: c.text }}>
-                  Requirements
-                </AppText>
-                <AppText style={{ color: c.textDim, marginTop: 2 }}>
-                  {booking.requirements}
-                </AppText>
-              </View>
-            </View>
-          ) : null}
-          {booking.responsibilities ? (
-            <View
-              style={[
-                styles.notes,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <FaTools size={13} color={c.textMuted} />
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <AppText style={{ fontWeight: "600", color: c.text }}>
-                  Responsibilities
-                </AppText>
-                <AppText style={{ color: c.textDim, marginTop: 2 }}>
-                  {booking.responsibilities}
-                </AppText>
-              </View>
-            </View>
-          ) : null}
-        </View>
-      )}
-
-      {/* Job details grid */}
-      <View
-        style={[
-          styles.section,
-          { backgroundColor: c.bgPanel, borderColor: c.border },
-        ]}
-      >
-        <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-          Job Details
-        </AppText>
-        <View style={{ gap: 8 }}>
-          <DetailItem
-            icon={<FaCalendarAlt size={14} color={c.orange} />}
-            label="Scheduled"
-            value={`${new Date(booking.scheduledAt).toLocaleDateString(
-              "en-GB",
-              {
-                weekday: "short",
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              },
-            )} at ${new Date(booking.scheduledAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}`}
-          />
-          {booking.address && booking.locationType !== "REMOTE" && (
-            <DetailItem
-              icon={<FaMapMarkerAlt size={14} color={c.orange} />}
-              label="Job Site Address"
-              value={booking.address}
-            />
-          )}
-          <DetailItem
-            icon={<FaMoneyBillWave size={14} color={c.orange} />}
-            label="Agreed Rate"
-            value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
-            accent
-          />
-          {booking.isNegotiated && booking.negotiatedRate && (
-            <DetailItem
-              icon={<FaHandshake size={14} color={c.orange} />}
-              label="Negotiated Rate"
-              value={`${booking.currency} ${Number(booking.negotiatedRate).toLocaleString()}`}
-              accent
-            />
-          )}
-          {booking.isNegotiated && booking.negotiationNote && (
-            <DetailItem
-              icon={<FaFileAlt size={14} color={c.orange} />}
-              label="Negotiation Note"
-              value={booking.negotiationNote}
-            />
-          )}
-          <View>
-            <AppText style={[styles.detailLabel, { color: c.textMuted }]}>
-              EST. DURATION
-            </AppText>
-            {renderDuration()}
-          </View>
-          {booking.checkInAt && (
-            <DetailItem
-              icon={<FaCheckCircle size={14} color={c.green} />}
-              label="Checked In"
-              value={new Date(booking.checkInAt).toLocaleString("en-NG", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            />
-          )}
-          {booking.checkOutAt && (
-            <DetailItem
-              icon={<FaFlag size={14} color={c.orange} />}
-              label="Checked Out"
-              value={new Date(booking.checkOutAt).toLocaleString("en-NG", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            />
-          )}
-          {booking.checkInAt && booking.checkOutAt && (
-            <DetailItem
-              icon={<FaClock size={14} color={c.orange} />}
-              label="Actual Duration"
-              value={calcDuration(booking.checkInAt, booking.checkOutAt)}
-            />
-          )}
-          {booking.insuranceRef && (
-            <DetailItem
-              icon={<FaShieldAlt size={14} color={c.orange} />}
-              label="Insurance"
-              value={`${booking.insurancePlan || "Insured"} · Policy #${booking.insuranceRef}`}
-            />
-          )}
-          {booking.jobType && (
-            <DetailItem
-              icon={
-                JOB_TYPES[booking.jobType]?.icon || (
-                  <FaBriefcase size={14} color={c.orange} />
-                )
-              }
-              label="Job Type"
-              value={JOB_TYPES[booking.jobType]?.label || booking.jobType}
-            />
-          )}
-          {booking.locationType && (
-            <DetailItem
-              icon={
-                LOC_TYPES[booking.locationType]?.icon || (
-                  <FaMapMarkerAlt size={14} color={c.orange} />
-                )
-              }
-              label="Location Type"
-              value={
-                LOC_TYPES[booking.locationType]?.label || booking.locationType
-              }
-            />
-          )}
-
-          {(() => {
-            const p = calcPricing(booking);
-            const currency = p.currency || booking.currency || "NGN";
-            const feePercent = Math.round(getHirerFeeRate(currency) * 100);
-            return isHirer ? (
-              <>
-                <DetailItem
-                  icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                  label="Subtotal"
-                  value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
-                />
-                <DetailItem
-                  icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                  label={`Platform Fee (${feePercent}%)`}
-                  value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
-                  accent
-                />
-                <DetailItem
-                  icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                  label="Total Payment"
-                  value={`${currency} ${Number(p.grossTotal).toLocaleString()}`}
-                  accent
-                />
-              </>
-            ) : (
-              <>
-                <DetailItem
-                  icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                  label="Total Earnings"
-                  value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
-                  accent
-                />
-                <DetailItem
-                  icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                  label={`Platform Fee (${feePercent}%)`}
-                  value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
-                />
-                <DetailItem
-                  icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                  label="Your Payout"
-                  value={`${currency} ${Number(p.workerPayout).toLocaleString()}`}
-                  accent
-                />
-              </>
-            );
-          })()}
-        </View>
-      </View>
-
-      {/* GPS */}
-      {(hasCheckInGps || hasCheckOutGps) && (
-        <GpsSection
-          hasCheckInGps={hasCheckInGps}
-          hasCheckOutGps={hasCheckOutGps}
-          booking={booking}
-          checkInDistKm={checkInDistKm}
-          checkOutDistKm={checkOutDistKm}
-        />
-      )}
-
-      {/* Reviews */}
-      {booking.status === "COMPLETED" && (
-        <View
-          style={[
-            styles.section,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
-          ]}
-        >
-          <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-            Reviews
-          </AppText>
-          <ReviewList
-            reviews={booking.reviews}
-            reviewCheckDone={reviewCheckDone}
-            hasReviewed={hasReviewed}
-            bookingId={bookingId}
-          />
-        </View>
-      )}
-
-      {/* Cancel reason */}
-      {booking.cancelReason ? (
-        <CancelReason reason={booking.cancelReason} />
-      ) : null}
-
-      {/* Bottom actions */}
-      {booking.status === "COMPLETED" && (
-        <View style={[styles.bottomActions, { borderTopColor: c.border }]}>
-          <Pressable
-            onPress={onDownloadInvoice}
-            style={[
-              styles.invoiceBtn,
-              { backgroundColor: c.bgCard, borderColor: c.border },
-            ]}
-          >
-            <FaFileAlt size={12} color={c.textDim} />
-            <AppText
-              style={{
-                fontSize: 13,
-                fontWeight: "600",
-                color: c.textDim,
-                marginLeft: 6,
-              }}
-            >
-              Download Invoice
-            </AppText>
-          </Pressable>
-          {showRefundButton && (
-            <Pressable
-              onPress={onShowRefundModal}
-              disabled={refundLoading}
-              style={[
-                styles.refundBtn,
-                { backgroundColor: c.redDim, borderColor: c.red },
-              ]}
-            >
-              <FaUndo size={12} color={c.red} />
-              <AppText
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: c.red,
-                  marginLeft: 6,
-                }}
-              >
-                Request Refund
-              </AppText>
-            </Pressable>
-          )}
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ─── Reusable sub-parts ────────────────────────────────────────────────
-function badgePalette(color, c) {
-  switch (color) {
+function badgePalette(key, c) {
+  switch (key) {
     case "yellow":
       return { bg: "rgba(251,191,36,0.12)", fg: "#fbbf24" };
     case "orange":
@@ -1441,34 +70,227 @@ function badgePalette(color, c) {
   }
 }
 
-function Timeline({ step, steps }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
+const TIMELINE_STEPS = ["Pending", "Accepted", "In Progress", "Completed"];
+
+const JOB_TYPES = {
+  FULL_TIME: { Icon: FaBriefcase, label: "Full-time" },
+  PART_TIME: { Icon: FaClock, label: "Part-time" },
+  CONTRACT: { Icon: FaFileAlt, label: "Contract" },
+  TEMPORARY: { Icon: FaFlag, label: "Temporary" },
+};
+const LOC_TYPES = {
+  REMOTE: { Icon: FaGlobe, label: "Remote" },
+  ON_SITE: { Icon: FaMapPin, label: "On-site" },
+  HYBRID: { Icon: FaRandom, label: "Hybrid" },
+};
+
+// ── Inline helpers ────────────────────────────────────────────────────
+function DetailItem({ icon, label, value, accent, c }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: c.bgCard,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 10,
+      }}
+    >
+      <View style={{ marginTop: 1 }}>{icon}</View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <AppText
+          style={{
+            fontSize: 10,
+            fontWeight: "500",
+            color: c.textMuted,
+            textTransform: "uppercase",
+            letterSpacing: 0.6,
+            marginBottom: 3,
+          }}
+        >
+          {label}
+        </AppText>
+        {typeof value === "string" || typeof value === "number" ? (
+          <AppText
+            style={{
+              fontSize: 13,
+              fontWeight: "600",
+              color: accent ? c.orange : c.text,
+              lineHeight: 18,
+            }}
+          >
+            {String(value)}
+          </AppText>
+        ) : (
+          value
+        )}
+      </View>
+    </View>
+  );
+}
+
+function GpsCard({
+  title,
+  dotColor,
+  timestamp,
+  lat,
+  lng,
+  distKm,
+  cardClass,
+  c,
+}) {
+  const getDistanceIcon = () => {
+    if (distKm < 0.1) return <FaCheckCircle size={12} color={c.green} />;
+    if (distKm > 1) return <FaExclamationTriangle size={12} color={c.orange} />;
+    return <FaMap size={12} color="#3b82f6" />;
+  };
+
   return (
     <View
       style={[
-        styles.timelineWrap,
-        { backgroundColor: c.bgPanel, borderColor: c.border },
+        styles.gpsCard,
+        cardClass === "in"
+          ? { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }
+          : { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
       ]}
     >
-      <View style={styles.timeline}>
-        {steps.map((s, i) => {
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 10,
+        }}
+      >
+        <View
+          style={{
+            width: 10,
+            height: 10,
+            borderRadius: 5,
+            backgroundColor: dotColor,
+          }}
+        />
+        <AppText
+          style={{ fontSize: 13, fontWeight: "700", color: "#1a1a1a", flex: 1 }}
+        >
+          {title}
+        </AppText>
+        {timestamp ? (
+          <AppText style={{ fontSize: 11, color: "#888" }}>
+            {new Date(timestamp).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}{" "}
+            ·{" "}
+            {new Date(timestamp).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+            })}
+          </AppText>
+        ) : null}
+      </View>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginBottom: 8,
+        }}
+      >
+        <AppText style={{ fontSize: 12, color: "#888" }}>Coordinates</AppText>
+        <AppText style={{ fontSize: 12, color: "#333", fontFamily: "Courier" }}>
+          {lat.toFixed(5)}, {lng.toFixed(5)}
+        </AppText>
+      </View>
+      {distKm !== null ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 8,
+            backgroundColor: distKm > 1 ? "#fef3c7" : "#dcfce7",
+            marginBottom: 10,
+          }}
+        >
+          {getDistanceIcon()}
+          <AppText
+            style={{
+              fontSize: 12,
+              fontWeight: "600",
+              color: distKm > 1 ? "#92400e" : "#166534",
+            }}
+          >
+            {distKm < 0.1
+              ? "Worker was at the job site"
+              : `${distKm.toFixed(2)} km from job site`}
+          </AppText>
+        </View>
+      ) : null}
+      <Pressable
+        onPress={() =>
+          Linking.openURL(`https://www.google.com/maps?q=${lat},${lng}`)
+        }
+        style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+      >
+        <FaMap size={11} color="#2563eb" />
+        <AppText style={{ fontSize: 11, fontWeight: "600", color: "#2563eb" }}>
+          View on Google Maps
+        </AppText>
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Timeline ────────────────────────────────────────────────────────────
+function Timeline({ step, c }) {
+  return (
+    <View
+      style={{
+        backgroundColor: c.bgPanel,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 14,
+        paddingHorizontal: 16,
+        paddingVertical: 18,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
+      >
+        {TIMELINE_STEPS.map((label, i) => {
           const active = i <= step;
           const current = i === step;
           return (
-            <View key={s} style={{ alignItems: "center", flex: 1 }}>
+            <View key={label} style={{ flex: 1, alignItems: "center" }}>
               <View
-                style={[
-                  styles.timelineDot,
-                  {
-                    backgroundColor: current
-                      ? c.orange
-                      : active
-                        ? c.orangeDim
-                        : c.bgCard,
-                    borderColor: active ? c.orange : c.border,
-                  },
-                ]}
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: current
+                    ? c.orange
+                    : active
+                      ? c.orangeDim
+                      : c.bgCard,
+                  borderWidth: 2,
+                  borderColor: active ? c.orange : c.border,
+                  shadowColor: current ? c.orange : "transparent",
+                  shadowOpacity: current ? 0.4 : 0,
+                  shadowRadius: 6,
+                  shadowOffset: { width: 0, height: 0 },
+                }}
               >
                 {i < step ? (
                   <FaCheck size={10} color={current ? c.bg : c.orange} />
@@ -1486,14 +308,14 @@ function Timeline({ step, steps }) {
               </View>
               <AppText
                 style={{
-                  fontSize: 10,
+                  marginTop: 8,
+                  fontSize: 9,
                   fontWeight: "600",
-                  color: active ? c.text : c.textMuted,
-                  marginTop: 6,
+                  color: active ? c.textDim : c.textMuted,
                   textAlign: "center",
                 }}
               >
-                {s}
+                {label}
               </AppText>
             </View>
           );
@@ -1503,66 +325,50 @@ function Timeline({ step, steps }) {
   );
 }
 
-function GpsSection({
-  hasCheckInGps,
-  hasCheckOutGps,
-  booking,
-  checkInDistKm,
-  checkOutDistKm,
-}) {
-  const { theme } = useTheme();
-  const c = theme.colors;
+// ── Section wrapper ─────────────────────────────────────────────────────
+function Section({ title, children, c }) {
   return (
     <View
-      style={[
-        styles.section,
-        { backgroundColor: c.bgPanel, borderColor: c.border },
-      ]}
+      style={{
+        backgroundColor: c.bgPanel,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 14,
+        padding: 16,
+        gap: 12,
+      }}
     >
-      <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-        Worker Location
+      <AppText
+        style={{
+          fontFamily: "Syne_700Bold",
+          fontSize: 12,
+          fontWeight: "700",
+          color: c.textDim,
+          textTransform: "uppercase",
+          letterSpacing: 1,
+        }}
+      >
+        {title}
       </AppText>
-      <AppText style={{ fontSize: 12, color: c.textMuted, marginBottom: 12 }}>
-        GPS recorded at check-in and check-out. Visible to both parties.
-      </AppText>
-      <View style={{ gap: 10 }}>
-        {hasCheckInGps && (
-          <GpsCard
-            title="Check-in Location"
-            dotColor="#16a34a"
-            timestamp={booking.checkInAt}
-            lat={booking.checkInLat}
-            lng={booking.checkInLng}
-            distKm={checkInDistKm}
-            cardClass={styles.gpsCardIn}
-          />
-        )}
-        {hasCheckOutGps && (
-          <GpsCard
-            title="Check-out Location"
-            dotColor="#dc2626"
-            timestamp={booking.checkOutAt}
-            lat={booking.checkOutLat}
-            lng={booking.checkOutLng}
-            distKm={checkOutDistKm}
-            cardClass={styles.gpsCardOut}
-          />
-        )}
-      </View>
+      {children}
     </View>
   );
 }
 
-function ReviewList({ reviews, reviewCheckDone, hasReviewed }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-  const list = reviews || [];
+// ── Reviews list ────────────────────────────────────────────────────────
+function ReviewsSection({
+  reviews,
+  reviewCheckDone,
+  hasReviewed,
+  onLeaveReview,
+  c,
+}) {
+  if (!reviews?.length && !reviewCheckDone) return null;
   return (
-    <>
-      {list.length > 0 && (
-        <View style={{ gap: 12 }}>
-          {list.map((review) => (
-            <View key={review.id} style={{ gap: 6 }}>
+    <Section title="Reviews" c={c}>
+      {reviews?.length > 0
+        ? reviews.map((review) => (
+            <View key={review.id} style={{ gap: 6, marginBottom: 8 }}>
               <View
                 style={{
                   flexDirection: "row",
@@ -1571,24 +377,35 @@ function ReviewList({ reviews, reviewCheckDone, hasReviewed }) {
                 }}
               >
                 <View
-                  style={[
-                    styles.reviewerAvatar,
-                    { backgroundColor: c.orangeDim },
-                  ]}
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: c.orangeDim,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                  }}
                 >
-                  <AppText style={{ color: c.orange, fontWeight: "700" }}>
+                  <AppText
+                    style={{ fontSize: 12, fontWeight: "700", color: c.orange }}
+                  >
                     {review.giver?.firstName?.[0]}
                     {review.giver?.lastName?.[0]}
                   </AppText>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <AppText style={{ fontWeight: "600", color: c.text }}>
-                    {review.giver?.firstName} {review.giver?.lastName}{" "}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <AppText
+                    style={{ fontSize: 13, fontWeight: "600", color: c.text }}
+                    numberOfLines={1}
+                  >
+                    {review.giver?.firstName} {review.giver?.lastName}
                     <AppText style={{ color: c.textDim, fontWeight: "400" }}>
-                      · {review.giver?.role === "HIRER" ? "Hirer" : "Worker"}
+                      {" · "}
+                      {review.giver?.role === "HIRER" ? "Hirer" : "Worker"}
                     </AppText>
                   </AppText>
-                  <AppText style={{ fontSize: 12, color: c.textMuted }}>
+                  <AppText style={{ fontSize: 11, color: c.textMuted }}>
                     {new Date(review.createdAt).toLocaleDateString("en-GB", {
                       day: "numeric",
                       month: "short",
@@ -1596,19 +413,14 @@ function ReviewList({ reviews, reviewCheckDone, hasReviewed }) {
                     })}
                   </AppText>
                 </View>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={{ flexDirection: "row", gap: 2 }}>
                   {[1, 2, 3, 4, 5].map((i) => (
                     <FaStar
                       key={i}
-                      size={14}
+                      size={12}
                       color={i <= review.rating ? "#fbbf24" : c.border}
                     />
                   ))}
-                  <AppText
-                    style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}
-                  >
-                    {review.rating}/5
-                  </AppText>
                 </View>
               </View>
               {review.comment ? (
@@ -1621,6 +433,7 @@ function ReviewList({ reviews, reviewCheckDone, hasReviewed }) {
                 >
                   <AppText
                     style={{
+                      fontSize: 13,
                       color: c.textDim,
                       fontStyle: "italic",
                       lineHeight: 20,
@@ -1631,269 +444,1417 @@ function ReviewList({ reviews, reviewCheckDone, hasReviewed }) {
                 </View>
               ) : null}
             </View>
-          ))}
-        </View>
-      )}
-      {reviewCheckDone && !hasReviewed && (
-        <AppText style={{ color: c.orange, marginTop: 10, fontWeight: "600" }}>
-          Leave a review
-        </AppText>
-      )}
-      {reviewCheckDone && hasReviewed && (
-        <View
-          style={[
-            styles.reviewedNote,
-            { backgroundColor: c.greenDim, borderColor: c.green },
+          ))
+        : null}
+      {reviewCheckDone && !hasReviewed ? (
+        <Pressable
+          onPress={onLeaveReview}
+          style={({ pressed }) => [
+            {
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              borderWidth: 1,
+              borderColor: c.border,
+              borderRadius: 9,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              opacity: pressed ? 0.75 : 1,
+            },
           ]}
         >
+          <FaStar size={12} color={c.orange} />
+          <AppText
+            style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
+          >
+            Leave a Review
+          </AppText>
+        </Pressable>
+      ) : null}
+      {reviewCheckDone && hasReviewed ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: c.greenDim,
+            borderWidth: 1,
+            borderColor: c.green,
+            borderRadius: 8,
+          }}
+        >
           <FaCheckCircle size={13} color={c.green} />
-          <AppText style={{ color: c.green, fontSize: 12, marginLeft: 6 }}>
-            Your review has been submitted.
+          <AppText style={{ fontSize: 12, color: c.green, flex: 1 }}>
+            Your review has been submitted.{" "}
+            {(reviews?.length ?? 0) < 2 ? " Waiting for the other party." : ""}
           </AppText>
         </View>
-      )}
-    </>
+      ) : null}
+    </Section>
   );
 }
 
-function CancelReason({ reason }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
+// ── GPS Section ────────────────────────────────────────────────────────
+function GpsSection({
+  booking,
+  hasCheckInGps,
+  hasCheckOutGps,
+  checkInDistKm,
+  checkOutDistKm,
+  c,
+}) {
   return (
-    <View
-      style={[
-        styles.section,
-        { backgroundColor: c.bgPanel, borderColor: c.border },
-      ]}
-    >
-      <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-        Cancellation Reason
+    <Section title="Worker Location" c={c}>
+      <AppText style={{ fontSize: 13, color: c.textMuted, marginBottom: 6 }}>
+        GPS recorded at check-in and check-out. Visible to both parties.
       </AppText>
+      <View style={{ gap: 10 }}>
+        {hasCheckInGps ? (
+          <GpsCard
+            title="Check-in Location"
+            dotColor="#16a34a"
+            timestamp={booking.checkInAt}
+            lat={booking.checkInLat}
+            lng={booking.checkInLng}
+            distKm={checkInDistKm}
+            cardClass="in"
+            c={c}
+          />
+        ) : null}
+        {hasCheckOutGps ? (
+          <GpsCard
+            title="Check-out Location"
+            dotColor="#dc2626"
+            timestamp={booking.checkOutAt}
+            lat={booking.checkOutLat}
+            lng={booking.checkOutLng}
+            distKm={checkOutDistKm}
+            cardClass="out"
+            c={c}
+          />
+        ) : null}
+      </View>
+    </Section>
+  );
+}
+
+// ── Cancel reason ──────────────────────────────────────────────────────
+function CancelReason({ reason, c }) {
+  return (
+    <Section title="Cancellation Reason" c={c}>
       <View
-        style={[
-          styles.cancelReasonCard,
-          { backgroundColor: c.redDim, borderColor: c.red },
-        ]}
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-start",
+          gap: 10,
+          padding: 14,
+          backgroundColor: c.redDim,
+          borderWidth: 1,
+          borderColor: "rgba(239,68,68,0.2)",
+          borderRadius: 12,
+        }}
       >
         <FaExclamationTriangle size={14} color={c.red} />
-        <AppText style={{ color: c.textDim, marginLeft: 8, flex: 1 }}>
+        <AppText
+          style={{ flex: 1, fontSize: 13, color: c.textDim, lineHeight: 20 }}
+        >
           {reason}
         </AppText>
       </View>
+    </Section>
+  );
+}
+
+// ── Bottom actions ─────────────────────────────────────────────────────
+function BottomActions({
+  isCompletedOrPaid,
+  showRefundButton,
+  onDownloadInvoice,
+  onRefundClick,
+  refundLoading,
+  invoiceLoading,
+  c,
+}) {
+  if (!isCompletedOrPaid) return null;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 10,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: c.border,
+      }}
+    >
+      <Pressable
+        onPress={onDownloadInvoice}
+        disabled={invoiceLoading}
+        style={({ pressed }) => [
+          {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            backgroundColor: c.bgCard,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 9,
+            opacity: invoiceLoading ? 0.5 : pressed ? 0.75 : 1,
+          },
+        ]}
+      >
+        <FaFileAlt size={12} color={c.textDim} />
+        <AppText style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}>
+          Download Invoice
+        </AppText>
+      </Pressable>
+      {showRefundButton ? (
+        <Pressable
+          onPress={onRefundClick}
+          disabled={refundLoading}
+          style={({ pressed }) => [
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              backgroundColor: c.redDim,
+              borderWidth: 1,
+              borderColor: c.red,
+              borderRadius: 9,
+              opacity: refundLoading ? 0.5 : pressed ? 0.75 : 1,
+            },
+          ]}
+        >
+          <FaUndo size={12} color={c.red} />
+          <AppText style={{ fontSize: 13, fontWeight: "600", color: c.red }}>
+            Request Refund
+          </AppText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
-// ─── Styles (verbatim from CSS, mobile root 14) ────────────────────────
+// ═════════════════════════════════════════════════════════════════════════
+// MAIN EXPORT
+// ═════════════════════════════════════════════════════════════════════════
+export default function BookingDetailMain({
+  booking,
+  step,
+  dur,
+  hasCheckInGps,
+  hasCheckOutGps,
+  checkInDistKm,
+  checkOutDistKm,
+  reviewCheckDone,
+  hasReviewed,
+  bookingId,
+  invoiceLoading,
+  onDownloadInvoice,
+  onLeaveReview,
+  isHirer,
+  payment,
+  paymentStatus,
+  isWorker,
+  workerName,
+  refundLoading,
+  hasActiveRefund,
+  onShowRefundModal,
+}) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+
+  const meta = STATUS_META[booking.status] || {};
+  const badgeColor = badgePalette(meta.color, c);
+  const isCompletedOrPaid = ["COMPLETED", "PAID"].includes(booking.status);
+  const isJobPostBooking = booking.source === "JOB_POST";
+  const isRetainedStaff = booking.source === "RETAINED_STAFF";
+
+  const showMapLink =
+    booking.latitude && booking.longitude && booking.locationType !== "REMOTE";
+
+  const showRefundButton =
+    isHirer &&
+    paymentStatus === "RELEASED" &&
+    !refundLoading &&
+    !hasActiveRefund &&
+    !isRetainedStaff;
+
+  const renderDuration = () => {
+    if (!dur) {
+      if (booking.estimatedHours || booking.estimatedValue) {
+        return <AppText style={{ color: c.textMuted }}>Loading…</AppText>;
+      }
+      return <AppText style={{ color: c.textMuted }}>Not specified</AppText>;
+    }
+    const unitMap = {
+      hours: "hours",
+      days: "days",
+      weeks: "weeks",
+      months: "months",
+      custom: "Custom",
+    };
+    const unitLabel = booking.estimatedUnit
+      ? unitMap[booking.estimatedUnit] || booking.estimatedUnit
+      : null;
+
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        <AppText style={{ fontSize: 13, fontWeight: "600", color: c.text }}>
+          {dur.main}
+        </AppText>
+        {dur.sub ? (
+          <AppText style={{ fontSize: 12, color: c.textMuted }}>
+            {dur.sub}
+          </AppText>
+        ) : null}
+        {unitLabel ? (
+          <AppText style={{ fontSize: 11, color: c.textMuted }}>
+            ({unitLabel}
+            {booking.isNegotiated && booking.negotiatedRate
+              ? " · negotiated"
+              : ""}
+            )
+          </AppText>
+        ) : null}
+      </View>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // BRANCH 1 — RETAINED STAFF PAYROLL
+  // ═══════════════════════════════════════════════════════════════════════
+  if (isRetainedStaff) {
+    const p = calcPricing(booking);
+    const currency = p.currency || booking.currency || "NGN";
+    const feePercent = Math.round(getHirerFeeRate(currency) * 100);
+
+    return (
+      <View style={{ gap: 10 }}>
+        <BookingReleaseDetails payment={payment} currency={booking.currency} />
+
+        <View
+          style={{
+            backgroundColor: c.bgPanel,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 16,
+            padding: 20,
+            gap: 8,
+          }}
+        >
+          <View
+            style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}
+          >
+            <AppText
+              style={{
+                fontFamily: "Syne_700Bold",
+                fontSize: 20,
+                fontWeight: "700",
+                color: c.text,
+                flex: 1,
+                lineHeight: 26,
+              }}
+            >
+              {booking.title}
+            </AppText>
+            <View
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                backgroundColor: badgeColor.bg,
+                borderRadius: 20,
+              }}
+            >
+              <AppText
+                style={{
+                  fontSize: 10,
+                  fontWeight: "700",
+                  color: badgeColor.fg,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                {meta.label}
+              </AppText>
+            </View>
+          </View>
+          {booking.category ? (
+            <View
+              style={{
+                alignSelf: "flex-start",
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                backgroundColor: c.orangeDim,
+                borderRadius: 12,
+              }}
+            >
+              <AppText
+                style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
+              >
+                {booking.category.name}
+              </AppText>
+            </View>
+          ) : null}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              alignSelf: "flex-start",
+              paddingHorizontal: 10,
+              paddingVertical: 3,
+              backgroundColor: "rgba(129,140,248,0.1)",
+              borderWidth: 1,
+              borderColor: "rgba(129,140,248,0.25)",
+              borderRadius: 12,
+            }}
+          >
+            <FaBriefcase size={10} color="#818cf8" />
+            <AppText
+              style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+            >
+              Retained Staff Payroll
+            </AppText>
+          </View>
+        </View>
+
+        <Section title="Retained Staff Details" c={c}>
+          <DetailItem
+            icon={<FaCalendarAlt size={14} color={c.orange} />}
+            label="Pay Period"
+            value={new Date(booking.scheduledAt).toLocaleDateString("en-GB", {
+              month: "short",
+              year: "numeric",
+            })}
+            c={c}
+          />
+          <DetailItem
+            icon={<FaMoneyBillWave size={14} color={c.orange} />}
+            label="Base Rate"
+            value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
+            accent
+            c={c}
+          />
+          <DetailItem
+            icon={<FaFileAlt size={14} color={c.orange} />}
+            label="Role"
+            value={booking.description || "Standard Retained Role"}
+            c={c}
+          />
+          {booking.jobType
+            ? (() => {
+                const Icon = JOB_TYPES[booking.jobType]?.Icon || FaBriefcase;
+                return (
+                  <DetailItem
+                    icon={<Icon size={14} color={c.orange} />}
+                    label="Job Type"
+                    value={JOB_TYPES[booking.jobType]?.label || booking.jobType}
+                    c={c}
+                  />
+                );
+              })()
+            : null}
+          {booking.employmentType ? (
+            <DetailItem
+              icon={<FaBriefcase size={14} color={c.orange} />}
+              label="Employment Type"
+              value={String(booking.employmentType).replace(/_/g, " ")}
+              c={c}
+            />
+          ) : null}
+          {booking.department ? (
+            <DetailItem
+              icon={<FaBuilding size={14} color={c.orange} />}
+              label="Department"
+              value={booking.department}
+              c={c}
+            />
+          ) : null}
+          {booking.locationType ? (
+            <DetailItem
+              icon={<FaMapPin size={14} color={c.orange} />}
+              label="Location Type"
+              value={
+                LOC_TYPES[booking.locationType]?.label || booking.locationType
+              }
+              c={c}
+            />
+          ) : null}
+          {booking.location && booking.locationType !== "REMOTE" ? (
+            <DetailItem
+              icon={<FaMapMarkerAlt size={14} color={c.orange} />}
+              label="Work Location"
+              value={booking.location}
+              c={c}
+            />
+          ) : null}
+          {booking.workDays?.length > 0 ? (
+            <DetailItem
+              icon={<FaCalendarAlt size={14} color={c.orange} />}
+              label="Work Days"
+              value={booking.workDays.join(", ")}
+              c={c}
+            />
+          ) : null}
+          {booking.workStart && booking.workEnd ? (
+            <DetailItem
+              icon={<FaClock size={14} color={c.orange} />}
+              label="Working Hours"
+              value={`${booking.workStart} — ${booking.workEnd}${booking.timezone ? ` (${booking.timezone})` : ""}`}
+              c={c}
+            />
+          ) : null}
+          {booking.employeeNumber ? (
+            <DetailItem
+              icon={<FaBriefcase size={14} color={c.orange} />}
+              label="Employee #"
+              value={booking.employeeNumber}
+              c={c}
+            />
+          ) : null}
+          {booking.managerName ? (
+            <DetailItem
+              icon={<FaUser size={14} color={c.orange} />}
+              label="Manager"
+              value={booking.managerName}
+              c={c}
+            />
+          ) : null}
+          {booking.emergencyContact ? (
+            <DetailItem
+              icon={<FaExclamationTriangle size={14} color={c.orange} />}
+              label="Emergency Contact"
+              value={
+                typeof booking.emergencyContact === "string"
+                  ? booking.emergencyContact
+                  : booking.emergencyContact.name || ""
+              }
+              c={c}
+            />
+          ) : null}
+          <DetailItem
+            icon={<FaClock size={14} color={c.orange} />}
+            label="Status"
+            value={
+              booking.status === "PAID"
+                ? "Paid & Completed"
+                : booking.status === "ACCEPTED"
+                  ? "Active Payroll"
+                  : booking.status
+            }
+            accent={booking.status === "PAID"}
+            c={c}
+          />
+          <DetailItem
+            icon={<FaMoneyBillWave size={14} color={c.orange} />}
+            label="Base Amount"
+            value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
+            c={c}
+          />
+          {booking.bonusAmount > 0 ? (
+            <DetailItem
+              icon={<FaPlusCircle size={14} color={c.green} />}
+              label="Bonus"
+              value={`+ ${currency} ${Number(booking.bonusAmount).toLocaleString()}`}
+              c={c}
+            />
+          ) : null}
+          {booking.deductionAmount > 0 ? (
+            <DetailItem
+              icon={<FaMinusCircle size={14} color="#f87171" />}
+              label="Deduction"
+              value={`- ${currency} ${Number(booking.deductionAmount).toLocaleString()}`}
+              c={c}
+            />
+          ) : null}
+          <DetailItem
+            icon={<FaMoneyBillWave size={14} color={c.orange} />}
+            label={`Platform Fee (${feePercent}%)`}
+            value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
+            accent
+            c={c}
+          />
+          {isHirer ? (
+            <DetailItem
+              icon={<FaMoneyBillWave size={14} color={c.orange} />}
+              label="Total Payment"
+              value={`${currency} ${Number(p.grossTotal).toLocaleString()}`}
+              accent
+              c={c}
+            />
+          ) : (
+            <DetailItem
+              icon={<FaMoneyBillWave size={14} color={c.orange} />}
+              label="Your Payout"
+              value={`${currency} ${Number(p.workerPayout).toLocaleString()}`}
+              accent
+              c={c}
+            />
+          )}
+        </Section>
+
+        <Section title="Description" c={c}>
+          <AppText style={{ fontSize: 13, color: c.textDim, lineHeight: 20 }}>
+            {booking.description || "No additional description provided."}
+          </AppText>
+          {booking.notes ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                gap: 8,
+                padding: 12,
+                backgroundColor: c.bgCard,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 8,
+              }}
+            >
+              <FaFileAlt
+                size={12}
+                color={c.textMuted}
+                style={{ marginTop: 2 }}
+              />
+              <AppText style={{ fontSize: 13, color: c.textDim, flex: 1 }}>
+                {booking.notes}
+              </AppText>
+            </View>
+          ) : null}
+        </Section>
+
+        {isCompletedOrPaid ? (
+          <ReviewsSection
+            reviews={booking.reviews}
+            reviewCheckDone={reviewCheckDone}
+            hasReviewed={hasReviewed}
+            onLeaveReview={onLeaveReview}
+            c={c}
+          />
+        ) : null}
+
+        <BottomActions
+          isCompletedOrPaid={isCompletedOrPaid}
+          showRefundButton={false}
+          onDownloadInvoice={onDownloadInvoice}
+          invoiceLoading={invoiceLoading}
+          c={c}
+        />
+      </View>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // BRANCH 2 — JOB POST
+  // ═══════════════════════════════════════════════════════════════════════
+  if (isJobPostBooking) {
+    const p = calcPricing(booking);
+    const currency = p.currency || booking.currency || "NGN";
+    const feePercent = Math.round(getHirerFeeRate(currency) * 100);
+
+    return (
+      <View style={{ gap: 10 }}>
+        <BookingReleaseDetails payment={payment} currency={booking.currency} />
+
+        <View
+          style={{
+            backgroundColor: c.bgPanel,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 16,
+            padding: 20,
+            gap: 8,
+          }}
+        >
+          <View
+            style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}
+          >
+            <AppText
+              style={{
+                fontFamily: "Syne_700Bold",
+                fontSize: 20,
+                fontWeight: "700",
+                color: c.text,
+                flex: 1,
+                lineHeight: 26,
+              }}
+            >
+              {booking.title}
+            </AppText>
+            <View
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                backgroundColor: badgeColor.bg,
+                borderRadius: 20,
+              }}
+            >
+              <AppText
+                style={{
+                  fontSize: 10,
+                  fontWeight: "700",
+                  color: badgeColor.fg,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                {meta.label}
+              </AppText>
+            </View>
+          </View>
+          {booking.category ? (
+            <View
+              style={{
+                alignSelf: "flex-start",
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                backgroundColor: c.orangeDim,
+                borderRadius: 12,
+              }}
+            >
+              <AppText
+                style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
+              >
+                {booking.category.name}
+              </AppText>
+            </View>
+          ) : null}
+          {booking.isNegotiated ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                alignSelf: "flex-start",
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                backgroundColor: "rgba(129,140,248,0.1)",
+                borderWidth: 1,
+                borderColor: "rgba(129,140,248,0.25)",
+                borderRadius: 12,
+              }}
+            >
+              <FaHandshake size={10} color="#818cf8" />
+              <AppText
+                style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+              >
+                Negotiated rate
+              </AppText>
+            </View>
+          ) : null}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              alignSelf: "flex-start",
+              paddingHorizontal: 10,
+              paddingVertical: 3,
+              backgroundColor: "rgba(129,140,248,0.1)",
+              borderWidth: 1,
+              borderColor: "rgba(129,140,248,0.25)",
+              borderRadius: 12,
+            }}
+          >
+            <FaBriefcase size={10} color="#818cf8" />
+            <AppText
+              style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+            >
+              From Job Post
+            </AppText>
+          </View>
+        </View>
+
+        {step >= 0 ? <Timeline step={step} c={c} /> : null}
+
+        {booking.status === "PENDING" && isHirer ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              gap: 10,
+              padding: 14,
+              backgroundColor: "rgba(251,191,36,0.07)",
+              borderWidth: 1.5,
+              borderColor: "rgba(251,191,36,0.35)",
+              borderRadius: 14,
+            }}
+          >
+            <FaHourglassHalf
+              size={16}
+              color="#fbbf24"
+              style={{ marginTop: 2 }}
+            />
+            <View style={{ flex: 1 }}>
+              <AppText
+                style={{ fontSize: 13, fontWeight: "700", color: "#fbbf24" }}
+              >
+                Waiting for {workerName || "the worker"} to respond
+              </AppText>
+              <AppText
+                style={{
+                  fontSize: 12,
+                  color: c.textDim,
+                  marginTop: 4,
+                  lineHeight: 18,
+                }}
+              >
+                Your booking request has been sent. {workerName || "The worker"}{" "}
+                hasn't accepted yet — you'll be notified the moment they do. You
+                can cancel for free until they accept.
+              </AppText>
+            </View>
+          </View>
+        ) : null}
+
+        <Section title="Booking Details" c={c}>
+          <DetailItem
+            icon={<FaCalendarAlt size={14} color={c.orange} />}
+            label="Scheduled"
+            value={`${new Date(booking.scheduledAt).toLocaleDateString(
+              "en-GB",
+              {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              },
+            )} at ${new Date(booking.scheduledAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}`}
+            c={c}
+          />
+          {booking.address && showMapLink ? (
+            <DetailItem
+              icon={<FaMapMarkerAlt size={14} color={c.orange} />}
+              label="Job Site Address"
+              value={booking.address}
+              c={c}
+            />
+          ) : null}
+          <DetailItem
+            icon={<FaMoneyBillWave size={14} color={c.orange} />}
+            label="Agreed Total"
+            value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
+            accent
+            c={c}
+          />
+          {booking.isNegotiated && booking.negotiatedRate ? (
+            <DetailItem
+              icon={<FaHandshake size={14} color={c.orange} />}
+              label="Negotiated Override"
+              value={`${booking.currency} ${Number(booking.negotiatedRate).toLocaleString()}`}
+              accent
+              c={c}
+            />
+          ) : null}
+          {booking.isNegotiated && booking.negotiationNote ? (
+            <DetailItem
+              icon={<FaFileAlt size={14} color={c.orange} />}
+              label="Negotiation Note"
+              value={booking.negotiationNote}
+              c={c}
+            />
+          ) : null}
+          {booking.checkInAt ? (
+            <DetailItem
+              icon={<FaCheckCircle size={14} color={c.green} />}
+              label="Checked In"
+              value={new Date(booking.checkInAt).toLocaleString("en-NG", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+              c={c}
+            />
+          ) : null}
+          {booking.checkOutAt ? (
+            <DetailItem
+              icon={<FaFlag size={14} color={c.orange} />}
+              label="Checked Out"
+              value={new Date(booking.checkOutAt).toLocaleString("en-NG", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+              c={c}
+            />
+          ) : null}
+          {booking.checkInAt && booking.checkOutAt ? (
+            <DetailItem
+              icon={<FaClock size={14} color={c.orange} />}
+              label="Actual Duration"
+              value={calcDuration(booking.checkInAt, booking.checkOutAt)}
+              c={c}
+            />
+          ) : null}
+          {booking.insuranceRef ? (
+            <DetailItem
+              icon={<FaShieldAlt size={14} color={c.orange} />}
+              label="Insurance"
+              value={`${booking.insurancePlan || "Insured"} · Policy #${booking.insuranceRef}`}
+              c={c}
+            />
+          ) : null}
+          {isHirer ? (
+            <>
+              <DetailItem
+                icon={<FaMoneyBillWave size={14} color={c.orange} />}
+                label="Subtotal"
+                value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
+                c={c}
+              />
+              <DetailItem
+                icon={<FaMoneyBillWave size={14} color={c.orange} />}
+                label={`Platform Fee (${feePercent}%)`}
+                value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
+                accent
+                c={c}
+              />
+              <DetailItem
+                icon={<FaMoneyBillWave size={14} color={c.orange} />}
+                label="Total Payment"
+                value={`${currency} ${Number(p.grossTotal).toLocaleString()}`}
+                accent
+                c={c}
+              />
+            </>
+          ) : (
+            <>
+              <DetailItem
+                icon={<FaMoneyBillWave size={14} color={c.orange} />}
+                label="Total Earnings"
+                value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
+                accent
+                c={c}
+              />
+              <DetailItem
+                icon={<FaMoneyBillWave size={14} color={c.orange} />}
+                label={`Platform Fee (${feePercent}%)`}
+                value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
+                c={c}
+              />
+              <DetailItem
+                icon={<FaMoneyBillWave size={14} color={c.orange} />}
+                label="Your Payout"
+                value={`${currency} ${Number(p.workerPayout).toLocaleString()}`}
+                accent
+                c={c}
+              />
+            </>
+          )}
+        </Section>
+
+        {hasCheckInGps || hasCheckOutGps ? (
+          <GpsSection
+            booking={booking}
+            hasCheckInGps={hasCheckInGps}
+            hasCheckOutGps={hasCheckOutGps}
+            checkInDistKm={checkInDistKm}
+            checkOutDistKm={checkOutDistKm}
+            c={c}
+          />
+        ) : null}
+
+        {booking.status === "COMPLETED" ? (
+          <ReviewsSection
+            reviews={booking.reviews}
+            reviewCheckDone={reviewCheckDone}
+            hasReviewed={hasReviewed}
+            onLeaveReview={onLeaveReview}
+            c={c}
+          />
+        ) : null}
+
+        {booking.cancelReason ? (
+          <CancelReason reason={booking.cancelReason} c={c} />
+        ) : null}
+
+        <BottomActions
+          isCompletedOrPaid={booking.status === "COMPLETED"}
+          showRefundButton={showRefundButton}
+          onDownloadInvoice={onDownloadInvoice}
+          onRefundClick={onShowRefundModal}
+          refundLoading={refundLoading}
+          invoiceLoading={invoiceLoading}
+          c={c}
+        />
+      </View>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // BRANCH 3 — DIRECT BOOKING
+  // ═══════════════════════════════════════════════════════════════════════
+  const p = calcPricing(booking);
+  const currency = p.currency || booking.currency || "NGN";
+  const feePercent = Math.round(getHirerFeeRate(currency) * 100);
+
+  return (
+    <View style={{ gap: 10 }}>
+      <BookingReleaseDetails payment={payment} currency={booking.currency} />
+
+      <View
+        style={{
+          backgroundColor: c.bgPanel,
+          borderWidth: 1,
+          borderColor: c.border,
+          borderRadius: 16,
+          padding: 20,
+          gap: 8,
+        }}
+      >
+        <View
+          style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}
+        >
+          <AppText
+            style={{
+              fontFamily: "Syne_700Bold",
+              fontSize: 20,
+              fontWeight: "700",
+              color: c.text,
+              flex: 1,
+              lineHeight: 26,
+            }}
+          >
+            {booking.title}
+          </AppText>
+          <View
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 4,
+              backgroundColor: badgeColor.bg,
+              borderRadius: 20,
+            }}
+          >
+            <AppText
+              style={{
+                fontSize: 10,
+                fontWeight: "700",
+                color: badgeColor.fg,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
+              {meta.label}
+            </AppText>
+          </View>
+        </View>
+        {booking.category ? (
+          <View
+            style={{
+              alignSelf: "flex-start",
+              paddingHorizontal: 10,
+              paddingVertical: 3,
+              backgroundColor: c.orangeDim,
+              borderRadius: 12,
+            }}
+          >
+            <AppText
+              style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
+            >
+              {booking.category.name}
+            </AppText>
+          </View>
+        ) : null}
+        {booking.isNegotiated ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              alignSelf: "flex-start",
+              paddingHorizontal: 10,
+              paddingVertical: 3,
+              backgroundColor: "rgba(129,140,248,0.1)",
+              borderWidth: 1,
+              borderColor: "rgba(129,140,248,0.25)",
+              borderRadius: 12,
+            }}
+          >
+            <FaHandshake size={10} color="#818cf8" />
+            <AppText
+              style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+            >
+              Negotiated rate
+            </AppText>
+          </View>
+        ) : null}
+      </View>
+
+      {step >= 0 ? <Timeline step={step} c={c} /> : null}
+
+      {booking.status === "PENDING" && isHirer ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: 10,
+            padding: 14,
+            backgroundColor: "rgba(251,191,36,0.07)",
+            borderWidth: 1.5,
+            borderColor: "rgba(251,191,36,0.35)",
+            borderRadius: 14,
+          }}
+        >
+          <FaHourglassHalf size={16} color="#fbbf24" style={{ marginTop: 2 }} />
+          <View style={{ flex: 1 }}>
+            <AppText
+              style={{ fontSize: 13, fontWeight: "700", color: "#fbbf24" }}
+            >
+              Waiting for {workerName || "the worker"} to respond
+            </AppText>
+            <AppText
+              style={{
+                fontSize: 12,
+                color: c.textDim,
+                marginTop: 4,
+                lineHeight: 18,
+              }}
+            >
+              Your booking request has been sent. {workerName || "The worker"}{" "}
+              hasn't accepted yet — you'll be notified the moment they do. You
+              can cancel for free until they accept.
+            </AppText>
+          </View>
+        </View>
+      ) : null}
+
+      <Section title="Description" c={c}>
+        <AppText style={{ fontSize: 13, color: c.textDim, lineHeight: 20 }}>
+          {booking.description}
+        </AppText>
+        {booking.notes ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              gap: 8,
+              padding: 12,
+              backgroundColor: c.bgCard,
+              borderWidth: 1,
+              borderColor: c.border,
+              borderRadius: 8,
+            }}
+          >
+            <FaFileAlt size={12} color={c.textMuted} style={{ marginTop: 2 }} />
+            <AppText style={{ fontSize: 13, color: c.textDim, flex: 1 }}>
+              {booking.notes}
+            </AppText>
+          </View>
+        ) : null}
+      </Section>
+
+      {booking.requirements || booking.responsibilities ? (
+        <Section title="Requirements & Responsibilities" c={c}>
+          {booking.requirements ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                gap: 8,
+                padding: 12,
+                backgroundColor: c.bgCard,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 8,
+                marginBottom: 8,
+              }}
+            >
+              <FaFileAlt
+                size={12}
+                color={c.textMuted}
+                style={{ marginTop: 2 }}
+              />
+              <View style={{ flex: 1 }}>
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "600",
+                    color: c.text,
+                    marginBottom: 2,
+                  }}
+                >
+                  Requirements
+                </AppText>
+                <AppText style={{ fontSize: 13, color: c.textDim }}>
+                  {booking.requirements}
+                </AppText>
+              </View>
+            </View>
+          ) : null}
+          {booking.responsibilities ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                gap: 8,
+                padding: 12,
+                backgroundColor: c.bgCard,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 8,
+              }}
+            >
+              <FaTools size={12} color={c.textMuted} style={{ marginTop: 2 }} />
+              <View style={{ flex: 1 }}>
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "600",
+                    color: c.text,
+                    marginBottom: 2,
+                  }}
+                >
+                  Responsibilities
+                </AppText>
+                <AppText style={{ fontSize: 13, color: c.textDim }}>
+                  {booking.responsibilities}
+                </AppText>
+              </View>
+            </View>
+          ) : null}
+        </Section>
+      ) : null}
+
+      <Section title="Job Details" c={c}>
+        <DetailItem
+          icon={<FaCalendarAlt size={14} color={c.orange} />}
+          label="Scheduled"
+          value={`${new Date(booking.scheduledAt).toLocaleDateString("en-GB", {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })} at ${new Date(booking.scheduledAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`}
+          c={c}
+        />
+        {booking.address && booking.locationType !== "REMOTE" ? (
+          <DetailItem
+            icon={<FaMapMarkerAlt size={14} color={c.orange} />}
+            label="Job Site Address"
+            value={booking.address}
+            c={c}
+          />
+        ) : null}
+        <DetailItem
+          icon={<FaMoneyBillWave size={14} color={c.orange} />}
+          label="Agreed Rate"
+          value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
+          accent
+          c={c}
+        />
+        {booking.isNegotiated && booking.negotiatedRate ? (
+          <DetailItem
+            icon={<FaHandshake size={14} color={c.orange} />}
+            label="Negotiated Rate"
+            value={`${booking.currency} ${Number(booking.negotiatedRate).toLocaleString()}`}
+            accent
+            c={c}
+          />
+        ) : null}
+        {booking.isNegotiated && booking.negotiationNote ? (
+          <DetailItem
+            icon={<FaFileAlt size={14} color={c.orange} />}
+            label="Negotiation Note"
+            value={booking.negotiationNote}
+            c={c}
+          />
+        ) : null}
+        <View
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: c.bgCard,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 10,
+            gap: 3,
+          }}
+        >
+          <AppText
+            style={{
+              fontSize: 10,
+              fontWeight: "500",
+              color: c.textMuted,
+              textTransform: "uppercase",
+              letterSpacing: 0.6,
+            }}
+          >
+            Est. Duration
+          </AppText>
+          {renderDuration()}
+        </View>
+        {booking.checkInAt ? (
+          <DetailItem
+            icon={<FaCheckCircle size={14} color={c.green} />}
+            label="Checked In"
+            value={new Date(booking.checkInAt).toLocaleString("en-NG", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+            c={c}
+          />
+        ) : null}
+        {booking.checkOutAt ? (
+          <DetailItem
+            icon={<FaFlag size={14} color={c.orange} />}
+            label="Checked Out"
+            value={new Date(booking.checkOutAt).toLocaleString("en-NG", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+            c={c}
+          />
+        ) : null}
+        {booking.checkInAt && booking.checkOutAt ? (
+          <DetailItem
+            icon={<FaClock size={14} color={c.orange} />}
+            label="Actual Duration"
+            value={calcDuration(booking.checkInAt, booking.checkOutAt)}
+            c={c}
+          />
+        ) : null}
+        {booking.insuranceRef ? (
+          <DetailItem
+            icon={<FaShieldAlt size={14} color={c.orange} />}
+            label="Insurance"
+            value={`${booking.insurancePlan || "Insured"} · Policy #${booking.insuranceRef}`}
+            c={c}
+          />
+        ) : null}
+        {booking.jobType ? (
+          <DetailItem
+            icon={<FaBriefcase size={14} color={c.orange} />}
+            label="Job Type"
+            value={JOB_TYPES[booking.jobType]?.label || booking.jobType}
+            c={c}
+          />
+        ) : null}
+        {booking.locationType ? (
+          <DetailItem
+            icon={<FaMapMarkerAlt size={14} color={c.orange} />}
+            label="Location Type"
+            value={
+              LOC_TYPES[booking.locationType]?.label || booking.locationType
+            }
+            c={c}
+          />
+        ) : null}
+        {isHirer ? (
+          <>
+            <DetailItem
+              icon={<FaMoneyBillWave size={14} color={c.orange} />}
+              label="Subtotal"
+              value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
+              c={c}
+            />
+            <DetailItem
+              icon={<FaMoneyBillWave size={14} color={c.orange} />}
+              label={`Platform Fee (${feePercent}%)`}
+              value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
+              accent
+              c={c}
+            />
+            <DetailItem
+              icon={<FaMoneyBillWave size={14} color={c.orange} />}
+              label="Total Payment"
+              value={`${currency} ${Number(p.grossTotal).toLocaleString()}`}
+              accent
+              c={c}
+            />
+          </>
+        ) : (
+          <>
+            <DetailItem
+              icon={<FaMoneyBillWave size={14} color={c.orange} />}
+              label="Total Earnings"
+              value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
+              accent
+              c={c}
+            />
+            <DetailItem
+              icon={<FaMoneyBillWave size={14} color={c.orange} />}
+              label={`Platform Fee (${feePercent}%)`}
+              value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
+              c={c}
+            />
+            <DetailItem
+              icon={<FaMoneyBillWave size={14} color={c.orange} />}
+              label="Your Payout"
+              value={`${currency} ${Number(p.workerPayout).toLocaleString()}`}
+              accent
+              c={c}
+            />
+          </>
+        )}
+      </Section>
+
+      {hasCheckInGps || hasCheckOutGps ? (
+        <GpsSection
+          booking={booking}
+          hasCheckInGps={hasCheckInGps}
+          hasCheckOutGps={hasCheckOutGps}
+          checkInDistKm={checkInDistKm}
+          checkOutDistKm={checkOutDistKm}
+          c={c}
+        />
+      ) : null}
+
+      {booking.status === "COMPLETED" ? (
+        <ReviewsSection
+          reviews={booking.reviews}
+          reviewCheckDone={reviewCheckDone}
+          hasReviewed={hasReviewed}
+          onLeaveReview={onLeaveReview}
+          c={c}
+        />
+      ) : null}
+
+      {booking.cancelReason ? (
+        <CancelReason reason={booking.cancelReason} c={c} />
+      ) : null}
+
+      <BottomActions
+        isCompletedOrPaid={booking.status === "COMPLETED"}
+        showRefundButton={showRefundButton}
+        onDownloadInvoice={onDownloadInvoice}
+        onRefundClick={onShowRefundModal}
+        refundLoading={refundLoading}
+        invoiceLoading={invoiceLoading}
+        c={c}
+      />
+    </View>
+  );
+}
+
+function calcDuration(start, end) {
+  if (!start || !end) return null;
+  const ms = new Date(end) - new Date(start);
+  const hrs = Math.floor(ms / 3600000);
+  const min = Math.floor((ms % 3600000) / 60000);
+  return hrs > 0 ? `${hrs}h ${min}m` : `${min}m`;
+}
+
 const styles = StyleSheet.create({
-  titleBlock: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 8,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  title: {
-    flex: 1,
-    fontFamily: "Syne_700Bold",
-    fontSize: 20,
-    lineHeight: 26,
-  },
-  categoryPill: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-    marginTop: 4,
-    gap: 4,
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  section: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 10,
-  },
-  sectionTitle: {
-    fontFamily: "Syne_700Bold",
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  notes: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 6,
-  },
-  detailItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  detailLabel: {
-    fontSize: 10,
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 2,
-  },
-  detailValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 18,
-  },
-  timelineWrap: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-  },
-  timeline: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  timelineDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pendingBanner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-  },
   gpsCard: {
     borderRadius: 12,
     padding: 14,
-    borderWidth: 1,
-  },
-  gpsCardIn: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#bbf7d0",
-  },
-  gpsCardOut: {
-    backgroundColor: "#fff1f2",
-    borderColor: "#fecdd3",
-  },
-  gpsCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  gpsCardDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  gpsCardTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1a1a1a",
-    flex: 1,
-  },
-  gpsCardTime: {
-    fontSize: 11,
-    color: "#888",
-  },
-  gpsCoordRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  gpsCoordLabel: { fontSize: 12, color: "#888" },
-  gpsCoordValue: {
-    fontFamily: "DMSans_400Regular",
-    fontSize: 12,
-    color: "#333",
-  },
-  gpsDistRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  gpsDistNear: { backgroundColor: "#dcfce7" },
-  gpsDistFar: { backgroundColor: "#fef3c7" },
-  gpsMapLink: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#2563eb",
-  },
-  reviewerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  reviewedNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 10,
-  },
-  bottomActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    paddingTop: 16,
-    borderTopWidth: 1,
-  },
-  invoiceBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  refundBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  cancelReasonCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    padding: 12,
-    borderRadius: 10,
     borderWidth: 1,
   },
 });

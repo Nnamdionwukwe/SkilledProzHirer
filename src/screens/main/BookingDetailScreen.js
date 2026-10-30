@@ -1,46 +1,18 @@
 // src/screens/main/BookingDetailScreen.js
 //
-// Verbatim port of the web `components/booking/BookingDetail/index.jsx`.
-//
-// Structure:
-//   · Back link
-//   · SOS banner (if active)
-//   · Toast (auto-dismiss)  — mirrors web `showToastMessage`
-//   · Main column:
-//       - BookingDetailMain   (title, timeline, description, job details,
-//                              GPS, reviews, cancellation reason,
-//                              bottom actions: invoice + refund)
-//       - WorkerPaymentPreview (only for workers on PENDING)
-//   · Sidebar column:
-//       - BookingDetailPayment  (fee breakdown + Pay Now or Receipt)
-//       - BookingDetailSidebar  (party + actions + cancel + dispute)
-//   · Refund status (if any)
-//
-// Data:
-//   GET  /bookings/:bookingId
-//   GET  /payments/:bookingId
-//   GET  /reviews/check/:bookingId
-//   GET  /referral/wallet
-//   GET  /refunds/my?bookingId=:bookingId
-//
-// Verbatim behaviours preserved:
-//   · Dynamic fee percent — `getHirerFeeRate(currency)` (NGN=2%, other=5%)
-//   · Referral slider — only for hirer, NGN currency, walletBalance > 0,
-//                        wallet applies against subtotal (not grossTotal)
-//   · Referral is recalculated on both percent change AND booking change
-//   · Pay Now only visible when `paymentRequired` is true
-//   · Refund & invoice only rendered once booking is COMPLETED
+// Verbatim port of pages/booking/BookingDetail/index.jsx.
+// Fixes:
+//  1. Invoice download (with Android "activity no longer available" retry)
+//  2. Payment routing (navigates to InitiatePayment for card, ReleaseEscrow for release)
+//  3. Uses the fully-ported BookingDetailMain
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -48,27 +20,307 @@ import {
   View,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useTranslation } from "react-i18next";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
 import AppText from "../../components/AppText";
+import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
 import client from "../../api/client";
-import { getBooking, updateBookingStatus } from "../../api/bookings";
-import { getPaymentForBooking, releasePayment } from "../../api/payments";
 import { calcPricing } from "../../utils/pricing";
-import { FaArrowLeft, FaExclamationCircle, FaTimes } from "../../icons/fa";
-
 import BookingDetailMain from "../../components/booking/BookingDetailMain";
-import BookingDetailSidebar from "../../components/booking/BookingDetailSidebar";
 import BookingDetailPayment from "../../components/booking/BookingDetailPayment";
+import BookingDetailSidebar from "../../components/booking/BookingDetailSidebar";
 import WorkerPaymentPreview from "../../components/booking/WorkerPaymentPreview";
 import RaiseDisputeSheet from "../../components/booking/RaiseDisputeSheet";
-import { RefundRequest, RefundStatus } from "../../components/booking/Refund";
-import PageSkeleton from "../../components/PageSkeleton";
+import { FaArrowLeft, FaExclamationCircle, FaTimes } from "../../icons/fa";
 
-// ─── Helpers ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// Inline stubs — RefundRequest / RefundStatus
+// ═══════════════════════════════════════════════════════════════════════
+
+function RefundRequestInline({
+  booking,
+  payment,
+  isProcessing,
+  isHirer,
+  onRequestRefund,
+}) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+
+  if (!isHirer) {
+    return (
+      <AppText style={{ fontSize: 13, color: c.textDim, textAlign: "center" }}>
+        Only the hirer can request a refund.
+      </AppText>
+    );
+  }
+
+  const handleSubmit = () => {
+    if (!reason.trim()) {
+      setError("Please describe the reason for the refund request.");
+      return;
+    }
+    const amount = Number(payment?.amount) || Number(booking?.agreedRate) || 0;
+    onRequestRefund({
+      bookingId: booking.id,
+      reason: reason.trim(),
+      amount,
+      currency: booking.currency || "NGN",
+    });
+  };
+
+  return (
+    <View style={{ gap: 12 }}>
+      <AppText style={{ fontSize: 13, color: c.textDim, lineHeight: 20 }}>
+        Request a refund for this booking. Our team will review it within 24-48
+        hours.
+      </AppText>
+
+      <View>
+        <AppText
+          style={{
+            fontSize: 10,
+            fontWeight: "700",
+            color: c.textMuted,
+            textTransform: "uppercase",
+            letterSpacing: 0.6,
+            marginBottom: 6,
+          }}
+        >
+          Reason for refund <AppText style={{ color: c.red }}>*</AppText>
+        </AppText>
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: error ? c.red : c.border,
+            borderRadius: 8,
+            backgroundColor: c.bgCard,
+            overflow: "hidden",
+          }}
+        >
+          <TextInput
+            value={reason}
+            onChangeText={(t) => {
+              setReason(t);
+              setError("");
+            }}
+            placeholder="Explain why you're requesting a refund…"
+            placeholderTextColor={c.textMuted}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            style={{
+              minHeight: 96,
+              padding: 12,
+              fontSize: 13,
+              color: c.text,
+              lineHeight: 18,
+            }}
+          />
+        </View>
+        {error ? (
+          <AppText style={{ fontSize: 12, color: c.red, marginTop: 4 }}>
+            {error}
+          </AppText>
+        ) : null}
+      </View>
+
+      <Pressable
+        onPress={handleSubmit}
+        disabled={isProcessing}
+        style={({ pressed }) => [
+          {
+            paddingVertical: 12,
+            backgroundColor: c.red,
+            borderRadius: 10,
+            alignItems: "center",
+            opacity: isProcessing ? 0.5 : pressed ? 0.85 : 1,
+          },
+        ]}
+      >
+        {isProcessing ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <AppText style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>
+            Submit Refund Request
+          </AppText>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+function RefundStatusInline({ refund, isHirer, onViewDetails }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  if (!refund) return null;
+
+  const statusColors = {
+    PENDING: { bg: "rgba(251,191,36,0.1)", fg: "#fbbf24" },
+    APPROVED: { bg: c.greenDim, fg: c.green },
+    PROCESSING: { bg: "rgba(129,140,248,0.12)", fg: "#818cf8" },
+    COMPLETED: { bg: c.greenDim, fg: c.green },
+    REJECTED: { bg: c.redDim, fg: c.red },
+    DISPUTED: { bg: "rgba(245,158,11,0.1)", fg: "#f59e0b" },
+  };
+  const sc = statusColors[refund.status] || { bg: c.bgCard, fg: c.textDim };
+
+  return (
+    <View
+      style={{
+        backgroundColor: c.bgPanel,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 14,
+        padding: 16,
+        gap: 10,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
+        }}
+      >
+        <AppText style={{ fontSize: 12, fontWeight: "700", color: c.text }}>
+          Refund Request
+        </AppText>
+        <View
+          style={{
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+            backgroundColor: sc.bg,
+            borderRadius: 10,
+          }}
+        >
+          <AppText
+            style={{
+              fontSize: 10,
+              fontWeight: "700",
+              color: sc.fg,
+              textTransform: "uppercase",
+              letterSpacing: 0.4,
+            }}
+          >
+            {refund.status}
+          </AppText>
+        </View>
+      </View>
+      <AppText style={{ fontSize: 12, color: c.textDim }}>
+        Amount: {refund.currency || "NGN"}{" "}
+        {Number(refund.amount || 0).toLocaleString()}
+      </AppText>
+      {refund.reason ? (
+        <AppText
+          style={{ fontSize: 12, color: c.textDim, fontStyle: "italic" }}
+          numberOfLines={3}
+        >
+          "{refund.reason}"
+        </AppText>
+      ) : null}
+      {onViewDetails ? (
+        <Pressable
+          onPress={onViewDetails}
+          style={({ pressed }) => [
+            {
+              alignSelf: "flex-start",
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              backgroundColor: c.orangeDim,
+              borderWidth: 1,
+              borderColor: c.orange,
+              borderRadius: 8,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <AppText style={{ fontSize: 12, fontWeight: "600", color: c.orange }}>
+            View Details →
+          </AppText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Receipt Generator — ported from web's index.jsx
+// ═══════════════════════════════════════════════════════════════════════
+function generateReceiptHTML(transaction) {
+  const amountPrefix = "-";
+  const channelLabel = transaction.meta?.paymentProvider || "Card / Bank";
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, sans-serif; background: #f8f9fa; color: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+    .receipt { max-width: 520px; width: 100%; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; }
+    .receipt-header { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #ffffff; padding: 32px 32px 24px; text-align: center; }
+    .receipt-header h1 { font-size: 24px; font-weight: 800; color: #fff; }
+    .receipt-header .subtitle { font-size: 13px; opacity: 0.9; color: #fff; margin-top: 4px; }
+    .receipt-status { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; padding: 6px 16px; background: rgba(255,255,255,0.2); border-radius: 999px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #fff; }
+    .receipt-amount { text-align: center; padding: 28px 32px 24px; border-bottom: 2px dashed #e5e7eb; }
+    .receipt-amount .label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+    .receipt-amount .value { font-size: 36px; font-weight: 800; margin-top: 8px; letter-spacing: -0.02em; color: #ef4444; }
+    .receipt-amount .channel { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 4px 12px; background: rgba(249, 115, 22, 0.15); color: #f97316; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .receipt-body { padding: 24px 32px; }
+    .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb; gap: 16px; }
+    .row:last-child { border-bottom: none; }
+    .row .label { color: #6b7280; font-size: 13px; font-weight: 500; flex-shrink: 0; }
+    .row .value { color: #1a1a2e; font-size: 13px; font-weight: 600; text-align: right; word-break: break-word; }
+    .row .value.mono { font-family: 'SF Mono', Menlo, monospace; font-size: 12px; }
+    .row.section-title { padding-top: 18px; padding-bottom: 6px; border-bottom: none; }
+    .row.section-title .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280; font-weight: 800; }
+    .fee-row { color: #f97316; }
+    .net-row { margin-top: 8px; padding-top: 16px; border-top: 2px solid #e5e7eb; border-bottom: none; }
+    .net-row .label { font-weight: 700; color: #1a1a2e; }
+    .net-row .value { font-size: 16px; font-weight: 800; color: #22c55e; }
+    .receipt-footer { padding: 24px 32px; background: #f9fafb; text-align: center; font-size: 12px; color: #6b7280; }
+    .receipt-footer strong { color: #1a1a2e; }
+    .receipt-footer p { margin-top: 6px; }
+  </style></head><body>
+    <div class="receipt">
+      <div class="receipt-header"><h1>SkilledProz</h1><p class="subtitle">Transaction Receipt</p><div class="receipt-status">${transaction.status}</div></div>
+      <div class="receipt-amount"><div class="label">Amount Charged</div><div class="value">${amountPrefix} ${formatPrice(transaction.amount, transaction.currency)}</div><div class="channel">${channelLabel}</div></div>
+      <div class="receipt-body">
+        <div class="row section-title"><span class="label">Transaction</span></div>
+        <div class="row"><span class="label">Reference</span><span class="value mono">${transaction.reference}</span></div>
+        <div class="row"><span class="label">Date</span><span class="value">${new Date(transaction.createdAt).toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span></div>
+        <div class="row"><span class="label">Description</span><span class="value">${transaction.description}</span></div>
+        <div class="row section-title"><span class="label">Booking Details</span></div>
+        <div class="row"><span class="label">Booking ID</span><span class="value mono">${transaction.bookingId}</span></div>
+        <div class="row"><span class="label">Service</span><span class="value">${transaction.bookingTitle}</span></div>
+        <div class="row"><span class="label">Worker</span><span class="value">${transaction.workerName}</span></div>
+        <div class="row"><span class="label">Hirer</span><span class="value">${transaction.hirerName}</span></div>
+        <div class="row section-title"><span class="label">Breakdown</span></div>
+        <div class="row"><span class="label">Gross Amount</span><span class="value">${formatPrice(transaction.amount, transaction.currency)}</span></div>
+        <div class="row fee-row"><span class="label">Platform Fee</span><span class="value">- ${formatPrice(transaction.fee, transaction.currency)}</span></div>
+        <div class="row net-row"><span class="label">Net Amount</span><span class="value">${formatPrice(transaction.netAmount, transaction.currency)}</span></div>
+      </div>
+      <div class="receipt-footer"><p>Thank you for using <strong>SkilledProz</strong></p><p>skilledproz.com · support@skilledproz.com</p></div>
+    </div>
+  </body></html>`;
+}
+
+function formatPrice(amount, currency = "NGN") {
+  const n = Number(amount) || 0;
+  return `${currency} ${n.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -81,16 +333,13 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function mapsUrl(lat, lng) {
-  return `https://www.google.com/maps?q=${lat},${lng}`;
-}
-
 function formatDuration(booking) {
   if (!booking) return null;
   const unit = booking.estimatedUnit || "hours";
   const value = booking.estimatedValue;
   const hours = booking.estimatedHours;
   if (!value && !hours) return null;
+
   if (value) {
     if (unit === "custom") return { main: value, sub: null };
     const labels = {
@@ -98,6 +347,7 @@ function formatDuration(booking) {
       days: "day",
       weeks: "week",
       months: "month",
+      years: "year",
     };
     const num = parseFloat(value);
     const label = (labels[unit] || unit) + (num !== 1 ? "s" : "");
@@ -107,18 +357,21 @@ function formatDuration(booking) {
   return hours ? { main: `${hours} hours`, sub: null } : null;
 }
 
-const STATUS_META = {
-  PENDING: { label: "Pending", color: "yellow", step: 0 },
-  ACCEPTED: { label: "Accepted", color: "orange", step: 1 },
-  IN_PROGRESS: { label: "In Progress", color: "indigo", step: 2 },
-  COMPLETED: { label: "Completed", color: "green", step: 3 },
-  CANCELLED: { label: "Cancelled", color: "red", step: -1 },
-  DISPUTED: { label: "Disputed", color: "rose", step: -1 },
+const STATUS_STEP = {
+  PENDING: 0,
+  ACCEPTED: 1,
+  IN_PROGRESS: 2,
+  COMPLETED: 3,
+  PAID: 3,
+  CANCELLED: -1,
+  DISPUTED: -1,
 };
 
-// ─── Screen ────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// Screen
+// ═══════════════════════════════════════════════════════════════════════
+
 export default function BookingDetailScreen() {
-  const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
   const { theme } = useTheme();
@@ -134,6 +387,7 @@ export default function BookingDetailScreen() {
   const [payment, setPayment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
 
   // Refund / dispute
   const [refunds, setRefunds] = useState([]);
@@ -161,16 +415,18 @@ export default function BookingDetailScreen() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState("");
 
-  // Pay options (toggle)
+  // Pay options toggle
   const [showPayOptions, setShowPayOptions] = useState(false);
 
-  // ── Fetch ──────────────────────────────────────────────────────────
+  // ── Fetch ──────────────────────────────────────────────────────
   const fetchAll = useCallback(
     async (silent = false) => {
       if (!bookingId) return;
       if (!silent) setLoading(true);
       try {
-        const b = await getBooking(bookingId);
+        const bRes = await client.get(`/bookings/${bookingId}`);
+        const b = bRes.data?.data?.booking;
+        if (!b) throw new Error("Booking not found");
         setBooking(b);
 
         if (b.emergencyContact) {
@@ -180,11 +436,14 @@ export default function BookingDetailScreen() {
                 ? JSON.parse(b.emergencyContact)
                 : b.emergencyContact,
             );
-          } catch {}
+          } catch {
+            setEmergencyContact(null);
+          }
         }
 
         try {
-          setPayment(await getPaymentForBooking(b.id));
+          const pRes = await client.get(`/payments/${b.id}`);
+          setPayment(pRes.data?.data || null);
         } catch {
           setPayment(null);
         }
@@ -201,53 +460,51 @@ export default function BookingDetailScreen() {
 
         if (user?.role === "HIRER") {
           try {
-            const res = await client.get("/referral/wallet");
-            setWalletBalance(Number(res.data?.data?.balance) || 0);
-            // Reset slider (per web: on new booking load)
-            setReferralPercent(0);
-            setReferralAmount(0);
-            setReferralApplied(false);
+            const wRes = await client.get("/referral/wallet");
+            setWalletBalance(Number(wRes.data?.data?.balance) || 0);
           } catch {
             setWalletBalance(0);
           }
         }
 
         try {
-          const res = await client.get(`/refunds/my?bookingId=${bookingId}`);
-          setRefunds(res.data?.data?.refunds || []);
+          const rRes = await client.get(`/refunds/my`, {
+            params: { bookingId },
+          });
+          setRefunds(rRes.data?.data?.refunds || []);
         } catch {
           setRefunds([]);
         }
       } catch (err) {
-        toast.error(err?.response?.data?.message || t("toast.networkError"));
+        toast.error(
+          err?.response?.data?.message || "Could not load booking details.",
+        );
       } finally {
         setLoading(false);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bookingId],
+    [bookingId, user?.role],
   );
 
   useEffect(() => {
     fetchAll(false);
   }, [fetchAll]);
 
-  // ── Recalculate referral on percent / wallet / booking changes ─────
+  // Recompute referral amount
   useEffect(() => {
     if (!booking) return;
     const p = calcPricing(booking);
     const subtotal = p.subtotal || 0;
     const maxDiscount = Math.min(subtotal, walletBalance);
     const rawAmount = (referralPercent / 100) * subtotal;
-    const amount = Math.round(rawAmount);
-    setReferralAmount(Math.min(amount, maxDiscount));
+    setReferralAmount(Math.min(Math.round(rawAmount), maxDiscount));
   }, [referralPercent, walletBalance, booking]);
 
-  // ── Derived flags ─────────────────────────────────────────────────
+  // ── Derived flags ─────────────────────────────────────────────
   const isHirer = userId === booking?.hirerId;
   const isWorker = userId === booking?.workerId;
-  const meta = booking ? STATUS_META[booking.status] || {} : {};
-  const step = meta.step ?? 0;
+  const step = booking ? (STATUS_STEP[booking.status] ?? 0) : 0;
   const other = isHirer ? booking?.worker : booking?.hirer;
   const dur = formatDuration(booking);
   const sosActive = !!booking?.sosActivatedAt && !booking?.sosResolvedAt;
@@ -275,7 +532,6 @@ export default function BookingDetailScreen() {
         )
       : null;
 
-  // Fee breakdown passed into BookingDetailPayment + Sidebar
   const feeBreakdown = useMemo(() => {
     if (!booking) return null;
     const p = calcPricing(booking);
@@ -302,26 +558,29 @@ export default function BookingDetailScreen() {
     ["ACCEPTED", "IN_PROGRESS"].includes(booking?.status) &&
     (!payment || payment.status === "PENDING");
 
+  // Active refund — only for THIS booking
   const activeRefund = refunds.find((r) =>
     ["PENDING", "APPROVED", "PROCESSING", "DISPUTED"].includes(r.status),
   );
 
-  // ── Status change ─────────────────────────────────────────────────
+  // ── Actions ────────────────────────────────────────────────────
   const updateStatus = async (status, extra = {}) => {
     setActing(true);
     try {
-      const updated = await updateBookingStatus(bookingId, status, extra);
+      const res = await client.patch(`/bookings/${bookingId}/status`, {
+        status,
+        ...extra,
+      });
+      const updated = res.data?.data?.booking || booking;
       setBooking(updated);
       toast.success(
-        t("booking.statusUpdated", {
-          status: String(status).toLowerCase().replace("_", " "),
-        }) || `Booking ${String(status).toLowerCase()}.`,
+        `Booking ${String(status).toLowerCase().replace("_", " ")}.`,
       );
       setShowCancel(false);
       setCancelReason("");
       setCancelError("");
     } catch (e) {
-      toast.error(e?.response?.data?.message || t("toast.unknownError"));
+      toast.error(e?.response?.data?.message || "Action failed.");
     } finally {
       setActing(false);
     }
@@ -329,33 +588,32 @@ export default function BookingDetailScreen() {
 
   const handleCancelSubmit = () => {
     if (!cancelReason.trim()) {
-      setCancelError(t("booking.cancel.reasonRequired"));
+      setCancelError("Please provide a reason.");
       return;
     }
     updateStatus("CANCELLED", { cancelReason: cancelReason.trim() });
   };
 
-  // ── SOS ──────────────────────────────────────────────────────────
   const handleResolveSOS = async () => {
     setResolvingSOS(true);
     try {
       await client.patch(`/bookings/${bookingId}/sos/resolve`);
-      toast.success(t("booking.sos.activated") || "SOS marked as resolved.");
+      toast.success("SOS marked as resolved.");
       fetchAll(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to resolve SOS");
+      toast.error(err?.response?.data?.message || "Failed to resolve SOS.");
     } finally {
       setResolvingSOS(false);
       setSosConfirmVisible(false);
     }
   };
 
-  // ── Refund ────────────────────────────────────────────────────────
   const handleRefundRequest = async (refundData) => {
     setRefundLoading(true);
     try {
       await client.post("/refunds/request", refundData);
       toast.success("Refund request submitted.");
+      setShowRefundModal(false);
       fetchAll(true);
     } catch (e) {
       toast.error(e?.response?.data?.message || "Refund request failed.");
@@ -364,18 +622,14 @@ export default function BookingDetailScreen() {
     }
   };
 
-  // ── Release (from sidebar) ───────────────────────────────────────
-  const handleReleasePayment = async () => {
-    try {
-      await releasePayment(bookingId);
-      toast.success(t("booking.payment.released") || "Payment released.");
-      fetchAll(true);
-    } catch (e) {
-      toast.error(e?.response?.data?.message || t("toast.unknownError"));
-    }
+  const handleReleasePayment = () => {
+    navigation.navigate("ReleaseEscrow", { bookingId });
   };
 
-  // ── Referral handlers ────────────────────────────────────────────
+  const handlePayByCard = () => {
+    navigation.navigate("InitiatePayment", { bookingId });
+  };
+
   const handlePercentChange = (pct) => {
     const subtotal = calcPricing(booking).subtotal || 0;
     const maxDiscount = Math.min(subtotal, walletBalance);
@@ -388,106 +642,271 @@ export default function BookingDetailScreen() {
 
   const handleReferralToggle = () => setReferralApplied((v) => !v);
 
-  // ── Guards ────────────────────────────────────────────────────────
-  if (loading) {
-    return <PageSkeleton variant="booking-detail" />;
-  }
+  // ── Invoice Generation (with Android retry) ─────────────────────
+  const handleDownloadInvoice = async () => {
+    setInvoiceLoading(true);
+    try {
+      const p = calcPricing(booking);
 
-  if (!booking) {
+      const transaction = {
+        reference: payment?.providerRef || booking.id,
+        type: "PAYMENT",
+        amount: p.grossTotal || booking.amount || 0,
+        currency: booking.currency || "NGN",
+        status: "COMPLETED",
+        createdAt: booking.createdAt || new Date().toISOString(),
+        description: `Payment for booking: ${booking.title}`,
+        fee: p.hirerFee || 0,
+        netAmount: p.subtotal || booking.amount || 0,
+        bookingId: booking.id,
+        bookingTitle: booking.title,
+        workerName: booking.worker
+          ? `${booking.worker.firstName} ${booking.worker.lastName}`
+          : "—",
+        hirerName: booking.hirer
+          ? `${booking.hirer.firstName} ${booking.hirer.lastName}`
+          : "—",
+        meta: {
+          paymentProvider: payment?.provider || "Paystack",
+        },
+      };
+
+      const html = generateReceiptHTML(transaction);
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+
+      // Give Android a tick to settle the activity before opening the
+      // share sheet — fixes "activity is no longer available".
+      await new Promise((resolve) =>
+        setTimeout(resolve, Platform.OS === "android" ? 300 : 0),
+      );
+
+      const canShare = await Sharing.isAvailableAsync();
+
+      if (!canShare) {
+        Alert.alert(
+          "Invoice Ready",
+          "The share sheet isn't available on this device. Opening the invoice...",
+          [
+            {
+              text: "OK",
+              onPress: async () => {
+                try {
+                  await Linking.openURL(uri);
+                } catch {
+                  toast.error("Could not open invoice.");
+                }
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      try {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: `Invoice — ${booking.title}`,
+          UTI: "com.adobe.pdf",
+        });
+      } catch (firstErr) {
+        if (
+          Platform.OS === "android" &&
+          /activity.*(no longer|not).*available/i.test(
+            String(firstErr?.message),
+          )
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          await Sharing.shareAsync(uri, {
+            mimeType: "application/pdf",
+            dialogTitle: `Invoice — ${booking.title}`,
+            UTI: "com.adobe.pdf",
+          });
+        } else {
+          throw firstErr;
+        }
+      }
+    } catch (e) {
+      console.error("Invoice error:", e);
+      toast.error(
+        e?.message?.includes("activity")
+          ? "Couldn't open share sheet. Please try again."
+          : "Failed to generate invoice.",
+      );
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
+  const handleLeaveReview = () => {
+    navigation.navigate("LeaveReview", { bookingId });
+  };
+  const handleShowRefundModal = () => setShowRefundModal(true);
+
+  // Back to Bookings list
+  const handleBack = () => {
+    navigation.navigate("Bookings");
+  };
+
+  // ── Loading — SKELETON ─────────────────────────────────────────
+  if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: c.bg }]}>
-        <FaExclamationCircle size={40} color={c.red} />
-        <AppText variant="body" tone="dim" style={{ marginTop: 12 }}>
-          {t("booking.notFound") || "Booking not found."}
-        </AppText>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={[styles.backBtn, { borderColor: c.border, marginTop: 16 }]}
-        >
-          <FaArrowLeft size={12} color={c.textDim} />
-          <AppText variant="small" tone="dim" style={{ marginLeft: 6 }}>
-            Back
-          </AppText>
-        </Pressable>
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top"]}>
+        <PageSkeleton variant="detail" />
+      </SafeAreaView>
     );
   }
 
+  // ── Not found ──────────────────────────────────────────────────
+  if (!booking) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top"]}>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            gap: 12,
+          }}
+        >
+          <FaExclamationCircle size={44} color={c.red} />
+          <AppText
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 18,
+              fontWeight: "800",
+              color: c.text,
+            }}
+          >
+            Booking not found
+          </AppText>
+          <Pressable
+            onPress={handleBack}
+            style={({ pressed }) => [
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 20,
+                backgroundColor: c.orange,
+                borderRadius: 10,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <FaArrowLeft size={12} color="#000" />
+            <AppText
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 13,
+                fontWeight: "800",
+                color: "#000",
+              }}
+            >
+              Back to Bookings
+            </AppText>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Render ─────────────────────────────────────────────────────
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      edges={["top", "left", "right"]}
+    >
       <ScrollView
-        contentContainerStyle={{
-          padding: 8,
-          paddingBottom: 40,
-          gap: 10,
-        }}
+        contentContainerStyle={{ padding: 8, paddingBottom: 40, gap: 10 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Back link — always visible, top of page */}
+        {/* Back link */}
         <Pressable
-          onPress={() => navigation.goBack()}
-          style={[
-            styles.backBtn,
-            { borderColor: c.border, alignSelf: "flex-start" },
+          onPress={handleBack}
+          style={({ pressed }) => [
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              alignSelf: "flex-start",
+              paddingVertical: 6,
+              paddingHorizontal: 14,
+              borderWidth: 1,
+              borderColor: c.border,
+              borderRadius: 20,
+              opacity: pressed ? 0.85 : 1,
+            },
           ]}
         >
           <FaArrowLeft size={12} color={c.textDim} />
-          <AppText variant="small" tone="dim" style={{ marginLeft: 6 }}>
+          <AppText
+            style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
+          >
             Back to Bookings
           </AppText>
         </Pressable>
 
         {/* SOS banner */}
-        {sosActive && (
+        {sosActive ? (
           <View
-            style={[
-              styles.sosBanner,
-              {
-                backgroundColor: "rgba(239,68,68,0.1)",
-                borderColor: c.red,
-              },
-            ]}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              padding: 14,
+              borderRadius: 12,
+              borderWidth: 2,
+              backgroundColor: "rgba(239,68,68,0.1)",
+              borderColor: c.red,
+              flexWrap: "wrap",
+            }}
           >
             <FaExclamationCircle size={20} color={c.red} />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <AppText weight="bold" style={{ color: c.red }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AppText
+                style={{ fontSize: 13, fontWeight: "700", color: c.red }}
+              >
                 SOS Alert Active
               </AppText>
-              <AppText variant="small" tone="dim">
+              <AppText style={{ fontSize: 12, color: c.textDim, marginTop: 2 }}>
                 The worker has triggered an emergency alert.
                 {booking.sosActivatedAt
                   ? ` Activated ${new Date(booking.sosActivatedAt).toLocaleTimeString()}`
                   : ""}
               </AppText>
             </View>
-            {(isHirer || user?.role === "ADMIN") && (
+            {isHirer || user?.role === "ADMIN" ? (
               <Pressable
                 onPress={() => setSosConfirmVisible(true)}
                 disabled={resolvingSOS}
-                style={[
-                  styles.sosBtn,
-                  { backgroundColor: c.red, opacity: resolvingSOS ? 0.5 : 1 },
+                style={({ pressed }) => [
+                  {
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    backgroundColor: c.red,
+                    borderRadius: 8,
+                    opacity: resolvingSOS ? 0.5 : pressed ? 0.85 : 1,
+                  },
                 ]}
               >
                 <AppText
-                  variant="small"
-                  weight="bold"
-                  style={{ color: "#fff" }}
+                  style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}
                 >
                   {resolvingSOS ? "Resolving…" : "Mark Resolved"}
                 </AppText>
               </Pressable>
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
 
         {/* MAIN COLUMN */}
         <BookingDetailMain
           booking={booking}
           step={step}
           dur={dur}
-          mapsUrl={mapsUrl}
-          calcDuration={null}
           hasCheckInGps={hasCheckInGps}
           hasCheckOutGps={hasCheckOutGps}
           checkInDistKm={checkInDistKm}
@@ -495,99 +914,95 @@ export default function BookingDetailScreen() {
           reviewCheckDone={reviewCheckDone}
           hasReviewed={hasReviewed}
           bookingId={booking.id}
-          invoiceLoading={false}
-          onDownloadInvoice={() => {
-            toast.info(
-              "Invoice download — open the Receipt button under Payment to save.",
-            );
-          }}
+          invoiceLoading={invoiceLoading}
+          onDownloadInvoice={handleDownloadInvoice}
+          onLeaveReview={handleLeaveReview}
           isHirer={isHirer}
           payment={payment}
           paymentStatus={payment?.status}
           isWorker={isWorker}
           workerName={booking.worker?.firstName}
-          onRefundRequest={handleRefundRequest}
           refundLoading={refundLoading}
           hasActiveRefund={!!activeRefund}
+          onShowRefundModal={handleShowRefundModal}
         />
 
-        {/* Worker pending preview */}
-        {isWorker && booking.status === "PENDING" && (
+        {/* Worker preview — pending only */}
+        {isWorker && booking.status === "PENDING" ? (
           <WorkerPaymentPreview booking={booking} isWorker={isWorker} />
-        )}
+        ) : null}
 
-        {/* SIDEBAR — merged into same column on mobile, matches the CSS
-            which puts the sidebar right after main at <900px (mobile) */}
-        <View style={{ marginTop: 10, gap: 10 }}>
-          {/* Payment card — only if receipt exists OR pay is required */}
-          {((payment && payment.status !== "PENDING") || paymentRequired) && (
-            <BookingDetailPayment
-              booking={booking}
-              payment={payment}
-              feeBreakdown={feeBreakdown}
-              walletBalance={walletBalance}
-              referralAmount={referralAmount}
-              referralApplied={referralApplied}
-              referralPercent={referralPercent}
-              onPercentChange={handlePercentChange}
-              onReferralToggle={handleReferralToggle}
-              showPayOptions={showPayOptions}
-              onTogglePayOptions={() => setShowPayOptions((v) => !v)}
-              paymentRequired={paymentRequired}
-              refetch={() => fetchAll(true)}
-              onSuccess={(msg) => toast.success(msg)}
-              isHirer={isHirer}
-              isWorker={isWorker}
-            />
-          )}
+        {/* Payment card — ALWAYS rendered (breakdown or receipt inside) */}
+        <BookingDetailPayment
+          booking={booking}
+          payment={payment}
+          feeBreakdown={feeBreakdown}
+          walletBalance={walletBalance}
+          referralAmount={referralAmount}
+          referralApplied={referralApplied}
+          referralPercent={referralPercent}
+          onPercentChange={handlePercentChange}
+          onReferralToggle={handleReferralToggle}
+          showPayOptions={showPayOptions}
+          onTogglePayOptions={() => setShowPayOptions((v) => !v)}
+          paymentRequired={paymentRequired}
+          onPayByCard={handlePayByCard}
+          refetch={() => fetchAll(true)}
+          onSuccess={(msg) => toast.success(msg)}
+          isHirer={isHirer}
+          isWorker={isWorker}
+        />
 
-          {/* Sidebar (party + actions) */}
-          <BookingDetailSidebar
-            booking={booking}
-            payment={payment}
-            isHirer={isHirer}
-            isWorker={isWorker}
-            other={other}
-            userId={userId}
-            acting={acting}
-            emergencyContact={emergencyContact}
-            showCancel={showCancel}
-            cancelReason={cancelReason}
-            cancelError={cancelError}
-            onCancelOpen={() => {
-              setShowCancel(true);
-              setCancelError("");
-            }}
-            onCancelClose={() => {
-              setShowCancel(false);
-              setCancelReason("");
-              setCancelError("");
-            }}
-            onCancelReasonChange={(v) => {
-              setCancelReason(v);
-              setCancelError("");
-            }}
-            onCancelSubmit={handleCancelSubmit}
-            onShowDispute={() => setShowDispute(true)}
-            onSuccess={(msg) => toast.success(msg)}
-            refetch={() => fetchAll(true)}
-            updateStatus={updateStatus}
-            onRelease={handleReleasePayment}
-            onMessage={() => toast.info("Messages coming soon")}
-            onVideoCall={() => toast.info("Video call coming soon")}
-          />
-        </View>
+        {/* Sidebar — party + actions */}
+        <BookingDetailSidebar
+          booking={booking}
+          payment={payment}
+          isHirer={isHirer}
+          isWorker={isWorker}
+          other={other}
+          userId={userId}
+          acting={acting}
+          emergencyContact={emergencyContact}
+          showCancel={showCancel}
+          cancelReason={cancelReason}
+          cancelError={cancelError}
+          onCancelOpen={() => {
+            setShowCancel(true);
+            setCancelError("");
+          }}
+          onCancelClose={() => {
+            setShowCancel(false);
+            setCancelReason("");
+            setCancelError("");
+          }}
+          onCancelReasonChange={(v) => {
+            setCancelReason(v);
+            setCancelError("");
+          }}
+          onCancelSubmit={handleCancelSubmit}
+          onShowDispute={() => setShowDispute(true)}
+          onSuccess={(msg) => toast.success(msg)}
+          refetch={() => fetchAll(true)}
+          updateStatus={updateStatus}
+          onRelease={handleReleasePayment}
+          onMessage={() =>
+            navigation.navigate("Chat", { withUserId: other?.id })
+          }
+          onVideoCall={() =>
+            navigation.navigate("VideoCall", { bookingId: booking.id })
+          }
+        />
 
-        {/* Refund status */}
-        {activeRefund && (
-          <RefundStatus
+        {/* Refund status — ONLY for this booking */}
+        {activeRefund ? (
+          <RefundStatusInline
             refund={activeRefund}
             isHirer={isHirer}
             onViewDetails={() =>
-              navigation.navigate("RefundDetail", { refundId: activeRefund.id })
+              navigation.navigate("RefundDetail", { id: activeRefund.id })
             }
           />
-        )}
+        ) : null}
       </ScrollView>
 
       {/* SOS confirmation modal */}
@@ -597,61 +1012,98 @@ export default function BookingDetailScreen() {
         animationType="fade"
         onRequestClose={() => setSosConfirmVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+          onPress={() => setSosConfirmVisible(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            style={{
+              backgroundColor: c.bgPanel,
+              borderWidth: 1,
+              borderColor: c.border,
+              borderRadius: 16,
+              padding: 20,
+              width: "100%",
+              maxWidth: 460,
+            }}
           >
-            <AppText weight="bold" style={{ fontSize: 16, marginBottom: 8 }}>
+            <AppText
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 16,
+                fontWeight: "800",
+                color: c.text,
+                marginBottom: 8,
+              }}
+            >
               Resolve SOS Alert
             </AppText>
-            <AppText variant="small" tone="dim" style={{ marginBottom: 16 }}>
+            <AppText
+              style={{
+                fontSize: 13,
+                color: c.textDim,
+                lineHeight: 19,
+                marginBottom: 16,
+              }}
+            >
               Are you sure you want to mark this SOS alert as resolved?
             </AppText>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <Pressable
                 onPress={() => setSosConfirmVisible(false)}
-                style={[
-                  styles.modalBtn,
+                style={({ pressed }) => [
                   {
+                    flex: 1,
+                    paddingVertical: 12,
                     backgroundColor: c.bgCard,
-                    borderColor: c.border,
                     borderWidth: 1,
+                    borderColor: c.border,
+                    borderRadius: 10,
+                    alignItems: "center",
+                    opacity: pressed ? 0.85 : 1,
                   },
                 ]}
               >
-                <AppText variant="small" weight="bold" tone="dim">
+                <AppText
+                  style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
+                >
                   Cancel
                 </AppText>
               </Pressable>
               <Pressable
                 onPress={handleResolveSOS}
                 disabled={resolvingSOS}
-                style={[
-                  styles.modalBtn,
+                style={({ pressed }) => [
                   {
+                    flex: 1,
+                    paddingVertical: 12,
                     backgroundColor: "#eab308",
-                    opacity: resolvingSOS ? 0.5 : 1,
+                    borderRadius: 10,
+                    alignItems: "center",
+                    opacity: resolvingSOS ? 0.5 : pressed ? 0.85 : 1,
                   },
                 ]}
               >
                 <AppText
-                  variant="small"
-                  weight="bold"
-                  style={{ color: "#000" }}
+                  style={{ fontSize: 13, fontWeight: "700", color: "#000" }}
                 >
                   {resolvingSOS ? "…" : "Yes, Resolve"}
                 </AppText>
               </Pressable>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Dispute sheet */}
-      {showDispute && (
+      {showDispute ? (
         <RaiseDisputeSheet
           bookingId={booking.id}
           bookingTitle={booking.title}
@@ -660,10 +1112,11 @@ export default function BookingDetailScreen() {
             toast.success(
               "Dispute raised. Our team will review within 24–48 hours.",
             );
+            setShowDispute(false);
             fetchAll(true);
           }}
         />
-      )}
+      ) : null}
 
       {/* Refund modal */}
       <Modal
@@ -672,102 +1125,58 @@ export default function BookingDetailScreen() {
         animationType="slide"
         onRequestClose={() => setShowRefundModal(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: c.bgPanel,
-                borderColor: c.border,
-                maxHeight: "92%",
-                padding: 0,
-              },
-            ]}
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+          onPress={() => setShowRefundModal(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            style={{
+              backgroundColor: c.bgPanel,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: 20,
+              maxHeight: "92%",
+            }}
           >
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
-              <View
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 16,
+              }}
+            >
+              <AppText
                 style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 8,
+                  fontFamily: "Syne_800ExtraBold",
+                  fontSize: 16,
+                  fontWeight: "800",
+                  color: c.text,
                 }}
               >
-                <AppText weight="bold" style={{ fontSize: 16 }}>
-                  Request Refund
-                </AppText>
-                <Pressable
-                  onPress={() => setShowRefundModal(false)}
-                  hitSlop={10}
-                >
-                  <FaTimes size={16} color={c.textDim} />
-                </Pressable>
-              </View>
-              <RefundRequest
+                Request Refund
+              </AppText>
+              <Pressable onPress={() => setShowRefundModal(false)} hitSlop={10}>
+                <FaTimes size={16} color={c.textDim} />
+              </Pressable>
+            </View>
+            <ScrollView>
+              <RefundRequestInline
                 booking={booking}
                 payment={payment}
                 isProcessing={refundLoading}
                 isHirer={isHirer}
-                onRequestRefund={async (data) => {
-                  await handleRefundRequest(data);
-                  setShowRefundModal(false);
-                }}
+                onRequestRefund={handleRefundRequest}
               />
             </ScrollView>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  sosBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 2,
-    gap: 10,
-  },
-  sosBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 460,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  modalBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-});

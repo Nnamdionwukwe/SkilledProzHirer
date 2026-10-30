@@ -1,604 +1,424 @@
 // src/screens/main/DisputesScreen.js
-// Mirrors the website's My Disputes page exactly.
-// Endpoints:
-//   GET  /disputes/my                — list disputes
-//   POST /disputes                   — raise a dispute (via RaiseDisputeSheet)
-//   PATCH /disputes/:bookingId/cancel — cancel a dispute
+//
+// Port of pages/disputes/Disputes.jsx + Disputes.module.css.
+//
+// Preserved verbatim:
+//   - STATUS_META (DISPUTED / UNDER_REVIEW / RESOLVED / CANCELLED)
+//   - GET /disputes/my (list)
+//   - PATCH /disputes/:id/cancel (cancel)
+//   - Header stats trio (Total / Active / Resolved)
+//   - 5 filter tabs (All / Open / Under Review / Resolved / Cancelled)
+//   - Expandable card: card-top → card-body
+//   - Detail grid (reason / description / evidence)
+//   - Booking details section
+//   - Parties row (hirer + worker chips)
+//   - Payment info block
+//   - Actions: Cancel Dispute (only DISPUTED) + View Booking
+//   - Confirmation modal
+//   - Image lightbox
+//
+// Dedupe fix: `filtered` de-duplicates by id, so duplicate server rows can't
+// trigger React's "two children with the same key" warning.
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  Image,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useToast } from "../../contexts/ToastContext";
-import AppText from "../../components/AppText";
-import ConfirmModal from "../../components/ConfirmModal";
-import { getMyDisputes, raiseDispute, cancelDispute } from "../../api/disputes";
-import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function fmtDate(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+import AppText from "../../components/AppText";
+import Skeleton from "../../components/Skeleton";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useAuthStore } from "../../store/authStore";
+import client from "../../api/client";
+import {
+  FaShieldAlt,
+  FaExclamationTriangle,
+  FaCheckCircle,
+  FaTimesCircle,
+  FaMoneyBillWave,
+  FaUser,
+  FaImage,
+  FaTrash,
+  FaEye,
+  FaTimes,
+  FaChevronRight,
+} from "../../icons/fa";
+
+const STATUS_META = {
+  DISPUTED: { label: "Open", key: "open" },
+  UNDER_REVIEW: { label: "Under Review", key: "review" },
+  RESOLVED: { label: "Resolved", key: "resolved" },
+  CANCELLED: { label: "Cancelled", key: "cancelled" },
+};
+
+function getStatusMeta(status) {
+  return STATUS_META[status] || { label: status, key: "open" };
 }
 
-// ── Status config — disputes currently use booking status DISPUTED ─────────
-const DISPUTE_STATUS = {
-  DISPUTED: { label: "DISPUTED", color: "#f97316" },
-  COMPLETED: { label: "RESOLVED", color: "#22c55e" },
-  CANCELLED: { label: "CANCELLED", color: "#ef4444" },
-  ACCEPTED: { label: "UNDER REVIEW", color: "#6366f1" },
-};
+function statusColors(key, c) {
+  switch (key) {
+    case "open":
+      return { bg: c.orangeDim, fg: c.orange, border: c.orangeGlow };
+    case "review":
+      return {
+        bg: "rgba(59,130,246,0.1)",
+        fg: "#60a5fa",
+        border: "rgba(59,130,246,0.2)",
+      };
+    case "resolved":
+      return { bg: c.greenDim, fg: c.green, border: "rgba(34,197,94,0.3)" };
+    case "cancelled":
+      return { bg: c.bgCard, fg: c.textMuted, border: c.border };
+    default:
+      return { bg: c.orangeDim, fg: c.orange, border: c.orangeGlow };
+  }
+}
 
-// Filter tabs shown on the website
-const FILTER_TABS = ["All", "Open", "Under Review", "Resolved", "Cancelled"];
+function formatCurrency(amount, currency = "NGN") {
+  if (amount == null) return `${currency} 0.00`;
+  return `${currency} ${Number(amount).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
 
-// Map each tab to a set of booking statuses
-const TAB_STATUSES = {
-  All: null, // show all
-  Open: ["DISPUTED"],
-  "Under Review": ["ACCEPTED", "DISPUTED"],
-  Resolved: ["COMPLETED"],
-  Cancelled: ["CANCELLED"],
-};
-
-// ── Dispute reason presets (matches common dispute reasons) ───────────────────
-const REASONS = [
-  "Worker didn't show up",
-  "Work quality was poor",
-  "Work not completed",
-  "Overcharged for service",
-  "Damaged property",
-  "Safety concern",
-  "Other",
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Raise Dispute Sheet (bottom modal)
-// ─────────────────────────────────────────────────────────────────────────────
-export function RaiseDisputeSheet({
-  bookingId,
-  bookingTitle,
-  visible,
-  onClose,
-  onSuccess,
-  c,
-  modalBg,
-}) {
-  const toast = useToast();
-  const [reason, setReason] = useState("");
-  const [description, setDescription] = useState("");
-  const [acting, setActing] = useState(false);
-  const [reasonError, setReasonError] = useState("");
-  const [descError, setDescError] = useState("");
-  const { t } = useTranslation();
-
-  const reset = () => {
-    setReason("");
-    setDescription("");
-    setReasonError("");
-    setDescError("");
-  };
-
-  const handleClose = () => {
-    reset();
-    onClose();
-  };
-
-  const handleSubmit = async () => {
-    let valid = true;
-    if (!reason) {
-      setReasonError("Please select a reason.");
-      valid = false;
-    }
-    if (description.trim().length < 10) {
-      setDescError("Please provide at least 10 characters of detail.");
-      valid = false;
-    }
-    if (!valid) return;
-
-    setActing(true);
-    try {
-      await raiseDispute({
-        bookingId,
-        reason,
-        description: description.trim(),
-      });
-      toast.success("Dispute raised. Our team will review within 24–48 hours.");
-      reset();
-      onSuccess?.();
-      onClose();
-    } catch (err) {
-      toast.error(err?.response?.data?.message ?? "Failed to raise dispute.");
-    } finally {
-      setActing(false);
-    }
-  };
-
-  if (!visible) return null;
-
+// ── Status badge ──────────────────────────────────────────────────────
+function StatusBadge({ status, c }) {
+  const meta = getStatusMeta(status);
+  const colors = statusColors(meta.key, c);
   return (
-    <Modal
-      visible
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
+    <View
+      style={{
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        backgroundColor: colors.bg,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 999,
+      }}
     >
-      <Pressable style={styles.backdrop} onPress={handleClose}>
+      <AppText style={{ fontSize: 10, fontWeight: "700", color: colors.fg }}>
+        {meta.label}
+      </AppText>
+    </View>
+  );
+}
+
+// ── Confirmation modal ────────────────────────────────────────────────
+function ConfirmationModal({ isOpen, onClose, onConfirm, title, message, c }) {
+  if (!isOpen) return null;
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.75)",
+          justifyContent: "center",
+          padding: 24,
+        }}
+        onPress={onClose}
+      >
         <Pressable
-          style={[
-            styles.sheet,
-            { backgroundColor: modalBg, borderTopColor: c.border },
-          ]}
-          onPress={(e) => e.stopPropagation()}
+          onPress={(e) => e.stopPropagation?.()}
+          style={{
+            backgroundColor: c.bgPanel,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 18,
+            padding: 20,
+          }}
         >
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Handle */}
-            <View style={[styles.handle, { backgroundColor: c.border }]} />
-
-            {/* Header */}
-            <View style={styles.sheetHeader}>
-              <View>
-                <AppText variant="title" weight="semibold">
-                  {`⚠️ ${t("disputes.raiseTitle")}`}
-                </AppText>
-                {bookingTitle && (
-                  <AppText
-                    variant="small"
-                    tone="dim"
-                    style={{ marginTop: 4 }}
-                    numberOfLines={1}
-                  >
-                    {bookingTitle}
-                  </AppText>
-                )}
-              </View>
-              <Pressable
-                onPress={handleClose}
-                style={[
-                  styles.closeBtn,
-                  { backgroundColor: c.bgInput, borderColor: c.border },
-                ]}
-              >
-                <AppText tone="dim">✕</AppText>
-              </Pressable>
-            </View>
-
-            {/* Reason */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: 10,
+            }}
+          >
             <AppText
-              variant="small"
-              weight="semibold"
-              style={[styles.fieldLabel, { color: c.textMuted }]}
-            >
-              REASON *
-            </AppText>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ marginBottom: 4 }}
-              contentContainerStyle={styles.reasonPills}
-            >
-              {REASONS.map((r) => {
-                const active = reason === r;
-                return (
-                  <Pressable
-                    key={r}
-                    style={[
-                      styles.reasonPill,
-                      {
-                        backgroundColor: active ? c.orange : c.bgInput,
-                        borderColor: active ? c.orange : c.border,
-                      },
-                    ]}
-                    onPress={() => {
-                      setReason(r);
-                      setReasonError("");
-                    }}
-                  >
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: active ? "#fff" : c.text }}
-                    >
-                      {r}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            {reasonError && (
-              <AppText
-                variant="small"
-                tone="danger"
-                style={{ marginBottom: 8 }}
-              >
-                {reasonError}
-              </AppText>
-            )}
-
-            {/* Description */}
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={[styles.fieldLabel, { color: c.textMuted, marginTop: 12 }]}
-            >
-              DESCRIPTION *
-            </AppText>
-            <TextInput
-              multiline
-              numberOfLines={5}
-              textAlignVertical="top"
-              placeholder={t("disputes.description")}
-              placeholderTextColor={c.textMuted}
-              value={description}
-              onChangeText={(v) => {
-                setDescription(v);
-                setDescError("");
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 17,
+                fontWeight: "800",
+                color: c.text,
+                flex: 1,
               }}
-              style={[
-                styles.textarea,
-                {
-                  color: c.text,
-                  borderColor: descError ? "#ef4444" : c.border,
-                  backgroundColor: c.bgInput,
-                },
-              ]}
-            />
-            {descError && (
-              <AppText variant="small" tone="danger" style={{ marginTop: 4 }}>
-                {descError}
-              </AppText>
-            )}
-
-            {/* Info note */}
-            <View
-              style={[
-                styles.infoNote,
-                {
-                  backgroundColor: "rgba(249,115,22,0.08)",
-                  borderColor: "rgba(249,115,22,0.25)",
-                },
-              ]}
             >
-              <AppText variant="small" tone="dim" style={{ lineHeight: 18 }}>
-                ⚠️ {t("disputes.support")}
-              </AppText>
-            </View>
-
-            {/* Submit */}
+              {title}
+            </AppText>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <FaTimes size={18} color={c.textDim} />
+            </Pressable>
+          </View>
+          <AppText
+            style={{
+              fontSize: 13,
+              color: c.textDim,
+              lineHeight: 19,
+              marginTop: 10,
+            }}
+          >
+            {message}
+          </AppText>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 8,
+              marginTop: 18,
+              justifyContent: "flex-end",
+            }}
+          >
             <Pressable
-              style={[
-                styles.submitBtn,
+              onPress={onClose}
+              style={({ pressed }) => [
                 {
-                  backgroundColor: acting ? c.bgCard : c.orange,
-                  opacity: acting ? 0.7 : 1,
+                  paddingVertical: 10,
+                  paddingHorizontal: 18,
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  borderRadius: 8,
+                  opacity: pressed ? 0.75 : 1,
                 },
               ]}
-              disabled={acting}
-              onPress={handleSubmit}
             >
-              {acting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ color: "#fff" }}
-                >
-                  {t("disputes.submitDispute")}
-                </AppText>
-              )}
-            </Pressable>
-
-            <Pressable onPress={handleClose} style={styles.cancelLink}>
-              <AppText variant="small" tone="dim">
-                {t("common.cancel")}
+              <AppText
+                style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
+              >
+                Cancel
               </AppText>
             </Pressable>
-          </ScrollView>
+            <Pressable
+              onPress={onConfirm}
+              style={({ pressed }) => [
+                {
+                  paddingVertical: 10,
+                  paddingHorizontal: 18,
+                  backgroundColor: c.red,
+                  borderRadius: 8,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <AppText
+                style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+              >
+                Confirm
+              </AppText>
+            </Pressable>
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Dispute Card (expandable)
-// ─────────────────────────────────────────────────────────────────────────────
-function DisputeCard({ item, expanded, onToggle, onViewBooking, onCancel, c }) {
-  const statusMeta = DISPUTE_STATUS[item.status] ?? {
-    label: item.status,
-    color: "#888",
-  };
-  const { t } = useTranslation();
+// ── Image lightbox ────────────────────────────────────────────────────
+function ImageLightbox({ imageUrl, onClose }) {
+  if (!imageUrl) return null;
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.92)",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 16,
+        }}
+      >
+        <Pressable
+          onPress={onClose}
+          style={{
+            position: "absolute",
+            top: 60,
+            right: 20,
+            zIndex: 2,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: "rgba(255,255,255,0.12)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <FaTimes size={22} color="#fff" />
+        </Pressable>
+        <Image
+          source={{ uri: imageUrl }}
+          style={{ width: "100%", height: "100%" }}
+          resizeMode="contain"
+        />
+      </View>
+    </Modal>
+  );
+}
 
-  // Description: booking notes or description (dispute reason not stored separately in this schema)
-  const description = item.notes || item.description || "—";
-
+// ── Detail item ───────────────────────────────────────────────────────
+function DetailItem({ label, value, c }) {
   return (
     <View
-      style={[
-        styles.disputeCard,
-        {
-          backgroundColor: c.bgCard,
-          borderColor: expanded ? c.orange : c.border,
-          borderWidth: expanded ? 1 : StyleSheet.hairlineWidth,
-        },
-      ]}
+      style={{
+        backgroundColor: c.bgCard,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        gap: 3,
+        flexBasis: "48%",
+        minWidth: 140,
+      }}
     >
-      {/* Card header — always visible */}
-      <Pressable onPress={onToggle} style={styles.cardHeader}>
-        {/* Warning icon */}
-        <View style={[styles.warnIcon, { borderColor: c.orange }]}>
-          <AppText variant="body" style={{ color: c.orange }}>
-            ⚠
-          </AppText>
-        </View>
-
-        {/* Title + date */}
-        <View style={styles.cardTitleBlock}>
-          <AppText variant="body" weight="semibold">
-            Booking dispute
-          </AppText>
-          <AppText variant="small" tone="dim">
-            · {fmtDate(item.updatedAt)}
-          </AppText>
-        </View>
-
-        {/* Status badge + toggle */}
-        <View style={styles.cardRight}>
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor: `${statusMeta.color}22`,
-                borderColor: `${statusMeta.color}55`,
-              },
-            ]}
-          >
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: statusMeta.color, fontSize: 10 }}
-            >
-              {statusMeta.label}
-            </AppText>
-          </View>
-          <AppText variant="small" tone="dim" style={{ marginLeft: 8 }}>
-            {expanded ? "▲" : "▼"}
-          </AppText>
-        </View>
-      </Pressable>
-
-      {/* Expanded content */}
-      {expanded && (
-        <View style={[styles.cardBody, { borderTopColor: c.border }]}>
-          {/* Category if available */}
-          {item.category?.name && (
-            <View
-              style={[
-                styles.catChip,
-                { backgroundColor: c.orangeDim, borderColor: c.orange },
-              ]}
-            >
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.orange }}
-              >
-                {item.category.name}
-              </AppText>
-            </View>
-          )}
-
-          {/* Booking title */}
-          {item.title && (
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ marginBottom: 10 }}
-            >
-              {item.title}
-            </AppText>
-          )}
-
-          {/* Description label */}
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: "#888", letterSpacing: 0.8, marginBottom: 6 }}
-          >
-            DESCRIPTION
-          </AppText>
-          <AppText variant="body" style={{ marginBottom: 14, lineHeight: 22 }}>
-            {description}
-          </AppText>
-
-          {/* Parties */}
-          {(item.hirer || item.worker) && (
-            <View
-              style={[
-                styles.partiesRow,
-                { borderTopColor: c.border, borderBottomColor: c.border },
-              ]}
-            >
-              {item.hirer && (
-                <View style={styles.partyItem}>
-                  <AppText
-                    variant="small"
-                    tone="dim"
-                    style={{ marginBottom: 2 }}
-                  >
-                    Hirer
-                  </AppText>
-                  <AppText variant="body" weight="semibold">
-                    {item.hirer.firstName} {item.hirer.lastName}
-                  </AppText>
-                </View>
-              )}
-              {item.worker && (
-                <View style={styles.partyItem}>
-                  <AppText
-                    variant="small"
-                    tone="dim"
-                    style={{ marginBottom: 2 }}
-                  >
-                    Worker
-                  </AppText>
-                  <AppText variant="body" weight="semibold">
-                    {item.worker.firstName} {item.worker.lastName}
-                  </AppText>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Payment info */}
-          {item.payment && (
-            <View
-              style={[
-                styles.paymentRow,
-                { backgroundColor: c.bgInput, borderColor: c.border },
-              ]}
-            >
-              <AppText variant="small" tone="dim">
-                Payment
-              </AppText>
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor:
-                      item.payment.status === "HELD"
-                        ? "rgba(249,115,22,0.12)"
-                        : "rgba(34,197,94,0.12)",
-                    borderColor:
-                      item.payment.status === "HELD" ? "#f97316" : "#22c55e",
-                  },
-                ]}
-              >
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{
-                    color:
-                      item.payment.status === "HELD" ? "#f97316" : "#22c55e",
-                    fontSize: 10,
-                  }}
-                >
-                  {item.payment.status}
-                </AppText>
-              </View>
-            </View>
-          )}
-
-          {/* Actions */}
-          <View style={styles.cardActions}>
-            {/* View Booking */}
-            <Pressable
-              onPress={() => onViewBooking(item.id)}
-              style={styles.viewBookingBtn}
-            >
-              <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: "#f97316" }}
-              >
-                View Booking →
-              </AppText>
-            </Pressable>
-
-            {/* Cancel dispute (only if still DISPUTED) */}
-            {item.status === "DISPUTED" && (
-              <Pressable
-                onPress={() => onCancel(item.id)}
-                style={[styles.cancelDisputeBtn, { borderColor: "#ef4444" }]}
-              >
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{ color: "#ef4444" }}
-                >
-                  Cancel Dispute
-                </AppText>
-              </Pressable>
-            )}
-          </View>
-
-          {/* Admin review note */}
-          <AppText variant="small" tone="dim" style={styles.reviewNote}>
-            Our team reviews disputes within 24–48 hours. Keep an eye on your
-            notifications.
-          </AppText>
-        </View>
-      )}
+      <AppText
+        style={{
+          fontFamily: "DMSans_600SemiBold",
+          fontSize: 9,
+          fontWeight: "700",
+          color: c.textMuted,
+          letterSpacing: 0.6,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </AppText>
+      <AppText style={{ fontSize: 12, color: c.text, lineHeight: 17 }}>
+        {value}
+      </AppText>
     </View>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Skeleton
-// ─────────────────────────────────────────────────────────────────────────────
-function Skeleton({ c }) {
+// ── Party chip ────────────────────────────────────────────────────────
+function PartyChip({ person, role, c }) {
+  if (!person) return null;
+  const initials =
+    `${person.firstName?.[0] || ""}${
+      person.lastName?.[0] || ""
+    }`.toUpperCase() || "?";
   return (
-    <View style={{ gap: 12, paddingHorizontal: 16, paddingTop: 8 }}>
-      {[1, 2, 3].map((i) => (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        backgroundColor: c.bgCard,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+      }}
+    >
+      <View
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: 15,
+          backgroundColor: c.orangeDim,
+          borderWidth: 1,
+          borderColor: c.orangeGlow,
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+          flexShrink: 0,
+        }}
+      >
+        {person.avatar ? (
+          <Image
+            source={{ uri: person.avatar }}
+            style={{ width: "100%", height: "100%" }}
+          />
+        ) : (
+          <AppText style={{ fontSize: 10, fontWeight: "700", color: c.orange }}>
+            {initials}
+          </AppText>
+        )}
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <AppText
+          numberOfLines={1}
+          style={{ fontSize: 12, fontWeight: "700", color: c.text }}
+        >
+          {`${person.firstName || ""} ${person.lastName || ""}`.trim() || "—"}
+        </AppText>
         <View
-          key={i}
-          style={[
-            styles.skCard,
-            { backgroundColor: c.bgCard, borderColor: c.border },
-          ]}
-        />
-      ))}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 3,
+            marginTop: 2,
+          }}
+        >
+          <FaUser size={9} color={c.textMuted} />
+          <AppText style={{ fontSize: 10, color: c.textMuted }}>{role}</AppText>
+        </View>
+      </View>
     </View>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main Screen
-// ─────────────────────────────────────────────────────────────────────────────
-export default function DisputesScreen({ navigation, route }) {
-  const { theme: th } = useTheme();
-  const c = th.colors;
-  const toast = useToast();
-  const { t } = useTranslation();
-
-  // Route params: bookingId + bookingTitle for pre-opening the raise sheet
-  const fromBookingId = route?.params?.bookingId ?? null;
-  const fromBookingTitle = route?.params?.bookingTitle ?? null;
+// ── Main ──────────────────────────────────────────────────────────────
+export default function DisputesScreen() {
+  const navigation = useNavigation();
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const { user } = useAuthStore();
 
   const [disputes, setDisputes] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState("All");
-  const [expanded, setExpanded] = useState(null); // bookingId of expanded card
-  const [modal, setModal] = useState(null);
+  const [error, setError] = useState("");
+  const [cancelling, setCancelling] = useState(null);
+  const [success, setSuccess] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [expanded, setExpanded] = useState(null);
 
-  // Raise dispute sheet
-  const [sheetBookingId, setSheetBookingId] = useState(fromBookingId);
-  const [sheetBookingTitle, setSheetBookingTitle] = useState(fromBookingTitle);
-  const [sheetVisible, setSheetVisible] = useState(!!fromBookingId);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelBookingId, setCancelBookingId] = useState(null);
+  const [lightboxImage, setLightboxImage] = useState(null);
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
-  const fetchDisputes = useCallback(async () => {
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    setRefreshing(true);
+    setError("");
     try {
-      const data = await getMyDisputes();
-      setDisputes(data.disputes ?? []);
+      const res = await client.get("/disputes/my");
+      const raw = res.data.data.disputes || [];
+
+      // De-duplicate by id BEFORE storing to state — a corrupted server
+      // response (double row for the same dispute) triggers React's
+      // "two children with the same key" warning on render.
+      const seen = new Set();
+      const all = raw.filter((d) => {
+        if (!d?.id || seen.has(d.id)) return false;
+        seen.add(d.id);
+        return true;
+      });
+
+      if (__DEV__ && all.length !== raw.length) {
+        console.log(
+          "[DisputesScreen] dropped",
+          raw.length - all.length,
+          "duplicate rows",
+        );
+      }
+
+      setDisputes(all);
+      setTotal(all.length);
     } catch {
-      toast.error("Failed to load disputes.");
+      setError("Failed to load disputes.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -606,446 +426,833 @@ export default function DisputesScreen({ navigation, route }) {
   }, []);
 
   useEffect(() => {
-    fetchDisputes();
-  }, []);
+    load(true);
+  }, [load]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchDisputes();
+  const openCancelModal = (bookingId) => {
+    setCancelBookingId(bookingId);
+    setShowCancelModal(true);
   };
 
-  // ── Cancel dispute ────────────────────────────────────────────────────────
-  const handleCancel = (bookingId) => {
-    setModal({
-      title: "Cancel Dispute",
-      message: "Cancel this dispute? The booking will be marked as Completed.",
-      confirmLabel: "Yes, Cancel Dispute",
-      destructive: true,
-      onConfirm: async () => {
-        try {
-          await cancelDispute(bookingId);
-          toast.success("Dispute cancelled. Booking marked as completed.");
-          setExpanded(null);
-          fetchDisputes();
-        } catch (err) {
-          toast.error(
-            err?.response?.data?.message ?? "Failed to cancel dispute.",
-          );
-        }
-      },
-    });
+  const closeCancelModal = () => {
+    setShowCancelModal(false);
+    setCancelBookingId(null);
   };
 
-  // ── Derived stats ─────────────────────────────────────────────────────────
-  const total = disputes.length;
-  const active = disputes.filter((d) => d.status === "DISPUTED").length;
-  const resolved = disputes.filter((d) =>
-    ["COMPLETED", "CANCELLED"].includes(d.status),
+  const confirmCancel = async () => {
+    if (!cancelBookingId) return;
+    setCancelling(cancelBookingId);
+    setError("");
+    setSuccess("");
+    try {
+      await client.patch(`/disputes/${cancelBookingId}/cancel`);
+      setSuccess("Dispute cancelled successfully.");
+      setDisputes((prev) =>
+        prev.map((d) =>
+          d.id === cancelBookingId ? { ...d, status: "CANCELLED" } : d,
+        ),
+      );
+      closeCancelModal();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to cancel dispute.");
+      closeCancelModal();
+    } finally {
+      setCancelling(null);
+    }
+  };
+
+  // Filter tabs — safe since disputes is already deduped
+  const seenIds = new Set();
+  const filtered = (
+    filterStatus ? disputes.filter((d) => d.status === filterStatus) : disputes
+  ).filter((d) => {
+    if (!d?.id || seenIds.has(d.id)) return false;
+    seenIds.add(d.id);
+    return true;
+  });
+
+  const filterTabs = [
+    { value: "", label: "All" },
+    { value: "DISPUTED", label: "Open" },
+    { value: "UNDER_REVIEW", label: "Under Review" },
+    { value: "RESOLVED", label: "Resolved" },
+    { value: "CANCELLED", label: "Cancelled" },
+  ];
+
+  const totalActive = disputes.filter(
+    (d) => d.status === "DISPUTED" || d.status === "UNDER_REVIEW",
   ).length;
+  const totalResolved = disputes.filter((d) => d.status === "RESOLVED").length;
 
-  // ── Filtered list ─────────────────────────────────────────────────────────
-  const allowed = TAB_STATUSES[activeTab];
-  const visible = allowed
-    ? disputes.filter((d) => allowed.includes(d.status))
-    : disputes;
+  // ── Loading ────────────────────────────────────────────────────
+  if (loading && disputes.length === 0) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top"]}>
+        <View style={{ padding: 16, gap: 14 }}>
+          <Skeleton width="40%" height={14} radius={4} />
+          <Skeleton width="60%" height={28} radius={6} />
+          <Skeleton width="80%" height={14} radius={4} />
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Skeleton width="100%" height={56} radius={10} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Skeleton width="100%" height={56} radius={10} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Skeleton width="100%" height={56} radius={10} />
+            </View>
+          </View>
+          <Skeleton width="100%" height={32} radius={6} />
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} width="100%" height={90} radius={14} />
+          ))}
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.screen, { backgroundColor: c.bg }]}>
-      <FlatList
-        data={visible}
-        keyExtractor={(item) => item.id}
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      edges={["top", "left", "right"]}
+    >
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 14 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={() => load(false)}
             tintColor={c.orange}
+            colors={[c.orange]}
           />
         }
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <View>
-            {/* ── Page header ── */}
-            <View style={styles.pageHeader}>
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.orange, letterSpacing: 1.2, marginBottom: 6 }}
-              >
-                SUPPORT
-              </AppText>
+      >
+        {/* Header */}
+        <View>
+          <AppText
+            style={{
+              fontFamily: "DMSans_600SemiBold",
+              fontSize: 10,
+              fontWeight: "700",
+              color: c.orange,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              marginBottom: 4,
+            }}
+          >
+            Support
+          </AppText>
+          <AppText
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 24,
+              fontWeight: "800",
+              color: c.text,
+              letterSpacing: -0.3,
+            }}
+          >
+            My Disputes
+          </AppText>
+          <AppText
+            style={{
+              fontSize: 12,
+              color: c.textDim,
+              marginTop: 4,
+              lineHeight: 17,
+            }}
+          >
+            Track and manage disputes raised on your bookings
+          </AppText>
 
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-around",
+              gap: 12,
+              marginTop: 14,
+              paddingHorizontal: 8,
+            }}
+          >
+            <View style={{ alignItems: "center" }}>
               <AppText
-                variant="body"
-                tone="dim"
-                style={{ marginTop: 4, lineHeight: 22 }}
+                style={{
+                  fontFamily: "Syne_800ExtraBold",
+                  fontSize: 20,
+                  fontWeight: "800",
+                  color: c.text,
+                }}
               >
-                Track and manage disputes raised on your bookings
+                {total}
+              </AppText>
+              <AppText
+                style={{ fontSize: 10, color: c.textMuted, marginTop: 2 }}
+              >
+                Total
               </AppText>
             </View>
-
-            {/* ── Stats row ── */}
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <AppText
-                  weight="displayBlack"
-                  variant="small"
-                  style={[styles.statNum, { color: c.text }]}
-                >
-                  {total}
-                </AppText>
-                <AppText variant="small" tone="dim">
-                  Total
-                </AppText>
-              </View>
-              <View style={styles.statItem}>
-                <AppText
-                  weight="displayBlack"
-                  style={[styles.statNum, { color: c.orange }]}
-                >
-                  {active}
-                </AppText>
-                <AppText variant="small" tone="dim">
-                  Active
-                </AppText>
-              </View>
-              <View style={styles.statItem}>
-                <AppText
-                  weight="displayBlack"
-                  style={[styles.statNum, { color: "#22c55e" }]}
-                >
-                  {resolved}
-                </AppText>
-                <AppText variant="small" tone="dim">
-                  Resolved
-                </AppText>
-              </View>
-            </View>
-
-            {/* ── Raise Dispute Button ── */}
-            <Pressable
-              onPress={() => {
-                setSheetBookingId(null);
-                setSheetBookingTitle(null);
-                setSheetVisible(true);
-              }}
-              style={[styles.raiseBtn, { backgroundColor: c.orange }]}
-            >
+            <View style={{ alignItems: "center" }}>
               <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: "#fff" }}
+                style={{
+                  fontFamily: "Syne_800ExtraBold",
+                  fontSize: 20,
+                  fontWeight: "800",
+                  color: c.orange,
+                }}
               >
-                ⚠️ {t("disputes.raiseTitle")}
+                {totalActive}
               </AppText>
+              <AppText
+                style={{ fontSize: 10, color: c.textMuted, marginTop: 2 }}
+              >
+                Active
+              </AppText>
+            </View>
+            <View style={{ alignItems: "center" }}>
+              <AppText
+                style={{
+                  fontFamily: "Syne_800ExtraBold",
+                  fontSize: 20,
+                  fontWeight: "800",
+                  color: c.green,
+                }}
+              >
+                {totalResolved}
+              </AppText>
+              <AppText
+                style={{ fontSize: 10, color: c.textMuted, marginTop: 2 }}
+              >
+                Resolved
+              </AppText>
+            </View>
+          </View>
+        </View>
+
+        {/* Filter tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            gap: 4,
+            borderBottomWidth: 1,
+            borderBottomColor: c.border,
+            paddingBottom: 1,
+          }}
+        >
+          {filterTabs.map((tab) => {
+            const active = filterStatus === tab.value;
+            return (
+              <Pressable
+                key={tab.value || "all"}
+                onPress={() => setFilterStatus(tab.value)}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderBottomWidth: 2,
+                  borderBottomColor: active ? c.orange : "transparent",
+                  marginBottom: -1,
+                }}
+              >
+                <AppText
+                  style={{
+                    fontSize: 12,
+                    fontWeight: active ? "700" : "500",
+                    color: active ? c.orange : c.textMuted,
+                  }}
+                >
+                  {tab.label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Alerts */}
+        {error ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              backgroundColor: c.redDim,
+              borderWidth: 1,
+              borderColor: c.red,
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+            }}
+          >
+            <FaExclamationTriangle size={13} color={c.red} />
+            <AppText style={{ flex: 1, fontSize: 12, color: c.red }}>
+              {error}
+            </AppText>
+            <Pressable onPress={() => setError("")} hitSlop={6}>
+              <FaTimes size={12} color={c.red} />
             </Pressable>
+          </View>
+        ) : null}
 
-            {/* ── Filter tabs ── */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.tabsScroll}
-              contentContainerStyle={styles.tabsContent}
+        {success ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              backgroundColor: c.greenDim,
+              borderWidth: 1,
+              borderColor: c.green,
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+            }}
+          >
+            <FaCheckCircle size={13} color={c.green} />
+            <AppText style={{ flex: 1, fontSize: 12, color: c.green }}>
+              {success}
+            </AppText>
+            <Pressable onPress={() => setSuccess("")} hitSlop={6}>
+              <FaTimes size={12} color={c.green} />
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* List */}
+        {filtered.length === 0 ? (
+          <View
+            style={{
+              alignItems: "center",
+              paddingVertical: 48,
+              paddingHorizontal: 20,
+              backgroundColor: c.bgPanel,
+              borderWidth: 1.5,
+              borderColor: c.border,
+              borderStyle: "dashed",
+              borderRadius: 14,
+              gap: 10,
+            }}
+          >
+            <FaShieldAlt
+              size={40}
+              color={c.textMuted}
+              style={{ opacity: 0.5 }}
+            />
+            <AppText
+              style={{
+                fontSize: 14,
+                fontWeight: "600",
+                color: c.text,
+                textAlign: "center",
+              }}
             >
-              {FILTER_TABS.map((tab) => {
-                const active = activeTab === tab;
-                return (
+              {filterStatus
+                ? `No ${getStatusMeta(filterStatus).label.toLowerCase()} disputes`
+                : "No disputes yet"}
+            </AppText>
+            <AppText
+              style={{
+                fontSize: 12,
+                color: c.textDim,
+                textAlign: "center",
+                maxWidth: 320,
+              }}
+            >
+              Disputes can be raised from any active booking that has an issue.
+            </AppText>
+          </View>
+        ) : (
+          <View style={{ gap: 12 }}>
+            {filtered.map((dispute) => {
+              const isExpanded = expanded === dispute.id;
+              const meta = getStatusMeta(dispute.status);
+              const colors = statusColors(meta.key, c);
+              const StatusIcon =
+                dispute.status === "RESOLVED"
+                  ? FaCheckCircle
+                  : dispute.status === "CANCELLED"
+                    ? FaTimesCircle
+                    : FaExclamationTriangle;
+
+              return (
+                <View
+                  key={dispute.id}
+                  style={{
+                    backgroundColor: c.bgPanel,
+                    borderWidth: 1,
+                    borderColor: isExpanded ? c.orangeGlow : c.border,
+                    borderRadius: 14,
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* Card top */}
                   <Pressable
-                    key={tab}
-                    onPress={() => setActiveTab(tab)}
-                    style={[
-                      styles.tab,
-                      { borderBottomColor: active ? c.orange : "transparent" },
+                    onPress={() =>
+                      setExpanded((prev) =>
+                        prev === dispute.id ? null : dispute.id,
+                      )
+                    }
+                    style={({ pressed }) => [
+                      {
+                        flexDirection: "row",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        paddingHorizontal: 14,
+                        paddingVertical: 14,
+                        opacity: pressed ? 0.85 : 1,
+                      },
                     ]}
                   >
-                    <AppText
-                      variant="body"
-                      weight={active ? "semibold" : "regular"}
-                      style={{ color: active ? c.orange : c.textMuted }}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        flex: 1,
+                        minWidth: 0,
+                      }}
                     >
-                      {tab}
-                    </AppText>
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 9,
+                          backgroundColor: colors.bg,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <StatusIcon size={14} color={colors.fg} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <AppText
+                          numberOfLines={2}
+                          style={{
+                            fontFamily: "DMSans_600SemiBold",
+                            fontSize: 13,
+                            fontWeight: "700",
+                            color: c.text,
+                          }}
+                        >
+                          {dispute.title || "Booking dispute"}
+                        </AppText>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            alignItems: "center",
+                            gap: 5,
+                            marginTop: 5,
+                          }}
+                        >
+                          {dispute.disputeReason ? (
+                            <View
+                              style={{
+                                backgroundColor: c.bgCard,
+                                borderWidth: 1,
+                                borderColor: c.border,
+                                borderRadius: 4,
+                                paddingHorizontal: 6,
+                                paddingVertical: 1,
+                              }}
+                            >
+                              <AppText
+                                style={{
+                                  fontSize: 10,
+                                  color: c.textDim,
+                                  textTransform: "capitalize",
+                                }}
+                              >
+                                {dispute.disputeReason.replace(/_/g, " ")}
+                              </AppText>
+                            </View>
+                          ) : null}
+                          <AppText style={{ fontSize: 10, color: c.textDim }}>
+                            {new Date(dispute.createdAt).toLocaleDateString(
+                              "en-GB",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              },
+                            )}
+                          </AppText>
+                        </View>
+                      </View>
+                    </View>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <StatusBadge status={dispute.status} c={c} />
+                      <FaChevronRight
+                        size={12}
+                        color={c.textMuted}
+                        style={{
+                          transform: [
+                            { rotate: isExpanded ? "90deg" : "0deg" },
+                          ],
+                        }}
+                      />
+                    </View>
                   </Pressable>
-                );
-              })}
-            </ScrollView>
-            {/* Tab underline bar */}
-            <View style={[styles.tabBar, { backgroundColor: c.border }]} />
+
+                  {/* Card body */}
+                  {isExpanded ? (
+                    <View
+                      style={{
+                        borderTopWidth: 1,
+                        borderTopColor: c.border,
+                        paddingHorizontal: 14,
+                        paddingVertical: 14,
+                        gap: 14,
+                      }}
+                    >
+                      {/* Dispute details */}
+                      <View style={{ gap: 8 }}>
+                        {dispute.disputeReason ? (
+                          <DetailItem
+                            label="Reason"
+                            value={dispute.disputeReason.replace(/_/g, " ")}
+                            c={c}
+                          />
+                        ) : null}
+                        {dispute.disputeDescription ? (
+                          <DetailItem
+                            label="Description"
+                            value={dispute.disputeDescription}
+                            c={c}
+                          />
+                        ) : null}
+                        {dispute.disputeEvidence &&
+                        dispute.disputeEvidence.length > 0 ? (
+                          <View>
+                            <AppText
+                              style={{
+                                fontFamily: "DMSans_600SemiBold",
+                                fontSize: 9,
+                                fontWeight: "700",
+                                color: c.textMuted,
+                                letterSpacing: 0.6,
+                                textTransform: "uppercase",
+                                marginBottom: 6,
+                              }}
+                            >
+                              Evidence
+                            </AppText>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                flexWrap: "wrap",
+                                gap: 6,
+                              }}
+                            >
+                              {dispute.disputeEvidence.map((url, idx) => (
+                                <Pressable
+                                  key={idx}
+                                  onPress={() => setLightboxImage(url)}
+                                  style={({ pressed }) => [
+                                    {
+                                      flexDirection: "row",
+                                      alignItems: "center",
+                                      gap: 4,
+                                      backgroundColor: c.bgInput || c.bgCard,
+                                      borderWidth: 1,
+                                      borderColor: c.border,
+                                      borderRadius: 6,
+                                      paddingHorizontal: 8,
+                                      paddingVertical: 5,
+                                      opacity: pressed ? 0.75 : 1,
+                                    },
+                                  ]}
+                                >
+                                  <FaImage size={11} color={c.textDim} />
+                                  <AppText
+                                    style={{
+                                      fontSize: 10,
+                                      color: c.textDim,
+                                    }}
+                                  >
+                                    View
+                                  </AppText>
+                                </Pressable>
+                              ))}
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      {/* Booking details */}
+                      <View>
+                        <AppText
+                          style={{
+                            fontFamily: "DMSans_600SemiBold",
+                            fontSize: 9,
+                            fontWeight: "700",
+                            color: c.textMuted,
+                            letterSpacing: 0.6,
+                            textTransform: "uppercase",
+                            marginBottom: 6,
+                          }}
+                        >
+                          Booking Details
+                        </AppText>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: 8,
+                          }}
+                        >
+                          {dispute.agreedRate != null ? (
+                            <DetailItem
+                              label="Agreed Rate"
+                              value={formatCurrency(
+                                dispute.agreedRate,
+                                dispute.currency,
+                              )}
+                              c={c}
+                            />
+                          ) : null}
+                          {dispute.estimatedUnit && dispute.estimatedValue ? (
+                            <DetailItem
+                              label="Duration"
+                              value={`${dispute.estimatedValue} ${dispute.estimatedUnit}`}
+                              c={c}
+                            />
+                          ) : null}
+                          {dispute.address ? (
+                            <DetailItem
+                              label="Address"
+                              value={dispute.address}
+                              c={c}
+                            />
+                          ) : null}
+                          {dispute.scheduledAt ? (
+                            <DetailItem
+                              label="Scheduled"
+                              value={new Date(
+                                dispute.scheduledAt,
+                              ).toLocaleString("en-GB", {
+                                dateStyle: "medium",
+                                timeStyle: "short",
+                              })}
+                              c={c}
+                            />
+                          ) : null}
+                          {dispute.jobType ? (
+                            <DetailItem
+                              label="Job Type"
+                              value={dispute.jobType.replace(/_/g, " ")}
+                              c={c}
+                            />
+                          ) : null}
+                          {dispute.locationType ? (
+                            <DetailItem
+                              label="Location"
+                              value={dispute.locationType.replace(/_/g, " ")}
+                              c={c}
+                            />
+                          ) : null}
+                        </View>
+                      </View>
+
+                      {/* Parties */}
+                      {dispute.hirer || dispute.worker ? (
+                        <View style={{ gap: 6 }}>
+                          {dispute.hirer ? (
+                            <PartyChip
+                              person={dispute.hirer}
+                              role="Hirer"
+                              c={c}
+                            />
+                          ) : null}
+                          {dispute.worker ? (
+                            <PartyChip
+                              person={dispute.worker}
+                              role="Worker"
+                              c={c}
+                            />
+                          ) : null}
+                        </View>
+                      ) : null}
+
+                      {/* Payment info */}
+                      {dispute.payments && dispute.payments.length > 0 ? (
+                        <View>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 4,
+                              marginBottom: 6,
+                            }}
+                          >
+                            <FaMoneyBillWave size={10} color={c.orange} />
+                            <AppText
+                              style={{
+                                fontFamily: "DMSans_600SemiBold",
+                                fontSize: 9,
+                                fontWeight: "700",
+                                color: c.textMuted,
+                                letterSpacing: 0.6,
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              Payment
+                            </AppText>
+                          </View>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              flexWrap: "wrap",
+                              gap: 8,
+                            }}
+                          >
+                            <DetailItem
+                              label="Status"
+                              value={dispute.payments[0].status}
+                              c={c}
+                            />
+                            <DetailItem
+                              label="Amount"
+                              value={formatCurrency(
+                                dispute.payments[0].amount,
+                                dispute.payments[0].currency,
+                              )}
+                              c={c}
+                            />
+                          </View>
+                        </View>
+                      ) : null}
+
+                      {/* Actions */}
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 8,
+                          paddingTop: 8,
+                          borderTopWidth: 1,
+                          borderTopColor: c.border,
+                        }}
+                      >
+                        {dispute.status === "DISPUTED" ? (
+                          <Pressable
+                            onPress={() => openCancelModal(dispute.id)}
+                            disabled={cancelling === dispute.id}
+                            style={({ pressed }) => [
+                              {
+                                flexDirection: "row",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 5,
+                                paddingHorizontal: 14,
+                                paddingVertical: 9,
+                                backgroundColor: "transparent",
+                                borderWidth: 1,
+                                borderColor: c.red,
+                                borderRadius: 8,
+                                opacity:
+                                  cancelling === dispute.id
+                                    ? 0.5
+                                    : pressed
+                                      ? 0.75
+                                      : 1,
+                              },
+                            ]}
+                          >
+                            {cancelling === dispute.id ? (
+                              <>
+                                <ActivityIndicator size="small" color={c.red} />
+                                <AppText
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: "600",
+                                    color: c.red,
+                                  }}
+                                >
+                                  Cancelling...
+                                </AppText>
+                              </>
+                            ) : (
+                              <>
+                                <FaTrash size={11} color={c.red} />
+                                <AppText
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: "600",
+                                    color: c.red,
+                                  }}
+                                >
+                                  Cancel Dispute
+                                </AppText>
+                              </>
+                            )}
+                          </Pressable>
+                        ) : null}
+                        <Pressable
+                          onPress={() =>
+                            navigation.navigate("BookingDetail", {
+                              bookingId: dispute.id,
+                            })
+                          }
+                          style={({ pressed }) => [
+                            {
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 4,
+                              paddingHorizontal: 10,
+                              paddingVertical: 9,
+                              marginLeft: "auto",
+                              opacity: pressed ? 0.75 : 1,
+                            },
+                          ]}
+                        >
+                          <FaEye size={11} color={c.orange} />
+                          <AppText
+                            style={{
+                              fontSize: 12,
+                              fontWeight: "600",
+                              color: c.orange,
+                            }}
+                          >
+                            View Booking →
+                          </AppText>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
           </View>
-        }
-        renderItem={({ item }) => (
-          <DisputeCard
-            item={item}
-            expanded={expanded === item.id}
-            onToggle={() =>
-              setExpanded((prev) => (prev === item.id ? null : item.id))
-            }
-            onViewBooking={(id) =>
-              navigation.navigate("BookingDetail", { bookingId: id })
-            }
-            onCancel={handleCancel}
-            c={c}
-          />
         )}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-        ListEmptyComponent={
-          loading ? (
-            <Skeleton c={c} />
-          ) : (
-            <View style={styles.empty}>
-              <AppText style={{ fontSize: 40, textAlign: "center" }}>
-                ⚖️
-              </AppText>
-              <AppText
-                variant="body"
-                weight="semibold"
-                style={{ textAlign: "center", marginTop: 12 }}
-              >
-                No disputes
-              </AppText>
-              <AppText
-                variant="small"
-                tone="dim"
-                style={{ textAlign: "center", marginTop: 6, lineHeight: 20 }}
-              >
-                {activeTab === "All"
-                  ? "You have no disputes. We hope it stays that way!"
-                  : `No ${activeTab.toLowerCase()} disputes found.`}
-              </AppText>
-            </View>
-          )
-        }
-        ListFooterComponent={<View style={{ height: 40 }} />}
-      />
+      </ScrollView>
 
-      {/* Raise dispute sheet */}
-      <RaiseDisputeSheet
-        bookingId={sheetBookingId}
-        bookingTitle={sheetBookingTitle}
-        visible={sheetVisible}
-        onClose={() => setSheetVisible(false)}
-        onSuccess={fetchDisputes}
+      {/* Confirmation modal */}
+      <ConfirmationModal
+        isOpen={showCancelModal}
+        onClose={closeCancelModal}
+        onConfirm={confirmCancel}
+        title="Cancel Dispute"
+        message="Are you sure you want to cancel this dispute? This action cannot be undone."
         c={c}
-        modalBg={th.mode === "dark" ? "#111118" : "#ffffff"}
       />
 
-      {/* Confirm modal */}
-      <ConfirmModal
-        visible={!!modal}
-        title={modal?.title}
-        message={modal?.message}
-        confirmLabel={modal?.confirmLabel}
-        destructive={modal?.destructive}
-        onConfirm={() => {
-          modal?.onConfirm?.();
-          setModal(null);
-        }}
-        onCancel={() => setModal(null)}
+      {/* Image lightbox */}
+      <ImageLightbox
+        imageUrl={lightboxImage}
+        onClose={() => setLightboxImage(null)}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  listContent: { paddingHorizontal: 16, paddingBottom: 40 },
-
-  // Page header
-  pageHeader: { paddingTop: 20, paddingBottom: 16 },
-  heroTitle: {
-    fontSize: 36,
-    fontWeight: "900",
-    letterSpacing: -0.5,
-    lineHeight: 42,
-  },
-
-  raiseBtn: {
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-
-  // Stats
-  statsRow: { flexDirection: "row", gap: 32, marginBottom: 20 },
-  statItem: { alignItems: "flex-start", gap: 2 },
-  statNum: { fontSize: 32, fontWeight: "900", lineHeight: 38 },
-
-  // Filter tabs
-  tabsScroll: { flexGrow: 0, marginBottom: 0 },
-  tabsContent: { flexDirection: "row", gap: 0, paddingRight: 16 },
-  tab: {
-    paddingHorizontal: 4,
-    paddingBottom: 10,
-    paddingTop: 4,
-    marginRight: 20,
-    borderBottomWidth: 2,
-  },
-  tabBar: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
-
-  // Dispute card
-  disputeCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    gap: 12,
-  },
-  warnIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cardTitleBlock: { flex: 1 },
-  cardRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-
-  // Expanded body
-  cardBody: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-  },
-  catChip: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  partiesRow: {
-    flexDirection: "row",
-    gap: 24,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 12,
-    marginVertical: 12,
-  },
-  partyItem: { flex: 1 },
-  paymentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 14,
-  },
-  cardActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  viewBookingBtn: { paddingVertical: 8 },
-  cancelDisputeBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  reviewNote: { lineHeight: 18, textAlign: "center", opacity: 0.6 },
-
-  // Raise dispute sheet
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    maxHeight: "88%",
-    paddingBottom: 32,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    padding: 20,
-    paddingBottom: 16,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fieldLabel: {
-    paddingHorizontal: 20,
-    marginBottom: 8,
-    letterSpacing: 0.8,
-    fontSize: 11,
-  },
-  reasonPills: { paddingHorizontal: 20, gap: 8, flexDirection: "row" },
-  reasonPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  textarea: {
-    marginHorizontal: 20,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    minHeight: 110,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  infoNote: {
-    marginHorizontal: 20,
-    marginTop: 14,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-  },
-  submitBtn: {
-    marginHorizontal: 20,
-    marginTop: 20,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-  cancelLink: { alignItems: "center", paddingVertical: 14 },
-
-  // Skeleton
-  skCard: {
-    height: 72,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    opacity: 0.5,
-  },
-
-  // Empty
-  empty: { alignItems: "center", paddingTop: 60, paddingHorizontal: 32 },
-});
+const styles = StyleSheet.create({});

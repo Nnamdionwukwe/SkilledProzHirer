@@ -1,21 +1,19 @@
 // src/components/booking/BookingDetailPayment.js
 //
 // Verbatim port of components/booking/BookingDetail/BookingDetailPayment.jsx
-// (aka the modern web file you pasted at `import { Link } from "react-router-dom";`).
 //
 // Two render paths:
-//   · payment PENDING (or missing) → renderFeeBreakdown()
-//       - Worker branch OR Hirer branch
-//       - Fixed-total view (job-post / negotiated) OR rate×qty view
+//   · payment PENDING or missing → renderFeeBreakdown()
+//       - Worker branch  OR  Hirer branch
+//       - Fixed-total view (job-post / negotiated) OR rate × qty view
 //       - Referral slider (hirer only, NGN only, wallet > 0)
 //       - Pay Now banner (hirer only, paymentRequired)
-//   · payment HELD / RELEASED → renderPaymentCard() (receipt)
+//   · payment HELD / RELEASED / REFUNDED / FAILED → renderPaymentCard() receipt
 //
-// Fee rate is always `getHirerFeeRate(currency) * 100` — no hardcoding.
-// Numbers use Intl.NumberFormat with 2 fraction digits (matches web).
+// Currency-aware fees: getHirerFeeRate(currency) × 100 (never hardcoded).
 
 import React from "react";
-import { Pressable, View } from "react-native";
+import { Linking, Pressable, View } from "react-native";
 
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -30,12 +28,6 @@ import {
   FaClock,
 } from "../../icons/fa";
 
-// Mobile PaymentOptions sheet — lightweight stub; wire to your existing
-// checkout flow later. Exports a component taking { booking, onSuccess,
-// referralAmount, referralApplied, onReferralToggle }.
-import PaymentOptions from "./PaymentOptions";
-
-// ── Helpers ────────────────────────────────────────────────────────────
 function getFeePercent(currency = "NGN") {
   return Math.round(getHirerFeeRate(currency) * 100);
 }
@@ -49,9 +41,7 @@ function formatPrice(amount, currency = "NGN") {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────
-function PayRow({ label, value, muted, green, capitalize, mono, extra }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
+function PayRow({ label, value, muted, green, capitalize, mono, extra, c }) {
   return (
     <View
       style={{
@@ -74,7 +64,7 @@ function PayRow({ label, value, muted, green, capitalize, mono, extra }) {
             fontWeight: "700",
             color: green ? c.green : muted ? c.textDim : c.text,
             textTransform: capitalize ? "capitalize" : "none",
-            fontFamily: mono ? "DMSans_400Regular" : undefined,
+            fontFamily: mono ? "Courier" : undefined,
             textAlign: "right",
             flexShrink: 1,
           }}
@@ -86,7 +76,135 @@ function PayRow({ label, value, muted, green, capitalize, mono, extra }) {
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────
+function FeeRow({ label, value, c }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+      }}
+    >
+      <AppText style={{ fontSize: 13, color: c.textDim, flexShrink: 1 }}>
+        {label}
+      </AppText>
+      {typeof value === "string" ? (
+        <AppText
+          style={{
+            fontSize: 13,
+            color: c.text,
+            textAlign: "right",
+            flexShrink: 1,
+          }}
+        >
+          {value}
+        </AppText>
+      ) : (
+        value
+      )}
+    </View>
+  );
+}
+
+function FeeTotal({ label, value, c }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+        paddingTop: 8,
+        borderTopColor: c.border,
+        borderTopWidth: 1,
+        marginTop: 2,
+      }}
+    >
+      <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
+        {label}
+      </AppText>
+      <AppText
+        style={{
+          fontFamily: "Syne_800ExtraBold",
+          fontSize: 20,
+          fontWeight: "800",
+          color: c.orange,
+        }}
+      >
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
+// ── Referral slider — replaces HTML <input type="range"> with +/− steps ─
+function ReferralSlider({ value, onChange, disabled, c }) {
+  const step = 5;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <Pressable
+        onPress={() => !disabled && onChange(Math.max(0, Number(value) - step))}
+        disabled={disabled || Number(value) <= 0}
+        hitSlop={6}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: c.border,
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: disabled || Number(value) <= 0 ? 0.4 : 1,
+        }}
+      >
+        <AppText style={{ fontSize: 18, color: c.text, lineHeight: 20 }}>
+          −
+        </AppText>
+      </Pressable>
+      <View
+        style={{
+          flex: 1,
+          height: 6,
+          borderRadius: 3,
+          backgroundColor: c.border,
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            height: "100%",
+            width: `${Math.min(100, Math.max(0, Number(value)))}%`,
+            backgroundColor: c.orange,
+          }}
+        />
+      </View>
+      <Pressable
+        onPress={() =>
+          !disabled && onChange(Math.min(100, Number(value) + step))
+        }
+        disabled={disabled || Number(value) >= 100}
+        hitSlop={6}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: c.border,
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: disabled || Number(value) >= 100 ? 0.4 : 1,
+        }}
+      >
+        <AppText style={{ fontSize: 18, color: c.text, lineHeight: 20 }}>
+          +
+        </AppText>
+      </Pressable>
+    </View>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
 export default function BookingDetailPayment({
   booking,
   payment,
@@ -129,7 +247,7 @@ export default function BookingDetailPayment({
       : null;
 
   // ══════════════════════════════════════════════════════════════════════
-  // renderFeeBreakdown — orange card + Pay Now banner
+  // renderFeeBreakdown
   // ══════════════════════════════════════════════════════════════════════
   const renderFeeBreakdown = () => {
     if (!feeBreakdown) return null;
@@ -137,7 +255,7 @@ export default function BookingDetailPayment({
     const isNegotiated = booking.isNegotiated && booking.negotiatedRate;
     const isFixedTotalView = isNegotiated || isJobPostBooking;
 
-    // ── Worker view ────────────────────────────────────────────────
+    // ── Worker view ────────────────────────────────────────────
     if (isWorker) {
       const cur = feeBreakdown.currency || "NGN";
       const workerPayout = feeBreakdown.workerPayout || 0;
@@ -176,35 +294,34 @@ export default function BookingDetailPayment({
               <FeeRow
                 label={isNegotiated ? "Agreed Total" : "Selected Amount"}
                 value={formatPrice(agreedRate, cur)}
+                c={c}
               />
-              {isJobPostBooking && realDurationText && (
+              {isJobPostBooking && realDurationText ? (
                 <FeeRow
                   label="Duration"
                   value={
-                    <>
+                    <AppText style={{ fontSize: 13, color: c.text }}>
                       {realDurationText}
                       {booking.estimatedHours ? (
-                        <AppText
-                          style={{
-                            color: c.textMuted,
-                            fontSize: 11,
-                            marginLeft: 4,
-                          }}
-                        >
+                        <AppText style={{ color: c.textMuted, fontSize: 11 }}>
+                          {" "}
                           (≈ {booking.estimatedHours}h)
                         </AppText>
                       ) : null}
-                    </>
+                    </AppText>
                   }
+                  c={c}
                 />
-              )}
+              ) : null}
               <FeeRow
                 label={`Platform Fee (${feePercent}%)`}
                 value={`+ ${formatPrice(feeBreakdown.platformFee || 0, cur)}`}
+                c={c}
               />
               <FeeTotal
                 label="You Earn"
                 value={formatPrice(workerPayout, cur)}
+                c={c}
               />
             </>
           ) : (
@@ -216,26 +333,36 @@ export default function BookingDetailPayment({
                     feeBreakdown.estimatedUnit
                   ] || ""
                 }`}
+                c={c}
               />
-              {feeBreakdown.hasQty && (
+              {feeBreakdown.hasQty ? (
                 <FeeRow
                   label="Duration"
-                  value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${feeBreakdown.qty !== 1 ? "s" : ""}`}
+                  value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${
+                    feeBreakdown.qty !== 1 ? "s" : ""
+                  }`}
+                  c={c}
                 />
-              )}
-              {feeBreakdown.hasQty && (
+              ) : null}
+              {feeBreakdown.hasQty ? (
                 <FeeRow
-                  label={`Subtotal (${feeBreakdown.qty} × ${formatPrice(agreedRate, cur)})`}
+                  label={`Subtotal (${feeBreakdown.qty} × ${formatPrice(
+                    agreedRate,
+                    cur,
+                  )})`}
                   value={formatPrice(feeBreakdown.subtotal || 0, cur)}
+                  c={c}
                 />
-              )}
+              ) : null}
               <FeeRow
                 label={`Platform Fee (${feePercent}%)`}
                 value={`+ ${formatPrice(feeBreakdown.platformFee || 0, cur)}`}
+                c={c}
               />
               <FeeTotal
                 label="You Earn"
                 value={formatPrice(workerPayout, cur)}
+                c={c}
               />
             </>
           )}
@@ -243,7 +370,7 @@ export default function BookingDetailPayment({
       );
     }
 
-    // ── Hirer view ─────────────────────────────────────────────────
+    // ── Hirer view ─────────────────────────────────────────────
     const cur = feeBreakdown.currency || "NGN";
     const agreedRate = feeBreakdown.agreedRate || 0;
     const subtotal = feeBreakdown.subtotal || 0;
@@ -293,39 +420,40 @@ export default function BookingDetailPayment({
             <FeeRow
               label={isNegotiated ? "Agreed Total" : "Selected Amount"}
               value={formatPrice(agreedRate, cur)}
+              c={c}
             />
-            {isJobPostBooking && realDurationText && (
+            {isJobPostBooking && realDurationText ? (
               <FeeRow
                 label="Duration"
                 value={
-                  <>
+                  <AppText style={{ fontSize: 13, color: c.text }}>
                     {realDurationText}
                     {booking.estimatedHours ? (
-                      <AppText
-                        style={{
-                          color: c.textMuted,
-                          fontSize: 11,
-                          marginLeft: 4,
-                        }}
-                      >
+                      <AppText style={{ color: c.textMuted, fontSize: 11 }}>
+                        {" "}
                         (≈ {booking.estimatedHours}h)
                       </AppText>
                     ) : null}
-                  </>
+                  </AppText>
                 }
+                c={c}
               />
-            )}
-            {isNegotiated && (feeBreakdown.hasQty || isCustom) && (
+            ) : null}
+            {isNegotiated && (feeBreakdown.hasQty || isCustom) ? (
               <FeeRow
                 label="Duration"
-                value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${feeBreakdown.qty !== 1 ? "s" : ""}`}
+                value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${
+                  feeBreakdown.qty !== 1 ? "s" : ""
+                }`}
+                c={c}
               />
-            )}
+            ) : null}
             <FeeRow
               label={`Platform Fee (${feePercent}%)`}
               value={`+ ${formatPrice(platformFee, cur)}`}
+              c={c}
             />
-            {referralApplied && discount > 0 && booking.currency === "NGN" && (
+            {referralApplied && discount > 0 && booking.currency === "NGN" ? (
               <View
                 style={{
                   flexDirection: "row",
@@ -350,8 +478,12 @@ export default function BookingDetailPayment({
                   − {formatPrice(discount, booking.currency)}
                 </AppText>
               </View>
-            )}
-            <FeeTotal label="You Pay" value={formatPrice(finalTotal, cur)} />
+            ) : null}
+            <FeeTotal
+              label="You Pay"
+              value={formatPrice(finalTotal, cur)}
+              c={c}
+            />
           </>
         ) : (
           <>
@@ -362,24 +494,33 @@ export default function BookingDetailPayment({
                   feeBreakdown.estimatedUnit
                 ] || ""
               }`}
+              c={c}
             />
-            {(feeBreakdown.hasQty || isCustom) && (
+            {feeBreakdown.hasQty || isCustom ? (
               <FeeRow
                 label="Duration"
-                value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${feeBreakdown.qty !== 1 ? "s" : ""}`}
+                value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${
+                  feeBreakdown.qty !== 1 ? "s" : ""
+                }`}
+                c={c}
               />
-            )}
-            {(feeBreakdown.hasQty || isCustom) && (
+            ) : null}
+            {feeBreakdown.hasQty || isCustom ? (
               <FeeRow
-                label={`Subtotal (${feeBreakdown.qty} × ${formatPrice(agreedRate, cur)})`}
+                label={`Subtotal (${feeBreakdown.qty} × ${formatPrice(
+                  agreedRate,
+                  cur,
+                )})`}
                 value={formatPrice(subtotal, cur)}
+                c={c}
               />
-            )}
+            ) : null}
             <FeeRow
               label={`Platform Fee (${feePercent}%)`}
               value={`+ ${formatPrice(platformFee, cur)}`}
+              c={c}
             />
-            {referralApplied && discount > 0 && booking.currency === "NGN" && (
+            {referralApplied && discount > 0 && booking.currency === "NGN" ? (
               <View
                 style={{
                   flexDirection: "row",
@@ -404,102 +545,107 @@ export default function BookingDetailPayment({
                   − {formatPrice(discount, booking.currency)}
                 </AppText>
               </View>
-            )}
-            <FeeTotal label="You Pay" value={formatPrice(finalTotal, cur)} />
+            ) : null}
+            <FeeTotal
+              label="You Pay"
+              value={formatPrice(finalTotal, cur)}
+              c={c}
+            />
           </>
         )}
 
-        {/* Referral slider */}
+        {/* Referral slider — hirer, NGN only, wallet > 0 */}
         {!feeBreakdown.isActual &&
-          isHirer &&
-          walletBalance > 0 &&
-          booking.currency === "NGN" && (
+        isHirer &&
+        walletBalance > 0 &&
+        booking.currency === "NGN" ? (
+          <View
+            style={{
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+              borderWidth: 1,
+              borderRadius: 10,
+              padding: 12,
+              marginTop: 8,
+              gap: 8,
+            }}
+          >
             <View
-              style={{
-                backgroundColor: c.bgCard,
-                borderColor: c.border,
-                borderWidth: 1,
-                borderRadius: 10,
-                padding: 12,
-                marginTop: 8,
-                gap: 8,
-              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              <FaGift size={14} color={c.green} />
+              <AppText
+                style={{
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: c.text,
+                  flex: 1,
+                }}
               >
-                <FaGift size={14} color={c.green} />
-                <AppText
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "600",
-                    color: c.text,
-                    flex: 1,
-                  }}
-                >
-                  Referral Wallet Balance: {formatPrice(walletBalance, "NGN")}
-                </AppText>
-              </View>
-              <ReferralSlider
-                value={referralPercent}
-                onChange={onPercentChange}
-                disabled={walletBalance <= 0}
-              />
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <AppText
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "700",
-                    color: c.orange,
-                    minWidth: 44,
-                  }}
-                >
-                  {referralPercent}%
-                </AppText>
-                <AppText
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "700",
-                    color: c.text,
-                    flex: 1,
-                    textAlign: "right",
-                  }}
-                >
-                  {formatPrice(referralAmount, "NGN")}
-                </AppText>
-                <Pressable
-                  onPress={onReferralToggle}
-                  disabled={referralAmount === 0}
-                  style={({ pressed }) => [
-                    {
-                      paddingHorizontal: 14,
-                      paddingVertical: 4,
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: referralApplied ? c.orange : c.border,
-                      backgroundColor: referralApplied ? c.orange : c.bgCard,
-                      opacity: referralAmount === 0 ? 0.4 : pressed ? 0.85 : 1,
-                    },
-                  ]}
-                >
-                  <AppText
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: referralApplied ? "#fff" : c.textDim,
-                    }}
-                  >
-                    {referralApplied ? "Remove" : "Apply"}
-                  </AppText>
-                </Pressable>
-              </View>
+                Referral Wallet Balance: {formatPrice(walletBalance, "NGN")}
+              </AppText>
             </View>
-          )}
+            <ReferralSlider
+              value={referralPercent}
+              onChange={onPercentChange}
+              disabled={walletBalance <= 0}
+              c={c}
+            />
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <AppText
+                style={{
+                  fontSize: 14,
+                  fontWeight: "700",
+                  color: c.orange,
+                  minWidth: 44,
+                }}
+              >
+                {referralPercent}%
+              </AppText>
+              <AppText
+                style={{
+                  fontSize: 13,
+                  fontWeight: "700",
+                  color: c.text,
+                  flex: 1,
+                  textAlign: "right",
+                }}
+              >
+                {formatPrice(referralAmount, "NGN")}
+              </AppText>
+              <Pressable
+                onPress={onReferralToggle}
+                disabled={referralAmount === 0}
+                style={({ pressed }) => [
+                  {
+                    paddingHorizontal: 14,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: referralApplied ? c.orange : c.border,
+                    backgroundColor: referralApplied ? c.orange : c.bgCard,
+                    opacity: referralAmount === 0 ? 0.4 : pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "700",
+                    color: referralApplied ? "#fff" : c.textDim,
+                  }}
+                >
+                  {referralApplied ? "Remove" : "Apply"}
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
-        {/* No-referral info box */}
-        {!feeBreakdown.isActual && isHirer && walletBalance === 0 && (
+        {/* No-referral info */}
+        {!feeBreakdown.isActual && isHirer && walletBalance === 0 ? (
           <View
             style={{
               backgroundColor: c.greenDim,
@@ -521,10 +667,10 @@ export default function BookingDetailPayment({
               You don't have any referral bonus yet. Invite friends to earn!
             </AppText>
           </View>
-        )}
+        ) : null}
 
         {/* Pay Now banner */}
-        {isHirer && paymentRequired && (
+        {isHirer && paymentRequired ? (
           <View
             style={{
               marginTop: 12,
@@ -534,7 +680,7 @@ export default function BookingDetailPayment({
               gap: 10,
             }}
           >
-            {isPaymentPending && isBookingAccepted && (
+            {isPaymentPending && isBookingAccepted ? (
               <View
                 style={{
                   flexDirection: "row",
@@ -562,9 +708,9 @@ export default function BookingDetailPayment({
                   </AppText>
                 </AppText>
               </View>
-            )}
+            ) : null}
 
-            {walletBalance > 0 && booking.currency === "NGN" && (
+            {walletBalance > 0 && booking.currency === "NGN" ? (
               <View
                 style={{
                   flexDirection: "row",
@@ -620,13 +766,16 @@ export default function BookingDetailPayment({
                   </>
                 )}
               </View>
-            )}
+            ) : null}
 
             <AppText
               style={{ fontSize: 12, color: c.textMuted, lineHeight: 17 }}
             >
               By proceeding, you agree to our{" "}
               <AppText
+                onPress={() =>
+                  Linking.openURL("https://skilledproz.com/refund-policy")
+                }
                 style={{
                   color: c.orange,
                   textDecorationLine: "underline",
@@ -690,7 +839,7 @@ export default function BookingDetailPayment({
               )}
             </Pressable>
 
-            {showPayOptions && (
+            {showPayOptions ? (
               <View
                 style={{
                   gap: 8,
@@ -700,9 +849,7 @@ export default function BookingDetailPayment({
                 }}
               >
                 <Pressable
-                  onPress={() => {
-                    if (onSuccess) onSuccess("Opening card checkout…");
-                  }}
+                  onPress={() => onSuccess?.("Opening card checkout…")}
                   style={({ pressed }) => [
                     {
                       height: 42,
@@ -723,27 +870,16 @@ export default function BookingDetailPayment({
                     Pay by Card
                   </AppText>
                 </Pressable>
-                <PaymentOptions
-                  booking={booking}
-                  referralAmount={referralApplied ? referralAmount : 0}
-                  referralApplied={referralApplied}
-                  onReferralToggle={onReferralToggle}
-                  onSuccess={() => {
-                    if (onSuccess) onSuccess("Payment submitted successfully.");
-                    onTogglePayOptions();
-                    if (refetch) refetch();
-                  }}
-                />
               </View>
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
       </View>
     );
   };
 
   // ══════════════════════════════════════════════════════════════════════
-  // renderPaymentCard — receipt view (HELD / RELEASED / REFUNDED / FAILED)
+  // renderPaymentCard — receipt view
   // ══════════════════════════════════════════════════════════════════════
   const renderPaymentCard = () => {
     if (!payment) return null;
@@ -797,21 +933,23 @@ export default function BookingDetailPayment({
         >
           Payment
         </AppText>
-        <PayRow label="Total" value={formatPrice(total, cur)} />
+        <PayRow label="Total" value={formatPrice(total, cur)} c={c} />
         <PayRow
           label={`Platform Fee (${cardFeePercent}%)`}
           value={formatPrice(platformFee, cur)}
           muted
+          c={c}
         />
         <PayRow
           label="Worker Payout"
           value={formatPrice(workerPayout, cur)}
           green
+          c={c}
         />
         <View
           style={{ height: 1, backgroundColor: c.border, marginVertical: 4 }}
         />
-        <PayRow label="Provider" value={payment.provider} capitalize />
+        <PayRow label="Provider" value={payment.provider} capitalize c={c} />
         <PayRow
           label="Status"
           extra={
@@ -838,162 +976,16 @@ export default function BookingDetailPayment({
               </AppText>
             </View>
           }
+          c={c}
         />
         {payment.providerRef ? (
-          <PayRow label="Ref" value={payment.providerRef} mono />
+          <PayRow label="Ref" value={payment.providerRef} mono c={c} />
         ) : null}
       </View>
     );
   };
 
-  // ══════════════════════════════════════════════════════════════════════
-  // Final return — mirrors web switch
-  // ══════════════════════════════════════════════════════════════════════
   const isPending = !payment || payment.status === "PENDING";
 
-  return (
-    <View>
-      {isPending && renderFeeBreakdown()}
-      {!isPending && renderPaymentCard()}
-    </View>
-  );
-}
-
-// ── Tiny local sub-components ──────────────────────────────────────────
-function FeeRow({ label, value }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-      }}
-    >
-      <AppText style={{ fontSize: 13, color: c.textDim, flexShrink: 1 }}>
-        {label}
-      </AppText>
-      <AppText
-        style={{
-          fontSize: 13,
-          color: c.text,
-          textAlign: "right",
-          flexShrink: 1,
-        }}
-      >
-        {value}
-      </AppText>
-    </View>
-  );
-}
-
-function FeeTotal({ label, value }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-        paddingTop: 8,
-        borderTopColor: c.border,
-        borderTopWidth: 1,
-        marginTop: 2,
-      }}
-    >
-      <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-        {label}
-      </AppText>
-      <AppText
-        style={{
-          fontFamily: "Syne_800ExtraBold",
-          fontSize: 20,
-          fontWeight: "800",
-          color: c.orange,
-        }}
-      >
-        {value}
-      </AppText>
-    </View>
-  );
-}
-
-// ── Referral slider — replaces web `<input type="range">` with +/− steps ─
-function ReferralSlider({ value, onChange, disabled }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-  const step = 5;
-
-  const dec = () => {
-    if (disabled) return;
-    onChange(Math.max(0, Number(value) - step));
-  };
-  const inc = () => {
-    if (disabled) return;
-    onChange(Math.min(100, Number(value) + step));
-  };
-
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <Pressable
-        onPress={dec}
-        disabled={disabled || Number(value) <= 0}
-        hitSlop={6}
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: c.border,
-          alignItems: "center",
-          justifyContent: "center",
-          opacity: disabled || Number(value) <= 0 ? 0.4 : 1,
-        }}
-      >
-        <AppText style={{ fontSize: 18, color: c.text, lineHeight: 20 }}>
-          −
-        </AppText>
-      </Pressable>
-      <View
-        style={{
-          flex: 1,
-          height: 6,
-          borderRadius: 3,
-          backgroundColor: c.border,
-          overflow: "hidden",
-        }}
-      >
-        <View
-          style={{
-            height: "100%",
-            width: `${Math.min(100, Math.max(0, Number(value)))}%`,
-            backgroundColor: c.orange,
-          }}
-        />
-      </View>
-      <Pressable
-        onPress={inc}
-        disabled={disabled || Number(value) >= 100}
-        hitSlop={6}
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: c.border,
-          alignItems: "center",
-          justifyContent: "center",
-          opacity: disabled || Number(value) >= 100 ? 0.4 : 1,
-        }}
-      >
-        <AppText style={{ fontSize: 18, color: c.text, lineHeight: 20 }}>
-          +
-        </AppText>
-      </Pressable>
-    </View>
-  );
+  return <View>{isPending ? renderFeeBreakdown() : renderPaymentCard()}</View>;
 }

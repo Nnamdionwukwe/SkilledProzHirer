@@ -1,1858 +1,812 @@
 // src/screens/main/CreateBookingScreen.js
-// Mirrors the website's CreateBooking — full UX rewrite.
-// API: GET /workers/:id  +  POST /bookings
+//
+// Port of pages/bookings/CreateBooking.jsx.
+//
+// Uses @react-native-community/datetimepicker for the schedule:
+//   - Android: native calendar/clock dialogs
+//   - iOS: inline spinners (kept open until user taps elsewhere)
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
+  Alert,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useTranslation } from "react-i18next";
+import { SafeAreaView } from "react-native-safe-area-context";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
-import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
-import AppInput from "../../components/AppInput";
-import AppButton from "../../components/AppButton";
-import Card from "../../components/Card";
+import Skeleton from "../../components/Skeleton";
+import BookingWorkerInfo from "../../components/booking/BookingWorkerInfo";
+import BookingFormFields from "../../components/booking/BookingFormFields";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useToast } from "../../contexts/ToastContext";
-import { createBooking } from "../../api/bookings";
-import { getWorkerPublicProfile } from "../../api/workers";
+import { useAuthStore } from "../../store/authStore";
+import client from "../../api/client";
+import { getHirerFeeRate } from "../../utils/pricing";
+import {
+  FaArrowLeft,
+  FaPlus,
+  FaExclamationTriangle,
+  FaClipboardList,
+  FaCheck,
+} from "../../icons/fa";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function estHours(unit, val) {
-  const n = parseFloat(val) || 0;
-  return (
-    { hours: n, days: n * 8, weeks: n * 40, months: n * 160 }[unit] ?? null
-  );
+const DURATION_OPTIONS = [
+  {
+    unit: "hours",
+    label: "Hourly",
+    rateKey: "hourlyRate",
+    suffix: "/hr",
+    inputLabel: "Hours",
+    inputType: "number",
+    step: 0.5,
+  },
+  {
+    unit: "days",
+    label: "Daily",
+    rateKey: "dailyRate",
+    suffix: "/day",
+    inputLabel: "Days",
+    inputType: "number",
+    step: 1,
+  },
+  {
+    unit: "weeks",
+    label: "Weekly",
+    rateKey: "weeklyRate",
+    suffix: "/wk",
+    inputLabel: "Weeks",
+    inputType: "number",
+    step: 1,
+  },
+  {
+    unit: "months",
+    label: "Monthly",
+    rateKey: "monthlyRate",
+    suffix: "/mo",
+    inputLabel: "Months",
+    inputType: "number",
+    step: 1,
+  },
+  {
+    unit: "years",
+    label: "Yearly",
+    rateKey: "yearlyRate",
+    suffix: "/yr",
+    inputLabel: "Years",
+    inputType: "number",
+    step: 1,
+  },
+  {
+    unit: "custom",
+    label: "Custom",
+    rateKey: "customRate",
+    suffix: "",
+    inputLabel: "Description",
+    inputType: "text",
+    step: null,
+  },
+];
+
+const UNIT_TO_TYPES = {
+  hours: { budget: "HOURLY", duration: "HOURS" },
+  days: { budget: "DAILY", duration: "DAYS" },
+  weeks: { budget: "WEEKLY", duration: "WEEKS" },
+  months: { budget: "MONTHLY", duration: "MONTHS" },
+  years: { budget: "YEARLY", duration: "YEARLY" },
+  custom: { budget: "CUSTOM", duration: "CUSTOM" },
+};
+
+function computeFees(agreedRate, qty = 1, currency = "NGN") {
+  const subtotal = parseFloat((agreedRate * qty).toFixed(2));
+  const rate = getHirerFeeRate(currency);
+  const hirerFee = parseFloat((subtotal * rate).toFixed(2));
+  const totalToPay = parseFloat((subtotal + hirerFee).toFixed(2));
+  return { subtotal, hirerFee, totalToPay, workerGets: subtotal };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sub-components
-// ─────────────────────────────────────────────────────────────────────────────
-
-// No worker selected state
-function EmptyWorkerState({ onBrowse, c }) {
-  const { t } = useTranslation();
-  return (
-    <View
-      style={[es.wrap, { backgroundColor: c.bgCard, borderColor: c.border }]}
-    >
-      <AppText style={{ fontSize: 48 }}>👷</AppText>
-      <AppText
-        variant="title"
-        weight="semibold"
-        style={{ color: c.text, marginTop: 14, textAlign: "center" }}
-      >
-        {t("createBooking.empty.title")}
-      </AppText>
-      <AppText
-        variant="body"
-        tone="dim"
-        style={{ textAlign: "center", marginTop: 6, lineHeight: 22 }}
-      >
-        {t("createBooking.empty.subtitle")}
-      </AppText>
-      <Pressable
-        onPress={onBrowse}
-        style={[es.btn, { backgroundColor: c.orange }]}
-      >
-        <Ionicons
-          name="search-outline"
-          size={18}
-          color="#fff"
-          style={{ marginRight: 8 }}
-        />
-        <AppText variant="body" weight="semibold" style={{ color: "#fff" }}>
-          {t("createBooking.empty.button")}
-        </AppText>
-      </Pressable>
-    </View>
-  );
-}
-
-// Worker card — mirrors website exactly
-function WorkerCard({ worker, c }) {
-  const { t } = useTranslation();
-  const u = worker.user ?? worker;
-  return (
-    <View
-      style={[wc.card, { backgroundColor: c.bgCard, borderColor: c.orange }]}
-    >
-      <View style={wc.topRow}>
-        {/* Avatar */}
-        <View
-          style={[
-            wc.avatar,
-            { borderColor: c.orange, backgroundColor: c.orangeDim },
-          ]}
-        >
-          {u.avatar ? (
-            <Image source={{ uri: u.avatar }} style={wc.avatarImg} />
-          ) : (
-            <AppText
-              variant="title"
-              weight="semibold"
-              style={{ color: c.orange }}
-            >
-              {u.firstName?.[0]}
-              {u.lastName?.[0]}
-            </AppText>
-          )}
-          {worker.isAvailable && (
-            <View
-              style={[
-                wc.onlineDot,
-                { backgroundColor: "#22c55e", borderColor: c.bgCard },
-              ]}
-            />
-          )}
-        </View>
-
-        {/* Info */}
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: 6,
-            }}
-          >
-            <AppText variant="body" weight="semibold" style={{ color: c.text }}>
-              {u.firstName} {u.lastName}
-            </AppText>
-            {worker.verificationStatus === "VERIFIED" && (
-              <View
-                style={[
-                  wc.verifiedBadge,
-                  {
-                    backgroundColor: "rgba(34,197,94,0.15)",
-                    borderColor: "#22c55e",
-                  },
-                ]}
-              >
-                <Ionicons name="shield-checkmark" size={11} color="#22c55e" />
-              </View>
-            )}
-          </View>
-          <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
-            {worker.title}
-          </AppText>
-          {worker.avgRating > 0 && (
-            <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
-              ⭐ {Number(worker.avgRating).toFixed(1)} ({worker.totalReviews}{" "}
-              {t("createBooking.reviews")})
-            </AppText>
-          )}
-          {(u.city || u.country) && (
-            <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
-              📍 {[u.city, u.country].filter(Boolean).join(", ")}
-            </AppText>
-          )}
-          {worker.completedJobs > 0 && (
-            <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
-              ✅ {worker.completedJobs} {t("createBooking.jobsDone")}
-            </AppText>
-          )}
-        </View>
-
-        {/* Lock tag */}
-        <View
-          style={[
-            wc.lockTag,
-            { borderColor: c.border, backgroundColor: c.bgInput },
-          ]}
-        >
-          <Ionicons name="lock-closed" size={12} color={c.textMuted} />
-          <AppText
-            variant="small"
-            tone="dim"
-            style={{
-              fontSize: 9,
-              marginTop: 3,
-              textAlign: "center",
-              lineHeight: 13,
-            }}
-          >
-            {t("createBooking.detailsLocked")}
-          </AppText>
-        </View>
-      </View>
-
-      {/* Categories */}
-      {worker.categories?.length > 0 && (
-        <View style={wc.catRow}>
-          {worker.categories.slice(0, 4).map((wcat) => (
-            <View
-              key={wcat.id}
-              style={[
-                wc.catPill,
-                { backgroundColor: c.orangeDim, borderColor: c.orange },
-              ]}
-            >
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.orange }}
-              >
-                {wcat.category?.icon} {wcat.category?.name}
-              </AppText>
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
-
-// Section label (orange uppercase legend)
-function SectionLegend({ label, c }) {
-  return (
-    <AppText
-      variant="small"
-      weight="semibold"
-      style={{
-        color: c.orange,
-        letterSpacing: 1.2,
-        marginBottom: 14,
-        fontSize: 11,
-      }}
-    >
-      {label}
-    </AppText>
-  );
-}
-
-// Fieldset wrapper
-function Fieldset({ legend, children, c }) {
-  return (
-    <View style={[s.fieldset, { borderColor: c.border }]}>
-      <SectionLegend label={legend} c={c} />
-      {children}
-    </View>
-  );
-}
-
-// List-style option row (Payment type & Duration)
-function ListOptionRow({ item, selected, onPress, c, last }) {
-  const isSelected = selected === item.value;
-  return (
-    <Pressable
-      onPress={() => onPress(item.value)}
-      style={({ pressed }) => [
-        s.listRow,
-        {
-          borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
-          borderBottomColor: c.border,
-          backgroundColor: isSelected
-            ? `${c.orange}15`
-            : pressed
-              ? c.bgInput
-              : "transparent",
-        },
-      ]}
-    >
-      {/* Icon circle */}
-      <View
-        style={[
-          s.listIconCircle,
-          { backgroundColor: isSelected ? c.orange : c.bgInput },
-        ]}
-      >
-        <Ionicons
-          name={item.icon}
-          size={18}
-          color={isSelected ? "#fff" : c.textMuted}
-        />
-      </View>
-      {/* Labels */}
-      <View style={{ flex: 1, marginLeft: 14 }}>
-        <AppText
-          variant="body"
-          weight={isSelected ? "semibold" : "regular"}
-          style={{ color: isSelected ? c.orange : c.text }}
-        >
-          {item.label}
-        </AppText>
-        {item.sub && (
-          <AppText variant="small" tone="dim">
-            {item.sub}
-          </AppText>
-        )}
-      </View>
-      {/* Check */}
-      {isSelected && (
-        <View style={[s.checkCircle, { backgroundColor: c.orange }]}>
-          <Ionicons name="checkmark" size={14} color="#fff" />
-        </View>
-      )}
-    </Pressable>
-  );
-}
-
-// Category bottom sheet modal
-function CategoryModal({
-  visible,
-  onClose,
-  categories,
-  selected,
-  onSelect,
-  c,
-  modalBg,
-}) {
-  const { t } = useTranslation();
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable style={s.backdrop} onPress={onClose}>
-        <Pressable
-          style={[
-            s.sheet,
-            { backgroundColor: modalBg, borderTopColor: c.border },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={[s.sheetHandle, { backgroundColor: c.border }]} />
-          <AppText
-            variant="title"
-            weight="semibold"
-            style={{ color: c.text, paddingHorizontal: 20, marginBottom: 16 }}
-          >
-            {t("createBooking.field.selectCategory")}
-          </AppText>
-          {categories.map((wcat, idx) => {
-            const catId = wcat.category?.id ?? "";
-            const isSelected = selected === catId;
-            return (
-              <Pressable
-                key={wcat.id}
-                onPress={() => {
-                  onSelect(catId);
-                  onClose();
-                }}
-                style={[
-                  s.sheetRow,
-                  {
-                    borderBottomColor: c.border,
-                    borderBottomWidth:
-                      idx < categories.length - 1
-                        ? StyleSheet.hairlineWidth
-                        : 0,
-                    backgroundColor: isSelected
-                      ? `${c.orange}15`
-                      : "transparent",
-                  },
-                ]}
-              >
-                <AppText variant="body" style={{ color: c.text, flex: 1 }}>
-                  {wcat.category?.icon} {wcat.category?.name}
-                  {wcat.isPrimary ? (
-                    <AppText variant="small" tone="dim">
-                      {" "}
-                      ({t("createBooking.primary")})
-                    </AppText>
-                  ) : null}
-                </AppText>
-                {isSelected && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={c.orange}
-                  />
-                )}
-              </Pressable>
-            );
-          })}
-          <View style={{ height: 30 }} />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main Screen
-// ─────────────────────────────────────────────────────────────────────────────
 export default function CreateBookingScreen() {
-  const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
-  const { theme: th } = useTheme();
-  const { toast } = useToast();
-  const c = th.colors;
-  const modalBg = th.mode === "dark" ? "#111118" : "#ffffff";
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const { user } = useAuthStore();
 
-  // ── Define all options INSIDE the component with t() ──────────────────────
-  const JOB_TYPE_OPTIONS = [
-    {
-      value: "FULL_TIME",
-      label: t("createBooking.jobType.fullTime"),
-      icon: "briefcase-outline",
-    },
-    {
-      value: "PART_TIME",
-      label: t("createBooking.jobType.partTime"),
-      icon: "time-outline",
-    },
-    {
-      value: "CONTRACT",
-      label: t("createBooking.jobType.contract"),
-      icon: "document-text-outline",
-    },
-    {
-      value: "TEMPORARY",
-      label: t("createBooking.jobType.temporary"),
-      icon: "hourglass-outline",
-    },
-  ];
+  const propWorkerId = route.params?.workerId || "";
+  const fromJobId = route.params?.fromJob || null;
 
-  const LOCATION_TYPE_OPTIONS = [
-    {
-      value: "REMOTE",
-      label: t("createBooking.locationType.remote"),
-      icon: "globe-outline",
-    },
-    {
-      value: "ON_SITE",
-      label: t("createBooking.locationType.onSite"),
-      icon: "location-outline",
-    },
-    {
-      value: "HYBRID",
-      label: t("createBooking.locationType.hybrid"),
-      icon: "git-merge-outline",
-    },
-  ];
-
-  const PAYMENT_TYPE_OPTIONS = [
-    {
-      value: "FIXED",
-      label: t("createBooking.paymentType.fixed"),
-      sub: t("createBooking.paymentType.fixedSub"),
-      icon: "cash-outline",
-    },
-    {
-      value: "HOURLY",
-      label: t("createBooking.paymentType.hourly"),
-      sub: t("createBooking.paymentType.hourlySub"),
-      icon: "time-outline",
-    },
-    {
-      value: "DAILY",
-      label: t("createBooking.paymentType.daily"),
-      sub: t("createBooking.paymentType.dailySub"),
-      icon: "sunny-outline",
-    },
-    {
-      value: "WEEKLY",
-      label: t("createBooking.paymentType.weekly"),
-      sub: t("createBooking.paymentType.weeklySub"),
-      icon: "calendar-outline",
-    },
-    {
-      value: "MONTHLY",
-      label: t("createBooking.paymentType.monthly"),
-      sub: t("createBooking.paymentType.monthlySub"),
-      icon: "calendar-number-outline",
-    },
-    {
-      value: "CUSTOM",
-      label: t("createBooking.paymentType.custom"),
-      sub: t("createBooking.paymentType.customSub"),
-      icon: "create-outline",
-    },
-  ];
-
-  const DURATION_UNIT_OPTIONS = [
-    {
-      value: "HOURS",
-      label: t("createBooking.durationUnit.hours"),
-      icon: "time-outline",
-    },
-    {
-      value: "DAYS",
-      label: t("createBooking.durationUnit.days"),
-      icon: "sunny-outline",
-    },
-    {
-      value: "WEEKS",
-      label: t("createBooking.durationUnit.weeks"),
-      icon: "calendar-outline",
-    },
-    {
-      value: "MONTHS",
-      label: t("createBooking.durationUnit.months"),
-      icon: "calendar-number-outline",
-    },
-    {
-      value: "CUSTOM",
-      label: t("createBooking.durationUnit.custom"),
-      icon: "create-outline",
-    },
-  ];
-
-  const ENGAGEMENT_OPTIONS = [
-    {
-      unit: "hours",
-      label: t("createBooking.engagement.hourly"),
-      rateKey: "hourlyRate",
-      suffix: "/hr",
-    },
-    {
-      unit: "days",
-      label: t("createBooking.engagement.daily"),
-      rateKey: "dailyRate",
-      suffix: "/day",
-    },
-    {
-      unit: "weeks",
-      label: t("createBooking.engagement.weekly"),
-      rateKey: "weeklyRate",
-      suffix: "/wk",
-    },
-    {
-      unit: "months",
-      label: t("createBooking.engagement.monthly"),
-      rateKey: "monthlyRate",
-      suffix: "/mo",
-    },
-    {
-      unit: "custom",
-      label: t("createBooking.engagement.custom"),
-      rateKey: "customRate",
-      suffix: "",
-    },
-  ];
-
-  const initWorkerId = route.params?.workerId ?? "";
-
-  // Worker
-  const [workerIdInput, setWorkerIdInput] = useState(initWorkerId);
-  const [workerId, setWorkerId] = useState(initWorkerId);
   const [worker, setWorker] = useState(null);
   const [workerLoading, setWorkerLoading] = useState(false);
   const [workerError, setWorkerError] = useState("");
-
-  // Job Type & Location
+  const [jobPost, setJobPost] = useState(null);
+  const [selectedUnit, setSelectedUnit] = useState(null);
   const [jobType, setJobType] = useState("FULL_TIME");
   const [locationType, setLocationType] = useState("REMOTE");
-
-  // Engagement (worker's rate units)
-  const [selectedUnit, setSelectedUnit] = useState("hours");
-
-  // Payment type & Duration
-  const [paymentType, setPaymentType] = useState("FIXED");
+  const [budgetType, setBudgetType] = useState("HOURLY");
   const [durationType, setDurationType] = useState("HOURS");
+  const [isNegotiated, setIsNegotiated] = useState(false);
+  const [negotiatedRate, setNegotiatedRate] = useState("");
+  const [negotiationNote, setNegotiationNote] = useState("");
+  const [form, setForm] = useState({
+    workerId: propWorkerId,
+    categoryId: "",
+    title: "",
+    description: "",
+    address: "",
+    latitude: "",
+    longitude: "",
+    scheduledAt: "",
+    estimatedValue: "",
+    notes: "",
+    requirements: "",
+    responsibilities: "",
+    rate: 0,
+    customLabel: "",
+    quantity: 1,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
 
-  // Category
-  const [categoryId, setCategoryId] = useState("");
-  const [showCatModal, setShowCatModal] = useState(false);
-
-  // Form
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
-  const [address, setAddress] = useState("");
-  const [estValue, setEstValue] = useState("");
-  const [durationValue, setDurationValue] = useState("");
-
-  // Date/time
-  const [scheduledAt, setScheduledAt] = useState(null);
-  const [scheduledObj, setScheduledObj] = useState(
-    new Date(Date.now() + 3600000),
-  );
+  // Date/time picker state
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState({});
+  const minDate = new Date(Date.now() + 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 16);
 
-  // ── Fetch worker ────────────────────────────────────────────────────────────
+  // Sync budgetType & durationType to selectedUnit
   useEffect(() => {
-    if (!initWorkerId) return;
+    if (selectedUnit && UNIT_TO_TYPES[selectedUnit]) {
+      setBudgetType(UNIT_TO_TYPES[selectedUnit].budget);
+      setDurationType(UNIT_TO_TYPES[selectedUnit].duration);
+    }
+  }, [selectedUnit]);
 
-    setWorkerLoading(true);
-    setWorkerError("");
-
-    getWorkerPublicProfile(initWorkerId)
-      .then((w) => {
-        if (!w) throw new Error("empty");
-        setWorker(w);
-        setWorkerId(initWorkerId);
-        const avail = ENGAGEMENT_OPTIONS.filter((o) =>
-          o.rateKey === "customRate" ? w.customRate > 0 : w[o.rateKey] > 0,
-        );
-        setSelectedUnit(avail[0]?.unit ?? "hours");
-        const primary =
-          w.categories?.find((cat) => cat.isPrimary) ?? w.categories?.[0];
-        if (primary) setCategoryId(primary.category?.id ?? "");
-      })
-      .catch(() => {
-        setWorkerError(t("createBooking.workerNotFound"));
-        setWorker(null);
-      })
-      .finally(() => setWorkerLoading(false));
-  }, []);
-
-  // ── Effect 2: Debounced fetch when user TYPES a different ID ─────────────────
+  // Load worker
   useEffect(() => {
-    const trimmed = workerIdInput.trim();
-
-    if (trimmed === initWorkerId) return;
-
-    if (!trimmed) {
+    const id = form.workerId?.trim();
+    if (!id) {
       setWorker(null);
-      setWorkerId("");
-      setWorkerError("");
       return;
     }
-
-    const timer = setTimeout(async () => {
-      setWorkerLoading(true);
-      setWorkerError("");
-      setWorker(null);
-      try {
-        const w = await getWorkerPublicProfile(trimmed);
-        if (!w) throw new Error("empty");
+    setWorkerLoading(true);
+    setWorkerError("");
+    client
+      .get(`/workers/${id}`)
+      .then((res) => {
+        const w = res.data.data.worker;
         setWorker(w);
-        setWorkerId(trimmed);
-        const avail = ENGAGEMENT_OPTIONS.filter((o) =>
+        setForm((prev) => ({
+          ...prev,
+          rate: w.customRate || 0,
+          customLabel: w.customRateLabel || "",
+        }));
+        const available = DURATION_OPTIONS.filter((o) =>
           o.rateKey === "customRate" ? w.customRate > 0 : w[o.rateKey] > 0,
         );
-        setSelectedUnit(avail[0]?.unit ?? "hours");
-        const primary =
-          w.categories?.find((cat) => cat.isPrimary) ?? w.categories?.[0];
-        if (primary) setCategoryId(primary.category?.id ?? "");
-      } catch {
-        setWorkerError(t("createBooking.workerNotFound"));
-        setWorker(null);
-      } finally {
-        setWorkerLoading(false);
-      }
-    }, 800);
+        setSelectedUnit((available[0] || DURATION_OPTIONS[0]).unit);
+        const primaryCat =
+          w.categories?.find((cc) => cc.isPrimary) || w.categories?.[0];
+        if (primaryCat)
+          setForm((f) => ({ ...f, categoryId: primaryCat.category.id }));
+      })
+      .catch(() => {
+        setWorkerError("Worker not found. Check the ID and try again.");
+      })
+      .finally(() => setWorkerLoading(false));
+  }, [form.workerId]);
 
-    return () => clearTimeout(timer);
-  }, [workerIdInput]);
+  // Load job post
+  useEffect(() => {
+    if (!fromJobId) return;
+    client
+      .get(`/jobs/${fromJobId}`)
+      .then((res) => {
+        const jp = res.data.data.jobPost;
+        setJobPost(jp);
+        setForm((f) => ({
+          ...f,
+          categoryId: jp.categoryId || f.categoryId,
+          title: jp.title || f.title,
+          description: jp.description || f.description,
+          address: jp.address || f.address,
+          estimatedValue:
+            jp.estimatedValue ||
+            (jp.estimatedHours ? String(jp.estimatedHours) : f.estimatedValue),
+        }));
+        if (jp.estimatedUnit) setSelectedUnit(jp.estimatedUnit);
+      })
+      .catch(() => {});
+  }, [fromJobId]);
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
-  const currentOpt = ENGAGEMENT_OPTIONS.find((o) => o.unit === selectedUnit);
-  const lockedRate = worker ? (worker[currentOpt?.rateKey] ?? 0) : 0;
-  const lockedCurr = worker?.currency ?? "USD";
-  const availUnits = worker
-    ? ENGAGEMENT_OPTIONS.filter((o) =>
+  // Derived
+  const isFromJob = !!fromJobId && !!jobPost;
+  const currentOption = DURATION_OPTIONS.find((o) => o.unit === selectedUnit);
+  const lockedRate = isFromJob
+    ? jobPost?.budget || 0
+    : worker && currentOption
+      ? worker[currentOption.rateKey] || 0
+      : 0;
+  const lockedCurrency = isFromJob
+    ? jobPost?.currency || "USD"
+    : worker?.currency || "USD";
+  const availableUnits = worker
+    ? DURATION_OPTIONS.filter((o) =>
         o.rateKey === "customRate"
           ? worker.customRate > 0
           : worker[o.rateKey] > 0,
       )
     : [];
-  const displayUnits =
-    availUnits.length > 0 ? availUnits : [ENGAGEMENT_OPTIONS[0]];
-  const estNumeric = parseFloat(estValue) || 0;
-  const estTotalVal =
-    currentOpt?.unit !== "custom" && lockedRate > 0 && estNumeric > 0
-      ? estNumeric * lockedRate
-      : null;
+  const finalRate =
+    isNegotiated && negotiatedRate ? parseFloat(negotiatedRate) : lockedRate;
+  const estQty = parseFloat(form.estimatedValue) || 1;
 
-  const selectedCatObj = worker?.categories?.find(
-    (wc) => wc.category?.id === categoryId,
-  );
+  let estFees = null;
+  if (selectedUnit === "custom") {
+    const customRate = form.rate || worker?.customRate || 0;
+    const customQty = form.quantity || 1;
+    if (customRate > 0)
+      estFees = computeFees(customRate, customQty, lockedCurrency);
+  } else if (
+    lockedRate > 0 &&
+    form.estimatedValue &&
+    currentOption?.inputType === "number"
+  ) {
+    estFees = computeFees(finalRate, estQty, lockedCurrency);
+  }
 
-  // ── Date picker ─────────────────────────────────────────────────────────────
-  const onDateChange = (event, date) => {
-    if (Platform.OS === "android") setShowDatePicker(false);
+  const set = (key, val) => {
+    setForm((f) => ({ ...f, [key]: val }));
+    setError("");
+  };
+
+  // ── Date/Time picker handlers ─────────────────────────────────
+  const handleDateChange = (event, selectedDate) => {
+    // On Android, always close after selection (even on dismiss)
+    if (Platform.OS !== "ios") setShowDatePicker(false);
     if (event.type === "dismissed") return;
-    if (date) {
-      setScheduledObj(date);
-      setScheduledAt(date.toISOString());
-      setErrors((e) => ({ ...e, scheduledAt: null }));
+    if (selectedDate) {
+      const current = form.scheduledAt
+        ? new Date(form.scheduledAt)
+        : new Date(Date.now() + 3600 * 1000);
+      current.setFullYear(selectedDate.getFullYear());
+      current.setMonth(selectedDate.getMonth());
+      current.setDate(selectedDate.getDate());
+      // ISO slice for local timezone (not UTC)
+      const pad = (n) => String(n).padStart(2, "0");
+      const str = `${current.getFullYear()}-${pad(
+        current.getMonth() + 1,
+      )}-${pad(current.getDate())}T${pad(current.getHours())}:${pad(
+        current.getMinutes(),
+      )}`;
+      set("scheduledAt", str);
     }
   };
 
-  const formattedDate = scheduledAt
-    ? new Date(scheduledAt).toLocaleDateString("en-GB", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }) +
-      " · " +
-      new Date(scheduledAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
+  const handleTimeChange = (event, selectedTime) => {
+    if (Platform.OS !== "ios") setShowTimePicker(false);
+    if (event.type === "dismissed") return;
+    if (selectedTime) {
+      const current = form.scheduledAt
+        ? new Date(form.scheduledAt)
+        : new Date(Date.now() + 3600 * 1000);
+      current.setHours(selectedTime.getHours());
+      current.setMinutes(selectedTime.getMinutes());
+      const pad = (n) => String(n).padStart(2, "0");
+      const str = `${current.getFullYear()}-${pad(
+        current.getMonth() + 1,
+      )}-${pad(current.getDate())}T${pad(current.getHours())}:${pad(
+        current.getMinutes(),
+      )}`;
+      set("scheduledAt", str);
+    }
+  };
 
-  // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    const e = {};
-    if (!worker) e.workerId = t("createBooking.workerRequired");
-    if (!title.trim()) e.title = t("createBooking.titleRequired");
-    if (!description.trim())
-      e.description = t("createBooking.descriptionRequired");
-    if (locationType !== "REMOTE" && !address.trim())
-      e.address = t("createBooking.addressRequired");
-    if (!scheduledAt) e.scheduledAt = t("createBooking.dateRequired");
-    if (!categoryId) e.categoryId = t("createBooking.categoryRequired");
-    if (Object.keys(e).length) {
-      setErrors(e);
+    if (!worker) {
+      setError("Please enter a valid Worker ID first.");
       return;
     }
-    setErrors({});
-    setSubmitting(true);
+    const required = [
+      "workerId",
+      "categoryId",
+      "title",
+      "description",
+      ...(locationType !== "REMOTE" ? ["address"] : []),
+      "scheduledAt",
+    ];
+    for (const k of required) {
+      if (!form[k]) {
+        setError(
+          `Please fill in: ${k.replace(/([A-Z])/g, " $1").toLowerCase()}`,
+        );
+        return;
+      }
+    }
+    if (lockedRate <= 0 && currentOption?.unit !== "custom" && !isNegotiated) {
+      setError("This worker has not set a rate for the selected duration.");
+      return;
+    }
+    if (isNegotiated && !negotiatedRate) {
+      setError("Please enter the agreed total amount.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      const ehrs =
-        currentOpt?.unit !== "custom"
-          ? estHours(currentOpt?.unit, estValue)
-          : null;
-      const booking = await createBooking({
-        workerId: workerId.trim(),
-        categoryId,
-        title: title.trim(),
-        description: description.trim(),
-        address: locationType !== "REMOTE" ? address.trim() : undefined,
-        scheduledAt,
-        jobType,
-        locationType,
-        budgetType: paymentType,
-        durationType,
-        estimatedHours: ehrs || undefined,
-        estimatedUnit: currentOpt?.unit || "hours",
-        estimatedValue: estValue ? estValue.toString() : undefined,
-        agreedRate: lockedRate,
-        currency: lockedCurr,
-        notes: notes.trim() || undefined,
-        durationValue: durationValue.trim() || undefined,
-      });
-      toast.success(t("createBooking.created"));
-      navigation.replace("BookingDetail", { bookingId: booking.id });
-    } catch (err) {
-      toast.error(err?.response?.data?.message || t("toast.unknownError"));
+      let estimatedHours = null;
+      const rawVal = form.estimatedValue
+        ? parseFloat(form.estimatedValue)
+        : null;
+      if (!isNegotiated && rawVal !== null) {
+        if (currentOption?.unit === "hours") estimatedHours = rawVal;
+        else if (currentOption?.unit === "days") estimatedHours = rawVal * 8;
+        else if (currentOption?.unit === "weeks") estimatedHours = rawVal * 40;
+        else if (currentOption?.unit === "months")
+          estimatedHours = rawVal * 160;
+        else if (currentOption?.unit === "years")
+          estimatedHours = rawVal * 1920;
+      }
+
+      const finalAgreedRate = isNegotiated
+        ? parseFloat(negotiatedRate)
+        : finalRate;
+
+      let estimatedValueStr = undefined;
+      if (isNegotiated) {
+        if (selectedUnit === "custom")
+          estimatedValueStr = String(form.quantity || 1);
+        else
+          estimatedValueStr = form.estimatedValue
+            ? String(form.estimatedValue)
+            : undefined;
+      } else if (selectedUnit === "custom") {
+        estimatedValueStr = String(form.rate * (form.quantity || 1));
+      } else if (form.estimatedValue) {
+        estimatedValueStr = String(form.estimatedValue);
+      }
+
+      const payload = {
+        workerId: form.workerId,
+        categoryId: form.categoryId,
+        title: form.title,
+        description: form.description,
+        address: locationType === "REMOTE" ? "Remote" : form.address,
+        latitude: form.latitude ? parseFloat(form.latitude) : undefined,
+        longitude: form.longitude ? parseFloat(form.longitude) : undefined,
+        scheduledAt: form.scheduledAt,
+        estimatedHours: estimatedHours ?? undefined,
+        estimatedUnit: currentOption?.unit || "hours",
+        estimatedValue: estimatedValueStr,
+        quantity: selectedUnit === "custom" ? form.quantity || 1 : 1,
+        customLabel: form.customLabel || null,
+        agreedRate: isNegotiated
+          ? parseFloat(negotiatedRate)
+          : selectedUnit === "custom"
+            ? form.rate
+            : finalRate,
+        isNegotiated,
+        negotiatedRate: isNegotiated ? parseFloat(negotiatedRate) : undefined,
+        negotiationNote:
+          isNegotiated && negotiationNote ? negotiationNote : undefined,
+        currency: lockedCurrency,
+        notes: form.notes || undefined,
+        jobType: jobType || undefined,
+        locationType: locationType || undefined,
+        budgetType: budgetType || undefined,
+        durationType: durationType || undefined,
+        requirements: form.requirements || undefined,
+        responsibilities: form.responsibilities || undefined,
+      };
+
+      const res = await client.post("/bookings", payload);
+      const { booking } = res.data.data;
+      navigation.navigate("BookingDetail", { bookingId: booking.id });
+    } catch (e) {
+      setError(
+        e.response?.data?.message ||
+          "Failed to create booking. Please try again.",
+      );
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-  return (
-    <AppScreen contentContainerStyle={{ paddingBottom: 60 }}>
-      {/* Back */}
-      <Pressable
-        onPress={() => navigation.goBack()}
-        style={s.backBtn}
-        hitSlop={8}
-      >
-        <Ionicons
-          name="arrow-back"
-          size={16}
-          color={c.text}
-          style={{ marginRight: 6 }}
-        />
-        <AppText variant="small">{t("bookings.backToBookings")}</AppText>
-      </Pressable>
+  const handleBack = () => navigation.navigate("Bookings");
+  const onBrowseWorkers = () => navigation.navigate("BrowseWorkers");
 
-      {/* Hero */}
-      <AppText
-        variant="small"
-        weight="semibold"
-        style={{ color: c.orange, letterSpacing: 0.8 }}
-      >
-        {t("bookings.newJob").toUpperCase()}
-      </AppText>
-      <AppText
-        variant="body"
-        tone="dim"
-        style={{ marginTop: 6, marginBottom: 20, lineHeight: 22 }}
-      >
-        {t("bookings.createSubtitle")}
-      </AppText>
-
-      {/* ── WORKER SECTION ── */}
-
-      <Fieldset legend={t("bookings.worker")} c={c}>
-        <AppInput
-          label={t("createBooking.field.workerId")}
-          placeholder={t("createBooking.field.workerIdPlaceholder")}
-          value={workerIdInput}
-          onChangeText={(v) => {
-            setWorkerIdInput(v);
-            setErrors((e) => ({ ...e, workerId: null }));
-          }}
-          error={errors.workerId}
-          iconLeft="person-outline"
-        />
-
-        {/* Browse hint */}
+  // Restricted
+  if (user?.role !== "HIRER") {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top"]}>
         <View
           style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            marginTop: 10,
+            flex: 1,
             alignItems: "center",
-            gap: 4,
+            justifyContent: "center",
+            padding: 24,
+            gap: 12,
           }}
         >
-          <AppText variant="small" tone="dim">
-            {t("createBooking.browseHint")}
+          <FaClipboardList size={44} color={c.orange} />
+          <AppText
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 20,
+              fontWeight: "800",
+              color: c.text,
+              textAlign: "center",
+            }}
+          >
+            Only Hirers Can Post Jobs
+          </AppText>
+          <AppText
+            style={{ fontSize: 13, color: c.textDim, textAlign: "center" }}
+          >
+            Workers can accept and complete jobs, but only Hirers can post them.
           </AppText>
           <Pressable
-            onPress={() => navigation.navigate("BrowseWorkers")}
-            hitSlop={6}
+            onPress={handleBack}
+            style={({ pressed }) => [
+              {
+                marginTop: 8,
+                paddingVertical: 12,
+                paddingHorizontal: 24,
+                backgroundColor: c.orange,
+                borderRadius: 10,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
           >
             <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: c.orange, textDecorationLine: "underline" }}
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 13,
+                fontWeight: "800",
+                color: "#000",
+              }}
             >
-              {t("createBooking.browseLink")}
+              Back to Bookings
             </AppText>
           </Pressable>
-          <AppText variant="small" tone="dim">
-            {t("createBooking.browseHintEnd")}
-          </AppText>
         </View>
+      </SafeAreaView>
+    );
+  }
 
-        {workerError ? (
-          <AppText variant="small" tone="danger" style={{ marginTop: 6 }}>
-            {workerError}
-          </AppText>
-        ) : null}
-      </Fieldset>
-
-      {/* Loading */}
-      {workerLoading && (
-        <View style={s.workerLoading}>
-          <ActivityIndicator color={c.orange} />
-          <AppText variant="small" tone="dim" style={{ marginLeft: 10 }}>
-            {t("createBooking.loadingWorker")}
-          </AppText>
-        </View>
-      )}
-
-      {/* No worker CTA */}
-      {!workerId.trim() && !workerLoading && (
-        <EmptyWorkerState
-          onBrowse={() => navigation.navigate("BrowseWorkers")}
-          c={c}
-        />
-      )}
-
-      {/* Worker card */}
-      {worker && !workerLoading && <WorkerCard worker={worker} c={c} />}
-
-      {/* ════════ REST OF FORM (only when worker loaded) ════════ */}
-      {worker && !workerLoading && (
-        <>
-          {/* ── JOB TYPE ── */}
-          <Fieldset legend={t("createBooking.section.jobType")} c={c}>
-            <View style={s.twoColGrid}>
-              {JOB_TYPE_OPTIONS.map((jt) => {
-                const sel = jobType === jt.value;
-                return (
-                  <Pressable
-                    key={jt.value}
-                    onPress={() => setJobType(jt.value)}
-                    style={[
-                      s.twoColCard,
-                      {
-                        borderColor: sel ? c.orange : c.border,
-                        backgroundColor: sel ? `${c.orange}15` : c.bgCard,
-                      },
-                    ]}
-                  >
-                    {sel && (
-                      <View style={[s.selDot, { backgroundColor: c.orange }]} />
-                    )}
-                    <Ionicons
-                      name={jt.icon}
-                      size={22}
-                      color={sel ? c.orange : c.textMuted}
-                    />
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{
-                        color: sel ? c.orange : c.text,
-                        marginTop: 8,
-                        textAlign: "center",
-                      }}
-                    >
-                      {jt.label}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Fieldset>
-
-          {/* ── LOCATION TYPE ── */}
-          <Fieldset legend={t("createBooking.section.locationType")} c={c}>
-            <View style={s.threeColGrid}>
-              {LOCATION_TYPE_OPTIONS.map((lt) => {
-                const sel = locationType === lt.value;
-                return (
-                  <Pressable
-                    key={lt.value}
-                    onPress={() => setLocationType(lt.value)}
-                    style={[
-                      s.threeColCard,
-                      {
-                        borderColor: sel ? c.orange : c.border,
-                        backgroundColor: sel ? `${c.orange}15` : c.bgCard,
-                      },
-                    ]}
-                  >
-                    {sel && (
-                      <View style={[s.selDot, { backgroundColor: c.orange }]} />
-                    )}
-                    <Ionicons
-                      name={lt.icon}
-                      size={20}
-                      color={sel ? c.orange : c.textMuted}
-                    />
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{
-                        color: sel ? c.orange : c.text,
-                        marginTop: 6,
-                        textAlign: "center",
-                      }}
-                    >
-                      {lt.label}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Fieldset>
-
-          {/* ── PRICING & DURATION (engagement type from worker) ── */}
-          <Fieldset legend={t("createBooking.section.pricingDuration")} c={c}>
-            <AppText
-              variant="small"
-              weight="semibold"
-              tone="dim"
-              style={{ marginBottom: 4 }}
-            >
-              {t("createBooking.field.engagementType")}
-            </AppText>
-            <AppText
-              variant="small"
-              tone="dim"
-              style={{ marginBottom: 12, lineHeight: 18 }}
-            >
-              {t("createBooking.field.engagementHint")}
-            </AppText>
-
-            {/* Engagement grid */}
-            <View style={s.twoColGrid}>
-              {displayUnits.map((opt) => {
-                const rate = worker[opt.rateKey] ?? 0;
-                const hasRate = rate > 0;
-                const active = selectedUnit === opt.unit;
-                return (
-                  <Pressable
-                    key={opt.unit}
-                    onPress={() => hasRate && setSelectedUnit(opt.unit)}
-                    style={[
-                      s.engagementCard,
-                      {
-                        borderColor: active ? c.orange : c.border,
-                        backgroundColor: active ? `${c.orange}15` : c.bgCard,
-                        opacity: hasRate ? 1 : 0.4,
-                      },
-                    ]}
-                  >
-                    <AppText
-                      variant="small"
-                      weight="semibold"
-                      style={{ color: active ? c.orange : c.textMuted }}
-                    >
-                      {opt.label}
-                    </AppText>
-                    <AppText
-                      variant="body"
-                      weight="semibold"
-                      style={{
-                        color: active ? c.orange : c.text,
-                        marginTop: 4,
-                      }}
-                    >
-                      {hasRate
-                        ? `${lockedCurr} ${Number(rate).toLocaleString()}${opt.suffix}`
-                        : t("createBooking.notOffered")}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Locked rate row */}
-            <View style={s.lockedRow}>
-              <View
-                style={[
-                  s.lockedBox,
-                  { backgroundColor: c.bgCard, borderColor: c.orange },
-                ]}
-              >
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{
-                    color: c.textMuted,
-                    letterSpacing: 0.8,
-                    fontSize: 10,
-                  }}
-                >
-                  {t("createBooking.field.agreedRate")}
-                </AppText>
-                <AppText
-                  style={{
-                    color: c.orange,
-                    fontSize: 26,
-                    fontWeight: "900",
-                    lineHeight: 32,
-                    marginTop: 4,
-                  }}
-                >
-                  {lockedCurr} {Number(lockedRate).toLocaleString()}
-                  {currentOpt?.suffix}
-                </AppText>
-                <AppText variant="small" tone="dim" style={{ marginTop: 4 }}>
-                  {t("createBooking.field.workersRate")}
-                </AppText>
-              </View>
-              <View
-                style={[
-                  s.lockedBox,
-                  { backgroundColor: c.bgCard, borderColor: c.border },
-                ]}
-              >
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{
-                    color: c.textMuted,
-                    letterSpacing: 0.8,
-                    fontSize: 10,
-                  }}
-                >
-                  {t("createBooking.field.currency")}
-                </AppText>
-                <AppText
-                  style={{
-                    color: c.orange,
-                    fontSize: 26,
-                    fontWeight: "900",
-                    lineHeight: 32,
-                    marginTop: 4,
-                  }}
-                >
-                  {lockedCurr}
-                </AppText>
-                <AppText variant="small" tone="dim" style={{ marginTop: 4 }}>
-                  {t("createBooking.field.workersCurrency")}
-                </AppText>
-              </View>
-            </View>
-
-            {/* Duration value input */}
-            {currentOpt?.unit === "custom" ? (
-              <AppInput
-                label={t("createBooking.field.describeEngagement")}
-                placeholder={
-                  t("createBooking.field.describeEngagementPlaceholder") ||
-                  "e.g. Full build, until project complete"
-                }
-                value={estValue}
-                onChangeText={setEstValue}
-                iconLeft="create-outline"
-                style={{ marginTop: 12 }}
-              />
-            ) : (
-              <View style={{ marginTop: 12 }}>
-                <AppInput
-                  label={t("createBooking.field.numberOfUnits", {
-                    unit: currentOpt?.label || "",
-                  })}
-                  placeholder={
-                    t("createBooking.field.numberPlaceholder") || "e.g. 4"
-                  }
-                  value={estValue}
-                  onChangeText={(v) => setEstValue(v.replace(/[^0-9.]/g, ""))}
-                  keyboardType="decimal-pad"
-                  iconLeft="hourglass-outline"
-                />
-                {estTotalVal > 0 && (
-                  <View
-                    style={[
-                      s.totalEstimate,
-                      { backgroundColor: c.bgCard, borderColor: c.border },
-                    ]}
-                  >
-                    <AppText variant="small" tone="dim">
-                      {t("createBooking.estimatedTotal")}
-                    </AppText>
-                    <AppText
-                      variant="title"
-                      weight="semibold"
-                      style={{ color: "#22c55e", marginTop: 4 }}
-                    >
-                      {lockedCurr} {Number(estTotalVal).toLocaleString()}
-                    </AppText>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Pricing note from worker */}
-            {worker.pricingNote ? (
-              <View
-                style={[
-                  s.pricingNote,
-                  { backgroundColor: c.bgCard, borderColor: c.border },
-                ]}
-              >
-                <AppText variant="small" tone="dim">
-                  💬 {t("createBooking.pricingNote")}{" "}
-                  <AppText
-                    variant="small"
-                    tone="dim"
-                    style={{ fontStyle: "italic" }}
-                  >
-                    {worker.pricingNote}
-                  </AppText>
-                </AppText>
-              </View>
-            ) : null}
-          </Fieldset>
-
-          {/* ── PAYMENT TYPE ── */}
-          <Fieldset legend={t("createBooking.section.paymentType")} c={c}>
-            <View
-              style={[
-                s.listContainer,
-                { borderColor: c.border, backgroundColor: c.bgCard },
-              ]}
-            >
-              {PAYMENT_TYPE_OPTIONS.map((item, idx) => (
-                <ListOptionRow
-                  key={item.value}
-                  item={item}
-                  selected={paymentType}
-                  onPress={setPaymentType}
-                  c={c}
-                  last={idx === PAYMENT_TYPE_OPTIONS.length - 1}
-                />
-              ))}
-            </View>
-          </Fieldset>
-
-          {/* ── JOB DURATION ── */}
-          <Fieldset legend={t("createBooking.section.jobDuration")} c={c}>
-            <View
-              style={[
-                s.listContainer,
-                { borderColor: c.border, backgroundColor: c.bgCard },
-              ]}
-            >
-              {DURATION_UNIT_OPTIONS.map((item, idx) => (
-                <ListOptionRow
-                  key={item.value}
-                  item={item}
-                  selected={durationType}
-                  onPress={setDurationType}
-                  c={c}
-                  last={idx === DURATION_UNIT_OPTIONS.length - 1}
-                />
-              ))}
-            </View>
-            {durationType === "CUSTOM" ? (
-              <AppInput
-                label={t("createBooking.field.describeDuration")}
-                placeholder={
-                  t("createBooking.field.describeDurationPlaceholder") ||
-                  "e.g. Until launch, ongoing retainer"
-                }
-                value={durationValue}
-                onChangeText={setDurationValue}
-                iconLeft="create-outline"
-                style={{ marginTop: 12 }}
-              />
-            ) : (
-              <AppInput
-                label={t("createBooking.field.numberOfDuration", {
-                  duration: durationType,
-                })}
-                placeholder={
-                  t("createBooking.field.numberPlaceholder") || "e.g. 5"
-                }
-                value={durationValue}
-                onChangeText={(v) => setDurationValue(v.replace(/[^0-9]/g, ""))}
-                keyboardType="number-pad"
-                iconLeft="hourglass-outline"
-                style={{ marginTop: 12 }}
-              />
-            )}
-          </Fieldset>
-
-          {/* ── CATEGORY ── */}
-          <Fieldset legend={t("createBooking.section.category")} c={c}>
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{
-                color: c.textMuted,
-                letterSpacing: 0.6,
-                marginBottom: 6,
-                fontSize: 11,
-              }}
-            >
-              {t("createBooking.field.serviceCategory")}
-            </AppText>
-            <AppText
-              variant="small"
-              tone="dim"
-              style={{ marginBottom: 12, lineHeight: 18 }}
-            >
-              {t("createBooking.field.categoryHint")}
-            </AppText>
-            <Pressable
-              onPress={() =>
-                worker.categories?.length > 1 && setShowCatModal(true)
-              }
-              style={[
-                s.catSelector,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <AppText variant="body" style={{ color: c.text, flex: 1 }}>
-                {selectedCatObj
-                  ? `${selectedCatObj.category?.icon ?? ""} ${selectedCatObj.category?.name ?? ""}${selectedCatObj.isPrimary ? ` (${t("createBooking.primary")})` : ""}`
-                  : t("createBooking.field.selectCategory")}
-              </AppText>
-              {worker.categories?.length > 1 && (
-                <Ionicons name="chevron-down" size={16} color={c.textMuted} />
-              )}
-            </Pressable>
-            {errors.categoryId ? (
-              <AppText variant="small" tone="danger" style={{ marginTop: 6 }}>
-                {errors.categoryId}
-              </AppText>
-            ) : null}
-          </Fieldset>
-
-          {/* ── JOB INFORMATION ── */}
-          <Fieldset legend={t("createBooking.section.jobInformation")} c={c}>
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{
-                color: c.textMuted,
-                letterSpacing: 0.6,
-                marginBottom: 8,
-                fontSize: 11,
-              }}
-            >
-              {t("createBooking.field.jobTitle")}
-            </AppText>
-            <View
-              style={[
-                s.inputBox,
-                {
-                  borderColor: errors.title ? c.red : c.border,
-                  backgroundColor: c.bgInput,
-                },
-              ]}
-            >
-              <TextInput
-                value={title}
-                onChangeText={(v) => {
-                  setTitle(v);
-                  setErrors((e) => ({ ...e, title: null }));
-                }}
-                placeholder={
-                  t("createBooking.field.jobTitlePlaceholder") ||
-                  "e.g. Fix leaking kitchen pipe"
-                }
-                placeholderTextColor={c.textMuted}
-                style={[s.inputText, { color: c.text }]}
-              />
-            </View>
-            {errors.title ? (
-              <AppText variant="small" tone="danger" style={{ marginTop: 4 }}>
-                {errors.title}
-              </AppText>
-            ) : null}
-
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{
-                color: c.textMuted,
-                letterSpacing: 0.6,
-                marginTop: 14,
-                marginBottom: 8,
-                fontSize: 11,
-              }}
-            >
-              {t("createBooking.field.description")}
-            </AppText>
-            <View
-              style={[
-                s.textarea,
-                {
-                  borderColor: errors.description ? c.red : c.border,
-                  backgroundColor: c.bgInput,
-                },
-              ]}
-            >
-              <TextInput
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                placeholder={
-                  t("createBooking.field.descriptionPlaceholder") ||
-                  "Describe exactly what needs to be done…"
-                }
-                placeholderTextColor={c.textMuted}
-                value={description}
-                onChangeText={(v) => {
-                  setDescription(v);
-                  setErrors((e) => ({ ...e, description: null }));
-                }}
-                style={[s.textareaInput, { color: c.text }]}
-              />
-            </View>
-            {errors.description ? (
-              <AppText variant="small" tone="danger" style={{ marginTop: 4 }}>
-                {errors.description}
-              </AppText>
-            ) : null}
-
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{
-                color: c.textMuted,
-                letterSpacing: 0.6,
-                marginTop: 14,
-                marginBottom: 8,
-                fontSize: 11,
-              }}
-            >
-              {t("createBooking.field.additionalNotes")}
-            </AppText>
-            <View
-              style={[
-                s.textarea,
-                {
-                  borderColor: c.border,
-                  backgroundColor: c.bgInput,
-                  minHeight: 80,
-                },
-              ]}
-            >
-              <TextInput
-                multiline
-                numberOfLines={2}
-                textAlignVertical="top"
-                placeholder={
-                  t("createBooking.field.notesPlaceholder") ||
-                  "Access instructions, parking, tools to bring…"
-                }
-                placeholderTextColor={c.textMuted}
-                value={notes}
-                onChangeText={setNotes}
-                style={[s.textareaInput, { color: c.text }]}
-              />
-            </View>
-          </Fieldset>
-
-          {/* ── LOCATION ── (only if not remote) */}
-          {locationType !== "REMOTE" && (
-            <Fieldset legend={t("createBooking.section.location")} c={c}>
-              <AppInput
-                label={t("bookings.serviceAddress")}
-                placeholder={
-                  t("createBooking.field.addressPlaceholder") ||
-                  "Enter full address..."
-                }
-                value={address}
-                onChangeText={(v) => {
-                  setAddress(v);
-                  setErrors((e) => ({ ...e, address: null }));
-                }}
-                error={errors.address}
-                iconLeft="location-outline"
-              />
-            </Fieldset>
-          )}
-
-          {/* ── SCHEDULE ── */}
-          <Fieldset legend={t("createBooking.section.schedule")} c={c}>
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{
-                color: c.textMuted,
-                letterSpacing: 0.6,
-                marginBottom: 8,
-                fontSize: 11,
-              }}
-            >
-              {t("createBooking.field.dateTime")}
-            </AppText>
-            <Pressable
-              onPress={() => setShowDatePicker(true)}
-              style={[
-                s.dateBtn,
-                {
-                  borderColor: errors.scheduledAt ? c.red : c.border,
-                  backgroundColor: c.bgInput,
-                },
-              ]}
-            >
-              <Ionicons name="calendar-outline" size={18} color={c.orange} />
-              <AppText
-                variant="body"
-                style={{
-                  flex: 1,
-                  marginLeft: 10,
-                  color: formattedDate ? c.text : c.textMuted,
-                }}
-              >
-                {formattedDate || t("createBooking.field.selectDateTime")}
-              </AppText>
-              <Ionicons name="chevron-down" size={16} color={c.textMuted} />
-            </Pressable>
-            {errors.scheduledAt ? (
-              <AppText variant="small" tone="danger" style={{ marginTop: 4 }}>
-                {errors.scheduledAt}
-              </AppText>
-            ) : null}
-
-            {showDatePicker && Platform.OS === "android" && (
-              <DateTimePicker
-                value={scheduledObj}
-                mode="datetime"
-                display="default"
-                minimumDate={new Date(Date.now() + 3600000)}
-                onChange={onDateChange}
-              />
-            )}
-            {Platform.OS === "ios" && (
-              <Modal
-                visible={showDatePicker}
-                transparent
-                animationType="slide"
-                onRequestClose={() => setShowDatePicker(false)}
-              >
-                <Pressable
-                  style={s.dateBackdrop}
-                  onPress={() => setShowDatePicker(false)}
-                />
-                <View
-                  style={[
-                    s.dateSheet,
-                    { backgroundColor: c.bgPanel, borderTopColor: c.border },
-                  ]}
-                >
-                  <View
-                    style={[s.dateSheetHeader, { borderBottomColor: c.border }]}
-                  >
-                    <AppText variant="body" weight="semibold">
-                      {t("createBooking.datePicker.title")}
-                    </AppText>
-                    <Pressable
-                      onPress={() => setShowDatePicker(false)}
-                      hitSlop={10}
-                    >
-                      <AppText
-                        variant="body"
-                        weight="semibold"
-                        style={{ color: c.orange }}
-                      >
-                        {t("createBooking.datePicker.done")}
-                      </AppText>
-                    </Pressable>
-                  </View>
-                  <DateTimePicker
-                    value={scheduledObj}
-                    mode="datetime"
-                    display="spinner"
-                    minimumDate={new Date(Date.now() + 3600000)}
-                    onChange={onDateChange}
-                    style={{ height: 220, width: "100%" }}
-                    themeVariant="dark"
-                  />
-                </View>
-              </Modal>
-            )}
-          </Fieldset>
-
-          {/* ── SUMMARY ── */}
-          {title && scheduledAt && (
-            <Card padded style={{ marginBottom: 16 }}>
-              <AppText
-                variant="small"
-                weight="semibold"
-                tone="dim"
-                style={{ letterSpacing: 0.8, marginBottom: 12 }}
-              >
-                {t("createBooking.summary.title")}
-              </AppText>
-              {[
-                {
-                  label: t("createBooking.summary.worker"),
-                  value: `${(worker.user ?? worker).firstName} ${(worker.user ?? worker).lastName}`,
-                },
-                {
-                  label: t("createBooking.summary.jobType"),
-                  value: JOB_TYPE_OPTIONS.find((j) => j.value === jobType)
-                    ?.label,
-                },
-                {
-                  label: t("createBooking.summary.location"),
-                  value: LOCATION_TYPE_OPTIONS.find(
-                    (l) => l.value === locationType,
-                  )?.label,
-                },
-                {
-                  label: t("createBooking.summary.agreedRate"),
-                  value: `${lockedCurr} ${Number(lockedRate).toLocaleString()}${currentOpt?.suffix}`,
-                  accent: true,
-                },
-                ...(estTotalVal
-                  ? [
-                      {
-                        label: t("createBooking.summary.estimatedTotal"),
-                        value: `${lockedCurr} ${Number(estTotalVal).toLocaleString()}`,
-                        green: true,
-                      },
-                    ]
-                  : []),
-              ].map((row) => (
-                <View
-                  key={row.label}
-                  style={[s.summaryRow, { borderBottomColor: c.border }]}
-                >
-                  <AppText variant="small" tone="dim">
-                    {row.label}
-                  </AppText>
-                  <AppText
-                    variant="body"
-                    weight="semibold"
-                    style={{
-                      color: row.green
-                        ? "#22c55e"
-                        : row.accent
-                          ? c.orange
-                          : c.text,
-                    }}
-                  >
-                    {row.value}
-                  </AppText>
-                </View>
-              ))}
-              <AppText
-                variant="small"
-                tone="dim"
-                style={{ marginTop: 10, fontStyle: "italic" }}
-              >
-                ⚠️ {t("createBooking.summary.note")}
-              </AppText>
-            </Card>
-          )}
-        </>
-      )}
-
-      {/* Submit */}
-      {worker && (
-        <AppButton
-          title={t("createBooking.button.createBooking")}
-          iconLeft="add-circle-outline"
-          onPress={handleSubmit}
-          loading={submitting}
-        />
-      )}
-
-      <AppText
-        variant="small"
-        tone="dim"
-        style={{ textAlign: "center", marginTop: 12, marginBottom: 8 }}
+  return (
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      edges={["top", "left", "right"]}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        {t("createBooking.disclaimer")}
-      </AppText>
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 14 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Back */}
+          <Pressable
+            onPress={handleBack}
+            style={({ pressed }) => [
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                alignSelf: "flex-start",
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 20,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <FaArrowLeft size={12} color={c.textDim} />
+            <AppText
+              style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
+            >
+              Back to Bookings
+            </AppText>
+          </Pressable>
 
-      {/* Category modal */}
-      <CategoryModal
-        visible={showCatModal}
-        onClose={() => setShowCatModal(false)}
-        categories={worker?.categories ?? []}
-        selected={categoryId}
-        onSelect={setCategoryId}
-        c={c}
-        modalBg={modalBg}
-      />
-    </AppScreen>
+          {/* Header */}
+          <View>
+            <AppText
+              style={{
+                fontFamily: "DMSans_600SemiBold",
+                fontSize: 10,
+                fontWeight: "700",
+                color: c.orange,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                marginBottom: 4,
+              }}
+            >
+              New Job
+            </AppText>
+            <AppText
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 24,
+                fontWeight: "800",
+                color: c.text,
+                letterSpacing: -0.3,
+              }}
+            >
+              Create Booking
+            </AppText>
+            <AppText
+              style={{
+                fontSize: 13,
+                color: c.textDim,
+                marginTop: 4,
+                lineHeight: 18,
+              }}
+            >
+              Fill in the details and the worker will be notified immediately.
+            </AppText>
+          </View>
+
+          {/* Worker info + pricing */}
+          <BookingWorkerInfo
+            propWorkerId={propWorkerId}
+            worker={worker}
+            workerLoading={workerLoading}
+            workerError={workerError}
+            selectedUnit={selectedUnit}
+            setSelectedUnit={setSelectedUnit}
+            availableUnits={availableUnits}
+            currentOption={currentOption}
+            lockedRate={lockedRate}
+            lockedCurrency={lockedCurrency}
+            isFromJob={isFromJob}
+            isNegotiated={isNegotiated}
+            setIsNegotiated={setIsNegotiated}
+            negotiatedRate={negotiatedRate}
+            setNegotiatedRate={setNegotiatedRate}
+            negotiationNote={negotiationNote}
+            setNegotiationNote={setNegotiationNote}
+            estFees={estFees}
+            form={form}
+            set={set}
+            onBrowseWorkers={onBrowseWorkers}
+          />
+
+          {/* Form fields */}
+          <BookingFormFields
+            worker={worker}
+            jobType={jobType}
+            setJobType={setJobType}
+            locationType={locationType}
+            setLocationType={setLocationType}
+            budgetType={budgetType}
+            setBudgetType={setBudgetType}
+            durationType={durationType}
+            setDurationType={setDurationType}
+            form={form}
+            set={set}
+            minDate={minDate}
+            selectedUnit={selectedUnit}
+            isNegotiated={isNegotiated}
+            onOpenCategoryPicker={() => setCategoryPickerOpen(true)}
+            onOpenDatePicker={() => setShowDatePicker(true)}
+            onOpenTimePicker={() => setShowTimePicker(true)}
+          />
+
+          {/* Error */}
+          {error ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                backgroundColor: c.redDim,
+                borderWidth: 1,
+                borderColor: "rgba(239,68,68,0.2)",
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+              }}
+            >
+              <FaExclamationTriangle size={14} color={c.red} />
+              <AppText style={{ flex: 1, fontSize: 13, color: c.red }}>
+                {error}
+              </AppText>
+            </View>
+          ) : null}
+
+          {/* Submit */}
+          <Pressable
+            onPress={handleSubmit}
+            disabled={loading || !worker}
+            style={({ pressed }) => [
+              {
+                height: 56,
+                backgroundColor: c.orange,
+                borderRadius: 999,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                opacity: loading || !worker ? 0.5 : pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            {loading ? (
+              <>
+                <Skeleton width={17} height={17} radius={9} />
+                <AppText
+                  style={{
+                    fontFamily: "Syne_800ExtraBold",
+                    fontSize: 16,
+                    fontWeight: "800",
+                    color: "#000",
+                  }}
+                >
+                  Creating booking…
+                </AppText>
+              </>
+            ) : (
+              <>
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    borderWidth: 2,
+                    borderColor: "rgba(0,0,0,0.25)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <FaPlus size={14} color="#000" />
+                </View>
+                <AppText
+                  style={{
+                    fontFamily: "Syne_800ExtraBold",
+                    fontSize: 16,
+                    fontWeight: "800",
+                    color: "#000",
+                  }}
+                >
+                  Create Booking
+                </AppText>
+              </>
+            )}
+          </Pressable>
+
+          <AppText
+            style={{
+              fontSize: 11,
+              color: c.textMuted,
+              textAlign: "center",
+              lineHeight: 16,
+              paddingHorizontal: 8,
+            }}
+          >
+            The worker will be notified immediately. Payment is only charged
+            after the worker accepts and you approve it.
+          </AppText>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Category picker modal */}
+      <Modal
+        visible={categoryPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCategoryPickerOpen(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.7)",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onPress={() => setCategoryPickerOpen(false)}
+        >
+          <View
+            style={{
+              backgroundColor: c.bgPanel,
+              borderWidth: 1,
+              borderColor: c.border,
+              borderRadius: 14,
+              padding: 8,
+              maxHeight: 400,
+            }}
+          >
+            <ScrollView>
+              {worker?.categories?.map((wc) => {
+                const active = form.categoryId === wc.category.id;
+                return (
+                  <Pressable
+                    key={wc.id}
+                    onPress={() => {
+                      set("categoryId", wc.category.id);
+                      setCategoryPickerOpen(false);
+                    }}
+                    style={({ pressed }) => [
+                      {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        borderRadius: 8,
+                        backgroundColor: active
+                          ? c.orangeDim
+                          : pressed
+                            ? c.bgCard
+                            : "transparent",
+                      },
+                    ]}
+                  >
+                    <AppText
+                      style={{
+                        flex: 1,
+                        fontSize: 13,
+                        fontWeight: active ? "700" : "500",
+                        color: active ? c.orange : c.text,
+                      }}
+                    >
+                      {`${wc.category.icon || ""} ${wc.category.name || ""}${
+                        wc.isPrimary ? " (Primary)" : ""
+                      }`.trim()}
+                    </AppText>
+                    {active ? <FaCheck size={14} color={c.orange} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Date picker (Android: dialog, iOS: inline spinner) ── */}
+      {showDatePicker ? (
+        <DateTimePicker
+          value={
+            form.scheduledAt
+              ? new Date(form.scheduledAt)
+              : new Date(Date.now() + 3600 * 1000)
+          }
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          minimumDate={new Date()}
+          onChange={handleDateChange}
+        />
+      ) : null}
+
+      {/* ── Time picker (Android: dialog, iOS: inline spinner) ── */}
+      {showTimePicker ? (
+        <DateTimePicker
+          value={
+            form.scheduledAt
+              ? new Date(form.scheduledAt)
+              : new Date(Date.now() + 3600 * 1000)
+          }
+          mode="time"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={handleTimeChange}
+          is24Hour={false}
+        />
+      ) : null}
+    </SafeAreaView>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Empty state
-const es = StyleSheet.create({
-  wrap: {
-    alignItems: "center",
-    padding: 32,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  btn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 14,
-    marginTop: 20,
-  },
-});
-
-// Worker card
-const wc = StyleSheet.create({
-  card: { borderRadius: 16, borderWidth: 1.5, padding: 16, marginBottom: 14 },
-  topRow: { flexDirection: "row", alignItems: "flex-start" },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    position: "relative",
-  },
-  avatarImg: { width: "100%", height: "100%" },
-  onlineDot: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 13,
-    height: 13,
-    borderRadius: 7,
-    borderWidth: 2,
-  },
-  verifiedBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  lockTag: {
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    minWidth: 70,
-  },
-  catRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
-  catPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-});
-
-// Main styles
-const s = StyleSheet.create({
-  backBtn: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
-  fieldset: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 14 },
-  workerLoading: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-
-  // Job type / Location type grids
-  twoColGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  twoColCard: {
-    width: "47.5%",
-    borderWidth: 1.5,
-    borderRadius: 14,
-    padding: 16,
-    alignItems: "center",
-    position: "relative",
-  },
-  threeColGrid: { flexDirection: "row", gap: 8 },
-  threeColCard: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    position: "relative",
-  },
-  selDot: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-
-  // Engagement / pricing
-  engagementCard: {
-    width: "47.5%",
-    borderWidth: 1.5,
-    borderRadius: 14,
-    padding: 16,
-    alignItems: "center",
-  },
-  lockedRow: { flexDirection: "row", gap: 10, marginTop: 14 },
-  lockedBox: { flex: 1, borderWidth: 1, borderRadius: 14, padding: 14 },
-  totalEstimate: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  pricingNote: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-
-  // List option rows (Payment type / Duration)
-  listContainer: { borderWidth: 1, borderRadius: 14, overflow: "hidden" },
-  listRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  listIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  // Category selector
-  catSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 16,
-  },
-
-  // Job info inputs
-  inputBox: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 52,
-  },
-  inputText: { flex: 1, fontSize: 15, height: "100%" },
-  textarea: { borderWidth: 1.5, borderRadius: 12, padding: 14, minHeight: 110 },
-  textareaInput: { fontSize: 15, lineHeight: 22, flex: 1 },
-
-  // Date
-  dateBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 52,
-  },
-  dateBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
-  dateSheet: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderTopWidth: 1,
-    paddingBottom: 40,
-  },
-  dateSheetHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-
-  // Summary
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-
-  // Category modal
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    paddingTop: 12,
-    maxHeight: "70%",
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  sheetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-});
+const styles = StyleSheet.create({});
