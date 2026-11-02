@@ -1,11 +1,17 @@
 // src/screens/main/MyReportsScreen.js
-// Mirrors: website /reports/my
-// APIs:
-//   GET    /reports/my?page=&limit=&status=  → paginated report list
-//   POST   /reports                          → submit new report
-//   DELETE /reports/:id                      → cancel pending report
+// ─────────────────────────────────────────────────────────────────────────────
+// Verbatim mirror of the website's /reports/my page.
+// Platform-adaptive modals + skeleton + i18n + support hub link.
+//
+// Modals:
+//   • Detail    — bottom sheet (iOS native pageSheet, Android slide-up)
+//   • Delete    — centered branded confirm modal (no native Alert)
+//
+// The "Report" CTA at the top has been removed — reports are filed from
+// the entity being reported (user/job/post detail screens).
+// ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -17,88 +23,186 @@ import {
   StyleSheet,
   Platform,
   KeyboardAvoidingView,
+  Animated,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AppText from "../../components/AppText";
 import AppScreen from "../../components/AppScreen";
-import Card from "../../components/Card";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PLATFORM MODAL HELPER
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * SheetModal — platform-adaptive bottom sheet.
+ *
+ * iOS:     native pageSheet (drag handle, swipe-to-dismiss).
+ * Android: full-screen slide-up sheet.
+ *
+ * NOTE ON LAYOUT:
+ *   The Android branch uses `position: absolute` for the surface so it
+ *   anchors to the bottom. Children must use NATURAL height, not flex:1,
+ *   because the surface has no fixed height (only maxHeight). If you need
+ *   to scroll, put the ScrollView INSIDE the child content with a fixed
+ *   maxHeight on that content (each modal handles its own).
+ */
+function SheetModal({ visible, onClose, children }) {
+  const isIOS = Platform.OS === "ios";
+  const { theme: th } = useTheme();
+  const c = th.colors;
+  const insets = useSafeAreaInsets();
+
+  if (isIOS) {
+    return (
+      <Modal
+        visible={visible}
+        animationType="default"
+        presentationStyle="pageSheet"
+        allowSwipeDismissal
+        onRequestClose={onClose}
+      >
+        <View style={{ flex: 1, backgroundColor: c.bgPanel, paddingTop: 24 }}>
+          {children}
+        </View>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)" }}
+          onPress={onClose}
+        >
+          <Pressable
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "92%",
+              backgroundColor: c.bgPanel,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: c.border,
+              paddingBottom: Math.max(insets.bottom, 12),
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Drag handle */}
+            <View
+              style={{
+                width: 40,
+                height: 4,
+                borderRadius: 2,
+                alignSelf: "center",
+                marginTop: 10,
+                marginBottom: 4,
+                backgroundColor: c.border,
+              }}
+            />
+            {/* IMPORTANT: NO flex:1 here — parent has no fixed height. */}
+            {children}
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
 const STATUS_META = {
   PENDING: {
-    label: "Pending Review",
-    icon: "⏳",
-    color: "#f59e0b",
-    bg: "rgba(245,158,11,0.15)",
-    border: "rgba(245,158,11,0.30)",
+    labelKey: "reports.status.pending",
+    iconName: "time-outline",
+    cls: "yellow",
   },
   REVIEWING: {
-    label: "Under Review",
-    icon: "🔍",
-    color: "#3b82f6",
-    bg: "rgba(59,130,246,0.12)",
-    border: "rgba(59,130,246,0.30)",
+    labelKey: "reports.status.reviewing",
+    iconName: "search-outline",
+    cls: "blue",
   },
   RESOLVED: {
-    label: "Resolved",
-    icon: "✅",
-    color: "#22c55e",
-    bg: "rgba(34,197,94,0.12)",
-    border: "rgba(34,197,94,0.30)",
+    labelKey: "reports.status.resolved",
+    iconName: "checkmark-circle",
+    cls: "green",
   },
   DISMISSED: {
-    label: "Dismissed",
-    icon: "🚫",
-    color: "#6b7280",
-    bg: "rgba(107,114,128,0.12)",
-    border: "rgba(107,114,128,0.30)",
+    labelKey: "reports.status.dismissed",
+    iconName: "ban-outline",
+    cls: "dim",
   },
 };
 
 const ACTION_META = {
-  NO_ACTION: { label: "No action taken", icon: "—" },
-  WARNING_ISSUED: { label: "Warning issued", icon: "⚠️" },
-  CONTENT_REMOVED: { label: "Content removed", icon: "🗑️" },
-  USER_SUSPENDED: { label: "User suspended", icon: "🔒" },
-  USER_BANNED: { label: "User banned", icon: "🚫" },
+  NO_ACTION: { labelKey: "reports.action.noAction", iconName: null },
+  WARNING_ISSUED: {
+    labelKey: "reports.action.warning",
+    iconName: "warning-outline",
+  },
+  CONTENT_REMOVED: {
+    labelKey: "reports.action.removed",
+    iconName: "trash-outline",
+  },
+  USER_SUSPENDED: {
+    labelKey: "reports.action.suspended",
+    iconName: "lock-closed-outline",
+  },
+  USER_BANNED: { labelKey: "reports.action.banned", iconName: "ban-outline" },
 };
 
 const TYPE_META = {
-  USER: { label: "User", icon: "👤" },
-  JOB_POST: { label: "Job Post", icon: "💼" },
-  POST: { label: "Community Post", icon: "📝" },
-  REVIEW: { label: "Review", icon: "⭐" },
-  BOOKING: { label: "Booking", icon: "📅" },
-  MESSAGE: { label: "Message", icon: "💬" },
+  USER: { labelKey: "reports.type.user", iconName: "person-outline" },
+  JOB_POST: { labelKey: "reports.type.job", iconName: "briefcase-outline" },
+  POST: { labelKey: "reports.type.post", iconName: "create-outline" },
+  REVIEW: { labelKey: "reports.type.review", iconName: "star-outline" },
+  BOOKING: { labelKey: "reports.type.booking", iconName: "calendar-outline" },
+  MESSAGE: { labelKey: "reports.type.message", iconName: "chatbubble-outline" },
 };
 
 const REASON_OPTIONS = [
-  { value: "SPAM", label: "Spam" },
-  { value: "FAKE_PROFILE", label: "Fake profile" },
-  { value: "INAPPROPRIATE_CONTENT", label: "Inappropriate content" },
-  { value: "FRAUD", label: "Fraud / scam" },
-  { value: "HARASSMENT", label: "Harassment" },
-  { value: "SCAM", label: "Scam" },
-  { value: "MISLEADING_INFORMATION", label: "Misleading info" },
-  { value: "FAKE_REVIEWS", label: "Fake reviews" },
-  { value: "UNDERAGE_USER", label: "Underage user" },
-  { value: "HATE_SPEECH", label: "Hate speech" },
-  { value: "OTHER", label: "Other" },
+  { value: "SPAM", labelKey: "reports.reason.spam" },
+  { value: "FAKE_PROFILE", labelKey: "reports.reason.fakeProfile" },
+  { value: "INAPPROPRIATE_CONTENT", labelKey: "reports.reason.inappropriate" },
+  { value: "FRAUD", labelKey: "reports.reason.fraud" },
+  { value: "HARASSMENT", labelKey: "reports.reason.harassment" },
+  { value: "SCAM", labelKey: "reports.reason.scam" },
+  { value: "MISLEADING_INFORMATION", labelKey: "reports.reason.misleading" },
+  { value: "FAKE_REVIEWS", labelKey: "reports.reason.fakeReviews" },
+  { value: "UNDERAGE_USER", labelKey: "reports.reason.underage" },
+  { value: "HATE_SPEECH", labelKey: "reports.reason.hateSpeech" },
+  { value: "OTHER", labelKey: "reports.reason.other" },
 ];
 
 const STATUS_TABS = [
-  { key: "ALL", label: "All" },
-  { key: "PENDING", label: "Pending" },
-  { key: "REVIEWING", label: "Reviewing" },
-  { key: "RESOLVED", label: "Resolved" },
-  { key: "DISMISSED", label: "Dismissed" },
+  { key: "ALL", labelKey: "reports.tabs.all" },
+  { key: "PENDING", labelKey: "reports.tabs.pending" },
+  { key: "REVIEWING", labelKey: "reports.tabs.reviewing" },
+  { key: "RESOLVED", labelKey: "reports.tabs.resolved" },
+  { key: "DISMISSED", labelKey: "reports.tabs.dismissed" },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
 const fmtDate = (d) =>
   d
     ? new Date(d).toLocaleDateString("en-GB", {
@@ -108,512 +212,284 @@ const fmtDate = (d) =>
       })
     : "—";
 
-const timeAgo = (d) => {
+const timeAgo = (d, t) => {
   if (!d) return "—";
   const diff = Date.now() - new Date(d).getTime();
   const mins = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
-  if (mins < 60) return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 30) return `${days}d ago`;
+  if (mins < 60) return `${mins}${t("reports.timeMin")}`;
+  if (hours < 24) return `${hours}${t("reports.timeHour")}`;
+  if (days < 30) return `${days}${t("reports.timeDay")}`;
   return fmtDate(d);
 };
 
-// ── StatusBadge ───────────────────────────────────────────────────────────────
-function StatusBadge({ status }) {
+function statusColors(cls, c) {
+  switch (cls) {
+    case "yellow":
+      return {
+        color: "#eab308",
+        bg: "rgba(234,179,8,0.12)",
+        border: "rgba(234,179,8,0.25)",
+      };
+    case "blue":
+      return {
+        color: "#3b82f6",
+        bg: "rgba(59,130,246,0.12)",
+        border: "rgba(59,130,246,0.25)",
+      };
+    case "green":
+      return {
+        color: "#22c55e",
+        bg: "rgba(34,197,94,0.12)",
+        border: "rgba(34,197,94,0.25)",
+      };
+    case "dim":
+    default:
+      return { color: c.textMuted, bg: c.bgCard, border: c.border };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SKELETON
+// ─────────────────────────────────────────────────────────────────────────────
+function Skeleton({ height = 14, width = "100%", radius = 6, c, style }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: false,
+        }),
+        Animated.timing(anim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [anim]);
+  const bg = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [c.bgCard, c.border],
+  });
+  return (
+    <Animated.View
+      style={[
+        { height, width, borderRadius: radius, backgroundColor: bg },
+        style,
+      ]}
+    />
+  );
+}
+
+function PageSkeleton({ c }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg, padding: 16 }}>
+      <Skeleton height={10} width={110} c={c} style={{ marginBottom: 8 }} />
+      <Skeleton height={28} width="55%" c={c} style={{ marginBottom: 8 }} />
+      <Skeleton height={13} width="90%" c={c} style={{ marginBottom: 4 }} />
+      <Skeleton height={13} width="75%" c={c} style={{ marginBottom: 20 }} />
+      <View
+        style={{
+          flexDirection: "row",
+          borderWidth: 1,
+          borderColor: c.border,
+          backgroundColor: c.bgPanel,
+          borderRadius: 14,
+          overflow: "hidden",
+          marginBottom: 14,
+        }}
+      >
+        {[1, 2, 3].map((i) => (
+          <React.Fragment key={i}>
+            {i > 1 && (
+              <View
+                style={{
+                  width: StyleSheet.hairlineWidth,
+                  backgroundColor: c.border,
+                }}
+              />
+            )}
+            <View
+              style={{
+                flex: 1,
+                alignItems: "center",
+                paddingVertical: 14,
+                gap: 5,
+              }}
+            >
+              <Skeleton height={16} width={16} c={c} radius={8} />
+              <Skeleton height={18} width={28} c={c} />
+              <Skeleton height={9} width={55} c={c} />
+            </View>
+          </React.Fragment>
+        ))}
+      </View>
+      <View
+        style={{
+          flexDirection: "row",
+          gap: 12,
+          padding: 14,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: c.border,
+          borderLeftWidth: 3,
+          borderLeftColor: c.orange,
+          backgroundColor: c.bgPanel,
+          marginBottom: 16,
+        }}
+      >
+        <Skeleton height={16} width={16} c={c} radius={4} />
+        <View style={{ flex: 1, gap: 4 }}>
+          <Skeleton height={11} c={c} />
+          <Skeleton height={11} width="85%" c={c} />
+          <Skeleton height={11} width="60%" c={c} />
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", gap: 6, marginBottom: 16 }}>
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} height={30} width={70} c={c} radius={20} />
+        ))}
+      </View>
+      {[1, 2, 3].map((i) => (
+        <View
+          key={i}
+          style={{
+            borderWidth: 1,
+            borderColor: c.border,
+            backgroundColor: c.bgPanel,
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 10,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginBottom: 12,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                flex: 1,
+              }}
+            >
+              <Skeleton height={40} width={40} c={c} radius={10} />
+              <View style={{ flex: 1, gap: 5 }}>
+                <Skeleton height={13} width="45%" c={c} />
+                <Skeleton height={10} width="30%" c={c} />
+              </View>
+            </View>
+            <Skeleton height={22} width={90} c={c} radius={20} />
+          </View>
+          <Skeleton height={14} width="60%" c={c} style={{ marginBottom: 8 }} />
+          <Skeleton height={11} c={c} style={{ marginBottom: 4 }} />
+          <Skeleton
+            height={11}
+            width="70%"
+            c={c}
+            style={{ marginBottom: 14 }}
+          />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              paddingTop: 10,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: c.border,
+            }}
+          >
+            <Skeleton height={10} width={50} c={c} />
+            <Skeleton height={28} width={100} c={c} radius={8} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATUS BADGE
+// ─────────────────────────────────────────────────────────────────────────────
+function StatusBadge({ status, t, c }) {
   const m = STATUS_META[status] || STATUS_META.DISMISSED;
+  const col = statusColors(m.cls, c);
   return (
     <View
       style={{
+        flexDirection: "row",
+        alignItems: "center",
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 20,
-        backgroundColor: m.bg,
+        backgroundColor: col.bg,
         borderWidth: 1,
-        borderColor: m.border,
+        borderColor: col.border,
+        gap: 5,
       }}
     >
-      <AppText style={{ fontSize: 10, fontWeight: "700", color: m.color }}>
-        {m.icon} {m.label}
+      <Ionicons name={m.iconName} size={12} color={col.color} />
+      <AppText
+        style={{ fontSize: 11, fontWeight: "700", color: col.color }}
+        numberOfLines={1}
+      >
+        {t(m.labelKey)}
       </AppText>
     </View>
   );
 }
 
-// ── Skeleton card ─────────────────────────────────────────────────────────────
-function SkeletonCard({ c }) {
-  return (
-    <View
-      style={{
-        height: 120,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: c.border,
-        backgroundColor: c.bgCard,
-        marginBottom: 10,
-      }}
-    />
-  );
-}
-
-// ── Submit Report Modal (bottom sheet) ────────────────────────────────────────
-function ReportFormModal({ visible, onClose, onSuccess, c, modalBg, toast }) {
-  const [targetType, setTargetType] = useState("USER");
-  const [targetId, setTargetId] = useState("");
-  const [reason, setReason] = useState("");
-  const [description, setDescription] = useState("");
-  const [evidence, setEvidence] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(null);
-
-  function reset() {
-    setTargetType("USER");
-    setTargetId("");
-    setReason("");
-    setDescription("");
-    setEvidence("");
-    setDone(null);
-  }
-
-  function handleClose() {
-    reset();
-    onClose();
-  }
-
-  async function submit() {
-    if (!targetId.trim()) {
-      toast.error("Please enter the Target ID.");
-      return;
-    }
-    if (!reason) {
-      toast.error("Please select a reason.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const evidenceArr = evidence
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .slice(0, 5);
-      const res = await client.post("/reports", {
-        targetType,
-        targetId: targetId.trim(),
-        reason,
-        description: description.trim() || undefined,
-        evidence: evidenceArr,
-      });
-      setDone({ ref: res.data.data.ref });
-      onSuccess?.();
-    } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to submit report.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (!visible) return null;
-
-  return (
-    <Modal
-      visible
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)" }}
-          onPress={handleClose}
-        >
-          <Pressable
-            style={[s.sheet, { backgroundColor: modalBg, maxHeight: "92%" }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Handle */}
-            <View style={[s.handle, { backgroundColor: c.border }]} />
-
-            {/* Header */}
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 18,
-              }}
-            >
-              <View>
-                <AppText
-                  style={{
-                    fontSize: 11,
-                    color: c.orange,
-                    fontWeight: "700",
-                    letterSpacing: 0.8,
-                  }}
-                >
-                  SAFETY & TRUST
-                </AppText>
-                <AppText
-                  weight="displayBlack"
-                  style={{ fontSize: 24, color: c.text, marginTop: 2 }}
-                >
-                  File a Report
-                </AppText>
-              </View>
-              <Pressable
-                onPress={handleClose}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: c.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="close" size={18} color={c.textDim} />
-              </Pressable>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              {done ? (
-                /* ── Success state ── */
-                <View
-                  style={{ alignItems: "center", paddingVertical: 32, gap: 12 }}
-                >
-                  <AppText style={{ fontSize: 52 }}>✅</AppText>
-                  <AppText
-                    weight="displayBlack"
-                    style={{ fontSize: 22, color: c.text, textAlign: "center" }}
-                  >
-                    Report Submitted
-                  </AppText>
-                  <AppText
-                    variant="small"
-                    tone="dim"
-                    style={{
-                      textAlign: "center",
-                      lineHeight: 20,
-                      maxWidth: 280,
-                    }}
-                  >
-                    Reference:{" "}
-                    <AppText weight="semibold" style={{ color: c.text }}>
-                      {done.ref}
-                    </AppText>
-                    {"\n"}Our team will review it within 24–48 hours.
-                  </AppText>
-                  <Pressable
-                    onPress={handleClose}
-                    style={{
-                      marginTop: 8,
-                      paddingHorizontal: 28,
-                      paddingVertical: 13,
-                      borderRadius: 12,
-                      backgroundColor: c.orange,
-                    }}
-                  >
-                    <AppText weight="semibold" style={{ color: "#000" }}>
-                      Done
-                    </AppText>
-                  </Pressable>
-                </View>
-              ) : (
-                <>
-                  {/* ── Target Type ── */}
-                  <AppText style={[s.fieldLabel, { color: c.textMuted }]}>
-                    TARGET TYPE
-                  </AppText>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={{ marginBottom: 16 }}
-                    contentContainerStyle={{ gap: 8, paddingBottom: 2 }}
-                  >
-                    {Object.entries(TYPE_META).map(([key, m]) => (
-                      <Pressable
-                        key={key}
-                        onPress={() => setTargetType(key)}
-                        style={{
-                          paddingHorizontal: 14,
-                          paddingVertical: 9,
-                          borderRadius: 10,
-                          borderWidth: 1,
-                          backgroundColor:
-                            targetType === key
-                              ? "rgba(249,115,22,0.18)"
-                              : c.bgCard,
-                          borderColor:
-                            targetType === key
-                              ? "rgba(249,115,22,0.5)"
-                              : c.border,
-                        }}
-                      >
-                        <AppText
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "700",
-                            color: targetType === key ? c.orange : c.textDim,
-                          }}
-                        >
-                          {m.icon} {m.label}
-                        </AppText>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-
-                  {/* ── Target ID ── */}
-                  <AppText style={[s.fieldLabel, { color: c.textMuted }]}>
-                    TARGET ID *
-                  </AppText>
-                  <TextInput
-                    value={targetId}
-                    onChangeText={setTargetId}
-                    placeholder="Paste the UUID of the item to report"
-                    placeholderTextColor={c.textMuted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    style={[
-                      s.input,
-                      {
-                        color: c.text,
-                        borderColor: c.border,
-                        backgroundColor: c.bgCard,
-                      },
-                    ]}
-                  />
-
-                  {/* ── Reason grid ── */}
-                  <AppText
-                    style={[s.fieldLabel, { color: c.textMuted, marginTop: 4 }]}
-                  >
-                    REASON *
-                  </AppText>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      flexWrap: "wrap",
-                      gap: 8,
-                      marginBottom: 16,
-                    }}
-                  >
-                    {REASON_OPTIONS.map((r) => (
-                      <Pressable
-                        key={r.value}
-                        onPress={() => setReason(r.value)}
-                        style={{
-                          paddingHorizontal: 14,
-                          paddingVertical: 9,
-                          borderRadius: 20,
-                          borderWidth: 1,
-                          backgroundColor:
-                            reason === r.value
-                              ? "rgba(249,115,22,0.18)"
-                              : c.bgCard,
-                          borderColor:
-                            reason === r.value
-                              ? "rgba(249,115,22,0.5)"
-                              : c.border,
-                        }}
-                      >
-                        {reason === r.value && (
-                          <View
-                            style={{
-                              position: "absolute",
-                              top: 4,
-                              right: 4,
-                              width: 7,
-                              height: 7,
-                              borderRadius: 4,
-                              backgroundColor: c.orange,
-                            }}
-                          />
-                        )}
-                        <AppText
-                          style={{
-                            fontSize: 12,
-                            fontWeight: "600",
-                            color: reason === r.value ? c.orange : c.textDim,
-                          }}
-                        >
-                          {r.label}
-                        </AppText>
-                      </Pressable>
-                    ))}
-                  </View>
-
-                  {/* ── Description ── */}
-                  <AppText style={[s.fieldLabel, { color: c.textMuted }]}>
-                    ADDITIONAL DETAILS{" "}
-                    <AppText style={{ color: c.textMuted, fontWeight: "400" }}>
-                      (optional)
-                    </AppText>
-                  </AppText>
-                  <TextInput
-                    value={description}
-                    onChangeText={setDescription}
-                    placeholder="Describe what happened. More detail = faster action."
-                    placeholderTextColor={c.textMuted}
-                    multiline
-                    numberOfLines={4}
-                    maxLength={1000}
-                    textAlignVertical="top"
-                    style={[
-                      s.textarea,
-                      {
-                        color: c.text,
-                        borderColor: c.border,
-                        backgroundColor: c.bgCard,
-                      },
-                    ]}
-                  />
-                  <AppText
-                    style={{
-                      fontSize: 11,
-                      color: c.textMuted,
-                      alignSelf: "flex-end",
-                      marginBottom: 16,
-                    }}
-                  >
-                    {description.length}/1000
-                  </AppText>
-
-                  {/* ── Evidence ── */}
-                  <AppText style={[s.fieldLabel, { color: c.textMuted }]}>
-                    EVIDENCE URLS{" "}
-                    <AppText style={{ color: c.textMuted, fontWeight: "400" }}>
-                      (one per line, max 5)
-                    </AppText>
-                  </AppText>
-                  <TextInput
-                    value={evidence}
-                    onChangeText={setEvidence}
-                    placeholder={
-                      "https://example.com/screenshot1.png\nhttps://example.com/screenshot2.png"
-                    }
-                    placeholderTextColor={c.textMuted}
-                    multiline
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                    style={[
-                      s.textarea,
-                      {
-                        color: c.text,
-                        borderColor: c.border,
-                        backgroundColor: c.bgCard,
-                      },
-                    ]}
-                  />
-
-                  {/* Disclaimer */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 10,
-                      padding: 14,
-                      borderRadius: 12,
-                      backgroundColor: "rgba(249,115,22,0.08)",
-                      borderWidth: 1,
-                      borderColor: "rgba(249,115,22,0.2)",
-                      marginTop: 4,
-                      marginBottom: 20,
-                    }}
-                  >
-                    <AppText style={{ fontSize: 15 }}>🔒</AppText>
-                    <AppText
-                      variant="small"
-                      tone="dim"
-                      style={{ flex: 1, lineHeight: 18 }}
-                    >
-                      False or malicious reports may result in action against
-                      your account. Reports are reviewed by our team and are
-                      confidential.
-                    </AppText>
-                  </View>
-
-                  <Pressable
-                    onPress={submit}
-                    disabled={submitting || !reason || !targetId.trim()}
-                    style={{
-                      paddingVertical: 16,
-                      borderRadius: 14,
-                      alignItems: "center",
-                      backgroundColor:
-                        reason && targetId.trim() ? "#ef4444" : c.bgCard,
-                      borderWidth: reason && targetId.trim() ? 0 : 1,
-                      borderColor: c.border,
-                      opacity: reason && targetId.trim() ? 1 : 0.6,
-                      marginBottom: 32,
-                    }}
-                  >
-                    {submitting ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <AppText
-                        weight="semibold"
-                        style={{
-                          fontSize: 15,
-                          color:
-                            reason && targetId.trim() ? "#fff" : c.textMuted,
-                        }}
-                      >
-                        🚩 Submit Report
-                      </AppText>
-                    )}
-                  </Pressable>
-                </>
-              )}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-// ── Detail Drawer (bottom sheet) ──────────────────────────────────────────────
-function DetailDrawer({ report, visible, onClose, onCancel, c, modalBg }) {
-  if (!report || !visible) return null;
+// ─────────────────────────────────────────────────────────────────────────────
+// DETAIL DRAWER (bottom sheet)
+// ─────────────────────────────────────────────────────────────────────────────
+function DetailDrawer({ report, visible, onClose, onCancel, c, t }) {
+  if (!report) return null;
 
   const typeMeta = TYPE_META[report.targetType] || {
-    label: report.targetType,
-    icon: "📄",
+    labelKey: null,
+    iconName: "document-text-outline",
   };
   const statusMeta = STATUS_META[report.status] || STATUS_META.DISMISSED;
+  const statusCol = statusColors(statusMeta.cls, c);
   const actionMeta = ACTION_META[report.actionTaken] || {
-    label: report.actionTaken || "—",
-    icon: "—",
+    labelKey: null,
+    iconName: null,
   };
   const canCancel = report.status === "PENDING";
   const isDone = report.status === "RESOLVED" || report.status === "DISMISSED";
+  const reasonLabel = REASON_OPTIONS.find(
+    (r) => r.value === report.reason,
+  )?.labelKey;
 
   const timelineSteps = [
     {
-      label: "Report submitted",
+      label: t("reports.detail.timelineSubmitted"),
       date: fmtDate(report.createdAt),
       done: true,
       active: false,
     },
     {
-      label: "Review started",
+      label: t("reports.detail.timelineReview"),
       date: "—",
       done: report.status !== "PENDING",
       active: report.status === "REVIEWING",
     },
     {
-      label: isDone
-        ? report.status === "RESOLVED"
-          ? "Resolved"
-          : "Dismissed"
-        : "Awaiting resolution",
+      label:
+        report.status === "RESOLVED"
+          ? t("reports.status.resolved")
+          : report.status === "DISMISSED"
+            ? t("reports.status.dismissed")
+            : t("reports.detail.timelineAwaiting"),
       date: isDone ? fmtDate(report.resolvedAt) : "—",
       done: isDone,
       active: false,
@@ -621,497 +497,47 @@ function DetailDrawer({ report, visible, onClose, onCancel, c, modalBg }) {
   ];
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)" }}
-        onPress={onClose}
-      >
-        <Pressable
-          style={[s.sheet, { backgroundColor: modalBg, maxHeight: "88%" }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          {/* Handle */}
-          <View style={[s.handle, { backgroundColor: c.border }]} />
-
-          {/* Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              paddingBottom: 14,
-              borderBottomWidth: StyleSheet.hairlineWidth,
-              borderBottomColor: c.border,
-              marginBottom: 16,
-            }}
-          >
-            <View>
-              <AppText
-                style={{
-                  fontSize: 10,
-                  color: c.orange,
-                  fontWeight: "700",
-                  letterSpacing: 0.8,
-                  marginBottom: 2,
-                }}
-              >
-                REPORT DETAIL
-              </AppText>
-              <AppText
-                weight="displayBlack"
-                style={{ fontSize: 20, color: c.text, letterSpacing: 0.5 }}
-              >
-                {report.ref}
-              </AppText>
-            </View>
-            <Pressable
-              onPress={onClose}
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 9,
-                borderWidth: 1,
-                borderColor: c.border,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <AppText style={{ color: c.textMuted, fontSize: 16 }}>✕</AppText>
-            </Pressable>
-          </View>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 32 }}
-          >
-            {/* Status hero */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 14,
-                padding: 14,
-                borderRadius: 14,
-                borderWidth: 1,
-                backgroundColor: statusMeta.bg,
-                borderColor: statusMeta.border,
-                marginBottom: 16,
-              }}
-            >
-              <AppText style={{ fontSize: 28 }}>{statusMeta.icon}</AppText>
-              <View>
-                <AppText
-                  weight="semibold"
-                  style={{ fontSize: 15, color: c.text }}
-                >
-                  {statusMeta.label}
-                </AppText>
-                <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
-                  {isDone
-                    ? `Resolved ${fmtDate(report.resolvedAt)}`
-                    : `Submitted ${timeAgo(report.createdAt)}`}
-                </AppText>
-              </View>
-            </View>
-
-            {/* Detail grid */}
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 10,
-                marginBottom: 16,
-              }}
-            >
-              {[
-                {
-                  label: "Reported",
-                  value: `${typeMeta.icon}  ${typeMeta.label}`,
-                },
-                {
-                  label: "Reason",
-                  value:
-                    REASON_OPTIONS.find((r) => r.value === report.reason)
-                      ?.label || report.reason,
-                },
-                { label: "Submitted", value: fmtDate(report.createdAt) },
-                {
-                  label: "Target ID",
-                  value: report.targetId?.slice(-8).toUpperCase(),
-                  mono: true,
-                },
-              ].map((item) => (
-                <View
-                  key={item.label}
-                  style={{
-                    width: "47%",
-                    padding: 12,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: c.border,
-                    backgroundColor: c.bgCard,
-                  }}
-                >
-                  <AppText
-                    style={{
-                      fontSize: 9,
-                      color: c.textMuted,
-                      fontWeight: "700",
-                      letterSpacing: 0.7,
-                      textTransform: "uppercase",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {item.label}
-                  </AppText>
-                  <AppText
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "600",
-                      color: c.text,
-                      fontFamily: item.mono
-                        ? Platform.select({
-                            ios: "Courier",
-                            android: "monospace",
-                          })
-                        : undefined,
-                    }}
-                  >
-                    {item.value}
-                  </AppText>
-                </View>
-              ))}
-            </View>
-
-            {/* Description */}
-            {report.description ? (
-              <View
-                style={{
-                  padding: 14,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: c.border,
-                  backgroundColor: c.bgCard,
-                  marginBottom: 16,
-                }}
-              >
-                <AppText
-                  style={{
-                    fontSize: 10,
-                    color: c.textMuted,
-                    fontWeight: "700",
-                    letterSpacing: 0.7,
-                    textTransform: "uppercase",
-                    marginBottom: 8,
-                  }}
-                >
-                  YOUR DESCRIPTION
-                </AppText>
-                <AppText variant="body" tone="dim" style={{ lineHeight: 20 }}>
-                  {report.description}
-                </AppText>
-              </View>
-            ) : null}
-
-            {/* Outcome */}
-            {isDone ? (
-              <View
-                style={{
-                  padding: 14,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: "rgba(34,197,94,0.25)",
-                  backgroundColor: "rgba(34,197,94,0.10)",
-                  marginBottom: 16,
-                }}
-              >
-                <AppText
-                  style={{
-                    fontSize: 10,
-                    color: "#22c55e",
-                    fontWeight: "700",
-                    letterSpacing: 0.7,
-                    textTransform: "uppercase",
-                    marginBottom: 8,
-                  }}
-                >
-                  OUTCOME
-                </AppText>
-                <AppText
-                  weight="semibold"
-                  style={{ color: c.text, fontSize: 14, marginBottom: 4 }}
-                >
-                  {actionMeta.icon} {actionMeta.label}
-                </AppText>
-                {report.adminNote ? (
-                  <AppText
-                    variant="small"
-                    tone="dim"
-                    style={{ fontStyle: "italic", lineHeight: 18 }}
-                  >
-                    "{report.adminNote}"
-                  </AppText>
-                ) : null}
-              </View>
-            ) : null}
-
-            {/* Timeline */}
-            <View style={{ marginBottom: 16 }}>
-              <AppText
-                style={{
-                  fontSize: 10,
-                  color: c.textMuted,
-                  fontWeight: "700",
-                  letterSpacing: 0.8,
-                  textTransform: "uppercase",
-                  marginBottom: 12,
-                }}
-              >
-                TIMELINE
-              </AppText>
-              {timelineSteps.map((step, i) => (
-                <View
-                  key={i}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                    paddingVertical: 10,
-                    borderBottomWidth:
-                      i < timelineSteps.length - 1
-                        ? StyleSheet.hairlineWidth
-                        : 0,
-                    borderBottomColor: c.border,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 6,
-                      backgroundColor: step.done
-                        ? "#22c55e"
-                        : step.active
-                          ? "#3b82f6"
-                          : c.border,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <AppText variant="body" tone="dim" style={{ flex: 1 }}>
-                    {step.label}
-                  </AppText>
-                  <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                    {step.date}
-                  </AppText>
-                </View>
-              ))}
-            </View>
-
-            {/* Cancel button */}
-            {canCancel ? (
-              <Pressable
-                onPress={() => {
-                  onClose();
-                  onCancel(report);
-                }}
-                style={{
-                  paddingVertical: 14,
-                  borderRadius: 12,
-                  alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: "rgba(239,68,68,0.35)",
-                  backgroundColor: "rgba(239,68,68,0.10)",
-                }}
-              >
-                <AppText
-                  weight="semibold"
-                  style={{ color: "#ef4444", fontSize: 14 }}
-                >
-                  🗑️ Cancel this report
-                </AppText>
-              </Pressable>
-            ) : null}
-          </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-// ── Cancel Confirm Modal ──────────────────────────────────────────────────────
-function CancelConfirmModal({
-  report,
-  visible,
-  onClose,
-  onSuccess,
-  c,
-  modalBg,
-  toast,
-}) {
-  const [loading, setLoading] = useState(false);
-
-  async function handleCancel() {
-    setLoading(true);
-    try {
-      await client.delete(`/reports/${report.id}`);
-      onSuccess("Report cancelled and removed.");
-    } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to cancel report.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (!report || !visible) return null;
-
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.7)",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-        }}
-        onPress={onClose}
-      >
-        <Pressable
-          style={{
-            backgroundColor: modalBg,
-            borderRadius: 22,
-            padding: 28,
-            width: "100%",
-            maxWidth: 360,
-            alignItems: "center",
-            gap: 10,
-            borderWidth: 1,
-            borderColor: "rgba(239,68,68,0.2)",
-          }}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <AppText style={{ fontSize: 40 }}>🗑️</AppText>
-          <AppText
-            weight="displayBlack"
-            style={{ fontSize: 20, color: c.text, textAlign: "center" }}
-          >
-            Cancel this report?
-          </AppText>
-          <AppText
-            variant="small"
-            tone="dim"
-            style={{ textAlign: "center", lineHeight: 19 }}
-          >
-            Ref{" "}
-            <AppText weight="semibold" style={{ color: c.text }}>
-              {report.ref}
-            </AppText>
-            {"\n"}
-            {REASON_OPTIONS.find((r) => r.value === report.reason)?.label}
-            {"\n"}This action cannot be undone.
-          </AppText>
-
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 10,
-              width: "100%",
-              marginTop: 8,
-            }}
-          >
-            <Pressable
-              onPress={onClose}
-              disabled={loading}
-              style={{
-                flex: 1,
-                paddingVertical: 13,
-                borderRadius: 12,
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: c.border,
-                backgroundColor: "transparent",
-              }}
-            >
-              <AppText weight="semibold" style={{ color: c.textDim }}>
-                Keep it
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={handleCancel}
-              disabled={loading}
-              style={{
-                flex: 1,
-                paddingVertical: 13,
-                borderRadius: 12,
-                alignItems: "center",
-                backgroundColor: "#ef4444",
-              }}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <AppText weight="semibold" style={{ color: "#fff" }}>
-                  Yes, cancel
-                </AppText>
-              )}
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-// ── Report Card ───────────────────────────────────────────────────────────────
-function ReportCard({ report, onView, onCancel, c }) {
-  const typeMeta = TYPE_META[report.targetType] || {
-    label: report.targetType,
-    icon: "📄",
-  };
-  const actionMeta = ACTION_META[report.actionTaken];
-  const canCancel = report.status === "PENDING";
-  const hasOutcome = report.actionTaken && report.actionTaken !== "NO_ACTION";
-  const noAction =
-    report.actionTaken === "NO_ACTION" && report.status === "RESOLVED";
-  const reasonLabel =
-    REASON_OPTIONS.find((r) => r.value === report.reason)?.label ||
-    report.reason;
-
-  return (
-    <Pressable
-      onPress={() => onView(report)}
-      style={{
-        backgroundColor: c.bgPanel,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: c.border,
-        padding: 16,
-        marginBottom: 10,
-      }}
-    >
-      {/* Top row */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 10,
-        }}
-      >
+    <SheetModal visible={visible} onClose={onClose}>
+      <View style={{ paddingHorizontal: 20, maxHeight: 720 }}>
+        {/* Header */}
         <View
           style={{
             flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            flex: 1,
-            marginRight: 10,
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            paddingBottom: 14,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: c.border,
+            marginBottom: 16,
+            paddingTop: 8,
           }}
         >
-          <View
+          <View>
+            <AppText
+              style={{
+                fontSize: 10,
+                color: c.orange,
+                fontWeight: "700",
+                letterSpacing: 0.9,
+                marginBottom: 2,
+                textTransform: "uppercase",
+              }}
+            >
+              {t("reports.detail.title")}
+            </AppText>
+            <AppText
+              weight="displayBlack"
+              style={{ fontSize: 18, color: c.text, letterSpacing: 0.5 }}
+            >
+              {report.ref}
+            </AppText>
+          </View>
+          <Pressable
+            onPress={onClose}
             style={{
-              width: 42,
-              height: 42,
-              borderRadius: 12,
+              width: 32,
+              height: 32,
+              borderRadius: 8,
               borderWidth: 1,
               borderColor: c.border,
               backgroundColor: c.bgCard,
@@ -1119,162 +545,456 @@ function ReportCard({ report, onView, onCancel, c }) {
               justifyContent: "center",
             }}
           >
-            <AppText style={{ fontSize: 20 }}>{typeMeta.icon}</AppText>
-          </View>
-          <View style={{ flex: 1 }}>
-            <AppText
-              weight="semibold"
-              style={{ fontSize: 13, color: c.text, letterSpacing: 0.3 }}
-            >
-              {report.ref}
-            </AppText>
-            <AppText
-              style={{
-                fontSize: 10,
-                color: c.textMuted,
-                textTransform: "uppercase",
-                letterSpacing: 0.6,
-                marginTop: 1,
-              }}
-            >
-              {typeMeta.label}
-            </AppText>
-          </View>
+            <Ionicons name="close" size={16} color={c.textMuted} />
+          </Pressable>
         </View>
-        <StatusBadge status={report.status} />
-      </View>
 
-      {/* Reason + description */}
-      <View style={{ paddingLeft: 52, marginBottom: 8 }}>
-        <AppText
-          weight="semibold"
-          style={{ fontSize: 14, color: c.text, marginBottom: 3 }}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 40 }}
         >
-          {reasonLabel}
-        </AppText>
-        {report.description ? (
-          <AppText
-            variant="small"
-            tone="dim"
-            numberOfLines={2}
-            style={{ lineHeight: 18 }}
-          >
-            {report.description}
-          </AppText>
-        ) : null}
-      </View>
-
-      {/* Outcome pill */}
-      {hasOutcome ? (
-        <View
-          style={{
-            alignSelf: "flex-start",
-            marginLeft: 52,
-            marginBottom: 8,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 6,
-            borderWidth: 1,
-            borderColor: "rgba(34,197,94,0.25)",
-            backgroundColor: "rgba(34,197,94,0.10)",
-          }}
-        >
-          <AppText
-            style={{ fontSize: 11, fontWeight: "600", color: "#22c55e" }}
-          >
-            {actionMeta?.icon} {actionMeta?.label}
-          </AppText>
-        </View>
-      ) : noAction ? (
-        <View
-          style={{
-            alignSelf: "flex-start",
-            marginLeft: 52,
-            marginBottom: 8,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 6,
-            borderWidth: 1,
-            borderColor: c.border,
-            backgroundColor: c.bgCard,
-          }}
-        >
-          <AppText
-            style={{ fontSize: 11, fontWeight: "600", color: c.textMuted }}
-          >
-            — No action taken
-          </AppText>
-        </View>
-      ) : null}
-
-      {/* Footer */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingTop: 10,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: c.border,
-        }}
-      >
-        <AppText style={{ fontSize: 11, color: c.textMuted }}>
-          {timeAgo(report.createdAt)}
-        </AppText>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {canCancel ? (
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                onCancel(report);
-              }}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 9,
-                borderWidth: 1,
-                borderColor: c.border,
-                backgroundColor: c.bgCard,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <AppText style={{ fontSize: 14 }}>🗑️</AppText>
-            </Pressable>
-          ) : null}
+          {/* Status hero */}
           <View
             style={{
               flexDirection: "row",
               alignItems: "center",
-              gap: 4,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 8,
+              gap: 14,
+              padding: 14,
+              borderRadius: 14,
               borderWidth: 1,
-              borderColor: c.border,
-              backgroundColor: c.bgCard,
+              backgroundColor: statusCol.bg,
+              borderColor: statusCol.border,
+              marginBottom: 16,
             }}
           >
-            <AppText
-              style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
-            >
-              Details
-            </AppText>
-            <Ionicons name="chevron-forward" size={12} color={c.textMuted} />
+            <Ionicons
+              name={statusMeta.iconName}
+              size={26}
+              color={statusCol.color}
+            />
+            <View style={{ flex: 1 }}>
+              <AppText
+                weight="semibold"
+                style={{ fontSize: 14, color: c.text }}
+              >
+                {t(statusMeta.labelKey)}
+              </AppText>
+              <AppText variant="small" tone="dim" style={{ marginTop: 2 }}>
+                {isDone
+                  ? `${t("reports.status.resolved")} ${fmtDate(report.resolvedAt)}`
+                  : `${t("reports.detail.submitted")} ${timeAgo(report.createdAt, t)}`}
+              </AppText>
+            </View>
           </View>
-        </View>
+
+          {/* Detail grid */}
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            {[
+              {
+                label: t("reports.detail.reported"),
+                value: typeMeta.labelKey
+                  ? t(typeMeta.labelKey)
+                  : report.targetType,
+                iconName: typeMeta.iconName,
+              },
+              {
+                label: t("reports.detail.reason"),
+                value: reasonLabel ? t(reasonLabel) : report.reason,
+              },
+              {
+                label: t("reports.detail.submitted"),
+                value: fmtDate(report.createdAt),
+              },
+              {
+                label: t("reports.detail.targetId"),
+                value: report.targetId?.slice(-8).toUpperCase(),
+                mono: true,
+              },
+            ].map((item) => (
+              <View
+                key={item.label}
+                style={{
+                  width: "47%",
+                  padding: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: c.bgCard,
+                }}
+              >
+                <AppText
+                  style={{
+                    fontSize: 9,
+                    color: c.textMuted,
+                    fontWeight: "700",
+                    letterSpacing: 0.7,
+                    textTransform: "uppercase",
+                    marginBottom: 4,
+                  }}
+                >
+                  {item.label}
+                </AppText>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+                >
+                  {item.iconName && (
+                    <Ionicons name={item.iconName} size={12} color={c.text} />
+                  )}
+                  <AppText
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: c.text,
+                      flex: 1,
+                      fontFamily: item.mono
+                        ? Platform.select({
+                            ios: "Courier",
+                            android: "monospace",
+                          })
+                        : undefined,
+                    }}
+                    numberOfLines={2}
+                  >
+                    {item.value}
+                  </AppText>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {report.description ? (
+            <View
+              style={{
+                padding: 14,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: c.border,
+                backgroundColor: c.bgCard,
+                marginBottom: 16,
+              }}
+            >
+              <AppText
+                style={{
+                  fontSize: 10,
+                  color: c.textMuted,
+                  fontWeight: "700",
+                  letterSpacing: 0.7,
+                  textTransform: "uppercase",
+                  marginBottom: 8,
+                }}
+              >
+                {t("reports.detail.yourDescription")}
+              </AppText>
+              <AppText variant="body" tone="dim" style={{ lineHeight: 20 }}>
+                {report.description}
+              </AppText>
+            </View>
+          ) : null}
+
+          {isDone ? (
+            <View
+              style={{
+                padding: 14,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "rgba(34,197,94,0.25)",
+                backgroundColor: "rgba(34,197,94,0.10)",
+                marginBottom: 16,
+              }}
+            >
+              <AppText
+                style={{
+                  fontSize: 10,
+                  color: "#22c55e",
+                  fontWeight: "700",
+                  letterSpacing: 0.7,
+                  textTransform: "uppercase",
+                  marginBottom: 8,
+                }}
+              >
+                {t("reports.detail.outcome")}
+              </AppText>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 4,
+                }}
+              >
+                {actionMeta.iconName && (
+                  <Ionicons
+                    name={actionMeta.iconName}
+                    size={14}
+                    color={c.text}
+                  />
+                )}
+                <AppText
+                  weight="semibold"
+                  style={{ color: c.text, fontSize: 13, flex: 1 }}
+                >
+                  {actionMeta.labelKey
+                    ? t(actionMeta.labelKey)
+                    : report.actionTaken || "—"}
+                </AppText>
+              </View>
+              {report.adminNote ? (
+                <AppText
+                  variant="small"
+                  tone="dim"
+                  style={{ fontStyle: "italic", lineHeight: 18 }}
+                >
+                  "{report.adminNote}"
+                </AppText>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Timeline */}
+          <View style={{ marginBottom: 16 }}>
+            <AppText
+              style={{
+                fontSize: 10,
+                color: c.textMuted,
+                fontWeight: "700",
+                letterSpacing: 0.9,
+                textTransform: "uppercase",
+                marginBottom: 12,
+              }}
+            >
+              {t("reports.detail.timeline")}
+            </AppText>
+            {timelineSteps.map((step, i) => (
+              <View
+                key={i}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingVertical: 10,
+                  borderBottomWidth:
+                    i < timelineSteps.length - 1 ? StyleSheet.hairlineWidth : 0,
+                  borderBottomColor: c.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: step.done
+                      ? "#22c55e"
+                      : step.active
+                        ? "#3b82f6"
+                        : c.border,
+                    flexShrink: 0,
+                  }}
+                />
+                <AppText variant="body" tone="dim" style={{ flex: 1 }}>
+                  {step.label}
+                </AppText>
+                <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                  {step.date}
+                </AppText>
+              </View>
+            ))}
+          </View>
+
+          {canCancel ? (
+            <Pressable
+              onPress={() => {
+                onClose();
+                onCancel(report);
+              }}
+              style={{
+                paddingVertical: 13,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection: "row",
+                gap: 6,
+                borderWidth: 1,
+                borderColor: "rgba(239,68,68,0.30)",
+                backgroundColor: "rgba(239,68,68,0.08)",
+              }}
+            >
+              <Ionicons name="trash-outline" size={14} color="#ef4444" />
+              <AppText
+                weight="semibold"
+                style={{ color: "#ef4444", fontSize: 13 }}
+              >
+                {t("reports.detail.cancelBtn")}
+              </AppText>
+            </Pressable>
+          ) : null}
+        </ScrollView>
       </View>
-    </Pressable>
+    </SheetModal>
   );
 }
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE CONFIRM MODAL (branded, centered)
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE CONFIRM MODAL (Bottom Sheet — themed)
+// ─────────────────────────────────────────────────────────────────────────────
+function DeleteConfirmModal({
+  report,
+  visible,
+  onClose,
+  onSuccess,
+  c, // ← theme colors passed in
+  toast,
+  t,
+}) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleCancel() {
+    setLoading(true);
+    try {
+      await client.delete(`/reports/${report.id}`);
+      toast.success(t("reports.cancel.success"));
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t("reports.cancel.failed"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!report) return null;
+
+  const reasonLabel = REASON_OPTIONS.find(
+    (r) => r.value === report.reason,
+  )?.labelKey;
+
+  // Theme-aware destructive color (matches the red used elsewhere in the app)
+  const dangerColor = c.red || "#ef4444";
+  const dangerBg = c.redDim || "rgba(239,68,68,0.12)";
+
+  return (
+    <SheetModal visible={visible} onClose={loading ? undefined : onClose}>
+      <View
+        style={{ paddingHorizontal: 24, paddingBottom: 40, paddingTop: 16 }}
+      >
+        {/* Icon bubble — themed */}
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: dangerBg,
+            alignItems: "center",
+            justifyContent: "center",
+            alignSelf: "center",
+            marginBottom: 16,
+          }}
+        >
+          <Ionicons name="trash-outline" size={28} color={dangerColor} />
+        </View>
+
+        {/* Title — themed text */}
+        <AppText
+          weight="displayBlack"
+          style={{
+            fontSize: 20,
+            color: c.text,
+            textAlign: "center",
+            marginBottom: 8,
+          }}
+        >
+          {t("reports.cancel.title")}
+        </AppText>
+
+        {/* Body — themed dim text */}
+        <AppText
+          variant="small"
+          tone="dim"
+          style={{ textAlign: "center", lineHeight: 20, marginBottom: 24 }}
+        >
+          {t("reports.cancel.ref")}{" "}
+          <AppText weight="semibold" style={{ color: c.text }}>
+            {report.ref}
+          </AppText>
+          {"\n"}
+          {reasonLabel ? t(reasonLabel) : report.reason}
+          {"\n\n"}
+          <AppText style={{ color: dangerColor, fontWeight: "600" }}>
+            {t("reports.cancel.irreversible")}
+          </AppText>
+        </AppText>
+
+        {/* Actions — stacked, themed */}
+        <View style={{ gap: 12 }}>
+          {/* Confirm (destructive) */}
+          <Pressable
+            onPress={handleCancel}
+            disabled={loading}
+            style={{
+              paddingVertical: 15,
+              borderRadius: 12,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: dangerColor,
+              opacity: loading ? 0.7 : 1,
+            }}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <AppText
+                weight="semibold"
+                style={{ color: "#fff", fontSize: 15 }}
+              >
+                {t("reports.cancel.confirm")}
+              </AppText>
+            )}
+          </Pressable>
+
+          {/* Cancel — themed ghost button */}
+          <Pressable
+            onPress={onClose}
+            disabled={loading}
+            style={{
+              paddingVertical: 15,
+              borderRadius: 12,
+              alignItems: "center",
+              borderWidth: 1,
+              borderColor: c.border,
+              backgroundColor: c.bgCard,
+              opacity: loading ? 0.5 : 1,
+            }}
+          >
+            <AppText
+              weight="semibold"
+              style={{ color: c.textDim, fontSize: 15 }}
+            >
+              {t("reports.cancel.keep")}
+            </AppText>
+          </Pressable>
+        </View>
+      </View>
+    </SheetModal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
 export default function MyReportsScreen() {
+  const { t } = useTranslation();
   const { theme: th } = useTheme();
   const { toast } = useToast();
+  const navigation = useNavigation();
   const c = th.colors;
   const modalBg = th.effectiveMode === "dark" ? "#111118" : "#ffffff";
 
@@ -1286,8 +1006,7 @@ export default function MyReportsScreen() {
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [viewTarget, setViewTarget] = useState(null);
-  const [cancelTarget, setCancelTarget] = useState(null);
-  const [showForm, setShowForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const LIMIT = 10;
 
@@ -1305,7 +1024,7 @@ export default function MyReportsScreen() {
         setPages(d.pages || 1);
         setPage(pg);
       } catch {
-        toast.error("Failed to load reports.");
+        toast.error(t("reports.loadFailed"));
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -1323,22 +1042,26 @@ export default function MyReportsScreen() {
     setPage(1);
   }
 
-  function handleCancelSuccess(msg) {
-    setCancelTarget(null);
-    toast.success(msg);
-    load(page, tab);
+  function openSupportHub() {
+    const routeNames = navigation.getState()?.routeNames || [];
+    if (routeNames.includes("Support")) {
+      navigation.navigate("Support");
+    } else if (routeNames.includes("SupportHub")) {
+      navigation.navigate("SupportHub");
+    } else if (routeNames.includes("Help")) {
+      navigation.navigate("Help");
+    } else {
+      Linking.openURL("https://skilledproz.com/support").catch(() => {});
+    }
   }
 
-  function handleReportSuccess() {
-    setShowForm(false);
-    load(1, "ALL");
-    setTab("ALL");
-  }
-
-  // Summary counts
   const pending = reports.filter((r) => r.status === "PENDING").length;
   const reviewing = reports.filter((r) => r.status === "REVIEWING").length;
   const resolved = reports.filter((r) => r.status === "RESOLVED").length;
+
+  if (loading) {
+    return <PageSkeleton c={c} />;
+  }
 
   return (
     <>
@@ -1354,94 +1077,67 @@ export default function MyReportsScreen() {
         }
       >
         {/* ── Page header ── */}
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            marginBottom: 18,
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <AppText
-              style={{
-                fontSize: 11,
-                color: c.orange,
-                fontWeight: "700",
-                letterSpacing: 0.8,
-              }}
-            >
-              SAFETY & TRUST
-            </AppText>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                marginTop: 2,
-                flexWrap: "wrap",
-              }}
-            >
-              <AppText
-                weight="displayBlack"
-                style={{ fontSize: 30, color: c.text, lineHeight: 36 }}
-              >
-                My Reports
-              </AppText>
-              {total > 0 && (
-                <View
-                  style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 3,
-                    borderRadius: 20,
-                    borderWidth: 1,
-                    borderColor: c.border,
-                    backgroundColor: c.bgCard,
-                  }}
-                >
-                  <AppText
-                    style={{
-                      fontSize: 11,
-                      fontWeight: "700",
-                      color: c.textMuted,
-                    }}
-                  >
-                    {total}
-                  </AppText>
-                </View>
-              )}
-            </View>
-            <AppText
-              variant="small"
-              tone="dim"
-              style={{ marginTop: 4, lineHeight: 18 }}
-            >
-              Track reports you've submitted. Reviewed within 24–48 hours.
-            </AppText>
-          </View>
-          <Pressable
-            onPress={() => setShowForm(true)}
+        <View style={{ marginBottom: 16 }}>
+          <AppText
             style={{
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              borderRadius: 12,
-              backgroundColor: "#ef4444",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
+              fontSize: 10,
+              color: c.orange,
+              fontWeight: "700",
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
             }}
           >
-            <Ionicons name="flag" size={14} color="#fff" />
-            <AppText weight="semibold" style={{ color: "#fff", fontSize: 13 }}>
-              Report
+            {t("reports.trust")}
+          </AppText>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 2,
+              flexWrap: "wrap",
+            }}
+          >
+            <AppText
+              weight="displayBlack"
+              style={{ fontSize: 26, color: c.text, lineHeight: 32 }}
+            >
+              {t("reports.title")}
             </AppText>
-          </Pressable>
+            {total > 0 && (
+              <View
+                style={{
+                  paddingHorizontal: 9,
+                  paddingVertical: 3,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: c.bgCard,
+                }}
+              >
+                <AppText
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "700",
+                    color: c.textMuted,
+                  }}
+                >
+                  {total}
+                </AppText>
+              </View>
+            )}
+          </View>
+          <AppText
+            variant="small"
+            tone="dim"
+            style={{ marginTop: 4, lineHeight: 17 }}
+          >
+            {t("reports.subtitle")}
+          </AppText>
         </View>
 
         {/* ── Summary strip ── */}
-        {!loading && reports.length > 0 && (
+        {reports.length > 0 && (
           <View
             style={{
               flexDirection: "row",
@@ -1454,11 +1150,23 @@ export default function MyReportsScreen() {
             }}
           >
             {[
-              { icon: "⏳", value: pending, label: "Pending" },
-              { icon: "🔍", value: reviewing, label: "Reviewing" },
-              { icon: "✅", value: resolved, label: "Resolved" },
+              {
+                iconName: "time-outline",
+                value: pending,
+                labelKey: "reports.tabs.pending",
+              },
+              {
+                iconName: "search-outline",
+                value: reviewing,
+                labelKey: "reports.summary.reviewing",
+              },
+              {
+                iconName: "checkmark-circle",
+                value: resolved,
+                labelKey: "reports.tabs.resolved",
+              },
             ].map((item, i) => (
-              <React.Fragment key={item.label}>
+              <React.Fragment key={item.labelKey}>
                 {i > 0 && (
                   <View
                     style={{
@@ -1475,22 +1183,23 @@ export default function MyReportsScreen() {
                     gap: 3,
                   }}
                 >
-                  <AppText style={{ fontSize: 18 }}>{item.icon}</AppText>
+                  <Ionicons name={item.iconName} size={16} color={c.textDim} />
                   <AppText
                     weight="displayBlack"
-                    style={{ fontSize: 20, color: c.text, lineHeight: 24 }}
+                    style={{ fontSize: 18, color: c.text, lineHeight: 22 }}
                   >
                     {item.value}
                   </AppText>
                   <AppText
                     style={{
-                      fontSize: 10,
+                      fontSize: 9,
                       color: c.textMuted,
                       textTransform: "uppercase",
                       letterSpacing: 0.6,
                     }}
+                    numberOfLines={1}
                   >
-                    {item.label}
+                    {t(item.labelKey)}
                   </AppText>
                 </View>
               </React.Fragment>
@@ -1498,12 +1207,12 @@ export default function MyReportsScreen() {
           </View>
         )}
 
-        {/* ── Info banner ── */}
+        {/* ── Info banner with support hub link ── */}
         <View
           style={{
             flexDirection: "row",
             gap: 12,
-            padding: 14,
+            padding: 13,
             borderRadius: 12,
             borderWidth: 1,
             borderColor: c.border,
@@ -1513,79 +1222,106 @@ export default function MyReportsScreen() {
             marginBottom: 16,
           }}
         >
-          <AppText style={{ fontSize: 16 }}>🔒</AppText>
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={16}
+            color={c.orange}
+            style={{ marginTop: 1 }}
+          />
           <AppText
             variant="small"
             tone="dim"
-            style={{ flex: 1, lineHeight: 18 }}
+            style={{ flex: 1, lineHeight: 17 }}
           >
-            All reports are confidential. The reported party is never told who
-            filed the report.
+            {t("reports.infoBannerPrefix")}{" "}
+            <AppText
+              variant="small"
+              weight="semibold"
+              style={{
+                color: c.orange,
+                textDecorationLine: "underline",
+              }}
+              onPress={openSupportHub}
+              suppressHighlighting
+            >
+              {t("reports.contactSupport")}
+            </AppText>
+            {t("reports.infoBannerSuffix")}
           </AppText>
         </View>
 
-        {/* ── Status tabs ── */}
+        {/* ── Filter tabs ── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: 16 }}
+          style={{ flexGrow: 0, marginBottom: 16 }}
           contentContainerStyle={{ gap: 6, paddingBottom: 2 }}
         >
-          {STATUS_TABS.map((t) => (
-            <Pressable
-              key={t.key}
-              onPress={() => handleTabChange(t.key)}
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 20,
-                borderWidth: 1,
-                backgroundColor:
-                  tab === t.key ? "rgba(249,115,22,0.15)" : "transparent",
-                borderColor: tab === t.key ? "rgba(249,115,22,0.5)" : c.border,
-              }}
-            >
-              <AppText
+          {STATUS_TABS.map((tabItem) => {
+            const active = tab === tabItem.key;
+            return (
+              <Pressable
+                key={tabItem.key}
+                onPress={() => handleTabChange(tabItem.key)}
                 style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: tab === t.key ? c.orange : c.textDim,
+                  paddingHorizontal: 14,
+                  paddingVertical: 7,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  backgroundColor: active
+                    ? "rgba(249,115,22,0.12)"
+                    : "transparent",
+                  borderColor: active ? "rgba(249,115,22,0.45)" : c.border,
                 }}
               >
-                {t.label}
-              </AppText>
-            </Pressable>
-          ))}
+                <AppText
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "600",
+                    color: active ? c.orange : c.textDim,
+                  }}
+                >
+                  {t(tabItem.labelKey)}
+                </AppText>
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
         {/* ── Cards ── */}
-        {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonCard key={i} c={c} />
-          ))
-        ) : reports.length === 0 ? (
-          <View style={{ alignItems: "center", paddingVertical: 64, gap: 10 }}>
-            <AppText style={{ fontSize: 44, opacity: 0.35 }}>🚩</AppText>
-            <AppText weight="semibold" style={{ fontSize: 16, color: c.text }}>
+        {reports.length === 0 ? (
+          <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}>
+            <Ionicons
+              name="flag-outline"
+              size={40}
+              color={c.textMuted}
+              style={{ opacity: 0.4 }}
+            />
+            <AppText weight="semibold" style={{ fontSize: 15, color: c.text }}>
               {tab === "ALL"
-                ? "No reports yet"
-                : `No ${tab.toLowerCase()} reports`}
+                ? t("reports.empty.titleAll")
+                : t("reports.empty.titleFiltered", {
+                    status: t(
+                      STATUS_TABS.find((st) => st.key === tab)?.labelKey ||
+                        "reports.tabs.all",
+                    ).toLowerCase(),
+                  })}
             </AppText>
             <AppText
               variant="small"
               tone="dim"
-              style={{ textAlign: "center", maxWidth: 260, lineHeight: 18 }}
+              style={{ textAlign: "center", maxWidth: 260, lineHeight: 17 }}
             >
               {tab === "ALL"
-                ? "Tap Report to flag a user, job post, or any content."
-                : "Try a different filter above."}
+                ? t("reports.empty.subAll")
+                : t("reports.empty.subFiltered")}
             </AppText>
             {tab !== "ALL" ? (
               <Pressable
                 onPress={() => handleTabChange("ALL")}
                 style={{
                   marginTop: 8,
-                  paddingHorizontal: 18,
+                  paddingHorizontal: 16,
                   paddingVertical: 8,
                   borderRadius: 20,
                   borderWidth: 1,
@@ -1595,20 +1331,190 @@ export default function MyReportsScreen() {
                 <AppText
                   style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
                 >
-                  View all reports
+                  {t("reports.empty.viewAll")}
                 </AppText>
               </Pressable>
             ) : null}
           </View>
         ) : (
           reports.map((r) => (
-            <ReportCard
+            <Pressable
               key={r.id}
-              report={r}
-              c={c}
-              onView={setViewTarget}
-              onCancel={setCancelTarget}
-            />
+              onPress={() => setViewTarget(r)}
+              style={{
+                backgroundColor: c.bgPanel,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: c.border,
+                padding: 16,
+                marginBottom: 10,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  marginBottom: 10,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    flex: 1,
+                    marginRight: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      backgroundColor: c.bgCard,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons
+                      name={
+                        (
+                          TYPE_META[r.targetType] || {
+                            iconName: "document-text-outline",
+                          }
+                        ).iconName
+                      }
+                      size={18}
+                      color={c.orange}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <AppText
+                      weight="semibold"
+                      style={{
+                        fontSize: 12,
+                        color: c.text,
+                        letterSpacing: 0.4,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {r.ref}
+                    </AppText>
+                    <AppText
+                      style={{
+                        fontSize: 10,
+                        color: c.textMuted,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.6,
+                        marginTop: 1,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {TYPE_META[r.targetType]
+                        ? t(TYPE_META[r.targetType].labelKey)
+                        : r.targetType}
+                    </AppText>
+                  </View>
+                </View>
+                <StatusBadge status={r.status} t={t} c={c} />
+              </View>
+              <View style={{ paddingLeft: 50, marginBottom: 8 }}>
+                <AppText
+                  weight="semibold"
+                  style={{ fontSize: 13, color: c.text, marginBottom: 3 }}
+                >
+                  {REASON_OPTIONS.find((ro) => ro.value === r.reason)?.labelKey
+                    ? t(
+                        REASON_OPTIONS.find((ro) => ro.value === r.reason)
+                          .labelKey,
+                      )
+                    : r.reason}
+                </AppText>
+                {r.description ? (
+                  <AppText
+                    variant="small"
+                    tone="dim"
+                    numberOfLines={2}
+                    style={{ lineHeight: 17 }}
+                  >
+                    {r.description}
+                  </AppText>
+                ) : null}
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingTop: 10,
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: c.border,
+                }}
+              >
+                <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                  {timeAgo(r.createdAt, t)}
+                </AppText>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  {r.status === "PENDING" && (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        setDeleteTarget(r);
+                      }}
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: c.border,
+                        backgroundColor: c.bgCard,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={13}
+                        color={c.textMuted}
+                      />
+                    </Pressable>
+                  )}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      paddingHorizontal: 11,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      backgroundColor: c.bgCard,
+                    }}
+                  >
+                    <AppText
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "600",
+                        color: c.textDim,
+                      }}
+                    >
+                      {t("reports.card.viewDetails")}
+                    </AppText>
+                    <Ionicons
+                      name="arrow-forward"
+                      size={11}
+                      color={c.textMuted}
+                    />
+                  </View>
+                </View>
+              </View>
+            </Pressable>
           ))
         )}
 
@@ -1619,112 +1525,101 @@ export default function MyReportsScreen() {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
-              gap: 16,
+              gap: 14,
               marginTop: 8,
             }}
           >
             <Pressable
-              disabled={page <= 1 || loading}
+              disabled={page <= 1}
               onPress={() => load(page - 1)}
               style={{
-                paddingHorizontal: 18,
+                paddingHorizontal: 16,
                 paddingVertical: 8,
-                borderRadius: 10,
+                borderRadius: 9,
                 borderWidth: 1,
                 borderColor: c.border,
                 backgroundColor: c.bgCard,
-                opacity: page <= 1 || loading ? 0.4 : 1,
+                opacity: page <= 1 ? 0.35 : 1,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
               }}
             >
+              <Ionicons name="arrow-back" size={12} color={c.textDim} />
               <AppText
-                style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
+                style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
               >
-                ← Prev
+                {t("common.prev")}
               </AppText>
             </Pressable>
             <AppText style={{ fontSize: 12, color: c.textMuted }}>
-              Page {page} of {pages}
+              {t("reports.pageOf", { page, pages })}
             </AppText>
             <Pressable
-              disabled={page >= pages || loading}
+              disabled={page >= pages}
               onPress={() => load(page + 1)}
               style={{
-                paddingHorizontal: 18,
+                paddingHorizontal: 16,
                 paddingVertical: 8,
-                borderRadius: 10,
+                borderRadius: 9,
                 borderWidth: 1,
                 borderColor: c.border,
                 backgroundColor: c.bgCard,
-                opacity: page >= pages || loading ? 0.4 : 1,
+                opacity: page >= pages ? 0.35 : 1,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
               }}
             >
               <AppText
-                style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
+                style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
               >
-                Next →
+                {t("common.next")}
               </AppText>
+              <Ionicons name="arrow-forward" size={12} color={c.textDim} />
             </Pressable>
           </View>
         )}
       </AppScreen>
 
-      {/* ── Modals — outside AppScreen so they cover full screen ── */}
-      <ReportFormModal
-        visible={showForm}
-        onClose={() => setShowForm(false)}
-        onSuccess={handleReportSuccess}
+      {/* Detail drawer — only mounted when there's a target */}
+      {viewTarget && (
+        <DetailDrawer
+          report={viewTarget}
+          visible
+          onClose={() => setViewTarget(null)}
+          onCancel={(r) => {
+            setViewTarget(null);
+            setDeleteTarget(r);
+          }}
+          c={c}
+          t={t}
+        />
+      )}
+
+      {/* Delete confirm — branded centered modal */}
+      <DeleteConfirmModal
+        report={deleteTarget}
+        visible={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onSuccess={() => load(page, tab)}
         c={c}
         modalBg={modalBg}
         toast={toast}
-      />
-
-      <DetailDrawer
-        report={viewTarget}
-        visible={!!viewTarget}
-        onClose={() => setViewTarget(null)}
-        onCancel={(r) => {
-          setViewTarget(null);
-          setCancelTarget(r);
-        }}
-        c={c}
-        modalBg={modalBg}
-      />
-
-      <CancelConfirmModal
-        report={cancelTarget}
-        visible={!!cancelTarget}
-        onClose={() => setCancelTarget(null)}
-        onSuccess={handleCancelSuccess}
-        c={c}
-        modalBg={modalBg}
-        toast={toast}
+        t={t}
       />
     </>
   );
 }
 
-// ── Shared sheet styles ───────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED FIELD STYLES
+// ─────────────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  sheet: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 20,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
   fieldLabel: {
     fontSize: 10,
     fontWeight: "700",
-    letterSpacing: 0.8,
+    letterSpacing: 0.9,
     textTransform: "uppercase",
     marginBottom: 10,
   },

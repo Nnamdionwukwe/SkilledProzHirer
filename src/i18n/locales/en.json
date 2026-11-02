@@ -2865,6 +2865,455 @@
     "yourCategories": "Your service categories",
     "yourProfile": "Your professional profile"
   },
+  "campaign": {
+    "eyebrow": "Daily Campaign",
+    "title": "Refer & Earn Daily",
+    "subtitlePrefix": "Earn",
+    "subtitleSuffix": "for every person who downloads the app, sets up their account, and follows us on social media.",
+    "perReferral": "/ referral",
+    "notLoadedYet": "Referral code not loaded yet",
+    "linkCopied": "Link copied!",
+    "copyFailed": "Copy failed",
+    "loadFailed": "Failed to load campaign data",
+    "submitSuccess": "Submitted for review!",
+    "submitFailed": "Submission failed",
+    "justNow": "Just now",
+    "taskScore": "{{done}}/{{total}} tasks",
+
+    "task": {
+      "download": "Download App",
+      "profile": "Setup Profile",
+      "facebook": "Follow Facebook",
+      "instagram": "Follow Instagram",
+      "tiktok": "Follow TikTok"
+    },
+    "status": {
+      "pending": "Under Review",
+      "reviewing": "Reviewing",
+      "approved": "Approved",
+      "partial": "Partial",
+      "declined": "Declined"
+    },
+    "refStatus": {
+      "inProgress": "In Progress",
+      "ready": "Ready",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "program": {
+      "pending": "Referral: Pending",
+      "qualified": "Referral: Qualified",
+      "converted": "Referral: Converted",
+      "rewarded": "Referral: Rewarded",
+      "expired": "Referral: Expired",
+      "flagged": "Referral: Flagged"
+    },
+    "role": { "worker": "Worker", "hirer": "Hirer" },
+
+    "wallet": {
+      "label": "Campaign Wallet",
+      "lifetime": "All-time",
+      "withdraw": "Withdraw",
+      "needMin": "Need {{min}} · You have {{have}}"
+    },
+    "stats": {
+      "totalReferred": "Total Referred",
+      "readyToday": "Ready Today",
+      "tasksPending": "Tasks Pending",
+      "totalEarned": "Total Earned"
+    },
+
+    "banner": {
+      "doneTitle": "Submitted today!",
+      "doneSub": "{{count}} referral sent for review. Status:",
+      "notQualifiedTitle": "{{count}} referral not fully qualified",
+      "notQualifiedSub": "Some referrals still need to complete their profile setup before you can submit them.",
+      "readyTitle": "{{count}} referral ready — earn {{amount}}!",
+      "readySub": "Submit today's batch for admin review to get paid.",
+      "pendingTitle": "{{count}} referral still completing tasks",
+      "pendingSub": "Share your code with them so they can complete all 5 tasks.",
+      "idleTitle": "Start referring to earn daily",
+      "idleSub": "Share your referral code below — earn ₦{{reward}} per qualified person.",
+      "submitNow": "Submit Now"
+    },
+    "confirm": {
+      "title": "Submit {{count}} referrals?",
+      "body1Prefix": "You are submitting",
+      "body1Suffix": "referral for admin review.",
+      "body2Prefix": "If approved, you will earn",
+      "note": "Admin has final say. Any referral that didn't fully complete tasks will be declined and deducted.",
+      "submit": "Confirm Submit"
+    },
+
+    "tab": { "earn": "Earn Daily", "tasks": "My Tasks", "history": "History" },
+
+    "code": {
+      "label": "Your referral code",
+      "copy": "Copy Link",
+      "copied": "Copied!",
+      "share": "Share",
+      "shareVia": "Share via",
+      "whatsapp": "WhatsApp",
+      "post": "Post",
+      "shareMsg": "Join SkilledProz! Download the app, sign up with my code {{code}} and follow us on social media. I earn ₦{{reward}} when you complete all tasks! {{link}}"
+    },
+    "shareWaMsg": "Join SkilledProz! Download the app, sign up with my code {{code}} and follow us on social media. I earn ₦{{reward}} when you complete all tasks! {{link}}",
+    "shareXMsg": "Earn with me on SkilledProz! Use my referral code {{code}} when you sign up",
+
+    "how": {
+      "title": "How to earn ₦{{reward}} per person",
+      "s1": "Share your referral code or link",
+      "s2": "They download & sign up with your code",
+      "s3": "They complete their profile setup",
+      "s4": "They follow us on Facebook, Instagram & TikTok",
+      "s5": "You submit daily — admin verifies — ₦{{reward}} credited!"
+    },
+    "referrals": {
+      "title": "All Referrals",
+      "empty": "No referrals yet — share your code to start earning!",
+      "emptySub": "Share your code to start earning!",
+      "bonus": "bonus"
+    },
+
+    "myTasks": {
+      "emptyTitle": "You didn't sign up with a referral code",
+      "emptySub": "You didn't sign up with a referral code, so you have no tasks to complete.",
+      "progress": "{{done}}/{{total}} tasks complete",
+      "allDone": "All tasks done! Your referrer can now submit you for the ₦{{reward}} reward.",
+      "done": "Done",
+      "socialTitle": "Follow us on social media",
+      "screenshotNote": "Upload a real screenshot for each platform — admin reviews them before approving your reward."
+    },
+
+    "social": {
+      "follow": "Follow",
+      "done": "Done",
+      "uploadHint": "Upload a screenshot showing you follow this page",
+      "chooseImage": "Choose image",
+      "replace": "Replace",
+      "remove": "Remove",
+      "markDone": "Mark as followed",
+      "viewScreenshot": "View submitted screenshot",
+      "needScreenshot": "Please upload a screenshot first",
+      "permissionRequired": "Camera roll permission required",
+      "pickFailed": "Could not open image picker",
+      "recorded": "{{platform}} follow recorded",
+      "allDone": "All tasks done!",
+      "fail": "Failed to record"
+    },
+
+    "history": {
+      "empty": "No submissions yet",
+      "emptySub": "Submit your first daily batch to see history here.",
+      "submitted": "{{count}} submitted",
+      "approved": "approved",
+      "rejected": "rejected",
+      "admin": "Admin"
+    },
+
+    "withdraw": {
+      "title": "Withdraw Campaign Earnings",
+      "available": "Available",
+      "min": "Min.",
+      "amount": "AMOUNT (₦)",
+      "max": "Max",
+      "bankSection": "BANK DETAILS",
+      "bankName": "Bank Name",
+      "bankNamePh": "e.g. Access Bank",
+      "accountNumber": "Account Number",
+      "accountNumberPh": "10-digit number",
+      "accountName": "Account Name",
+      "accountNamePh": "Name on account",
+      "pin": "Withdrawal PIN",
+      "pinHint": "The same 4-digit PIN you use for worker, referral, and campaign withdrawals.",
+      "setPin": "Set your withdrawal PIN in Settings → Security",
+      "submit": "Withdraw",
+      "note": "Processed within 1–3 business days",
+      "success": "Withdrawal submitted! Processing in 1–3 days",
+      "failed": "Withdrawal failed",
+      "minError": "Minimum is {{min}}",
+      "insufficient": "Insufficient balance. Available: {{balance}}",
+      "bankRequired": "All bank fields required",
+      "pinRequired": "Please enter your 4-digit withdrawal PIN"
+    }
+  },
+  "referral": {
+    "eyebrow": "Referral Program",
+    "title": "Invite & Earn",
+    "subtitle": "Share your code. Earn real money when your referrals complete their first booking.",
+    "rank": "Rank",
+    "notLoadedYet": "Referral code not loaded yet",
+    "linkCopied": "Link copied to clipboard!",
+    "copyFailed": "Failed to copy",
+    "loadFailed": "Failed to load referral data",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysAgoSuffix": "d ago",
+    "joined": "Joined",
+    "expires": "Expires",
+    "loading": "Loading…",
+    "shareMsg": "Join SkilledProz! Sign up with my referral code {{code}}: {{link}}",
+
+    "code": {
+      "label": "YOUR REFERRAL CODE",
+      "copy": "Copy Link",
+      "copied": "Copied!",
+      "share": "Share",
+      "shareVia": "SHARE VIA",
+      "whatsapp": "WhatsApp",
+      "post": "Post"
+    },
+
+    "stats": {
+      "totalInvited": "TOTAL INVITED",
+      "totalInvitedSub": "All referrals",
+      "conversions": "CONVERSIONS",
+      "conversionsSub": "Completed bookings",
+      "pending": "PENDING",
+      "pendingSub": "Awaiting first booking",
+      "walletBalance": "WALLET BALANCE",
+      "walletBalanceSub": "Available to withdraw"
+    },
+
+    "tier": {
+      "label": "YOUR TIER",
+      "bronze": "Bronze",
+      "silver": "Silver",
+      "gold": "Gold",
+      "diamond": "Diamond",
+      "successCount": "{{count}} successful referral",
+      "successCount_plural": "{{count}} successful referrals",
+      "toNext": "{{count}} more to {{label}}",
+      "maxReached": "Maximum tier reached",
+      "perWorker": "Per Worker referral",
+      "perHirer": "Per Hirer referral"
+    },
+
+    "wallet": {
+      "label": "EARNINGS WALLET",
+      "available": "AVAILABLE BALANCE",
+      "lifetime": "Total earned all-time",
+      "withdraw": "Withdraw Earnings",
+      "minNote": "Min. {{min}} needed to withdraw",
+      "youHave": "You have {{amount}}",
+      "recentEarnings": "RECENT EARNINGS"
+    },
+
+    "how": {
+      "title": "HOW IT WORKS",
+      "step1": "Step 1",
+      "shareTitle": "Share your code",
+      "shareDesc": "Copy your unique referral link and share it with friends, colleagues, or on social media.",
+      "step2": "Step 2",
+      "signupTitle": "They sign up",
+      "signupDesc": "Your referral creates an account using your code and gets exclusive welcome perks.",
+      "step3": "Step 3",
+      "bookingTitle": "They complete a booking",
+      "bookingDesc": "Once your referral completes their first booking, your reward is automatically credited.",
+      "youEarn": "You earn",
+      "earnTitle": "Cash in your wallet",
+      "earnDescFallback": "Earn ₦1,500–₦9,000 per successful referral based on your tier."
+    },
+
+    "perks": {
+      "workersGet": "Workers who use your code get",
+      "hirersGet": "Hirers who use your code get",
+      "workersFallback": "30-day profile boost + platform fee waived on first 3 jobs",
+      "hirersFallback": "5% off first booking (up to ₦5,000) + ₦500 wallet credit"
+    },
+
+    "tabs": {
+      "referrals": "My Referrals ({{count}})",
+      "leaderboard": "Leaderboard"
+    },
+
+    "referrals": {
+      "empty": "No referrals yet",
+      "emptySub": "Share your referral code to get started and start earning!",
+      "emptyBtn": "Copy my referral link",
+      "tasks": "{{done}}/{{total}} tasks · {{amount}} reward"
+    },
+
+    "leaderboard": {
+      "youAre": "You are rank",
+      "onBoard": "on the leaderboard",
+      "you": "YOU",
+      "referrals": "{{count}} referrals",
+      "tierRequirements": "TIER REQUIREMENTS",
+      "minRefs": "{{count}}+ referrals",
+      "worker": "Worker",
+      "hirer": "Hirer"
+    },
+
+    "role": {
+      "worker": "Worker",
+      "hirer": "Hirer"
+    },
+
+    "status": {
+      "pending": "Pending",
+      "qualified": "Qualified",
+      "converted": "Converted",
+      "rewarded": "Rewarded",
+      "expired": "Expired",
+      "flagged": "Flagged"
+    },
+
+    "campStatus": {
+      "inProgress": "In Progress",
+      "ready": "Ready",
+      "submitted": "Submitted",
+      "paid": "Paid",
+      "rejected": "Rejected"
+    },
+
+    "withdraw": {
+      "title": "Withdraw Earnings",
+      "available": "AVAILABLE",
+      "min": "MINIMUM",
+      "amount": "AMOUNT (₦)",
+      "max": "Max",
+      "bankSection": "BANK DETAILS",
+      "bankName": "Bank Name",
+      "bankNamePh": "e.g. First Bank",
+      "accountNumber": "Account Number",
+      "accountNumberPh": "10-digit number",
+      "accountName": "Account Name",
+      "accountNamePh": "Name as on account",
+      "pin": "Withdrawal PIN",
+      "pinHint": "The same 4-digit PIN you use for worker, referral, and campaign withdrawals.",
+      "setPin": "Set your withdrawal PIN in Settings → Security",
+      "submit": "Withdraw",
+      "note": "Processing within 1–3 business days",
+      "success": "Withdrawal submitted! Processing in 1–3 business days",
+      "failed": "Withdrawal failed",
+      "minError": "Minimum withdrawal is {{min}}",
+      "insufficient": "Insufficient balance. Available: {{balance}}",
+      "bankRequired": "All bank details are required",
+      "pinRequired": "Please enter your 4-digit withdrawal PIN"
+    }
+  },
+  "reports": {
+    "trust": "Safety & Trust",
+    "title": "My Reports",
+    "subtitle": "Track reports you've submitted. Our moderation team reviews every report within 24–48 hours.",
+    "reportBtn": "Report",
+    "loadFailed": "Failed to load reports.",
+    "pageOf": "Page {{page}} of {{pages}}",
+    "timeMin": "m ago",
+    "timeHour": "h ago",
+    "timeDay": "d ago",
+    "infoBannerPrefix": "All reports are confidential. The reported party is never told who filed the report. If you need urgent help, please",
+    "contactSupport": "contact support in the support hub",
+    "infoBannerSuffix": ".",
+
+    "status": {
+      "pending": "Pending Review",
+      "reviewing": "Under Review",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed"
+    },
+    "action": {
+      "noAction": "No action taken",
+      "warning": "Warning issued",
+      "removed": "Content removed",
+      "suspended": "User suspended",
+      "banned": "User banned"
+    },
+    "type": {
+      "user": "User",
+      "job": "Job Post",
+      "post": "Community Post",
+      "review": "Review",
+      "booking": "Booking",
+      "message": "Message"
+    },
+    "reason": {
+      "spam": "Spam",
+      "fakeProfile": "Fake profile",
+      "inappropriate": "Inappropriate content",
+      "fraud": "Fraud / scam",
+      "harassment": "Harassment",
+      "scam": "Scam",
+      "misleading": "Misleading info",
+      "fakeReviews": "Fake reviews",
+      "underage": "Underage user",
+      "hateSpeech": "Hate speech",
+      "other": "Other"
+    },
+    "tabs": {
+      "all": "All",
+      "pending": "Pending",
+      "reviewing": "Under Review",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed"
+    },
+    "summary": {
+      "reviewing": "Under review"
+    },
+
+    "infoBanner": "All reports are confidential. The reported party is never told who filed the report. If you need urgent help, please contact support.",
+
+    "form": {
+      "title": "File a Report",
+      "targetType": "Target Type",
+      "targetId": "Target ID",
+      "targetIdPh": "Paste the UUID of the item to report",
+      "targetIdRequired": "Please enter the Target ID.",
+      "reason": "Reason",
+      "reasonRequired": "Please select a reason.",
+      "description": "Additional Details",
+      "descriptionPh": "Describe what happened. More detail = faster action.",
+      "optional": "optional",
+      "evidence": "Evidence URLs",
+      "evidenceHint": "one per line, max 5",
+      "evidencePh": "https://example.com/screenshot1.png\nhttps://example.com/screenshot2.png",
+      "disclaimer": "False or malicious reports may result in action against your account. Reports are reviewed by our team and are confidential.",
+      "submit": "Submit Report",
+      "failed": "Failed to submit report.",
+      "successTitle": "Report Submitted",
+      "successBody": "Our team will review it within 24–48 hours.",
+      "reference": "Reference"
+    },
+
+    "detail": {
+      "title": "Report Detail",
+      "submitted": "Submitted",
+      "reported": "Reported",
+      "reason": "Reason",
+      "targetId": "Target ID",
+      "yourDescription": "Your Description",
+      "outcome": "Outcome",
+      "timeline": "Timeline",
+      "timelineSubmitted": "Report submitted",
+      "timelineReview": "Review started",
+      "timelineAwaiting": "Awaiting resolution",
+      "cancelBtn": "Cancel this report"
+    },
+
+    "cancel": {
+      "title": "Cancel this report?",
+      "ref": "Ref",
+      "irreversible": "This action cannot be undone.",
+      "keep": "Keep it",
+      "confirm": "Yes, cancel",
+      "success": "Report cancelled and removed.",
+      "failed": "Failed to cancel report."
+    },
+
+    "card": {
+      "viewDetails": "View details"
+    },
+
+    "empty": {
+      "titleAll": "No reports submitted yet",
+      "titleFiltered": "No {{status}} reports",
+      "subAll": "Use the Report button on any user, job post, or content to flag it.",
+      "subFiltered": "Try a different filter above.",
+      "viewAll": "View all reports"
+    }
+  },
   "workerReg.account": "Account",
   "workerReg.addCategory": "Add Category",
   "workerReg.addCategoryFailed": "Failed to add category",
