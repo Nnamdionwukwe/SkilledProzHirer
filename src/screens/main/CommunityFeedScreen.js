@@ -31,6 +31,8 @@ import { useAuthStore } from "../../store/authStore";
 import client from "../../api/client";
 import tracker from "../../lib/tracker";
 
+import { getFeed, createPost } from "../../api/posts";
+
 const FILTERS = [
   { value: "ALL", labelKey: "posts.filterAll" },
   { value: "GENERAL", labelKey: "posts.filterGeneral" },
@@ -83,16 +85,14 @@ export default function CommunityFeedScreen() {
       if (p === 1) setLoading(true);
       else setLoadingMore(true);
       try {
-        const res = await client.get("/posts/feed", {
-          params: {
-            page: p,
-            limit: 15,
-            ...(f !== "ALL" && { type: f }),
-          },
+        const data = await getFeed({
+          page: p,
+          limit: 15,
+          ...(f !== "ALL" && { type: f }),
         });
-        const newPosts = res.data?.data?.posts || [];
-        const pages = res.data?.data?.pages || 1;
-        setTotal(res.data?.data?.total || 0);
+        const newPosts = data?.posts || [];
+        const pages = data?.pages || 1;
+        setTotal(data?.total || 0);
 
         if (reset || p === 1) setPosts(newPosts);
         else setPosts((prev) => [...prev, ...newPosts]);
@@ -102,7 +102,7 @@ export default function CommunityFeedScreen() {
           page: p,
           filter: f,
           count: newPosts.length,
-          total: res.data?.data?.total || 0,
+          total: data?.total || 0,
           isLoadMore: p > 1,
         });
       } catch (err) {

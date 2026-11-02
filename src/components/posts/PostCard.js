@@ -14,7 +14,7 @@
 //   • Modal uses presentationStyle="overFullScreen" + statusBarTranslucent
 //     so it renders above the Android nav bar (matches web z-index behavior)
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Pressable,
@@ -30,7 +30,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
-
+Image;
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
@@ -176,13 +176,42 @@ export default function PostCard({ post: initialPost, onDelete }) {
       ? author.workerProfile?.title
       : author?.hirerProfile?.companyName;
 
+  // ─── Normalize post images across every backend shape ─────
+  const postImages = useMemo(() => {
+    const candidates = [
+      post.images,
+      post.media,
+      post.imageUrls,
+      post.attachments,
+      post.postImages,
+      post.files,
+    ];
+    for (const c of candidates) {
+      if (Array.isArray(c) && c.length > 0) {
+        return c
+          .map((item) =>
+            typeof item === "string"
+              ? item
+              : item?.url ||
+                item?.uri ||
+                item?.src ||
+                item?.path ||
+                item?.secure_url ||
+                null,
+          )
+          .filter(Boolean);
+      }
+    }
+    return [];
+  }, [post]);
+
   // ─── Profile navigation (matches website profileUrlFor) ─────
   const profileNavigate = (target) => {
     if (!target?.id) return;
     if (target.role === "WORKER") {
       navigation.navigate("WorkerProfile", { userId: target.id });
-    } else if (target.role === "HIRER") {
-      navigation.navigate("HirerPublicProfile", { userId: target.id });
+    } else {
+      navigation.navigate("HirerDetail", { userId: target.id });
     }
   };
 
@@ -601,21 +630,21 @@ export default function PostCard({ post: initialPost, onDelete }) {
         </AppText>
 
         {/* ─── Post images — tap to open fullscreen ──── */}
-        {post.images?.length > 0 ? (
+        {postImages.length > 0 ? (
           <View style={styles.imageGrid}>
             <Pressable
               onPress={() => setLightboxIdx(imageIdx)}
               style={styles.imagePressable}
             >
               <Image
-                source={{ uri: resolveUrl(post.images[imageIdx]) }}
+                source={{ uri: resolveUrl(postImages[imageIdx]) }}
                 style={[styles.mainImage, { maxHeight: isWide ? 400 : 280 }]}
                 resizeMode="cover"
               />
             </Pressable>
-            {post.images.length > 1 ? (
+            {postImages.length > 1 ? (
               <View style={[styles.imageDots, { backgroundColor: c.bgCard }]}>
-                {post.images.map((_, i) => (
+                {postImages.map((_, i) => (
                   <Pressable
                     key={i}
                     onPress={() => setImageIdx(i)}
@@ -1434,7 +1463,7 @@ export default function PostCard({ post: initialPost, onDelete }) {
       ) : null}
 
       {/* ─── Fullscreen image lightbox ─────────────────── */}
-      {lightboxIdx !== null && post.images?.length > 0 ? (
+      {lightboxIdx !== null && postImages.length > 0 ? (
         <Modal
           visible
           transparent
@@ -1455,7 +1484,7 @@ export default function PostCard({ post: initialPost, onDelete }) {
             >
               <Ionicons name="close" size={22} color="#fff" />
             </Pressable>
-            {post.images.length > 1 ? (
+            {postImages.length > 1 ? (
               <>
                 <Pressable
                   onPress={() =>
@@ -1478,11 +1507,11 @@ export default function PostCard({ post: initialPost, onDelete }) {
               </>
             ) : null}
             <Image
-              source={{ uri: resolveUrl(post.images[lightboxIdx]) }}
+              source={{ uri: resolveUrl(postImages[lightboxIdx]) }}
               style={styles.lightboxImage}
               resizeMode="contain"
             />
-            {post.images.length > 1 ? (
+            {postImages.length > 1 ? (
               <View style={styles.lightboxCounter}>
                 <AppText
                   style={{
@@ -1491,7 +1520,7 @@ export default function PostCard({ post: initialPost, onDelete }) {
                     color: "#fff",
                   }}
                 >
-                  {lightboxIdx + 1} / {post.images.length}
+                  {lightboxIdx + 1} / {postImages.length}
                 </AppText>
               </View>
             ) : null}

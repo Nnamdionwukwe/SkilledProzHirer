@@ -1,10 +1,12 @@
 // src/components/posts/CreatePost.js
 //
-// Ported verbatim from src/components/posts/CreatePost.jsx
-// + CreatePost.module.css.
+// Ported from CreatePost.jsx + CreatePost.module.css.
 //
-// <input type="file"> → expo-image-picker.
-// URL.createObjectURL → file:// URIs from picker.
+// Image upload specifics (RN-specific — differs from web):
+//   • expo-image-picker returns { uri, fileName?, mimeType? } for each asset
+//   • FormData.append("files", { uri, name, type }) — NOT a File object
+//   • We send the field name "files" (matches backend multer config)
+//     If your backend expects a different field name, change FILES_FIELD below.
 
 import React, { useRef, useState } from "react";
 import {
@@ -26,6 +28,8 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
 import client from "../../api/client";
+
+const FILES_FIELD = "images"; // ← matches src/api/posts.js and backend multer
 
 const POST_TYPES = [
   { value: "GENERAL", key: "posts.typeGeneral", icon: "chatbubble-outline" },
@@ -77,22 +81,25 @@ export default function CreatePost({ onPostCreated, compact = false }) {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: 4,
       quality: 0.85,
     });
     if (result.canceled) return;
-    const newImgs = result.assets.map((a) => ({
+
+    const mapped = result.assets.map((a, idx) => ({
       uri: a.uri,
-      name: a.fileName || `photo-${Date.now()}.jpg`,
+      name: a.fileName || `photo-${Date.now()}-${idx}.jpg`,
       type: a.mimeType || "image/jpeg",
     }));
-    if (images.length + newImgs.length > 4) {
+
+    if (images.length + mapped.length > 4) {
       setError(t("posts.maxImagesError"));
       return;
     }
-    setImages((prev) => [...prev, ...newImgs]);
+
+    setImages((prev) => [...prev, ...mapped]);
     setError("");
   };
 
@@ -122,18 +129,36 @@ export default function CreatePost({ onPostCreated, compact = false }) {
       const form = new FormData();
       form.append("content", content);
       form.append("type", type);
-      form.append("isPublic", isPublic);
+      form.append("isPublic", isPublic ? "true" : "false");
+
       images.forEach((img) => {
-        form.append("files", {
+        form.append(FILES_FIELD, {
           uri: img.uri,
           name: img.name,
           type: img.type,
         });
       });
 
+      // TEMP diagnostic — remove once images work
+      console.log(
+        "[CreatePost] submitting",
+        JSON.stringify({
+          contentLength: content.length,
+          type,
+          isPublic,
+          imagesCount: images.length,
+          imageNames: images.map((i) => i.name),
+        }),
+      );
+
       const res = await client.post("/posts", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+
+      console.log(
+        "[CreatePost] response post:",
+        JSON.stringify(res.data?.data?.post)?.slice(0, 600),
+      );
 
       onPostCreated?.(res.data?.data?.post);
       toast.success(t("posts.postedSuccess"));
@@ -142,6 +167,12 @@ export default function CreatePost({ onPostCreated, compact = false }) {
       setType("GENERAL");
       if (compact) setExpanded(false);
     } catch (err) {
+      console.log(
+        "[CreatePost] error:",
+        err?.message,
+        err?.response?.status,
+        err?.response?.data,
+      );
       const msg = err?.response?.data?.message || t("posts.postFailed");
       setError(msg);
       toast.error(msg);
@@ -160,6 +191,7 @@ export default function CreatePost({ onPostCreated, compact = false }) {
         { backgroundColor: c.bgPanel, borderColor: c.border },
       ]}
     >
+      {/* ── Compact trigger ─────────────────────────── */}
       {compact && !expanded ? (
         <Pressable
           onPress={() => setExpanded(true)}
@@ -175,16 +207,24 @@ export default function CreatePost({ onPostCreated, compact = false }) {
               },
             ]}
           >
-            <AppText
-              style={{
-                fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
-                fontSize: rem(0.9),
-                fontWeight: "700",
-                color: c.orange,
-              }}
-            >
-              {user.firstName?.[0] || "?"}
-            </AppText>
+            {user.avatar ? (
+              <Image
+                source={{ uri: user.avatar }}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
+              />
+            ) : (
+              <AppText
+                style={{
+                  fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
+                  fontSize: rem(0.9),
+                  fontWeight: "700",
+                  color: c.orange,
+                }}
+              >
+                {user.firstName?.[0] || "?"}
+              </AppText>
+            )}
           </View>
           <View
             style={[
@@ -222,22 +262,34 @@ export default function CreatePost({ onPostCreated, compact = false }) {
         </Pressable>
       ) : null}
 
+      {/* ── Full editor ─────────────────────────────── */}
       {expanded ? (
         <View style={styles.editor}>
           <View style={styles.editorHeader}>
             <View
-              style={[styles.editorAvatar, { backgroundColor: c.orangeDim }]}
+              style={[
+                styles.editorAvatar,
+                { backgroundColor: c.orangeDim, overflow: "hidden" },
+              ]}
             >
-              <AppText
-                style={{
-                  fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
-                  fontSize: rem(1),
-                  fontWeight: "700",
-                  color: c.orange,
-                }}
-              >
-                {user.firstName?.[0] || "?"}
-              </AppText>
+              {user.avatar ? (
+                <Image
+                  source={{ uri: user.avatar }}
+                  style={{ width: "100%", height: "100%" }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <AppText
+                  style={{
+                    fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
+                    fontSize: rem(1),
+                    fontWeight: "700",
+                    color: c.orange,
+                  }}
+                >
+                  {user.firstName?.[0] || "?"}
+                </AppText>
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <AppText
@@ -405,6 +457,7 @@ export default function CreatePost({ onPostCreated, compact = false }) {
                   onPress={() => {
                     setExpanded(false);
                     setContent("");
+                    setImages([]);
                   }}
                   style={[styles.cancelBtn, { borderColor: c.border }]}
                 >
@@ -468,6 +521,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+    overflow: "hidden",
   },
   triggerInput: {
     flex: 1,
@@ -478,7 +532,11 @@ const styles = StyleSheet.create({
   },
   triggerActions: { flexDirection: "row", gap: 4, flexShrink: 0 },
   editor: { padding: 20, gap: 14 },
-  editorHeader: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  editorHeader: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
   editorAvatar: {
     width: 44,
     height: 44,
