@@ -48,6 +48,7 @@ import RefundDetailScreen from "../screens/main/RefundDetailScreen";
 import MyDisputesScreen from "../screens/main/MyDisputesScreen";
 import VideoCallScreen from "../screens/main/VideoCallScreen";
 import EditProfileScreen from "../screens/main/EditProfileScreen";
+import PostDetailScreen from "../screens/main/PostDetailScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -203,6 +204,8 @@ function WorkerDrawer() {
         name="ReferralDashboard"
         component={ReferralDashboardScreen}
       />
+      <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+
       <Drawer.Screen name="Campaign" component={CampaignDashboardScreen} />
       <Drawer.Screen name="MyReports" component={MyReportsScreen} />
     </Drawer.Navigator>

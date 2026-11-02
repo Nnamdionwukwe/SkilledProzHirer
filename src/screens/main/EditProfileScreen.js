@@ -84,10 +84,10 @@ export default function EditProfileScreen() {
         <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>Cancel</AppText>
       </Pressable>
 
-      <AppText style={styles.title(c)}>Profile Settings</AppText>
+      <AppText style={[styles.title, { color: theme.colors.text }]}>Profile Settings</AppText>
 
       <View style={[styles.section, { backgroundColor: c.bgPanel, borderColor: c.border }]}>
-        <AppText style={styles.sectionTitle(c)}>Personal Info</AppText>
+        <AppText style={[styles.sectionTitle, { color: theme.colors.orange }]}>Personal Info</AppText>
         <Field label="First Name" value={form.firstName} onChange={(v) => setForm(f => ({ ...f, firstName: v }))} c={c} />
         <Field label="Last Name" value={form.lastName} onChange={(v) => setForm(f => ({ ...f, lastName: v }))} c={c} />
         <Field label="Bio" value={form.bio} onChange={(v) => setForm(f => ({ ...f, bio: v }))} multiline c={c} />
@@ -95,15 +95,15 @@ export default function EditProfileScreen() {
       </View>
 
       <View style={[styles.section, { backgroundColor: c.bgPanel, borderColor: c.border }]}>
-        <AppText style={styles.sectionTitle(c)}>Location</AppText>
+        <AppText style={[styles.sectionTitle, { color: theme.colors.orange }]}>Location</AppText>
         <Field label="Country" value={form.country} onChange={(v) => setForm(f => ({ ...f, country: v }))} c={c} />
         <Field label="City" value={form.city} onChange={(v) => setForm(f => ({ ...f, city: v }))} c={c} />
         <Field label="Address" value={form.address} onChange={(v) => setForm(f => ({ ...f, address: v }))} c={c} />
       </View>
 
       <View style={[styles.section, { backgroundColor: c.bgPanel, borderColor: c.border }]}>
-        <AppText style={styles.sectionTitle(c)}>Preferences</AppText>
-        <AppText style={styles.label(c)}>Currency</AppText>
+        <AppText style={[styles.sectionTitle, { color: theme.colors.orange }]}>Preferences</AppText>
+        <AppText style={[styles.label, { color: theme.colors.textDim }]}>Currency</AppText>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 12 }}>
           {CURRENCIES.map((cur) => (
             <Pressable
@@ -116,7 +116,7 @@ export default function EditProfileScreen() {
           ))}
         </ScrollView>
 
-        <AppText style={styles.label(c)}>Language</AppText>
+        <AppText style={[styles.label, { color: theme.colors.textDim }]}>Language</AppText>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           {LANGUAGES.map((lang) => (
             <Pressable
@@ -139,13 +139,13 @@ export default function EditProfileScreen() {
         ]}
       >
         <FaSave size={14} color={c.bg} />
-        <AppText style={styles.saveBtnText(c)}>{saving ? "Saving..." : "Save Changes"}</AppText>
+        <AppText style={[styles.saveBtnText, { color: theme.colors.bg }]}>{saving ? "Saving..." : "Save Changes"}</AppText>
       </Pressable>
 
       <View style={[styles.dangerBox, { borderColor: c.red, backgroundColor: c.redDim }]}>
         <View style={{ flex: 1 }}>
-          <AppText style={styles.dangerTitle(c)}>Deactivate Account</AppText>
-          <AppText style={styles.dangerSub(c)}>Your profile will be hidden and you won't receive new bookings.</AppText>
+          <AppText style={[styles.dangerTitle, { color: theme.colors.red }]}>Deactivate Account</AppText>
+          <AppText style={[styles.dangerSub, { color: theme.colors.textDim }]}>Your profile will be hidden and you won't receive new bookings.</AppText>
         </View>
         <Pressable onPress={handleDeactivate} style={[styles.dangerBtn, { backgroundColor: c.red }]}>
           <AppText style={styles.dangerBtnText}>Deactivate</AppText>
@@ -158,7 +158,7 @@ export default function EditProfileScreen() {
 function Field({ label, value, onChange, multiline, c }) {
   return (
     <View style={{ marginBottom: 12 }}>
-      <AppText style={styles.label(c)}>{label}</AppText>
+      <AppText style={[styles.label, { color: theme.colors.textDim }]}>{label}</AppText>
       <TextInput
         value={value}
         onChangeText={onChange}

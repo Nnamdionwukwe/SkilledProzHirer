@@ -147,7 +147,7 @@ const NAV = [
     items: [
       {
         label: "Retained Staffs",
-        route: "RetainedStaffs",
+        route: "RetainedStaff",
         icon: ICON.retainedStaff,
       },
     ],

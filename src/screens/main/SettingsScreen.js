@@ -1250,7 +1250,7 @@ export default function SettingsScreen() {
               Choose your default estimated duration format when creating new
               bookings.
             </AppText>
-            <AppText style={styles.label(c)}>
+            <AppText style={[styles.label, { color: theme.colors.textDim }]}>
               Default Estimated Duration Unit
             </AppText>
             <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
@@ -2905,7 +2905,7 @@ function Field({
 }) {
   return (
     <View style={full ? { width: "100%" } : { flex: 1, minWidth: 140 }}>
-      <AppText style={styles.label(c)}>{label}</AppText>
+      <AppText style={[styles.label, { color: theme.colors.textDim }]}>{label}</AppText>
       <TextInput
         value={String(value || "")}
         onChangeText={onChange}
@@ -2933,7 +2933,7 @@ function Field({
 function PinField({ label, value, onChange, c }) {
   return (
     <View style={{ flex: 1, minWidth: 100 }}>
-      <AppText style={styles.label(c)}>{label}</AppText>
+      <AppText style={[styles.label, { color: theme.colors.textDim }]}>{label}</AppText>
       <TextInput
         value={value}
         onChangeText={(v) => onChange(v.replace(/\D/g, "").slice(0, 4))}
@@ -2962,7 +2962,7 @@ function PinField({ label, value, onChange, c }) {
 function SelectField({ label, value, onPress, c }) {
   return (
     <View style={{ flex: 1, minWidth: 140 }}>
-      <AppText style={styles.label(c)}>{label}</AppText>
+      <AppText style={[styles.label, { color: theme.colors.textDim }]}>{label}</AppText>
       <Pressable
         onPress={onPress}
         style={[
@@ -2989,7 +2989,7 @@ function SelectField({ label, value, onPress, c }) {
 function PriceField({ label, suffix, value, onChange, c }) {
   return (
     <View style={{ flex: 1, minWidth: 140 }}>
-      <AppText style={styles.label(c)}>{label}</AppText>
+      <AppText style={[styles.label, { color: theme.colors.textDim }]}>{label}</AppText>
       <View style={{ position: "relative" }}>
         <TextInput
           value={String(value || "")}
@@ -3027,7 +3027,7 @@ function PriceField({ label, suffix, value, onChange, c }) {
 function OptionRow({ label, options, value, onChange, c }) {
   return (
     <View>
-      <AppText style={styles.label(c)}>{label}</AppText>
+      <AppText style={[styles.label, { color: theme.colors.textDim }]}>{label}</AppText>
       <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
         {options.map((o) => {
           const active = value === o;

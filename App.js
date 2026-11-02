@@ -38,7 +38,7 @@ export default function App() {
 
   useOTAUpdates();
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Syne_700Bold,
     Syne_800ExtraBold,
     DMSans_400Regular,
@@ -48,18 +48,27 @@ export default function App() {
   });
 
   useEffect(() => {
-    initI18n().then(() => {
-      setI18nReady(true);
-      setLangKey(i18n.language || "en");
-      i18n.on("languageChanged", (lng) => setLangKey(lng));
-    });
+    console.log("🚀 initI18n starting...");
+    initI18n()
+      .then(() => {
+        console.log("✅ initI18n resolved");
+        setI18nReady(true);
+        setLangKey(i18n.language || "en");
+        i18n.on("languageChanged", (lng) => setLangKey(lng));
+      })
+      .catch((err) => {
+        console.log("❌ initI18n REJECTED:", err?.message || err);
+        setI18nReady(true); // Force boot so we can see other errors
+      });
   }, []);
 
   useEffect(() => {
+    console.log("⏸️ Loading status:", { fontsLoaded, i18nReady, fontError });
     if (fontsLoaded && i18nReady) {
+      console.log("🎉 Hiding splash screen");
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, i18nReady]);
+  }, [fontsLoaded, i18nReady, fontError]);
 
   if (!fontsLoaded || !i18nReady) {
     return <LoadingScreen />;

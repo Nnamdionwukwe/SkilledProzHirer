@@ -1,14 +1,4 @@
 // src/components/ReportButton.js
-//
-// Port of pages/reports/ReportButton.jsx + Reports.module.css.
-//
-// Self-contained modal — no external navigation. Submits to POST /reports
-// and shows a success screen with a reference code.
-//
-// Usage:
-//   <ReportButton targetType="USER" targetId={userId} targetName="John Doe" />
-//   <ReportButton targetType="POST" targetId={postId} variant="icon" />
-
 import React, { useState } from "react";
 import {
   Modal,
@@ -327,7 +317,7 @@ function ReportModal({
 
             {/* Reason */}
             <View>
-              <AppText style={styles.label(c)}>
+              <AppText style={[styles.label, { color: c.textDim }]}>
                 Reason <AppText style={{ color: c.red }}>*</AppText>
               </AppText>
               <View style={styles.reasonGrid}>
@@ -371,7 +361,7 @@ function ReportModal({
 
             {/* Description */}
             <View>
-              <AppText style={styles.label(c)}>
+              <AppText style={[styles.label, { color: c.textDim }]}>
                 Additional details{" "}
                 <AppText
                   style={{
@@ -414,7 +404,7 @@ function ReportModal({
 
             {/* Evidence */}
             <View>
-              <AppText style={styles.label(c)}>
+              <AppText style={[styles.label, { color: c.textDim }]}>
                 Evidence URLs{" "}
                 <AppText
                   style={{
@@ -582,14 +572,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 6,
   },
-  label: (c) => ({
+  // 🔥 FIXED: Removed (c) => ({...}) and made it a static object
+  label: {
     fontSize: 10,
     fontWeight: "700",
-    color: c.textDim,
     textTransform: "uppercase",
     letterSpacing: 0.7,
     marginBottom: 8,
-  }),
+  },
   reasonGrid: {
     flexDirection: "row",
     flexWrap: "wrap",

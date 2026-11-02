@@ -1027,7 +1027,7 @@ export default function JobDetailScreen() {
           DESCRIPTION
           ═══════════════════════════════════════════════════════════ */}
       <Section title="Job Description" c={c}>
-        <AppText style={styles.description(c)}>{job.description}</AppText>
+        <AppText style={[styles.description, { color: theme.colors.textDim }]}>{job.description}</AppText>
         {cleanNotes ? (
           <View
             style={[
@@ -1058,7 +1058,7 @@ export default function JobDetailScreen() {
           icon={<FaAlignLeft size={13} color={c.textDim} />}
           c={c}
         >
-          <AppText style={styles.description(c)}>
+          <AppText style={[styles.description, { color: theme.colors.textDim }]}>
             {job.responsibilities}
           </AppText>
         </Section>
@@ -1071,7 +1071,7 @@ export default function JobDetailScreen() {
           icon={<FaCheckCircle size={13} color={c.textDim} />}
           c={c}
         >
-          <AppText style={styles.description(c)}>{job.requirements}</AppText>
+          <AppText style={[styles.description, { color: theme.colors.textDim }]}>{job.requirements}</AppText>
         </Section>
       ) : null}
 
@@ -1265,7 +1265,7 @@ export default function JobDetailScreen() {
             >
               <FaLocationArrow size={13} color={c.orange} />
               <View style={{ flex: 1, marginLeft: 8, minWidth: 0 }}>
-                <AppText style={styles.detailLabel(c)}>Coordinates</AppText>
+                <AppText style={[styles.detailLabel, { color: theme.colors.textMuted }]}>Coordinates</AppText>
                 <AppText
                   style={{ fontSize: 12, fontWeight: "600", color: c.orange }}
                   numberOfLines={1}
@@ -1424,10 +1424,10 @@ export default function JobDetailScreen() {
             <View style={styles.paymentBreakdownBody}>
               {/* Rate */}
               <View style={styles.paymentBreakdownRow}>
-                <AppText style={styles.paymentBreakdownLabel(c)}>
+                <AppText style={[styles.paymentBreakdownLabel, { color: theme.colors.textDim }]}>
                   {paymentBreakdown.isFixed ? "Fixed Price" : "Rate"}
                 </AppText>
-                <AppText style={styles.paymentBreakdownValue(c)}>
+                <AppText style={[styles.paymentBreakdownValue, { color: theme.colors.text }]}>
                   {paymentBreakdown.currency}{" "}
                   {paymentBreakdown.rate.toLocaleString()}
                   {!paymentBreakdown.isFixed && paymentBreakdown.periodLabel ? (
@@ -1449,10 +1449,10 @@ export default function JobDetailScreen() {
               {paymentBreakdown.isRecurring &&
               paymentBreakdown.durationLabel ? (
                 <View style={styles.paymentBreakdownRow}>
-                  <AppText style={styles.paymentBreakdownLabel(c)}>
+                  <AppText style={[styles.paymentBreakdownLabel, { color: theme.colors.textDim }]}>
                     Duration ({paymentBreakdown.budgetTypeLabel})
                   </AppText>
-                  <AppText style={styles.paymentBreakdownValue(c)}>
+                  <AppText style={[styles.paymentBreakdownValue, { color: theme.colors.text }]}>
                     {paymentBreakdown.durationLabel}
                     {paymentBreakdown.multiplierLabel &&
                     paymentBreakdown.multiplierLabel !==
@@ -1499,10 +1499,10 @@ export default function JobDetailScreen() {
               {/* Subtotal */}
               {!paymentBreakdown.isFixed ? (
                 <View style={styles.paymentBreakdownRow}>
-                  <AppText style={styles.paymentBreakdownLabel(c)}>
+                  <AppText style={[styles.paymentBreakdownLabel, { color: theme.colors.textDim }]}>
                     Subtotal
                   </AppText>
-                  <AppText style={styles.paymentBreakdownValue(c)}>
+                  <AppText style={[styles.paymentBreakdownValue, { color: theme.colors.text }]}>
                     {paymentBreakdown.currency}{" "}
                     {paymentBreakdown.subtotal.toLocaleString()}
                   </AppText>
@@ -1512,7 +1512,7 @@ export default function JobDetailScreen() {
               {/* Platform fee */}
               <View style={styles.paymentBreakdownRow}>
                 <View style={{ flex: 1 }}>
-                  <AppText style={styles.paymentBreakdownLabel(c)}>
+                  <AppText style={[styles.paymentBreakdownLabel, { color: theme.colors.textDim }]}>
                     Platform fee ({paymentBreakdown.platformFeePercent}%)
                   </AppText>
                   <AppText
@@ -1526,7 +1526,7 @@ export default function JobDetailScreen() {
                     covers escrow, support, and payment processing
                   </AppText>
                 </View>
-                <AppText style={styles.paymentBreakdownValue(c)}>
+                <AppText style={[styles.paymentBreakdownValue, { color: theme.colors.text }]}>
                   + {paymentBreakdown.currency}{" "}
                   {paymentBreakdown.platformFee.toLocaleString()}
                 </AppText>
@@ -1633,7 +1633,7 @@ export default function JobDetailScreen() {
                 ]}
               >
                 <FaLink size={12} color={c.orange} />
-                <AppText style={styles.applyChannelText(c)}>
+                <AppText style={[styles.applyChannelText, { color: theme.colors.textDim }]}>
                   Apply via link
                 </AppText>
               </Pressable>
@@ -1653,7 +1653,7 @@ export default function JobDetailScreen() {
                 ]}
               >
                 <FaEnvelope size={12} color={c.orange} />
-                <AppText style={styles.applyChannelText(c)} numberOfLines={1}>
+                <AppText style={[styles.applyChannelText, { color: theme.colors.textDim }]} numberOfLines={1}>
                   {job.applicationEmail}
                 </AppText>
               </Pressable>
@@ -1675,7 +1675,7 @@ export default function JobDetailScreen() {
                 ]}
               >
                 <FaCommentDots size={12} color={c.orange} />
-                <AppText style={styles.applyChannelText(c)} numberOfLines={1}>
+                <AppText style={[styles.applyChannelText, { color: theme.colors.textDim }]} numberOfLines={1}>
                   {job.applicationWhatsApp}
                 </AppText>
               </Pressable>
@@ -1693,7 +1693,7 @@ export default function JobDetailScreen() {
                 ]}
               >
                 <FaPhone size={12} color={c.orange} />
-                <AppText style={styles.applyChannelText(c)} numberOfLines={1}>
+                <AppText style={[styles.applyChannelText, { color: theme.colors.textDim }]} numberOfLines={1}>
                   {job.applicationPhone}
                 </AppText>
               </Pressable>
@@ -2366,7 +2366,7 @@ function DetailCard({ icon, label, value, accent, c }) {
     >
       {icon}
       <View style={{ flex: 1, marginLeft: 8, minWidth: 0 }}>
-        <AppText style={styles.detailLabel(c)}>{label}</AppText>
+        <AppText style={[styles.detailLabel, { color: theme.colors.textMuted }]}>{label}</AppText>
         <AppText
           style={{
             fontSize: accent ? 14 : 12,

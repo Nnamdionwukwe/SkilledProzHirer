@@ -172,6 +172,7 @@
     "welcomeBack": "BIENVENIDO DE NUEVO",
     "workerDescription": "Ofrece tus servicios y consigue clientes."
   },
+
   "auth.agreeToTerms": "I agree to the",
   "auth.alreadyHaveAccount": "Already have an account?",
   "auth.and": "and",

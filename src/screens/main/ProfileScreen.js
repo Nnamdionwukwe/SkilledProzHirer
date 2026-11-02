@@ -606,7 +606,7 @@ export default function ProfileScreen() {
                 { backgroundColor: c.bgPanel, borderColor: c.border },
               ]}
             >
-              <AppText style={styles.cardLabel(c)}>Specialities</AppText>
+              <AppText style={[styles.cardLabel, { color: theme.colors.textMuted }]}>Specialities</AppText>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                 {wp.categories.map((cat) => (
                   <View
@@ -669,7 +669,7 @@ export default function ProfileScreen() {
                     { backgroundColor: c.bgPanel, borderColor: c.border },
                   ]}
                 >
-                  <AppText style={styles.cardLabel(c)}>About</AppText>
+                  <AppText style={[styles.cardLabel, { color: theme.colors.textMuted }]}>About</AppText>
                   <AppText
                     style={{ fontSize: 13, color: c.textDim, lineHeight: 20 }}
                   >
@@ -713,7 +713,7 @@ export default function ProfileScreen() {
                     { backgroundColor: c.bgPanel, borderColor: c.border },
                   ]}
                 >
-                  <AppText style={styles.cardLabel(c)}>Availability</AppText>
+                  <AppText style={[styles.cardLabel, { color: theme.colors.textMuted }]}>Availability</AppText>
                   <View
                     style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
                   >

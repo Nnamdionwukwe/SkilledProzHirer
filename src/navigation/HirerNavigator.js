@@ -49,6 +49,11 @@ import MyDisputesScreen from "../screens/main/MyDisputesScreen";
 import EditProfileScreen from "../screens/main/EditProfileScreen";
 import HirerWalletScreen from "../screens/main/HirerWalletScreen";
 import WalletTransactionDetailScreen from "../screens/main/WalletTransactionDetailScreen";
+import RetainedStaffScreen from "../screens/main/RetainedStaffScreen";
+import RetainedStaffListScreen from "../screens/main/RetainedStaffListScreen";
+import RetainedStaffDetailScreen from "../screens/main/RetainedStaffDetailScreen";
+import RetainedStaffCycleDetailScreen from "../screens/main/RetainedStaffCycleDetailScreen";
+import PostDetailScreen from "../screens/main/PostDetailScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -191,6 +196,23 @@ export default function HirerNavigator() {
         </Drawer.Screen>
         <Drawer.Screen name="WalletTransactionDetail">
           {() => <ScreenWithChrome Screen={WalletTransactionDetailScreen} />}
+        </Drawer.Screen>
+
+        {/* ── Retained Staff ──────────────────────────────────────── */}
+        <Drawer.Screen name="RetainedStaff">
+          {() => <ScreenWithChrome Screen={RetainedStaffScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="RetainedStaffList">
+          {() => <ScreenWithChrome Screen={RetainedStaffListScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="RetainedStaffDetail">
+          {() => <ScreenWithChrome Screen={RetainedStaffDetailScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="RetainedStaffCycleDetail">
+          {() => <ScreenWithChrome Screen={RetainedStaffCycleDetailScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="PostDetail">
+          {() => <ScreenWithChrome Screen={PostDetailScreen} />}
         </Drawer.Screen>
 
         <Drawer.Screen
