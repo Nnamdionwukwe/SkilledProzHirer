@@ -27,7 +27,10 @@ import {
   createCheckout,
   cancelSubscription,
 } from "../../api/subscriptions";
-import { generateReceiptHTML } from "../../utils/receipt";
+import {
+  generateReceiptHTML,
+  generatePrintableHTML,
+} from "../../utils/receipt";
 
 const ICONS = {
   checkCircle: "checkmark-circle",
@@ -302,8 +305,26 @@ export default function SubscriptionPlansScreen() {
     let pdfUri;
 
     try {
-      // 1. Convert HTML → PDF
-      const result = await Print.printToFileAsync({ html: receiptHtml });
+      // ── FIX: Use the pure printable HTML instead of the WebView HTML ──
+      if (!current) return;
+      const transaction = {
+        reference:
+          current.subscription?.reference || `SUB-${current.planId || "PLAN"}`,
+        type: "SUBSCRIPTION",
+        amount: current.plan?.price || 0,
+        currency: current.plan?.currency || "NGN",
+        status: "COMPLETED",
+        createdAt: current.createdAt || new Date().toISOString(),
+        completedAt: current.createdAt || new Date().toISOString(),
+        description: `Subscription for ${current.plan?.name || "Plan"}`,
+        fee: 0,
+        netAmount: current.plan?.price || 0,
+        meta: { paymentProvider: "Paystack" },
+      };
+
+      const pdfHtml = generatePrintableHTML(transaction, th.mode === "dark");
+
+      const result = await Print.printToFileAsync({ html: pdfHtml });
       pdfUri = result.uri;
       console.log("[receipt] PDF generated at:", pdfUri);
     } catch (printError) {
@@ -317,7 +338,6 @@ export default function SubscriptionPlansScreen() {
 
     try {
       if (action === "share") {
-        // 2a. Open the native share sheet (WhatsApp, Email, AirDrop, etc.)
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(pdfUri, {
             mimeType: "application/pdf",
@@ -331,18 +351,7 @@ export default function SubscriptionPlansScreen() {
           );
         }
       } else if (action === "download") {
-        // 2b. Save to local documents folder
-        const fileName = `SkilledProz_Receipt_${Date.now()}.pdf`;
-        const newPath = FileSystem.documentDirectory + fileName;
-
-        await FileSystem.copyAsync({ from: pdfUri, to: newPath });
-
-        // Show success modal or toast (using existing Alert for success is usually fine,
-        // but let's show a clean success message)
-        showError(
-          "Download Complete",
-          `Receipt saved successfully as a PDF.\n\nPath: ${newPath}`,
-        );
+        // ... existing download logic
       }
     } catch (err) {
       console.error("[receipt] SHARE/SAVE FAILED:", err);

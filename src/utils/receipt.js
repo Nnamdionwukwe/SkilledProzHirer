@@ -56,12 +56,8 @@ function getPaymentChannel(tx) {
   return "Payment";
 }
 
-export function generateReceiptHTML(transaction, isDark = true) {
-  const isCredit = false;
-  const amountPrefix = "-";
-  const channel = getPaymentChannel(transaction);
-  const statusLabel = STATUS_LABELS[transaction.status] || transaction.status;
-
+// ─── Shared Styles ────────────────────────────────────────────────────────
+function getStyles(isDark) {
   const bg = isDark ? "#080810" : "#f8f9fa";
   const panel = isDark ? "#0c0c18" : "#ffffff";
   const text = isDark ? "#ffffff" : "#1a1a2e";
@@ -71,13 +67,7 @@ export function generateReceiptHTML(transaction, isDark = true) {
   const footerBg = isDark ? "#0c0c18" : "#f9fafb";
   const tearColor = isDark ? "#080810" : "#f9fafb";
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Receipt - ${transaction.reference}</title>
-  <style>
+  return `
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -89,45 +79,6 @@ export function generateReceiptHTML(transaction, isDark = true) {
       align-items: center;
       min-height: 100vh;
       padding: 20px;
-      padding-top: 80px;
-    }
-    .action-bar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      background: ${panel};
-      border-bottom: 1px solid ${border};
-      display: flex;
-      justify-content: center;
-      gap: 12px;
-      padding: 14px;
-      z-index: 100;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
-    .btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 22px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      border: 1px solid ${border};
-      background: ${bg};
-      color: ${text};
-      outline: none;
-      transition: opacity 0.2s;
-      font-family: inherit;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-    .btn:active { opacity: 0.7; }
-    .btn-primary {
-      background: #f97316;
-      color: #fff;
-      border-color: #f97316;
     }
     .receipt {
       max-width: 520px;
@@ -223,28 +174,17 @@ export function generateReceiptHTML(transaction, isDark = true) {
     .receipt-footer { padding: 24px 32px; background: ${footerBg}; text-align: center; font-size: 12px; color: ${textDim}; }
     .receipt-footer strong { color: ${text}; }
     .tear-line { height: 16px; background-image: radial-gradient(circle, ${tearColor} 4px, transparent 4px); background-size: 16px 16px; background-position: -8px 50%; background-color: ${footerBg}; }
-  </style>
-</head>
-<body>
-  <div class="action-bar">
-    <button
-      type="button"
-      class="btn btn-primary"
-      onclick="try { window.ReactNativeWebView.postMessage('download'); } catch(e) { document.title='ERR:'+e.message; }"
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-      Download
-    </button>
-    <button
-      type="button"
-      class="btn"
-      onclick="try { window.ReactNativeWebView.postMessage('share'); } catch(e) { document.title='ERR:'+e.message; }"
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-      Share
-    </button>
-  </div>
+  `;
+}
 
+// ─── Receipt Body (Pure Content) ──────────────────────────────────────────
+function getReceiptContent(transaction) {
+  const isCredit = false;
+  const amountPrefix = "-";
+  const channel = getPaymentChannel(transaction);
+  const statusLabel = STATUS_LABELS[transaction.status] || transaction.status;
+
+  return `
   <div class="receipt">
     <div class="receipt-header">
       <div class="logo">
@@ -296,6 +236,102 @@ export function generateReceiptHTML(transaction, isDark = true) {
       <p style="margin-top: 6px; font-size: 11px;">skilledproz.com · support@skilledproz.com</p>
     </div>
   </div>
+  `;
+}
+
+// ─── 1. For WebView (Includes the Share Button) ───────────────────────────
+export function generateReceiptHTML(transaction, isDark = true) {
+  const bg = isDark ? "#080810" : "#f8f9fa";
+  const panel = isDark ? "#0c0c18" : "#ffffff";
+  const text = isDark ? "#ffffff" : "#1a1a2e";
+  const border = isDark ? "rgba(255,255,255,0.08)" : "#e5e7eb";
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Receipt - ${transaction.reference}</title>
+  <style>
+    ${getStyles(isDark)}
+    
+    body { padding-top: 80px; }
+    
+    .action-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: ${panel};
+      border-bottom: 1px solid ${border};
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      padding: 14px;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 32px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid ${border};
+      background: ${bg};
+      color: ${text};
+      outline: none;
+      transition: opacity 0.2s;
+      font-family: inherit;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .btn:active { opacity: 0.7; }
+    .btn-primary {
+      background: #f97316;
+      color: #fff;
+      border-color: #f97316;
+    }
+  </style>
+</head>
+<body>
+  <div class="action-bar">
+    <button
+      type="button"
+      class="btn btn-primary"
+      onclick="try { window.ReactNativeWebView.postMessage('share'); } catch(e) { document.title='ERR:'+e.message; }"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+      Share Receipt
+    </button>
+  </div>
+
+  ${getReceiptContent(transaction)}
+</body>
+</html>`;
+}
+
+// ─── 2. For Print/PDF (Only the Receipt, No Action Bar) ───────────────────
+export function generatePrintableHTML(transaction, isDark = true) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Receipt - ${transaction.reference}</title>
+  <style>
+    ${getStyles(isDark)}
+    
+    /* Padding for PDF margin */
+    body { padding: 40px 20px; }
+  </style>
+</head>
+<body>
+  ${getReceiptContent(transaction)}
 </body>
 </html>`;
 }
