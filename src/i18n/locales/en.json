@@ -1982,6 +1982,56 @@
     "unavailable": "Unavailable",
     "viewProfile": "View Profile"
   },
+  "subscription": {
+    "title": "Choose Your Plan",
+    "subtitleWorker": "Boost your profile and win more jobs",
+    "subtitleHirer": "Hire smarter, faster, and at scale",
+    "currentBanner": {
+      "active": "Active:",
+      "renews": "Renews {{date}}",
+      "receipt": "Receipt",
+      "cancel": "Cancel"
+    },
+    "promo": {
+      "placeholder": "Have a promo code?",
+      "apply": "Apply",
+      "remove": "Remove",
+      "appliedPercent": "Code applied — {{value}}% off",
+      "appliedFixed": "Code applied — ₦{{value}} off",
+      "invalid": "Invalid promo code.",
+      "invalidOrExpired": "Invalid or expired promo code."
+    },
+    "plan": {
+      "mostPopular": "Most Popular",
+      "currentPlan": "Current Plan",
+      "free": "Free",
+      "freePlan": "Free Plan",
+      "perMonth": "/mo",
+      "perYear": "/yr",
+      "save": "Save ₦{{amount}}",
+      "upgradeTo": "Upgrade to {{name}}",
+      "activating": "Activating..."
+    },
+    "disclaimer": "Payments processed securely by Paystack via Card. Cancel anytime. All prices in NGN.",
+    "errors": {
+      "checkoutFailed": "Could not open checkout. Please try again.",
+      "checkoutStartFailed": "Failed to start checkout.",
+      "cancelFailed": "Failed to cancel."
+    },
+    "success": {
+      "cancelled": "Subscription cancelled."
+    },
+    "cancelModal": {
+      "title": "Cancel subscription?",
+      "body": "Your plan stays active until the end of the current billing period. After that, you'll drop back to the Free plan.",
+      "keep": "Keep Plan",
+      "confirm": "Yes, Cancel",
+      "cancelling": "Cancelling..."
+    },
+    "receipt": {
+      "modalTitle": "Receipt"
+    }
+  },
   "savedWorkers.available": "Saved Workers Available",
   "savedWorkers.emptySub": "Saved Workers Empty Sub",
   "savedWorkers.emptyTitle": "Saved Workers Empty Title",
