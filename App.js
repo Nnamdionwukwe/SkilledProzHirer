@@ -29,6 +29,7 @@ import RootNavigator from "./src/navigation/RootNavigator";
 import { initI18n } from "./src/i18n";
 import i18n from "./src/i18n";
 import useOTAUpdates from "./src/hooks/useOTAUpdates";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -77,18 +78,20 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <CurrencyProvider>
-            <ToastProvider>
-              <SubscriptionProvider>
-                <VoiceCallProvider>
-                  <RootNavigator key={langKey} />
-                  <VoiceCallProviderUI />
-                </VoiceCallProvider>
-              </SubscriptionProvider>
-            </ToastProvider>
-          </CurrencyProvider>
-        </ThemeProvider>
+        <KeyboardProvider>
+          <ThemeProvider>
+            <CurrencyProvider>
+              <ToastProvider>
+                <SubscriptionProvider>
+                  <VoiceCallProvider>
+                    <RootNavigator key={langKey} />
+                    <VoiceCallProviderUI />
+                  </VoiceCallProvider>
+                </SubscriptionProvider>
+              </ToastProvider>
+            </CurrencyProvider>
+          </ThemeProvider>
+        </KeyboardProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

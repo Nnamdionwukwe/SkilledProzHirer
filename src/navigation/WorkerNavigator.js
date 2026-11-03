@@ -49,6 +49,7 @@ import MyDisputesScreen from "../screens/main/MyDisputesScreen";
 import VideoCallScreen from "../screens/main/VideoCallScreen";
 import EditProfileScreen from "../screens/main/EditProfileScreen";
 import PostDetailScreen from "../screens/main/PostDetailScreen";
+import SupportChatScreen from "../screens/main/SupportChatScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -272,6 +273,11 @@ function WorkerStack() {
         <Stack.Screen name="MyDisputes" component={MyDisputesScreen} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
         <Stack.Screen name="VideoCall" component={VideoCallScreen} />
+        <Stack.Screen name="SupportChat" component={SupportChatScreen} />
+        <Stack.Screen
+          name="SupportTicketThread"
+          component={SupportTicketThreadScreen}
+        />
       </Stack.Navigator>
       <CallBannersOverlay />
     </View>

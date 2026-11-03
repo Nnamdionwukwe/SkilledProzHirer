@@ -54,6 +54,9 @@ import RetainedStaffListScreen from "../screens/main/RetainedStaffListScreen";
 import RetainedStaffDetailScreen from "../screens/main/RetainedStaffDetailScreen";
 import RetainedStaffCycleDetailScreen from "../screens/main/RetainedStaffCycleDetailScreen";
 import PostDetailScreen from "../screens/main/PostDetailScreen";
+import SupportChatScreen from "../screens/main/SupportChatScreen";
+import SupportHubScreen from "../screens/main/SupportHubScreen";
+import SupportTicketThreadScreen from "../screens/main/SupportTicketThreadScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -213,6 +216,15 @@ export default function HirerNavigator() {
         </Drawer.Screen>
         <Drawer.Screen name="PostDetail">
           {() => <ScreenWithChrome Screen={PostDetailScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="SupportChat">
+          {() => <ScreenWithChrome Screen={SupportChatScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="SupportHub">
+          {() => <ScreenWithChrome Screen={SupportHubScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="SupportTicketDetail">
+          {() => <ScreenWithChrome Screen={SupportTicketThreadScreen} />}
         </Drawer.Screen>
 
         <Drawer.Screen

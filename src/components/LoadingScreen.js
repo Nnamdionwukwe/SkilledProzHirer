@@ -1,11 +1,4 @@
 // src/components/LoadingScreen.js
-//
-// Full-screen app launcher. Shown while fonts/i18n/auth hydrate.
-// Displays the SkilledProz logo with a soft pulse — no spinner.
-//
-// The pulse uses Animated so it runs on the native thread, doesn't
-// block JS, and looks identical on iOS and Android.
-
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Image, StyleSheet, View } from "react-native";
 
@@ -61,7 +54,6 @@ export default function LoadingScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Soft glow behind the logo */}
       <Animated.View
         style={[
           styles.glow,
@@ -70,7 +62,6 @@ export default function LoadingScreen() {
           },
         ]}
       />
-      {/* Logo */}
       <Animated.View
         style={{
           transform: [{ scale: pulse }],
@@ -95,7 +86,7 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 100,
     backgroundColor: "#f97316",
-    opacity: 0.3,
+    // ← opacity: 0.3 REMOVED — it conflicted with the Animated.Value above
   },
   logo: {
     width: 120,

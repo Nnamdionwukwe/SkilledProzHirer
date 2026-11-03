@@ -27,7 +27,7 @@
     "android": {
       "package": "com.skilledproz.hirer",
       "versionCode": 1,
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
