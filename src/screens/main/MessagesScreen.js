@@ -1,6 +1,14 @@
 // src/screens/main/MessagesScreen.js
+//
+// Mirrors pages/Messages/Messages.jsx (sidebar list):
+//   - Deduplicates conversations by peer user (fixes "same user every time")
+//   - Extracts the true `other` user from users[] AND lastMsg sender/receiver
+//   - Navigates to Chat with the peer's user ID for a fresh convo if needed
+//   - Shows `You: <preview>` when the last message came from the current user
+//   - Layout matches the website: name / time on top, preview / unread on bottom
+//   - Every visible string goes through t() using the `messages.*` namespace.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Image,
@@ -15,15 +23,19 @@ import {
   useNavigation,
   useRoute,
 } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
+
 import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
 import client from "../../api/client";
 import { FaSearch, FaComments } from "../../icons/fa";
+import { rem } from "../../constants/theme";
 
 const CONVO_POLL_MS = 12000;
 
+// ── Helpers ────────────────────────────────────────────────────────────
 function formatTime(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -34,7 +46,70 @@ function formatTime(dateStr) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-function Avatar({ user, size = 46 }) {
+// Extract the OTHER user from a conversation object. Handles every shape
+// the API might return:
+//   - convo.users = [{ userId, user: {...} }, { userId, user: {...} }]
+//   - convo.users = [{ id, firstName, lastName, avatar }, ...]
+//   - convo.lastMsg.sender / convo.lastMsg.receiver as fallback
+function getPeerUser(convo, currentUserId) {
+  if (!convo) return null;
+
+  // 1) Preferred: users[] with nested user
+  const usersArr = convo.users || [];
+  const otherEntry = usersArr.find(
+    (u) => (u.userId || u.user?.id || u.id) !== currentUserId,
+  );
+  if (otherEntry) {
+    return otherEntry.user || otherEntry;
+  }
+
+  // 2) Fallback: last message's other party
+  const lastMsg = convo.messages?.[0] ?? convo.lastMessage;
+  if (lastMsg) {
+    if (lastMsg.senderId === currentUserId && lastMsg.receiver) {
+      return lastMsg.receiver;
+    }
+    if (lastMsg.receiverId === currentUserId && lastMsg.sender) {
+      return lastMsg.sender;
+    }
+  }
+
+  // 3) Fallback: top-level convo.user / convo.peer
+  if (convo.user && convo.user.id !== currentUserId) return convo.user;
+  if (convo.peer && convo.peer.id !== currentUserId) return convo.peer;
+
+  return null;
+}
+
+// Same peer = same user. Two conversations with the same peer should collapse
+// into one entry (most recent wins).
+function dedupeByPeer(convos, currentUserId) {
+  const byPeer = new Map();
+  for (const convo of convos) {
+    const peer = getPeerUser(convo, currentUserId);
+    if (!peer?.id) continue;
+
+    const existing = byPeer.get(peer.id);
+    if (!existing) {
+      byPeer.set(peer.id, convo);
+      continue;
+    }
+
+    const existingTime = new Date(
+      existing.messages?.[0]?.createdAt || existing.updatedAt || 0,
+    ).getTime();
+    const newTime = new Date(
+      convo.messages?.[0]?.createdAt || convo.updatedAt || 0,
+    ).getTime();
+
+    if (newTime >= existingTime) {
+      byPeer.set(peer.id, convo);
+    }
+  }
+  return Array.from(byPeer.values());
+}
+
+function Avatar({ user, size = 46, c }) {
   const initials =
     `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
   return (
@@ -43,9 +118,9 @@ function Avatar({ user, size = 46 }) {
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: "rgba(249,115,22,0.15)",
+        backgroundColor: c.orangeDim,
         borderWidth: 1,
-        borderColor: "rgba(249,115,22,0.3)",
+        borderColor: c.orangeGlow,
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
@@ -58,7 +133,11 @@ function Avatar({ user, size = 46 }) {
         />
       ) : (
         <AppText
-          style={{ fontSize: size * 0.36, fontWeight: "700", color: "#f97316" }}
+          style={{
+            fontSize: size * 0.36,
+            fontWeight: "700",
+            color: c.orange,
+          }}
         >
           {initials || "?"}
         </AppText>
@@ -67,7 +146,6 @@ function Avatar({ user, size = 46 }) {
   );
 }
 
-// ── Skeleton row ────────────────────────────────────────────────────────
 function SkeletonRow({ c }) {
   return (
     <View style={styles.skeletonRow}>
@@ -104,14 +182,16 @@ function SkeletonRow({ c }) {
   );
 }
 
+// ── Main screen ────────────────────────────────────────────────────────
 export default function MessagesScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const { theme } = useTheme();
   const c = theme.colors;
 
-  const [conversations, setConversations] = useState([]);
+  const [rawConversations, setRawConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
@@ -121,8 +201,11 @@ export default function MessagesScreen() {
       const res = await client.get("/messages/conversations", {
         params: { page: 1, limit: 50, _t: Date.now() },
       });
-      setConversations(res.data.data.conversations || []);
-    } catch {}
+      const list = res.data?.data?.conversations || [];
+      setRawConversations(list);
+    } catch (err) {
+      console.log("⚠️ conversations fetch failed:", err?.message);
+    }
   }, []);
 
   useFocusEffect(
@@ -139,9 +222,7 @@ export default function MessagesScreen() {
   );
 
   useEffect(() => {
-    const id = setInterval(() => {
-      loadConversations();
-    }, CONVO_POLL_MS);
+    const id = setInterval(loadConversations, CONVO_POLL_MS);
     return () => clearInterval(id);
   }, [loadConversations]);
 
@@ -167,53 +248,93 @@ export default function MessagesScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const getOtherUser = (convo) =>
-    convo.users?.find((u) => u.userId !== user?.id)?.user;
+  // Deduplicate by peer user, then attach peer for rendering
+  const conversations = useMemo(() => {
+    const deduped = dedupeByPeer(rawConversations, user?.id);
+    return deduped
+      .map((convo) => ({
+        ...convo,
+        _peer: getPeerUser(convo, user?.id),
+      }))
+      .filter((convo) => convo._peer?.id) // must have a real peer
+      .sort((a, b) => {
+        const aTime = new Date(
+          a.messages?.[0]?.createdAt || a.updatedAt || 0,
+        ).getTime();
+        const bTime = new Date(
+          b.messages?.[0]?.createdAt || b.updatedAt || 0,
+        ).getTime();
+        return bTime - aTime;
+      });
+  }, [rawConversations, user?.id]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return conversations;
-    return conversations.filter((c) => {
-      const o = getOtherUser(c);
-      return `${o?.firstName || ""} ${o?.lastName || ""}`
+    return conversations.filter((convo) => {
+      const p = convo._peer;
+      return `${p?.firstName || ""} ${p?.lastName || ""}`
         .toLowerCase()
         .includes(q);
     });
-  }, [conversations, search, user?.id]);
+  }, [conversations, search]);
 
   const totalUnread = conversations.reduce(
     (sum, c) => sum + (c.unreadCount || 0),
     0,
   );
 
+  // ── Navigation: open Chat with the peer's user ID ───────────────────
+  const openChat = (convo) => {
+    const peer = convo._peer;
+    if (!peer?.id) return;
+
+    // If we already have a conversationId, use it.
+    // Otherwise pass withUserId so Chat creates/finds the conversation.
+    if (convo.id) {
+      navigation.navigate("Chat", {
+        conversationId: convo.id,
+        withUserId: peer.id,
+      });
+    } else {
+      navigation.navigate("Chat", { withUserId: peer.id });
+    }
+  };
+
   return (
     <AppScreen scroll={false} contentContainerStyle={{ flex: 1 }}>
       {/* Header */}
-      <View style={{ marginBottom: 12 }}>
+      <View style={{ marginBottom: rem(0.75) }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <AppText
             style={{
               fontFamily: "Syne_800ExtraBold",
-              fontSize: 24,
+              fontSize: rem(1.7),
               fontWeight: "800",
               color: c.text,
             }}
           >
-            Messages
+            {t("messages.title", "Messages")}
           </AppText>
           {totalUnread > 0 && (
             <View
               style={{
-                minWidth: 22,
-                height: 22,
-                paddingHorizontal: 6,
-                borderRadius: 11,
+                minWidth: rem(1.5),
+                height: rem(1.5),
+                paddingHorizontal: rem(0.4),
+                borderRadius: rem(1.5) / 2,
                 backgroundColor: c.orange,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <AppText style={{ fontSize: 11, fontWeight: "800", color: c.bg }}>
+              <AppText
+                style={{
+                  fontSize: rem(0.6875),
+                  fontWeight: "800",
+                  color: c.bg,
+                }}
+              >
                 {totalUnread > 99 ? "99+" : totalUnread}
               </AppText>
             </View>
@@ -232,7 +353,10 @@ export default function MessagesScreen() {
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Search conversations..."
+          placeholder={t(
+            "messages.searchPlaceholder",
+            "Search conversations...",
+          )}
           placeholderTextColor={c.textMuted}
           style={[styles.searchInput, { color: c.text }]}
           returnKeyType="search"
@@ -249,7 +373,7 @@ export default function MessagesScreen() {
       ) : (
         <FlatList
           data={filtered}
-          keyExtractor={(item) => String(item.id)}
+          keyExtractor={(item) => String(item.id || item._peer.id)}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -272,30 +396,31 @@ export default function MessagesScreen() {
                   marginTop: 10,
                 }}
               >
-                No conversations yet
+                {t("messages.noConversations", "No conversations yet")}
               </AppText>
               <AppText
                 style={{ fontSize: 12, color: c.textMuted, marginTop: 4 }}
               >
-                Start a booking to begin messaging
+                {t(
+                  "messages.noConversationsSub",
+                  "Start a conversation by visiting a worker's profile.",
+                )}
               </AppText>
             </View>
           }
           renderItem={({ item }) => {
-            const other = getOtherUser(item);
+            const peer = item._peer;
             const lastMsg = item.messages?.[0];
             const unread = item.unreadCount || 0;
             const preview = lastMsg
               ? lastMsg.senderId === user?.id
-                ? `You: ${lastMsg.content}`
+                ? `${t("messages.you", "You")}: ${lastMsg.content}`
                 : lastMsg.content
-              : "No messages yet";
+              : t("messages.noMessages", "No messages yet");
 
             return (
               <Pressable
-                onPress={() =>
-                  navigation.navigate("Chat", { conversationId: item.id })
-                }
+                onPress={() => openChat(item)}
                 style={({ pressed }) => [
                   styles.row,
                   {
@@ -304,7 +429,7 @@ export default function MessagesScreen() {
                   },
                 ]}
               >
-                <Avatar user={other} />
+                <Avatar user={peer} size={46} c={c} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View
                     style={{
@@ -322,7 +447,7 @@ export default function MessagesScreen() {
                         color: c.text,
                       }}
                     >
-                      {other?.firstName} {other?.lastName}
+                      {peer?.firstName} {peer?.lastName}
                     </AppText>
                     <AppText style={{ fontSize: 10, color: c.textMuted }}>
                       {lastMsg ? formatTime(lastMsg.createdAt) : ""}

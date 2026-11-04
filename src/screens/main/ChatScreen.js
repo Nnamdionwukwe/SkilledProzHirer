@@ -1,20 +1,33 @@
 // src/screens/main/ChatScreen.js
 //
 // Chat pane. Tick states:
-//   • msg.pending             → one grey tick (uploading to server)
-//   • msg.delivered === true  → two grey ticks (receiver's app fetched it)
-//   • msg.isRead === true     → two blue ticks (receiver opened the chat)
+//   • msg.pending             → one grey tick
+//   • msg.delivered === true  → two grey ticks
+//   • msg.isRead === true     → two blue ticks
 //
-// If the backend doesn't send `delivered`, two grey never renders — the
-// message goes straight from one grey to two blue when the receiver reads.
+// Keyboard handling — matches SupportChatScreen:
+//   • Body wrapped in KeyboardAwareScrollView (from react-native-keyboard-controller)
+//   • Chat list stays put — NOT pushed up by the keyboard
+//   • Only the input footer lifts via marginBottom: keyboardHeight
+//   • Content bottom padding = 16 + keyboardHeight so the last message
+//     is visible above the footer even when the keyboard is open
+//
+// Back button:
+//   • navigation.goBack() when possible, else navigate("Messages") — always
+//     lands on Messages, never Home.
+//
+// PDFs:
+//   • Rendered in-app inside a full-screen WebView modal using Google Docs Viewer.
+//
+// i18n:
+//   • Every visible string goes through t() using the `messages.*` namespace.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Linking,
   Modal,
   Platform,
@@ -23,10 +36,18 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { Video } from "expo-av";
+import { WebView } from "react-native-webview";
+import { useTranslation } from "react-i18next";
+
 import AppText from "../../components/AppText";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -43,6 +64,9 @@ import {
   FaPhone,
   FaVideo,
   FaChevronDown,
+  FaCamera,
+  FaImage,
+  FaFilePdf,
 } from "../../icons/fa";
 
 const MSG_POLL_MS = 3000;
@@ -102,13 +126,15 @@ function formatTime(dateStr) {
   });
 }
 
-function formatDateDivider(dateStr) {
+function formatDateDivider(dateStr, t) {
   const d = new Date(dateStr);
   const now = new Date();
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (d.toDateString() === now.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  if (d.toDateString() === now.toDateString())
+    return t("messages.today", "Today");
+  if (d.toDateString() === yesterday.toDateString())
+    return t("messages.yesterday", "Yesterday");
   return d.toLocaleDateString("en-GB", {
     weekday: "long",
     day: "numeric",
@@ -116,28 +142,46 @@ function formatDateDivider(dateStr) {
   });
 }
 
+// ── Keyboard height hook ───────────────────────────────────────────────
+function useKeyboardHeight() {
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setHeight(e?.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  return height;
+}
+
 // ── Tick states ────────────────────────────────────────────────────────
-// pending      → one grey check
-// !pending
-//   !read & delivered  → two grey checks
-//   read               → two blue checks
-//   !pending & !read & !delivered → one grey check (delivered unknown)
 function Ticks({ pending, delivered, read, color }) {
   const grey = "rgba(255,255,255,0.55)";
   const baseColor = color || grey;
   const blue = "#3b82f6";
 
   if (pending) {
-    // One check — message queued/sending
     return (
       <View style={{ flexDirection: "row", marginLeft: 4 }}>
         <FaCheck size={10} color={baseColor} style={{ opacity: 0.85 }} />
       </View>
     );
   }
-
   if (read) {
-    // Two blue checks — message read by receiver
     return (
       <View style={{ flexDirection: "row", marginLeft: 4 }}>
         <FaCheck size={10} color={blue} style={{ opacity: 0.95 }} />
@@ -149,9 +193,7 @@ function Ticks({ pending, delivered, read, color }) {
       </View>
     );
   }
-
   if (delivered) {
-    // Two grey checks — receiver's client has fetched the message
     return (
       <View style={{ flexDirection: "row", marginLeft: 4 }}>
         <FaCheck size={10} color={baseColor} style={{ opacity: 0.85 }} />
@@ -163,8 +205,6 @@ function Ticks({ pending, delivered, read, color }) {
       </View>
     );
   }
-
-  // Sent, delivered unknown — one grey check
   return (
     <View style={{ flexDirection: "row", marginLeft: 4 }}>
       <FaCheck size={10} color={baseColor} style={{ opacity: 0.85 }} />
@@ -173,6 +213,7 @@ function Ticks({ pending, delivered, read, color }) {
 }
 
 function TranslateButton({ text }) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const c = theme.colors;
   const [translated, setTranslated] = useState(null);
@@ -189,7 +230,7 @@ function TranslateButton({ text }) {
       });
       setTranslated(res.data.data.translated);
     } catch {
-      setTranslated("Translation failed.");
+      setTranslated(t("messages.translateFailed", "Translation failed."));
     } finally {
       setLoading(false);
     }
@@ -219,7 +260,7 @@ function TranslateButton({ text }) {
             marginTop: 1,
           }}
         >
-          Translated:
+          {t("messages.translated", "Translated:")}
         </AppText>
         <AppText style={{ flex: 1, fontSize: 12, color: "#93c5fd" }}>
           {translated}
@@ -233,7 +274,11 @@ function TranslateButton({ text }) {
 
   return (
     <View style={{ marginTop: 4 }}>
-      <Pressable onPress={() => setShowPicker(true)} disabled={loading}>
+      <Pressable
+        onPress={() => setShowPicker(true)}
+        disabled={loading}
+        accessibilityLabel={t("messages.translate", "Translate message")}
+      >
         <AppText style={{ fontSize: 11, color: c.textDim, opacity: 0.7 }}>
           {loading ? "…" : <FaGlobe size={12} color={c.textDim} />}
         </AppText>
@@ -264,12 +309,22 @@ function TranslateButton({ text }) {
               maxHeight: "70%",
             }}
           >
-            <FlatList
-              data={LANGUAGES}
-              keyExtractor={(l) => l.code}
-              renderItem={({ item }) => (
+            <AppText
+              style={{
+                fontSize: 14,
+                fontWeight: "700",
+                color: c.text,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+              }}
+            >
+              {t("messages.selectLanguage", "Select language")}
+            </AppText>
+            <KeyboardAwareScrollView>
+              {LANGUAGES.map((l) => (
                 <Pressable
-                  onPress={() => translate(item.code)}
+                  key={l.code}
+                  onPress={() => translate(l.code)}
                   style={({ pressed }) => ({
                     paddingVertical: 12,
                     paddingHorizontal: 14,
@@ -278,11 +333,11 @@ function TranslateButton({ text }) {
                   })}
                 >
                   <AppText style={{ fontSize: 13, color: c.text }}>
-                    {item.label}
+                    {l.label}
                   </AppText>
                 </Pressable>
-              )}
-            />
+              ))}
+            </KeyboardAwareScrollView>
           </View>
         </Pressable>
       </Modal>
@@ -360,45 +415,68 @@ function SkeletonBubble({ c, mine }) {
 export default function ChatScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const { theme } = useTheme();
   const c = theme.colors;
   const { startCall, call: activeCall } = useVoiceCall();
   const isOnCall = !!activeCall;
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
 
-  const initialConvoId = route.params?.conversationId || null;
-  const initialWithId = route.params?.withUserId || null;
-  const initialDraft = route.params?.draft || "";
+  // ── Param capture ───────────────────────────────────────────────────
+  const routeConvoId = route.params?.conversationId || null;
+  const routeWithId = route.params?.withUserId || null;
+  const routeDraft = route.params?.draft || "";
 
-  const [activeConvoId, setActiveConvoId] = useState(initialConvoId);
-  const [withUserId, setWithUserId] = useState(initialWithId);
+  // State
+  const [activeConvoId, setActiveConvoId] = useState(routeConvoId);
+  const [withUserId, setWithUserId] = useState(routeWithId);
   const [withUser, setWithUser] = useState(null);
   const [convoMeta, setConvoMeta] = useState(null);
 
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
-  const [newMessage, setNewMessage] = useState(initialDraft);
+  const [newMessage, setNewMessage] = useState(routeDraft);
   const [sending, setSending] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState(null);
+  const [pdfViewerSrc, setPdfViewerSrc] = useState(null);
   const [pendingCallType, setPendingCallType] = useState(null);
   const [startingCall, setStartingCall] = useState(false);
   const [showJump, setShowJump] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
 
-  const listRef = useRef(null);
+  const scrollRef = useRef(null);
   const pollRef = useRef(null);
   const initiatingRef = useRef(false);
   const lastIdRef = useRef(null);
   const markingReadRef = useRef(false);
 
-  const activeOther = useMemo(() => {
-    if (convoMeta) {
-      return convoMeta.users?.find((u) => u.userId !== user?.id)?.user || null;
-    }
-    return withUser || null;
-  }, [convoMeta, withUser, user?.id]);
+  // ── Sync params → state on every change ───────────────────────────
+  useEffect(() => {
+    setMessages([]);
+    setSendingMessage(null);
+    setConvoMeta(null);
+    setWithUser(null);
+    lastIdRef.current = null;
+    setNewMessage(routeDraft || "");
 
+    if (routeConvoId) {
+      setActiveConvoId(routeConvoId);
+      setWithUserId(null);
+    } else if (routeWithId) {
+      setActiveConvoId(null);
+      setWithUserId(routeWithId);
+    } else {
+      setActiveConvoId(null);
+      setWithUserId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeConvoId, routeWithId, routeDraft]);
+
+  // ── Fetch conversation meta ────────────────────────────────────────
   useEffect(() => {
     if (!activeConvoId) return;
     let cancelled = false;
@@ -417,6 +495,7 @@ export default function ChatScreen() {
     };
   }, [activeConvoId]);
 
+  // ── Fetch peer user (when launched via withUserId) ────────────────
   useEffect(() => {
     if (!withUserId) {
       setWithUser(null);
@@ -435,6 +514,13 @@ export default function ChatScreen() {
       cancelled = true;
     };
   }, [withUserId]);
+
+  const activeOther = useMemo(() => {
+    if (convoMeta) {
+      return convoMeta.users?.find((u) => u.userId !== user?.id)?.user || null;
+    }
+    return withUser || null;
+  }, [convoMeta, withUser, user?.id]);
 
   const markRead = useCallback((convoId) => {
     if (!convoId || markingReadRef.current) return;
@@ -456,13 +542,10 @@ export default function ChatScreen() {
           params: { page: 1, limit: 100, _t: Date.now() },
         });
         const msgs = res.data.data.messages || [];
-
-        // Auto-mark unread from other as read on every poll
         const hasUnreadFromOther = msgs.some(
           (m) => m.senderId !== user?.id && !m.isRead,
         );
         if (hasUnreadFromOther) markRead(convoId);
-
         setMessages(msgs);
       } catch {
         if (!silent) setMessages([]);
@@ -478,10 +561,8 @@ export default function ChatScreen() {
       setLoadingMessages(false);
       return;
     }
-
     loadMessages(activeConvoId);
     markRead(activeConvoId);
-
     clearInterval(pollRef.current);
     pollRef.current = setInterval(
       () => loadMessages(activeConvoId, true),
@@ -490,6 +571,7 @@ export default function ChatScreen() {
     return () => clearInterval(pollRef.current);
   }, [activeConvoId, loadMessages, markRead]);
 
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (messages.length === 0) {
       lastIdRef.current = null;
@@ -499,7 +581,7 @@ export default function ChatScreen() {
     if (newestId && newestId !== lastIdRef.current) {
       lastIdRef.current = newestId;
       requestAnimationFrame(() => {
-        listRef.current?.scrollToEnd({ animated: true });
+        scrollRef.current?.scrollToEnd?.({ animated: true });
       });
     }
   }, [messages]);
@@ -507,7 +589,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (sendingMessage) {
       requestAnimationFrame(() => {
-        listRef.current?.scrollToEnd({ animated: true });
+        scrollRef.current?.scrollToEnd?.({ animated: true });
       });
     }
   }, [sendingMessage]);
@@ -571,11 +653,11 @@ export default function ChatScreen() {
       const fd = new FormData();
       fd.append("file", {
         uri: asset.uri,
-        name: asset.fileName || `upload-${Date.now()}.jpg`,
-        type: asset.mimeType || "image/jpeg",
+        name: asset.fileName || asset.name || `upload-${Date.now()}`,
+        type: asset.mimeType || asset.type || "application/octet-stream",
       });
       fd.append("receiverId", receiverId);
-      fd.append("content", asset.fileName || "Attachment");
+      fd.append("content", asset.fileName || asset.name || "Attachment");
       if (activeConvoId) fd.append("conversationId", activeConvoId);
 
       const res = await client.post("/messages", fd, {
@@ -600,6 +682,7 @@ export default function ChatScreen() {
   };
 
   const pickFromLibrary = async () => {
+    setShowAttachModal(false);
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -611,14 +694,9 @@ export default function ChatScreen() {
   };
 
   const pickFromCamera = async () => {
+    setShowAttachModal(false);
     const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert(
-        "Camera permission",
-        "SkilledProz needs camera access to take live photos.",
-      );
-      return;
-    }
+    if (!perm.granted) return;
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       quality: 0.8,
@@ -627,12 +705,35 @@ export default function ChatScreen() {
     await uploadAsset(result.assets[0]);
   };
 
+  // ── Choose a document (PDF, DOC, etc.) from device files ─────────
+  const pickFromFiles = async () => {
+    setShowAttachModal(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          "application/pdf",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "text/plain",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/zip",
+        ],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+      await uploadAsset({
+        uri: file.uri,
+        fileName: file.name,
+        mimeType: file.mimeType,
+      });
+    } catch {}
+  };
+
   const handlePickFile = () => {
-    Alert.alert("Send attachment", "Choose a source", [
-      { text: "Take Photo", onPress: pickFromCamera },
-      { text: "Choose from Library", onPress: pickFromLibrary },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setShowAttachModal(true);
   };
 
   const confirmStartCall = async () => {
@@ -655,8 +756,9 @@ export default function ChatScreen() {
       }
     } catch (err) {
       Alert.alert(
-        "Call failed",
-        err.response?.data?.message || "Could not start call.",
+        t("messages.callFailedTitle", "Call failed"),
+        err.response?.data?.message ||
+          t("messages.callFailedBody", "Could not start call."),
       );
     } finally {
       setStartingCall(false);
@@ -700,6 +802,19 @@ export default function ChatScreen() {
       : `HirerProfile:${activeOther.id}`
     : null;
 
+  // ── BACK BUTTON: always land on Messages, never Home ─────────────
+  const handleBack = () => {
+    const state = navigation.getState?.();
+    const routes = state?.routes || [];
+    const prevRoute = routes[routes.length - 2]?.name;
+
+    if (prevRoute === "Messages") {
+      navigation.goBack();
+    } else {
+      navigation.navigate("Messages");
+    }
+  };
+
   const renderItem = ({ item }) => {
     if (item.type === "divider") {
       return (
@@ -712,7 +827,7 @@ export default function ChatScreen() {
               letterSpacing: 0.6,
             }}
           >
-            {formatDateDivider(item.date)}
+            {formatDateDivider(item.date, t)}
           </AppText>
         </View>
       );
@@ -720,13 +835,20 @@ export default function ChatScreen() {
 
     const msg = item.msg;
     const isMine = msg.senderId === user?.id;
+
+    // ── PDF guard FIRST, so a PDF URL never slips into the image branch.
+    const isPdf = !!msg.fileUrl && /\.pdf(\?|#|$)/i.test(msg.fileUrl);
+
     const isImage =
+      !isPdf &&
       msg.fileUrl &&
-      (msg.fileUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) ||
+      (msg.fileUrl.match(/\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i) ||
         msg.fileUrl.includes("image"));
+
     const isVideo =
+      !isPdf &&
       msg.fileUrl &&
-      (msg.fileUrl.match(/\.(mp4|mov|webm)$/i) ||
+      (msg.fileUrl.match(/\.(mp4|mov|webm)(\?|#|$)/i) ||
         msg.fileUrl.includes("video"));
 
     return (
@@ -797,9 +919,24 @@ export default function ChatScreen() {
             />
           )}
 
+          {/*
+            Non-image / non-video attachments (incl. PDFs).
+            • PDFs → open the in-app WebView viewer.
+            • Other files (doc/zip/txt) → hand to Linking so the OS can
+              present a share / open-with sheet.
+          */}
           {msg.fileUrl && !isImage && !isVideo && (
             <Pressable
-              onPress={() => Linking.openURL(msg.fileUrl)}
+              onPress={() => {
+                const absoluteUrl = /^https?:\/\//i.test(msg.fileUrl)
+                  ? msg.fileUrl
+                  : `${client.defaults.baseURL.replace(/\/api\/?$/, "")}${msg.fileUrl.startsWith("/") ? "" : "/"}${msg.fileUrl}`;
+                if (isPdf) {
+                  setPdfViewerSrc(absoluteUrl);
+                } else {
+                  Linking.openURL(absoluteUrl);
+                }
+              }}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -815,7 +952,7 @@ export default function ChatScreen() {
                 style={{ fontSize: 12, color: isMine ? c.bg : c.text }}
                 numberOfLines={1}
               >
-                {msg.content || "Attachment"}
+                {msg.content || t("messages.attachment", "Attachment")}
               </AppText>
             </Pressable>
           )}
@@ -867,7 +1004,9 @@ export default function ChatScreen() {
                 fontStyle: msg.pending ? "italic" : "normal",
               }}
             >
-              {msg.pending ? "sending…" : formatTime(msg.createdAt)}
+              {msg.pending
+                ? t("messages.sending", "sending…")
+                : formatTime(msg.createdAt)}
             </AppText>
             {isMine && (
               <Ticks
@@ -890,255 +1029,447 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: c.bg }}
-      edges={["top", "bottom"]}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top"]}>
+      {/* Header — flush at top. */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingHorizontal: 12,
+          paddingBottom: 10,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: c.border,
+          backgroundColor: c.bgPanel,
+        }}
       >
+        <Pressable
+          onPress={handleBack}
+          hitSlop={8}
+          accessibilityLabel={t("messages.back", "Back")}
+        >
+          <FaArrowLeft size={18} color={c.textDim} />
+        </Pressable>
+        {activeOther && <Avatar user={activeOther} size={34} />}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <AppText
+            numberOfLines={1}
+            style={{ fontSize: 14, fontWeight: "600", color: c.text }}
+          >
+            {activeOther?.firstName} {activeOther?.lastName}
+          </AppText>
+          <AppText numberOfLines={1} style={{ fontSize: 11, color: c.textDim }}>
+            {convoMeta?.booking?.title ||
+              t("messages.directMessage", "Direct message")}
+          </AppText>
+        </View>
+        {otherProfileUrl && (
+          <Pressable
+            onPress={() => {
+              const [screen, id] = otherProfileUrl.split(":");
+              navigation.navigate(screen, { userId: id });
+            }}
+            hitSlop={8}
+          >
+            <AppText
+              style={{ fontSize: 11, fontWeight: "600", color: c.orange }}
+            >
+              {t("messages.viewProfile", "Profile →")}
+            </AppText>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Body */}
+      <View style={{ flex: 1, position: "relative" }}>
+        {loadingMessages ? (
+          <View style={{ flex: 1, padding: 16 }}>
+            {[
+              { mine: false },
+              { mine: false },
+              { mine: true },
+              { mine: false },
+              { mine: true },
+              { mine: true },
+              { mine: false },
+            ].map((b, i) => (
+              <SkeletonBubble key={i} c={c} mine={b.mine} />
+            ))}
+          </View>
+        ) : messages.length === 0 && !sendingMessage ? (
+          <View
+            style={{
+              flex: 1,
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 24,
+            }}
+          >
+            <FaSmile size={36} color={c.textMuted} />
+            <AppText
+              style={{
+                fontSize: 14,
+                color: c.textDim,
+                fontWeight: "600",
+                marginTop: 8,
+              }}
+            >
+              {t("messages.startConversation", "Start the conversation")}
+            </AppText>
+            <AppText style={{ fontSize: 12, color: c.textMuted, marginTop: 4 }}>
+              {t(
+                "messages.startConversationSub",
+                "Say hello to get things started",
+              )}
+            </AppText>
+          </View>
+        ) : (
+          <KeyboardAwareScrollView
+            ref={scrollRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{
+              padding: 16,
+              paddingBottom: 16 + keyboardHeight,
+              flexGrow: 1,
+            }}
+            keyboardShouldPersistTaps="handled"
+            bottomOffset={0}
+            onScroll={handleScroll}
+            scrollEventThrottle={100}
+            onContentSizeChange={() => {
+              if (messages.length > 0) {
+                requestAnimationFrame(() => {
+                  scrollRef.current?.scrollToEnd?.({ animated: false });
+                });
+              }
+            }}
+          >
+            {grouped.map((item) => (
+              <View key={item.key}>{renderItem({ item })}</View>
+            ))}
+          </KeyboardAwareScrollView>
+        )}
+
+        {showJump && (
+          <Pressable
+            onPress={() => {
+              scrollRef.current?.scrollToEnd?.({ animated: true });
+              setShowJump(false);
+            }}
+            style={{
+              position: "absolute",
+              bottom: 16,
+              right: 16,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: c.bgPanel,
+              borderWidth: 1,
+              borderColor: c.border,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <FaChevronDown size={18} color={c.text} />
+          </Pressable>
+        )}
+      </View>
+
+      {/* Footer */}
+      <View
+        style={{
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: c.border,
+          backgroundColor: c.bgPanel,
+          marginBottom: keyboardHeight,
+          paddingBottom: keyboardHeight > 0 ? 0 : Math.max(insets.bottom, 8),
+          paddingHorizontal: 12,
+          paddingTop: 8,
+        }}
+      >
+        <View style={{ flexDirection: "row", gap: 4, paddingBottom: 6 }}>
+          <Pressable
+            onPress={handlePickFile}
+            disabled={uploadingFile}
+            accessibilityLabel={t("messages.attachFile", "Attach file")}
+            style={[
+              styles.toolBtn,
+              { backgroundColor: c.bgCard, borderColor: c.border },
+            ]}
+            hitSlop={4}
+          >
+            {uploadingFile ? (
+              <ActivityIndicator size="small" color={c.textDim} />
+            ) : (
+              <FaPaperclip size={14} color={c.textDim} />
+            )}
+          </Pressable>
+          <Pressable
+            onPress={() => !isOnCall && setPendingCallType("voice")}
+            disabled={!activeConvoId || startingCall || isOnCall}
+            style={[
+              styles.toolBtn,
+              {
+                backgroundColor: c.bgCard,
+                borderColor: c.border,
+                opacity: !activeConvoId || isOnCall ? 0.4 : 1,
+              },
+            ]}
+            hitSlop={4}
+          >
+            <FaPhone size={14} color={c.textDim} />
+          </Pressable>
+          <Pressable
+            onPress={() => !isOnCall && setPendingCallType("video")}
+            disabled={!activeConvoId || startingCall || isOnCall}
+            style={[
+              styles.toolBtn,
+              {
+                backgroundColor: c.bgCard,
+                borderColor: c.border,
+                opacity: !activeConvoId || isOnCall ? 0.4 : 1,
+              },
+            ]}
+            hitSlop={4}
+          >
+            <FaVideo size={14} color={c.textDim} />
+          </Pressable>
+        </View>
+
         <View
           style={{
             flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
+            alignItems: "flex-end",
+            gap: 8,
+            backgroundColor: c.bgInput,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 14,
             paddingHorizontal: 12,
-            paddingVertical: 10,
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: c.border,
-            backgroundColor: c.bgPanel,
+            paddingVertical: 6,
           }}
         >
-          <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-            <FaArrowLeft size={18} color={c.textDim} />
-          </Pressable>
-          {activeOther && <Avatar user={activeOther} size={34} />}
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <AppText
-              numberOfLines={1}
-              style={{ fontSize: 14, fontWeight: "600", color: c.text }}
-            >
-              {activeOther?.firstName} {activeOther?.lastName}
-            </AppText>
-            <AppText
-              numberOfLines={1}
-              style={{ fontSize: 11, color: c.textDim }}
-            >
-              {convoMeta?.booking?.title || "Direct message"}
-            </AppText>
-          </View>
-          {otherProfileUrl && (
-            <Pressable
-              onPress={() => {
-                const [screen, id] = otherProfileUrl.split(":");
-                navigation.navigate(screen, { userId: id });
-              }}
-              hitSlop={8}
-            >
-              <AppText
-                style={{ fontSize: 11, fontWeight: "600", color: c.orange }}
-              >
-                Profile →
-              </AppText>
-            </Pressable>
-          )}
-        </View>
-
-        <View style={{ flex: 1, position: "relative" }}>
-          {loadingMessages ? (
-            <View style={{ flex: 1, padding: 16 }}>
-              {[
-                { mine: false },
-                { mine: false },
-                { mine: true },
-                { mine: false },
-                { mine: true },
-                { mine: true },
-                { mine: false },
-              ].map((b, i) => (
-                <SkeletonBubble key={i} c={c} mine={b.mine} />
-              ))}
-            </View>
-          ) : messages.length === 0 && !sendingMessage ? (
-            <View
-              style={{
-                flex: 1,
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 24,
-              }}
-            >
-              <FaSmile size={36} color={c.textMuted} />
-              <AppText
-                style={{
-                  fontSize: 14,
-                  color: c.textDim,
-                  fontWeight: "600",
-                  marginTop: 8,
-                }}
-              >
-                Start the conversation
-              </AppText>
-              <AppText
-                style={{ fontSize: 12, color: c.textMuted, marginTop: 4 }}
-              >
-                Say hello to get things started
-              </AppText>
-            </View>
-          ) : (
-            <FlatList
-              ref={listRef}
-              data={grouped}
-              keyExtractor={(it) => it.key}
-              renderItem={renderItem}
-              contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
-              onScroll={handleScroll}
-              scrollEventThrottle={100}
-              onContentSizeChange={() => {
-                if (messages.length > 0) {
-                  listRef.current?.scrollToEnd({ animated: false });
-                }
-              }}
-            />
-          )}
-
-          {showJump && (
-            <Pressable
-              onPress={() => {
-                listRef.current?.scrollToEnd({ animated: true });
-                setShowJump(false);
-              }}
-              style={{
-                position: "absolute",
-                bottom: 16,
-                right: 16,
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: c.bgPanel,
-                borderWidth: 1,
-                borderColor: c.border,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <FaChevronDown size={18} color={c.text} />
-            </Pressable>
-          )}
-        </View>
-
-        <View
-          style={{
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: c.border,
-            backgroundColor: c.bgPanel,
-            paddingHorizontal: 12,
-            paddingTop: 8,
-            paddingBottom: 8,
-          }}
-        >
-          <View style={{ flexDirection: "row", gap: 4, paddingBottom: 6 }}>
-            <Pressable
-              onPress={handlePickFile}
-              disabled={uploadingFile}
-              style={[
-                styles.toolBtn,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-              hitSlop={4}
-            >
-              {uploadingFile ? (
-                <ActivityIndicator size="small" color={c.textDim} />
-              ) : (
-                <FaPaperclip size={14} color={c.textDim} />
-              )}
-            </Pressable>
-            <Pressable
-              onPress={() => !isOnCall && setPendingCallType("voice")}
-              disabled={!activeConvoId || startingCall || isOnCall}
-              style={[
-                styles.toolBtn,
-                {
-                  backgroundColor: c.bgCard,
-                  borderColor: c.border,
-                  opacity: !activeConvoId || isOnCall ? 0.4 : 1,
-                },
-              ]}
-              hitSlop={4}
-            >
-              <FaPhone size={14} color={c.textDim} />
-            </Pressable>
-            <Pressable
-              onPress={() => !isOnCall && setPendingCallType("video")}
-              disabled={!activeConvoId || startingCall || isOnCall}
-              style={[
-                styles.toolBtn,
-                {
-                  backgroundColor: c.bgCard,
-                  borderColor: c.border,
-                  opacity: !activeConvoId || isOnCall ? 0.4 : 1,
-                },
-              ]}
-              hitSlop={4}
-            >
-              <FaVideo size={14} color={c.textDim} />
-            </Pressable>
-          </View>
-
-          <View
+          <TextInput
+            value={newMessage}
+            onChangeText={setNewMessage}
+            placeholder={t("messages.typeMessage", "Type a message...")}
+            placeholderTextColor={c.textMuted}
+            multiline
             style={{
-              flexDirection: "row",
-              alignItems: "flex-end",
-              gap: 8,
-              backgroundColor: c.bgInput,
+              flex: 1,
+              color: c.text,
+              fontSize: 14,
+              maxHeight: 120,
+              paddingVertical: 8,
+            }}
+          />
+          <Pressable
+            onPress={handleSend}
+            disabled={!newMessage.trim() || sending}
+            accessibilityLabel={t("messages.sendMessage", "Send message")}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: newMessage.trim() ? c.orange : c.border,
+            }}
+            hitSlop={4}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color={c.bg} />
+            ) : (
+              <FaSend
+                size={14}
+                color={newMessage.trim() ? c.bg : c.textMuted}
+              />
+            )}
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Upload source modal — Take Photo / Library / File */}
+      <Modal
+        visible={showAttachModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAttachModal(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.7)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+          onPress={() => setShowAttachModal(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: c.bgPanel,
+              borderRadius: 16,
               borderWidth: 1,
               borderColor: c.border,
-              borderRadius: 14,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
+              padding: 20,
+              maxWidth: 340,
+              width: "100%",
             }}
           >
-            <TextInput
-              value={newMessage}
-              onChangeText={setNewMessage}
-              placeholder="Type a message..."
-              placeholderTextColor={c.textMuted}
-              multiline
+            <AppText
               style={{
-                flex: 1,
+                fontSize: 15,
+                fontWeight: "700",
                 color: c.text,
-                fontSize: 14,
-                maxHeight: 120,
-                paddingVertical: 8,
+                marginBottom: 4,
+                textAlign: "center",
               }}
-            />
-            <Pressable
-              onPress={handleSend}
-              disabled={!newMessage.trim() || sending}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: newMessage.trim() ? c.orange : c.border,
-              }}
-              hitSlop={4}
             >
-              {sending ? (
-                <ActivityIndicator size="small" color={c.bg} />
-              ) : (
-                <FaSend
-                  size={14}
-                  color={newMessage.trim() ? c.bg : c.textMuted}
-                />
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
+              {t("messages.attachTitle", "Send attachment")}
+            </AppText>
+            <AppText
+              style={{
+                fontSize: 12,
+                color: c.textDim,
+                textAlign: "center",
+                marginBottom: 16,
+              }}
+            >
+              {t("messages.attachBody", "Choose a source")}
+            </AppText>
 
+            <View style={{ gap: 8 }}>
+              <Pressable
+                onPress={pickFromCamera}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: pressed ? c.bgCard : "transparent",
+                })}
+              >
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: c.orangeDim,
+                    borderWidth: 1,
+                    borderColor: c.orangeGlow,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <FaCamera size={15} color={c.orange} />
+                </View>
+                <AppText
+                  style={{ fontSize: 13, fontWeight: "600", color: c.text }}
+                >
+                  {t("messages.takePhoto", "Take Photo")}
+                </AppText>
+              </Pressable>
+
+              <Pressable
+                onPress={pickFromLibrary}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: pressed ? c.bgCard : "transparent",
+                })}
+              >
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: c.orangeDim,
+                    borderWidth: 1,
+                    borderColor: c.orangeGlow,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <FaImage size={15} color={c.orange} />
+                </View>
+                <AppText
+                  style={{ fontSize: 13, fontWeight: "600", color: c.text }}
+                >
+                  {t("messages.chooseLibrary", "Choose from Library")}
+                </AppText>
+              </Pressable>
+
+              <Pressable
+                onPress={pickFromFiles}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: pressed ? c.bgCard : "transparent",
+                })}
+              >
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: c.orangeDim,
+                    borderWidth: 1,
+                    borderColor: c.orangeGlow,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <FaFilePdf size={15} color={c.orange} />
+                </View>
+                <AppText
+                  style={{ fontSize: 13, fontWeight: "600", color: c.text }}
+                >
+                  {t("messages.chooseFile", "Choose from File")}
+                </AppText>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setShowAttachModal(false)}
+                style={{
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: c.bgCard,
+                  alignItems: "center",
+                  marginTop: 4,
+                }}
+              >
+                <AppText
+                  style={{ fontSize: 13, fontWeight: "700", color: c.textDim }}
+                >
+                  {t("common.cancel", "Cancel")}
+                </AppText>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Call confirm modal */}
       <Modal
         visible={!!pendingCallType && !isOnCall}
         transparent
@@ -1195,7 +1526,9 @@ export default function ChatScreen() {
                 marginBottom: 6,
               }}
             >
-              Start {pendingCallType === "video" ? "video" : "voice"} call?
+              {pendingCallType === "video"
+                ? t("messages.startVideoCall", "Start video call?")
+                : t("messages.startVoiceCall", "Start voice call?")}
             </AppText>
             <AppText
               style={{
@@ -1205,10 +1538,15 @@ export default function ChatScreen() {
                 marginBottom: 16,
               }}
             >
-              {activeOther
-                ? `${activeOther.firstName || ""} ${activeOther.lastName || ""}`.trim()
-                : "This user"}{" "}
-              will be notified and asked to accept.
+              {t(
+                "messages.callConfirmBody",
+                "{{name}} will be notified and asked to accept.",
+                {
+                  name: activeOther
+                    ? `${activeOther.firstName || ""} ${activeOther.lastName || ""}`.trim()
+                    : t("messages.thisUser", "This user"),
+                },
+              )}
             </AppText>
             <View style={{ flexDirection: "row", gap: 8, width: "100%" }}>
               <Pressable
@@ -1226,7 +1564,7 @@ export default function ChatScreen() {
                 <AppText
                   style={{ fontSize: 13, fontWeight: "700", color: c.textDim }}
                 >
-                  Cancel
+                  {t("common.cancel", "Cancel")}
                 </AppText>
               </Pressable>
               <Pressable
@@ -1246,7 +1584,7 @@ export default function ChatScreen() {
                   <AppText
                     style={{ fontSize: 13, fontWeight: "700", color: c.bg }}
                   >
-                    Call
+                    {t("messages.call", "Call")}
                   </AppText>
                 )}
               </Pressable>
@@ -1255,6 +1593,69 @@ export default function ChatScreen() {
         </Pressable>
       </Modal>
 
+      {/* ── In-app PDF viewer — full-screen WebView via Google Docs Viewer ── */}
+      <Modal
+        visible={!!pdfViewerSrc}
+        animationType="slide"
+        onRequestClose={() => setPdfViewerSrc(null)}
+      >
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: c.bg }}
+          edges={["top", "bottom"]}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: c.border,
+              backgroundColor: c.bgPanel,
+            }}
+          >
+            <Pressable
+              onPress={() => setPdfViewerSrc(null)}
+              hitSlop={8}
+              accessibilityLabel={t("common.close", "Close")}
+            >
+              <FaX size={20} color={c.text} />
+            </Pressable>
+            <AppText
+              style={{ fontSize: 14, fontWeight: "600", color: c.text }}
+              numberOfLines={1}
+            >
+              {t("messages.pdfViewerTitle", "PDF")}
+            </AppText>
+            <View style={{ width: 20 }} />
+          </View>
+          {pdfViewerSrc ? (
+            <WebView
+              source={{
+                uri: `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(pdfViewerSrc)}`,
+              }}
+              style={{ flex: 1 }}
+              originWhitelist={["*"]}
+              startInLoadingState
+              renderLoading={() => (
+                <View
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: c.bg,
+                  }}
+                >
+                  <ActivityIndicator size="large" color={c.orange} />
+                </View>
+              )}
+            />
+          ) : null}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Lightbox */}
       <Modal
         visible={!!lightboxSrc}
         transparent

@@ -18,14 +18,21 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import AppText from "../../components/AppText";
 import { getReviewsReceived } from "../../api/reviews";
+import { FaStar, FaExclamationTriangle } from "../../icons/fa";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function fmtDateTime(d) {
+function fmtDate(d) {
   if (!d) return "";
-  return new Date(d).toLocaleString("en-GB", {
+  return new Date(d).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
+  });
+}
+
+function fmtTime(d) {
+  if (!d) return "";
+  return new Date(d).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -36,13 +43,16 @@ function initials(first, last) {
 }
 
 // ── Star row ──────────────────────────────────────────────────────────────────
-function StarRow({ rating, size = 16, color }) {
+function StarRow({ rating, size = 14, gap = 2 }) {
   return (
-    <View style={{ flexDirection: "row", gap: 2 }}>
-      {[1, 2, 3, 4, 5].map((i) => (
+    <View style={{ flexDirection: "row", gap }}>
+      {[1, 2, 3, 4, 5].map((s) => (
         <AppText
-          key={i}
-          style={{ fontSize: size, color: i <= rating ? color : "#4b5563" }}
+          key={s}
+          style={{
+            fontSize: size,
+            color: s <= rating ? "#f97316" : "#4b5563",
+          }}
         >
           ★
         </AppText>
@@ -54,53 +64,51 @@ function StarRow({ rating, size = 16, color }) {
 // ── Rating summary card ────────────────────────────────────────────────────────
 function RatingSummaryCard({ avgRating, totalReviews, distribution, c, t }) {
   const filledStars = Math.round(avgRating);
-  const maxCount = Math.max(
-    ...[5, 4, 3, 2, 1].map((s) => distribution[s] ?? 0),
-    1,
-  );
 
   return (
     <View
       style={[
-        s.summaryCard,
+        styles.summaryCard,
         { backgroundColor: c.bgCard, borderColor: c.border },
       ]}
     >
       {/* Top row: big number + star row */}
-      <View style={s.summaryTop}>
-        <AppText
-          weight="displayBlack"
-          style={[s.bigRating, { color: c.orange }]}
-        >
-          {Number(avgRating).toFixed(1)}
-        </AppText>
-        <View style={{ marginLeft: 16 }}>
-          <StarRow rating={filledStars} size={22} color={c.orange} />
-          <AppText variant="small" tone="dim" style={{ marginTop: 6 }}>
-            {totalReviews} {t("reviews.reviewsCount", { count: totalReviews })}
+      <View style={styles.summaryTop}>
+        <View style={styles.ratingHero}>
+          <AppText
+            weight="displayBlack"
+            style={[styles.bigRating, { color: c.orange }]}
+          >
+            {avgRating > 0 ? avgRating.toFixed(1) : "—"}
           </AppText>
+          <View style={{ marginLeft: 12 }}>
+            <StarRow rating={filledStars} size={18} />
+            <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 4 }}>
+              {totalReviews} review{totalReviews !== 1 ? "s" : ""}
+            </AppText>
+          </View>
         </View>
       </View>
 
       {/* Distribution bars */}
-      <View style={[s.distBlock, { borderTopColor: c.border }]}>
+      <View style={styles.distBlock}>
         {[5, 4, 3, 2, 1].map((star) => {
-          const count = distribution[star] ?? 0;
-          const pct = maxCount > 0 ? count / maxCount : 0;
+          const count = distribution[star] || 0;
+          const pct = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
           return (
-            <View key={star} style={s.distRow}>
-              <AppText variant="small" tone="dim" style={s.distLabel}>
+            <View key={star} style={styles.distRow}>
+              <AppText style={[styles.distLabel, { color: c.textDim }]}>
                 {star} ★
               </AppText>
-              <View style={[s.barTrack, { backgroundColor: c.bgInput }]}>
+              <View style={[styles.barTrack, { backgroundColor: c.border }]}>
                 <View
                   style={[
-                    s.barFill,
-                    { backgroundColor: c.orange, width: `${pct * 100}%` },
+                    styles.barFill,
+                    { backgroundColor: c.orange, width: `${pct}%` },
                   ]}
                 />
               </View>
-              <AppText variant="small" tone="dim" style={s.distCount}>
+              <AppText style={[styles.distCount, { color: c.textMuted }]}>
                 {count}
               </AppText>
             </View>
@@ -112,54 +120,65 @@ function RatingSummaryCard({ avgRating, totalReviews, distribution, c, t }) {
 }
 
 // ── Review card ───────────────────────────────────────────────────────────────
-function ReviewCard({ review, navigation, c, t }) {
+function ReviewCard({ review, c, t }) {
   const giver = review.giver ?? {};
   const booking = review.booking;
   const location = [giver.city, giver.country].filter(Boolean).join(", ");
 
   return (
     <View
-      style={[s.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
+      style={[
+        styles.card,
+        { backgroundColor: c.bgCard, borderColor: c.border },
+      ]}
     >
       {/* Author row */}
-      <View style={s.authorRow}>
-        <Pressable onPress={() => navigation.navigate("WorkerProfile")}>
-          <View
-            style={[
-              s.avatar,
-              { backgroundColor: c.orangeDim, borderColor: c.border },
-            ]}
+      <View style={styles.authorRow}>
+        <View
+          style={[
+            styles.avatar,
+            { backgroundColor: c.orangeDim, borderColor: c.border },
+          ]}
+        >
+          {giver.avatar ? (
+            <Image source={{ uri: giver.avatar }} style={styles.avatarImg} />
+          ) : (
+            <AppText style={{ color: c.orange, fontWeight: "700" }}>
+              {initials(giver.firstName, giver.lastName)}
+            </AppText>
+          )}
+        </View>
+
+        <View style={styles.authorInfo}>
+          <AppText
+            variant="body"
+            weight="semibold"
+            style={{ color: c.text, fontSize: 14 }}
           >
-            {giver.avatar ? (
-              <Image source={{ uri: giver.avatar }} style={s.avatarImg} />
-            ) : (
-              <AppText style={{ color: c.orange, fontWeight: "700" }}>
-                {initials(giver.firstName, giver.lastName)}
-              </AppText>
-            )}
-          </View>
-        </Pressable>
-        <View style={s.authorInfo}>
-          <AppText variant="body" weight="semibold" style={{ color: c.text }}>
             {giver.firstName} {giver.lastName}
-          </AppText>
-          <AppText variant="small" style={{ color: c.textMuted }}>
-            {giver.role === "WORKER" ? t("reviews.worker") : t("reviews.hirer")}
+            <AppText style={{ color: c.textDim, fontWeight: "400" }}>
+              {giver.role === "WORKER" ? " · Worker" : " · Hirer"}
+            </AppText>
           </AppText>
           {!!location && (
-            <AppText variant="small" style={{ color: c.textMuted }}>
+            <AppText style={{ color: c.textMuted, fontSize: 11, marginTop: 2 }}>
               {location}
             </AppText>
           )}
-          <AppText variant="small" style={{ color: c.textMuted }}>
-            {fmtDateTime(review.createdAt)}
+          <AppText style={{ color: c.textMuted, fontSize: 11, marginTop: 2 }}>
+            {fmtDate(review.createdAt)} at {fmtTime(review.createdAt)}
           </AppText>
         </View>
-        <View style={s.ratingCol}>
-          <StarRow rating={review.rating} size={15} color={c.orange} />
+
+        <View style={styles.ratingRight}>
+          <StarRow rating={review.rating} size={14} />
           <AppText
-            variant="small"
-            style={{ color: c.textMuted, textAlign: "right", marginTop: 2 }}
+            style={{
+              fontSize: 10,
+              color: c.textMuted,
+              marginTop: 2,
+              textAlign: "right",
+            }}
           >
             {review.rating}/5
           </AppText>
@@ -167,11 +186,16 @@ function ReviewCard({ review, navigation, c, t }) {
       </View>
 
       {/* Comment */}
-      {!!review.comment && (
-        <View style={[s.quoteRow, { borderLeftColor: c.orange }]}>
+      {review.comment && (
+        <View style={[styles.quoteRow, { borderLeftColor: c.orange }]}>
           <AppText
             variant="body"
-            style={{ color: c.text, fontStyle: "italic" }}
+            style={{
+              color: c.textDim,
+              fontStyle: "italic",
+              lineHeight: 18,
+              fontSize: 13,
+            }}
           >
             "{review.comment}"
           </AppText>
@@ -182,7 +206,7 @@ function ReviewCard({ review, navigation, c, t }) {
       {booking && (
         <View
           style={[
-            s.bookingChip,
+            styles.bookingChip,
             { backgroundColor: c.bgInput, borderColor: c.border },
           ]}
         >
@@ -191,13 +215,17 @@ function ReviewCard({ review, navigation, c, t }) {
               {booking.category.icon}
             </AppText>
           )}
-          <AppText variant="small" weight="semibold" style={{ color: c.text }}>
+          <AppText
+            variant="small"
+            weight="semibold"
+            style={{ color: c.text, fontSize: 12 }}
+          >
             {booking.title}
           </AppText>
           {booking.category?.name && (
             <AppText
               variant="small"
-              style={{ color: c.textMuted, marginLeft: 6 }}
+              style={{ color: c.textMuted, marginLeft: 6, fontSize: 11 }}
             >
               {booking.category.name}
             </AppText>
@@ -216,7 +244,7 @@ function Skeleton({ c }) {
         <View
           key={i}
           style={[
-            s.skCard,
+            styles.skCard,
             { backgroundColor: c.bgCard, borderColor: c.border },
           ]}
         />
@@ -238,14 +266,24 @@ export default function ReviewsReceivedScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [error, setError] = useState("");
 
-  const fetch = useCallback(async (pg = 1, replace = true) => {
+  const limit = 10;
+
+  const fetchReviews = useCallback(async (pg = 1, replace = true) => {
+    setLoading(true);
+    setError("");
     try {
-      const d = await getReviewsReceived({ page: pg, limit: 15 });
+      const d = await getReviewsReceived({ page: pg, limit });
       setData(d);
-      setReviews(replace ? d.reviews : (prev) => [...prev, ...d.reviews]);
-      setTotalPages(d.pages ?? 1);
+      setReviews(
+        replace ? d.reviews || [] : (prev) => [...prev, ...(d.reviews || [])],
+      );
+      // FIXED: mixed ?? and || — wrapped in parens / replaced with safe chain
+      const computedPages = d.pages || Math.ceil((d.total || 0) / limit) || 1;
+      setTotalPages(computedPages);
     } catch {
+      setError(t("toast.unknownError"));
       toast.error(t("toast.unknownError"));
     } finally {
       setLoading(false);
@@ -254,22 +292,26 @@ export default function ReviewsReceivedScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    fetch(1, true);
-  }, []);
+    fetchReviews(1, true);
+  }, [fetchReviews]);
 
   const onRefresh = () => {
     setRefreshing(true);
     setPage(1);
-    fetch(1, true);
+    fetchReviews(1, true);
   };
 
   const loadMore = () => {
-    if (page < totalPages) {
+    if (!loading && page < totalPages) {
       const next = page + 1;
       setPage(next);
-      fetch(next, false);
+      fetchReviews(next, false);
     }
   };
+
+  const total = data?.total || reviews.length;
+  const avgRating = data?.avgRating || 0;
+  const distribution = data?.distribution || {};
 
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
@@ -288,24 +330,44 @@ export default function ReviewsReceivedScreen({ navigation }) {
         onEndReachedThreshold={0.4}
         ListHeaderComponent={
           <View>
-            {/* Page hero */}
-            <View style={[styles.heroWrap, { borderColor: c.border }]}>
-              <View style={[styles.eyebrow, { backgroundColor: c.orange }]}>
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{ color: "#fff", letterSpacing: 1.2 }}
+            {/* Hero */}
+            <View style={styles.pageHeader}>
+              <View>
+                <View
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: c.orangeDim,
+                      borderColor: c.orangeGlow,
+                    },
+                  ]}
                 >
-                  {t("reviews.reputationEyebrow")}
+                  <AppText
+                    variant="small"
+                    weight="semibold"
+                    style={{
+                      color: c.orange,
+                      letterSpacing: 1.2,
+                      fontSize: 10,
+                    }}
+                  >
+                    YOUR REPUTATION
+                  </AppText>
+                </View>
+                <AppText
+                  weight="displayBlack"
+                  style={{ fontSize: 22, color: c.text, marginBottom: 4 }}
+                >
+                  Reviews Received
+                </AppText>
+                <AppText
+                  variant="body"
+                  style={{ color: c.textDim, fontSize: 13 }}
+                >
+                  Feedback workers have left about you as a hirer
                 </AppText>
               </View>
-              <AppText
-                variant="body"
-                style={{ color: c.textMuted, marginTop: 6, lineHeight: 22 }}
-              >
-                {t("reviews.receivedSubtitle")}
-              </AppText>
-              {/* See Reviews Given link */}
+
               <Pressable
                 onPress={() => navigation.navigate("ReviewsGiven")}
                 style={[
@@ -313,57 +375,117 @@ export default function ReviewsReceivedScreen({ navigation }) {
                   { borderColor: c.border, backgroundColor: c.bgCard },
                 ]}
               >
-                <AppText variant="body" style={{ color: c.text }}>
-                  {t("reviews.seeGiven")} →
+                <AppText variant="body" style={{ color: c.text, fontSize: 13 }}>
+                  See Reviews Given →
                 </AppText>
               </Pressable>
             </View>
 
-            {/* Rating summary */}
-            {data && (
+            {/* Summary */}
+            {!loading && total > 0 && (
               <RatingSummaryCard
-                avgRating={data.avgRating ?? 0}
-                totalReviews={data.totalReviews ?? 0}
-                distribution={data.distribution ?? {}}
+                avgRating={avgRating}
+                totalReviews={total}
+                distribution={distribution}
                 c={c}
                 t={t}
               />
             )}
             <View style={{ height: 16 }} />
+
+            {/* Error */}
+            {!loading && error ? (
+              <View style={styles.empty}>
+                <FaExclamationTriangle size={28} color={c.textMuted} />
+                <AppText
+                  weight="semibold"
+                  style={{ color: c.text, marginTop: 12, fontSize: 14 }}
+                >
+                  {error}
+                </AppText>
+              </View>
+            ) : !loading && reviews.length === 0 ? (
+              <View style={styles.empty}>
+                <FaStar size={28} color={c.textMuted} />
+                <AppText
+                  weight="semibold"
+                  style={{ color: c.text, marginTop: 12, fontSize: 14 }}
+                >
+                  No reviews yet
+                </AppText>
+                <AppText
+                  style={{
+                    color: c.textDim,
+                    marginTop: 4,
+                    textAlign: "center",
+                    fontSize: 12,
+                  }}
+                >
+                  Complete jobs to start receiving reviews from workers.
+                </AppText>
+              </View>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => <ReviewCard review={item} c={c} t={t} />}
         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         ListEmptyComponent={
-          loading ? (
-            <Skeleton c={c} />
-          ) : (
-            <View style={styles.empty}>
-              <AppText style={{ fontSize: 44 }}>⭐</AppText>
-              <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: c.text, marginTop: 12 }}
-              >
-                {t("reviews.noReviewsYet")}
-              </AppText>
-              <AppText
-                variant="small"
-                style={{ color: c.textMuted, marginTop: 6 }}
-              >
-                {t("reviews.noReceivedSub")}
-              </AppText>
-            </View>
-          )
+          loading && reviews.length === 0 ? <Skeleton c={c} /> : null
         }
         ListFooterComponent={
-          page < totalPages ? (
-            <View style={{ alignItems: "center", padding: 20 }}>
-              <ActivityIndicator color={c.orange} />
-            </View>
-          ) : (
+          <View>
+            {/* Pagination */}
+            {totalPages > 1 && reviews.length > 0 && (
+              <View style={[styles.pagination, { borderTopColor: c.border }]}>
+                <Pressable
+                  disabled={page === 1 || loading}
+                  onPress={() => {
+                    const prev = page - 1;
+                    setPage(prev);
+                    fetchReviews(prev, true);
+                  }}
+                  style={[
+                    styles.pageBtn,
+                    {
+                      backgroundColor: c.bgCard,
+                      borderColor: c.border,
+                      opacity: page === 1 ? 0.3 : 1,
+                    },
+                  ]}
+                >
+                  <AppText style={{ color: c.textDim, fontSize: 12 }}>
+                    ← Prev
+                  </AppText>
+                </Pressable>
+
+                <AppText style={{ color: c.textMuted, fontSize: 12 }}>
+                  {page} of {totalPages}
+                </AppText>
+
+                <Pressable
+                  disabled={page === totalPages || loading}
+                  onPress={() => {
+                    const next = page + 1;
+                    setPage(next);
+                    fetchReviews(next, true);
+                  }}
+                  style={[
+                    styles.pageBtn,
+                    {
+                      backgroundColor: c.bgCard,
+                      borderColor: c.border,
+                      opacity: page === totalPages ? 0.3 : 1,
+                    },
+                  ]}
+                >
+                  <AppText style={{ color: c.textDim, fontSize: 12 }}>
+                    Next →
+                  </AppText>
+                </Pressable>
+              </View>
+            )}
             <View style={{ height: 40 }} />
-          )
+          </View>
         }
       />
     </View>
@@ -374,84 +496,136 @@ export default function ReviewsReceivedScreen({ navigation }) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
-  heroWrap: { marginBottom: 20 },
-  eyebrow: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 12,
+  pageHeader: {
+    flexDirection: "column",
+    gap: 12,
+    marginBottom: 20,
   },
-  heroTitle: {
-    fontSize: 36,
-    fontWeight: "900",
-    lineHeight: 42,
-    letterSpacing: -0.5,
+  badge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 100,
+    borderWidth: 1,
+    marginBottom: 8,
   },
   switchBtn: {
     alignSelf: "flex-start",
-    marginTop: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
   },
-  empty: { alignItems: "center", paddingTop: 60, paddingHorizontal: 32 },
-});
-
-const s = StyleSheet.create({
-  // Summary card
   summaryCard: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 20,
-    marginBottom: 0,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
   },
-  summaryTop: { flexDirection: "row", alignItems: "center", marginBottom: 20 },
-  bigRating: { fontSize: 64, fontWeight: "900", lineHeight: 72 },
+  summaryTop: {
+    marginBottom: 16,
+  },
+  ratingHero: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  bigRating: {
+    fontSize: 48,
+    lineHeight: 54,
+  },
   distBlock: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 16,
-    gap: 10,
+    borderTopColor: "transparent",
+    paddingTop: 12,
+    gap: 8,
   },
-  distRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  distLabel: { width: 28, textAlign: "right" },
-  barTrack: { flex: 1, height: 8, borderRadius: 4, overflow: "hidden" },
-  barFill: { height: "100%", borderRadius: 4 },
-  distCount: { width: 16, textAlign: "right" },
-
-  // Review card
+  distRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  distLabel: {
+    width: 28,
+    textAlign: "right",
+    fontSize: 11,
+  },
+  barTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  distCount: {
+    width: 20,
+    textAlign: "right",
+    fontSize: 11,
+  },
   card: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    borderWidth: 1,
     padding: 16,
-    gap: 12,
   },
-  authorRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  authorRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
-  avatarImg: { width: 52, height: 52 },
-  authorInfo: { flex: 1, gap: 1 },
-  ratingCol: { alignItems: "flex-end" },
-  quoteRow: { borderLeftWidth: 3, paddingLeft: 12 },
+  avatarImg: { width: "100%", height: "100%", resizeMode: "cover" },
+  authorInfo: { flex: 1 },
+  ratingRight: { alignItems: "flex-end" },
+  quoteRow: {
+    borderLeftWidth: 2,
+    paddingLeft: 12,
+    marginBottom: 12,
+  },
   bookingChip: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
-    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  empty: {
+    alignItems: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  pagination: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 24,
+    paddingTop: 20,
+    borderTopWidth: 1,
+  },
+  pageBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     borderWidth: 1,
   },
   skCard: {
-    height: 160,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
+    height: 120,
+    width: "100%",
+    borderRadius: 12,
+    borderWidth: 1,
     opacity: 0.5,
   },
 });
