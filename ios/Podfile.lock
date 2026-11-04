@@ -62,6 +62,8 @@ PODS:
     - RecaptchaInterop
   - ExpoAsset (12.0.13):
     - ExpoModulesCore
+  - ExpoBlur (15.0.8):
+    - ExpoModulesCore
   - ExpoClipboard (8.0.8):
     - ExpoModulesCore
   - ExpoCrypto (15.0.9):
@@ -1462,6 +1464,51 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
+  - react-native-keyboard-controller (1.18.5):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - react-native-keyboard-controller/common (= 1.18.5)
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - react-native-keyboard-controller/common (1.18.5):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - react-native-safe-area-context (5.6.2):
     - hermes-engine
     - RCTRequired
@@ -2294,6 +2341,7 @@ DEPENDENCIES:
   - Expo (from `../node_modules/expo`)
   - "ExpoAdapterGoogleSignIn (from `../node_modules/@react-native-google-signin/google-signin/expo/ios`)"
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
+  - ExpoBlur (from `../node_modules/expo-blur/ios`)
   - ExpoClipboard (from `../node_modules/expo-clipboard/ios`)
   - ExpoCrypto (from `../node_modules/expo-crypto/ios`)
   - ExpoDevice (from `../node_modules/expo-device/ios`)
@@ -2354,6 +2402,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - react-native-keyboard-controller (from `../node_modules/react-native-keyboard-controller`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-slider (from `../node_modules/@react-native-community/slider`)"
   - react-native-webrtc (from `../node_modules/react-native-webrtc`)
@@ -2437,6 +2486,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-google-signin/google-signin/expo/ios"
   ExpoAsset:
     :path: "../node_modules/expo-asset/ios"
+  ExpoBlur:
+    :path: "../node_modules/expo-blur/ios"
   ExpoClipboard:
     :path: "../node_modules/expo-clipboard/ios"
   ExpoCrypto:
@@ -2556,6 +2607,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-keyboard-controller:
+    :path: "../node_modules/react-native-keyboard-controller"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-slider:
@@ -2661,6 +2714,7 @@ SPEC CHECKSUMS:
   Expo: 3ccbb4de93972b9a8214b8853ab0c4d4a317e62b
   ExpoAdapterGoogleSignIn: dd506e5b1d8b9a172843ff6fc72875e0a9d241e1
   ExpoAsset: 9e5a7c9c0a9fb83ad5b2bb365141f2bd7f289b66
+  ExpoBlur: b90747a3f22a8b6ceffd9cb0dc41a4184efdc656
   ExpoClipboard: b36b287d8356887844bb08ed5c84b5979bb4dd1e
   ExpoCrypto: e2a2c4c748aac8485e5675f027b7901f511d43ff
   ExpoDevice: 6327c3c200816795708885adf540d26ecab83d1a
@@ -2683,7 +2737,7 @@ SPEC CHECKSUMS:
   ExpoVideo: 8d9e8a1acd0c4c210e538b4355e34ae8ff5e04f7
   ExpoWebBrowser: 970dd4c64c29c955c3af664c8058ba768a4c9187
   EXStructuredHeaders: c951e77f2d936f88637421e9588c976da5827368
-  EXUpdates: dca805b4aa04f48a5b1e5d8bcdc572b20c9ddd5f
+  EXUpdates: dfa95abdb2063c56bc6a8791afbcb3db1e87ded6
   EXUpdatesInterface: 5adf50cb41e079c861da6d9b4b954c3db9a50734
   FBLazyVector: e95a291ad2dadb88e42b06e0c5fb8262de53ec12
   GoogleSignIn: e449a40a92e9f2eea56e98b5214d13725dc5a00a
@@ -2728,6 +2782,7 @@ SPEC CHECKSUMS:
   React-logger: 50fdb9a8236da90c0b1072da5c32ee03aeb5bf28
   React-Mapbuffer: 9050ee10c19f4f7fca8963d0211b2854d624973e
   React-microtasksnativemodule: f775db9e991c6f3b8ccbc02bfcde22770f96e23b
+  react-native-keyboard-controller: 1ad78688f744e0ebdf3b04007b91089a254b80f9
   react-native-safe-area-context: 37e680fc4cace3c0030ee46e8987d24f5d3bdab2
   react-native-slider: 8c562583722c396a3682f451f0b6e68e351ec3b9
   react-native-webrtc: f55aa2ad5ed12a04bb1fad72c7f57c401ada7277

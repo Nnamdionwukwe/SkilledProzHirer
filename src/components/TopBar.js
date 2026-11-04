@@ -1,15 +1,7 @@
 // src/components/TopBar.js
 //
-// Shared between Hirer and Worker navigators.
-//
-// Props:
-//   title     – screen title (translated string from navigator)
-//   subtitle  – screen subtitle (optional)
-//   showBack  – true = back arrow ←, false/omitted = hamburger ☰
-//
-// Drawer actions are dispatched via navigationRef + DrawerActions so they
-// work regardless of how deeply the Drawer is nested:
-//   RootStack → RootBranch → Branch → HirerNavigator (Drawer)
+// Verbatim port of the website's HirerLayout.jsx header block.
+// Rounded icon buttons + avatars match .headerIconBtn / .headerAvatar from CSS.
 
 import React, { useEffect, useState } from "react";
 import { View, Pressable, StyleSheet } from "react-native";
@@ -24,12 +16,12 @@ import { useAuthStore } from "../store/authStore";
 import { hirerApi } from "../api/hirer";
 import client from "../api/client";
 import { FaCommentDots } from "../icons/fa";
+import { rem } from "../constants/theme";
 import {
   openDrawer,
   navigate as globalNavigate,
 } from "../navigation/navigationRef";
 
-// ─── English fallback map ────────────────────────────────────────────────────
 const SCREEN_FALLBACK = {
   Dashboard: { title: "Dashboard", subtitle: "Your work at a glance" },
   Bookings: { title: "My Bookings", subtitle: "Manage your bookings" },
@@ -114,6 +106,7 @@ export default function TopBar({
   const navigation = useNavigation();
   const { user } = useAuthStore();
   const [unread, setUnread] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   const routeName = useNavigationState(
     (state) => state?.routes?.[state.index]?.name,
@@ -122,7 +115,7 @@ export default function TopBar({
   const title = titleProp ?? fallback.title ?? prettyTitle(routeName);
   const resolvedSub = subtitleProp ?? fallback.subtitle ?? null;
 
-  // ── Role-aware notification polling — 30s ────────────────────────────
+  // ── Notification unread count ────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     let timer;
@@ -133,13 +126,27 @@ export default function TopBar({
           const res = await client.get("/workers/dashboard/notifications", {
             params: { limit: 1, page: 1 },
           });
-          count = res.data.data?.unreadCount ?? 0;
+          count =
+            res.data?.data?.unreadCount ??
+            res.data?.unreadCount ??
+            res.data?.data?.unread ??
+            0;
         } else {
-          const data = await hirerApi.getNotifications();
-          count = data?.unread ?? 0;
+          const res = await client.get("/hirers/me/notifications", {
+            params: { limit: 1 },
+          });
+          count =
+            res.data?.data?.unreadCount ??
+            res.data?.unreadCount ??
+            res.data?.data?.unread ??
+            res.data?.unread ??
+            0;
         }
+        console.log("🔔 unread count:", count, "from /notifications");
         if (!cancelled) setUnread(count);
-      } catch {}
+      } catch (err) {
+        console.log("⚠️ notification fetch failed:", err?.message);
+      }
     };
     fetchUnread();
     timer = setInterval(fetchUnread, 30_000);
@@ -149,7 +156,26 @@ export default function TopBar({
     };
   }, [user?.role]);
 
-  // ── Left button ──────────────────────────────────────────────────────
+  // ── Messages unread count ───────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    let timer;
+    const fetchMessages = async () => {
+      try {
+        const { data } = await client.get("/messages/conversations");
+        const convos = data?.data?.conversations ?? data?.conversations ?? [];
+        const total = convos.reduce((s, c) => s + (c.unreadCount || 0), 0);
+        if (!cancelled) setUnreadMessages(total);
+      } catch {}
+    };
+    fetchMessages();
+    timer = setInterval(fetchMessages, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   const handleLeft = () => {
     if (showBack) {
       if (navigation.canGoBack()) navigation.goBack();
@@ -190,19 +216,20 @@ export default function TopBar({
         styles.wrap,
         {
           paddingTop: insets.top,
-          backgroundColor: theme.colors.bg,
+          backgroundColor: theme.colors.bgPanel,
           borderBottomColor: theme.colors.border,
         },
       ]}
     >
       <View style={styles.row}>
+        {/* Menu / back button */}
         <Pressable
           onPress={handleLeft}
           hitSlop={10}
           style={({ pressed }) => [
             styles.iconBtn,
             {
-              backgroundColor: theme.colors.bgPanel,
+              backgroundColor: theme.colors.bgCard,
               borderColor: theme.colors.border,
               opacity: pressed ? 0.7 : 1,
             },
@@ -211,45 +238,30 @@ export default function TopBar({
           <Ionicons
             name={showBack ? "arrow-back" : "menu"}
             size={18}
-            color={theme.colors.text}
+            color={theme.colors.textDim}
           />
         </Pressable>
 
-        <View style={{ flex: 1, marginLeft: 2 }}>
+        {/* Title block */}
+        <View style={{ flex: 1, marginLeft: rem(0.75) }}>
           <AppText
-            weight="bold"
             numberOfLines={1}
-            style={{ fontSize: 15, color: theme.colors.text }}
+            style={[styles.title, { color: theme.colors.text }]}
           >
             {title}
           </AppText>
           {resolvedSub ? (
             <AppText
               numberOfLines={1}
-              style={{ fontSize: 11, color: theme.colors.textDim }}
+              style={[styles.sub, { color: theme.colors.textMuted }]}
             >
               {resolvedSub}
             </AppText>
           ) : null}
         </View>
 
+        {/* Right cluster */}
         <View style={styles.rightCluster}>
-          {/* Messages icon */}
-          <Pressable
-            onPress={openMessages}
-            hitSlop={6}
-            style={({ pressed }) => [
-              styles.iconBtn,
-              {
-                backgroundColor: theme.colors.bgPanel,
-                borderColor: theme.colors.border,
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            <FaCommentDots size={18} color={theme.colors.text} />
-          </Pressable>
-
           {/* Notifications bell */}
           <Pressable
             onPress={openNotifications}
@@ -257,7 +269,7 @@ export default function TopBar({
             style={({ pressed }) => [
               styles.iconBtn,
               {
-                backgroundColor: theme.colors.bgPanel,
+                backgroundColor: theme.colors.bgCard,
                 borderColor: theme.colors.border,
                 opacity: pressed ? 0.7 : 1,
               },
@@ -266,17 +278,51 @@ export default function TopBar({
             <Ionicons
               name="notifications-outline"
               size={18}
-              color={theme.colors.text}
+              color={theme.colors.textDim}
             />
             {unread > 0 && (
               <View
-                style={[styles.badge, { backgroundColor: theme.colors.orange }]}
+                style={[
+                  styles.bellBadge,
+                  {
+                    backgroundColor: theme.colors.orange,
+                    borderColor: theme.colors.bg,
+                  },
+                ]}
               >
-                <AppText
-                  weight="bold"
-                  style={{ color: "#0f0f1a", fontSize: 9, lineHeight: 10 }}
-                >
+                <AppText style={[styles.bellBadgeText, { color: "#000" }]}>
                   {unread > 9 ? "9+" : String(unread)}
+                </AppText>
+              </View>
+            )}
+          </Pressable>
+
+          {/* Messages icon */}
+          <Pressable
+            onPress={openMessages}
+            hitSlop={6}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              {
+                backgroundColor: theme.colors.bgCard,
+                borderColor: theme.colors.border,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <FaCommentDots size={18} color={theme.colors.textDim} />
+            {unreadMessages > 0 && (
+              <View
+                style={[
+                  styles.bellBadge,
+                  {
+                    backgroundColor: theme.colors.orange,
+                    borderColor: theme.colors.bg,
+                  },
+                ]}
+              >
+                <AppText style={[styles.bellBadgeText, { color: "#000" }]}>
+                  {unreadMessages > 9 ? "9+" : String(unreadMessages)}
                 </AppText>
               </View>
             )}
@@ -288,12 +334,22 @@ export default function TopBar({
             hitSlop={6}
             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
           >
-            <Avatar
-              uri={user?.avatar}
-              firstName={user?.firstName}
-              lastName={user?.lastName}
-              size={34}
-            />
+            <View
+              style={[
+                styles.avatarWrap,
+                {
+                  backgroundColor: theme.colors.orangeDim,
+                  borderColor: theme.colors.orangeGlow,
+                },
+              ]}
+            >
+              <Avatar
+                uri={user?.avatar}
+                firstName={user?.firstName}
+                lastName={user?.lastName}
+                size={25}
+              />
+            </View>
           </Pressable>
         </View>
       </View>
@@ -306,33 +362,71 @@ function prettyTitle(route) {
   return route.replace(/([A-Z])/g, " $1").trim();
 }
 
+// ─── Styles ────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   wrap: { borderBottomWidth: StyleSheet.hairlineWidth },
   row: {
-    height: 52,
+    height: rem(60 / 14), // 60px / 14
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    gap: 8,
+    paddingHorizontal: rem(20 / 14), // 20px / 14
+    gap: rem(0.75),
   },
+  title: {
+    fontFamily: "Syne_700Bold",
+    fontSize: rem(1),
+    fontWeight: "700",
+    lineHeight: rem(1) * 1.2,
+  },
+  sub: {
+    fontSize: rem(0.6875),
+    lineHeight: rem(0.6875) * 1.3,
+  },
+  // ⬇⬇  Changed: borderRadius from RADII.base (8) → 14 for rounder look
+  //      Website's 8px border-radius on a 34px button = 23.5% roundness
+  //      We want the same visual proportion: 34 × 0.24 ≈ 8, but at raw px
+  //      For a truly "rounded" look, 14px on 34px looks closer to the web
+  //      After matching the web at 14px root: border-radius 8px = 8 × (14/16) = 7
+  //      To feel rounder, use 14 (nearly half-height, becomes circle-ish)
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
+    width: rem(34 / 14),
+    height: rem(34 / 14),
+    borderRadius: 14, // ← was RADII.base (8), now 14 (rounder)
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
   },
-  rightCluster: { flexDirection: "row", alignItems: "center", gap: 8 },
-  badge: {
+  rightCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: rem(0.625),
+  },
+  bellBadge: {
     position: "absolute",
-    top: -3,
-    right: -3,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    paddingHorizontal: 3,
+    top: rem(-4 / 14),
+    right: rem(-4 / 14),
+    minWidth: rem(16 / 14),
+    height: rem(16 / 14),
+    paddingHorizontal: rem(4 / 14),
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 2,
+  },
+  bellBadgeText: {
+    fontSize: rem(0.625),
+    fontWeight: "800",
+    lineHeight: rem(0.625) * 1.1,
+  },
+  // ⬇⬇ Avatar keeps full circle + explicit 1.5px border, non-scaled
+  avatarWrap: {
+    width: rem(28 / 14),
+    height: rem(28 / 14),
+    borderRadius: 999, // perfect circle
+    borderWidth: 1.5, // stays visible at all DPIs
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    // No `padding` — border hugs the image directly
   },
 });
