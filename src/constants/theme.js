@@ -123,3 +123,12 @@ export const getCurrentFontScale = () =>
 
 // Respect the OS's accessibility font-size setting too
 export const getSystemFontScale = () => PixelRatio.getFontScale() || 1.0;
+
+
+// ── rem() — website rem-to-RN-px conversion ────────────────────────────
+// 1rem on the website = 14px on phones (from global.css @media 480).
+// rem(1.5) returns 1.5 * 14 = 21px, scaled by the current viewport.
+export function rem(remValue) {
+  const BASE_AT_PHONE = 14;
+  return Math.round(remValue * BASE_AT_PHONE * getCurrentFontScale());
+}
