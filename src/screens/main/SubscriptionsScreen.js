@@ -15,7 +15,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system/legacy";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
@@ -41,7 +40,6 @@ const ICONS = {
   download: "download-outline",
 };
 
-// Injected BEFORE content loads so window.ReactNativeWebView exists from paint #1
 const INJECTED_BRIDGE = `
   (function() {
     if (!window.ReactNativeWebView) {
@@ -69,7 +67,6 @@ const INJECTED_BRIDGE = `
   })();
 `;
 
-// ─── Custom Error Modal ──────────────────────────────────────────────────────
 function ErrorModal({ visible, title, message, onClose, c }) {
   return (
     <Modal
@@ -136,7 +133,6 @@ export default function SubscriptionPlansScreen() {
 
   const [receiptHtml, setReceiptHtml] = useState(null);
 
-  // State for the platform error modal
   const [errorModal, setErrorModal] = useState({
     visible: false,
     title: "",
@@ -296,16 +292,13 @@ export default function SubscriptionPlansScreen() {
     setReceiptHtml(html);
   };
 
-  // ── Handles messages from the WebView buttons ────────────────────────────
   const handleWebViewMessage = async (event) => {
     const action = event?.nativeEvent?.data;
-    console.log("[receipt] WebView message:", action);
     if (action !== "download" && action !== "share") return;
 
     let pdfUri;
 
     try {
-      // ── FIX: Use the pure printable HTML instead of the WebView HTML ──
       if (!current) return;
       const transaction = {
         reference:
@@ -323,12 +316,9 @@ export default function SubscriptionPlansScreen() {
       };
 
       const pdfHtml = generatePrintableHTML(transaction, th.mode === "dark");
-
       const result = await Print.printToFileAsync({ html: pdfHtml });
       pdfUri = result.uri;
-      console.log("[receipt] PDF generated at:", pdfUri);
     } catch (printError) {
-      console.error("[receipt] PRINT FAILED:", printError);
       showError(
         "Print Failed",
         printError?.message || "Could not generate the PDF receipt.",
@@ -350,11 +340,8 @@ export default function SubscriptionPlansScreen() {
             "Your device does not support sharing files.",
           );
         }
-      } else if (action === "download") {
-        // ... existing download logic
       }
     } catch (err) {
-      console.error("[receipt] SHARE/SAVE FAILED:", err);
       showError(
         "Save Failed",
         err?.message || "Could not save or share the PDF receipt.",
@@ -451,7 +438,7 @@ export default function SubscriptionPlansScreen() {
         </View>
       )}
 
-      {/* ── Error / Success Banners ── */}
+      {/* ── Error / Success ── */}
       {error ? (
         <View
           style={[
@@ -479,7 +466,7 @@ export default function SubscriptionPlansScreen() {
         </View>
       ) : null}
 
-      {/* ── Promo code section ── */}
+      {/* ── Promo code ── */}
       <View style={s.promoSection}>
         {promoApplied ? (
           <View style={s.promoAppliedRow}>
@@ -601,33 +588,49 @@ export default function SubscriptionPlansScreen() {
                 ]}
               >
                 {isPopular && (
-                  <View style={[s.popularBadge, { backgroundColor: c.orange }]}>
-                    <AppText style={s.badgeText}>
+                  <View
+                    style={[
+                      s.popularBadge,
+                      { backgroundColor: c.orange, borderColor: c.orangeDim },
+                    ]}
+                  >
+                    <AppText style={[s.badgeText, { color: c.bg }]}>
                       {t("subscription.plan.mostPopular")}
                     </AppText>
                   </View>
                 )}
                 {isCurrent && (
-                  <View style={[s.currentBadge, { backgroundColor: c.green }]}>
-                    <AppText style={s.badgeText}>
+                  <View
+                    style={[
+                      s.currentBadge,
+                      { backgroundColor: c.green, borderColor: c.green },
+                    ]}
+                  >
+                    <AppText style={[s.badgeText, { color: c.bg }]}>
                       {t("subscription.plan.currentPlan")}
                     </AppText>
                   </View>
                 )}
 
                 <AppText style={s.planTier}>{plan.tier}</AppText>
-                <AppText style={s.planName}>{plan.name}</AppText>
+                <AppText style={[s.planName, { color: c.text }]}>
+                  {plan.name}
+                </AppText>
 
-                <View style={s.planPrice}>
+                {/* ── Price Block ── */}
+                <View style={s.planPriceWrap}>
                   {plan.price === 0 ? (
                     <AppText style={[s.priceAmount, { color: c.orange }]}>
                       {t("subscription.plan.free")}
                     </AppText>
                   ) : discounted ? (
                     <View style={s.priceDiscountWrap}>
+                      {/* Struck-through original */}
                       <AppText style={s.priceStrike}>
                         {plan.currency} {plan.price.toLocaleString()}
                       </AppText>
+
+                      {/* Discounted horizontal row */}
                       <View style={s.priceRow}>
                         <AppText style={s.priceCurrency}>
                           {plan.currency}
@@ -641,6 +644,8 @@ export default function SubscriptionPlansScreen() {
                             : t("subscription.plan.perMonth")}
                         </AppText>
                       </View>
+
+                      {/* Savings pill */}
                       <View
                         style={[
                           s.savingsBadge,
@@ -661,7 +666,8 @@ export default function SubscriptionPlansScreen() {
                       </View>
                     </View>
                   ) : (
-                    <>
+                    // Normal horizontal row
+                    <View style={s.priceRow}>
                       <AppText style={s.priceCurrency}>{plan.currency}</AppText>
                       <AppText style={[s.priceAmount, { color: c.orange }]}>
                         {plan.price.toLocaleString()}
@@ -671,7 +677,7 @@ export default function SubscriptionPlansScreen() {
                           ? t("subscription.plan.perYear")
                           : t("subscription.plan.perMonth")}
                       </AppText>
-                    </>
+                    </View>
                   )}
                 </View>
 
@@ -856,7 +862,6 @@ export default function SubscriptionPlansScreen() {
         </View>
       </Modal>
 
-      {/* ── Platform Error Modal ── */}
       <ErrorModal
         visible={errorModal.visible}
         title={errorModal.title}
@@ -949,18 +954,18 @@ const s = StyleSheet.create({
     paddingVertical: 4,
   },
   plansGrid: {
-    gap: 20,
+    gap: 16,
     marginBottom: 24,
   },
   skeleton: {
-    height: 400,
+    height: 360,
     borderRadius: 16,
     opacity: 0.5,
   },
   planCard: {
     borderRadius: 16,
     borderWidth: 1.5,
-    padding: 24,
+    padding: 20,
     position: "relative",
     alignItems: "flex-start",
   },
@@ -971,6 +976,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 4,
     borderRadius: 100,
+    borderWidth: 2,
   },
   currentBadge: {
     position: "absolute",
@@ -979,9 +985,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 4,
     borderRadius: 100,
+    borderWidth: 2,
   },
   badgeText: {
-    color: "#000",
     fontSize: 10,
     fontWeight: "800",
   },
@@ -991,45 +997,46 @@ const s = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: "uppercase",
     color: "#9ca3af",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   planName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  planPrice: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 24,
-  },
-  priceCurrency: {
-    fontSize: 13,
-    color: "#6b7280",
-    marginRight: 4,
-  },
-  priceAmount: {
-    fontSize: 32,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-  },
-  pricePer: {
-    fontSize: 12,
-    color: "#9ca3af",
-    marginLeft: 4,
-  },
-  priceDiscountWrap: {
-    flexDirection: "column",
-  },
-  priceStrike: {
-    fontSize: 13,
-    color: "#9ca3af",
-    textDecorationLine: "line-through",
-    marginBottom: 4,
+
+  /* ── Price Block ── */
+  planPriceWrap: {
+    width: "100%",
+    marginBottom: 18,
   },
   priceRow: {
     flexDirection: "row",
     alignItems: "baseline",
+  },
+  priceCurrency: {
+    fontSize: 11,
+    color: "#9ca3af",
+    marginRight: 3,
+  },
+  priceAmount: {
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+  },
+  pricePer: {
+    fontSize: 10,
+    color: "#9ca3af",
+    marginLeft: 3,
+  },
+  priceDiscountWrap: {
+    width: "100%",
+  },
+  priceStrike: {
+    fontSize: 11,
+    color: "#9ca3af",
+    textDecorationLine: "line-through",
+    marginBottom: 2,
   },
   savingsBadge: {
     paddingHorizontal: 8,
@@ -1038,11 +1045,12 @@ const s = StyleSheet.create({
     alignSelf: "flex-start",
     marginTop: 6,
   },
+
   featureList: {
     flex: 1,
     width: "100%",
-    marginBottom: 24,
-    gap: 10,
+    marginBottom: 20,
+    gap: 8,
   },
   featureItem: {
     flexDirection: "row",
@@ -1050,21 +1058,21 @@ const s = StyleSheet.create({
     gap: 8,
   },
   featureText: {
-    fontSize: 13,
-    color: "#6b7280",
+    fontSize: 12,
+    color: "#9ca3af",
     flex: 1,
     lineHeight: 18,
   },
   planBtn: {
     width: "100%",
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   disclaimer: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#9ca3af",
     textAlign: "center",
     marginBottom: 20,

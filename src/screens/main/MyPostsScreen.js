@@ -1,20 +1,10 @@
 // src/screens/main/MyPostsScreen.js
 //
 // Verbatim port of src/pages/MyPostsPage.jsx + MyPostsPage.module.css.
-//
-// Mapping reference:
-//   .myPostsPage { margin: -1.25rem; padding: 0.75rem 0.75rem 4rem } @≤640px
-//     → AppScreen with 0 base padding; listContent uses 0.75rem × 16 × fontScale
-//       padding (≈10.8px on mobile, matching the website's visible padding).
-//   .myPostsPage { padding: 1.5rem } @≥900px
-//     → 1.5rem × 16 × fontScale (≈24px) on wide screens.
-//   .myPostsHeader / .myPostsTitle / .myPostsSub → identical text scale + weight.
-//   .myPostsSpacer 0.875rem → <View style={{ height: rem(0.875) }} />
-//   <CreatePost onPostCreated /> (expanded, not compact)
-//     → <CreatePost onPostCreated={...} /> — existing component.
-//   <PostCard post onDelete />  → identical.
-//   styles.feedList { gap: 0.75rem } → <View style={{ gap: rem(0.75) }}>
-//   .empty block with FiEdit3 → Ionicons "create-outline"
+// Outer horizontal + top padding set to 0 so content hugs the screen
+// edges — mirrors the campaign screen's `padding: 0` change.
+// Title uses <AppText weight="displayBlack"> like every other screen
+// (no manual fontFamily — weight drives the Syne display font).
 
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -49,27 +39,8 @@ export default function MyPostsScreen() {
   const rem = (n) => n * 16 * fontScale;
   const c = theme.colors;
 
-  // Breakpoints — mirror CSS:
-  //   Default → padding 1.5rem  (≥ 900 / wide tablets)
-  //   ≤ 640   → padding 0.75rem (mobile, which is the primary target)
   const isCompact = width <= 640;
-  const isWide = width >= 900;
-
-  // Visible padding from screen edge:
-  //   ≤ 640  → 0.75rem × 16 × fontScale  (~10.8px on 360w)
-  //   641-899 → 1rem × 16 × fontScale    (interpolated)
-  //   ≥ 900  → 1.5rem × 16 × fontScale   (~24px on tablet)
-  const padH = isCompact
-    ? 0.75 * 16 * fontScale
-    : isWide
-      ? 1.5 * 16 * fontScale
-      : 1 * 16 * fontScale;
-
   const padBottom = isCompact ? 4 * 16 * fontScale : 1.5 * 16 * fontScale;
-
-  // Header text sizes — rem × 16 × fontScale
-  const titleFs = 1.5 * 16 * fontScale;
-  const subFs = 0.85 * 16 * fontScale;
 
   const fetchPosts = useCallback(
     async (opts = {}) => {
@@ -113,8 +84,8 @@ export default function MyPostsScreen() {
       <ScrollView
         style={{ flex: 1, width: "100%" }}
         contentContainerStyle={{
-          paddingHorizontal: padH,
-          paddingTop: padH,
+          paddingHorizontal: 0,
+          paddingTop: 4,
           paddingBottom: padBottom,
         }}
         showsVerticalScrollIndicator={false}
@@ -128,41 +99,39 @@ export default function MyPostsScreen() {
         }
       >
         {/* ─── Header ──────────────────────────────────── */}
-        <View style={{ marginBottom: rem(0.5) }}>
+        <View style={{ marginBottom: 12, paddingHorizontal: 8 }}>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: theme.fonts?.displayBlack || "Syne_800ExtraBold",
-              fontSize: titleFs,
-              lineHeight: titleFs * 1.2,
-              fontWeight: "800",
+              fontSize: 24,
+              lineHeight: 30,
               color: c.text,
-              letterSpacing: -0.02 * titleFs,
-              marginBottom: rem(0.25),
+              letterSpacing: -0.4,
+              marginBottom: 4,
             }}
           >
             {t("posts.myTitle")}
           </AppText>
           <AppText
-            style={{
-              fontFamily: theme.fonts?.body || "DMSans_400Regular",
-              fontSize: subFs,
-              lineHeight: subFs * 1.45,
-              color: c.textDim,
-            }}
+            variant="body"
+            tone="dim"
+            style={{ lineHeight: 18, fontSize: 13 }}
           >
             {t("posts.mySubtitle")}
           </AppText>
         </View>
 
         {/* ─── CreatePost (expanded, full editor) ──────── */}
-        <CreatePost onPostCreated={handlePostCreated} />
+        <View style={{ paddingHorizontal: 4 }}>
+          <CreatePost onPostCreated={handlePostCreated} />
+        </View>
 
-        {/* ─── Spacer 0.875rem ─────────────────────────── */}
+        {/* ─── Spacer ──────────────────────────────────── */}
         <View style={{ height: rem(0.875) }} />
 
         {/* ─── Loading / Empty / Feed ──────────────────── */}
         {loading ? (
-          <View style={{ gap: rem(0.75) }}>
+          <View style={{ gap: rem(0.75), paddingHorizontal: 4 }}>
             <PostSkeleton />
             <PostSkeleton />
             <PostSkeleton />
@@ -177,16 +146,16 @@ export default function MyPostsScreen() {
                 paddingVertical: rem(2.5),
                 paddingHorizontal: rem(1.5),
                 gap: rem(0.5),
+                marginHorizontal: 4,
               },
             ]}
           >
             <Ionicons name="create-outline" size={rem(2)} color={c.textDim} />
             <AppText
+              weight="semibold"
               style={{
-                fontFamily: theme.fonts?.display || "Syne_700Bold",
                 fontSize: rem(1),
                 lineHeight: rem(1) * 1.3,
-                fontWeight: "700",
                 color: c.text,
                 marginTop: rem(0.5),
                 textAlign: "center",
@@ -195,11 +164,11 @@ export default function MyPostsScreen() {
               {t("posts.noMyPosts")}
             </AppText>
             <AppText
+              variant="small"
+              tone="dim"
               style={{
-                fontFamily: theme.fonts?.body || "DMSans_400Regular",
                 fontSize: rem(0.82),
                 lineHeight: rem(0.82) * 1.4,
-                color: c.textDim,
                 textAlign: "center",
               }}
             >
@@ -207,7 +176,7 @@ export default function MyPostsScreen() {
             </AppText>
           </View>
         ) : (
-          <View style={{ gap: rem(0.75) }}>
+          <View style={{ gap: rem(0.75), paddingHorizontal: 4 }}>
             {posts.map((post) => (
               <PostCard
                 key={post.id}

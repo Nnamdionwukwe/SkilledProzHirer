@@ -1,14 +1,13 @@
 // src/screens/main/SettingsScreen.js
 //
-// Verbatim port of pages/Settings/SettingsPage.jsx.
-// Language powered by i18n. All inputs stay above keyboard.
-// Security split into 4 tabs: Security (password only),
-// Withdrawal PIN, Account Info, Account Status.
+// Full i18n port. Every string routes through t() with keys that already
+// exist in en.json under settings.*, common.*, toast.*.
+// Withdrawal PIN / Account Info / Account Status labels remain English to
+// match the web version (no keys in en.json for these three tab labels).
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -22,6 +21,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
+import { useTranslation } from "react-i18next";
 
 import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
@@ -74,7 +74,6 @@ import {
   FaExclamationCircle,
 } from "../../icons/fa";
 
-// ── Languages (i18n source) ──────────────────────────────────────
 const ALL_LANGUAGES = LANGUAGES.map((l) => ({
   code: l.code ?? l,
   name:
@@ -108,48 +107,18 @@ const CURRENCIES = [
   "STD",
 ];
 
-const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say"];
+const GENDERS = [
+  { value: "Male", key: "settings.gender.male" },
+  { value: "Female", key: "settings.gender.female" },
+  { value: "Non-binary", key: "settings.gender.nonBinary" },
+  { value: "Prefer not to say", key: "settings.gender.preferNot" },
+];
+
 const COMPANY_SIZES = ["1–10", "11–50", "51–200", "201–500", "500+"];
-const DURATION_UNITS = [
-  { value: "hours", label: "Hours" },
-  { value: "days", label: "Days" },
-  { value: "weeks", label: "Weeks" },
-  { value: "months", label: "Months" },
-  { value: "custom", label: "Custom" },
-];
-
-const TABS_WORKER = [
-  { id: "profile", icon: FaUser, label: "Profile" },
-  { id: "work", icon: FaBriefcase, label: "Work Profile" },
-  { id: "pricing", icon: FaDollarSign, label: "Pricing" },
-  { id: "currencies", icon: FaSyncAlt, label: "Currencies" },
-  { id: "appearance", icon: FaSun, label: "Appearance" },
-  { id: "notifications", icon: FaBell, label: "Notifications" },
-  { id: "privacy", icon: FaLock, label: "Privacy" },
-  { id: "security", icon: FaShieldAlt, label: "Security" },
-  { id: "pin", icon: FaKey, label: "Withdrawal PIN" },
-  { id: "accountInfo", icon: FaInfoCircle, label: "Account Info" },
-  { id: "accountStatus", icon: FaExclamationTriangle, label: "Account Status" },
-  { id: "activity", icon: FaChartLine, label: "Activity" },
-];
-
-const TABS_HIRER = [
-  { id: "profile", icon: FaUser, label: "Profile" },
-  { id: "company", icon: FaBriefcase, label: "Company" },
-  { id: "hiring", icon: FaClipboardCheck, label: "Hiring Prefs" },
-  { id: "currencies", icon: FaSyncAlt, label: "Currencies" },
-  { id: "appearance", icon: FaSun, label: "Appearance" },
-  { id: "notifications", icon: FaBell, label: "Notifications" },
-  { id: "privacy", icon: FaLock, label: "Privacy" },
-  { id: "security", icon: FaShieldAlt, label: "Security" },
-  { id: "pin", icon: FaKey, label: "Withdrawal PIN" },
-  { id: "accountInfo", icon: FaInfoCircle, label: "Account Info" },
-  { id: "accountStatus", icon: FaExclamationTriangle, label: "Account Status" },
-  { id: "activity", icon: FaChartLine, label: "Activity" },
-];
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const { theme, language, changeTheme, mode } = useTheme();
   const { user, updateUser } = useAuthStore();
   const {
@@ -159,8 +128,83 @@ export default function SettingsScreen() {
     changePaymentCurrency,
   } = useCurrency();
   const c = theme.colors;
-
   const isWorker = user?.role === "WORKER";
+
+  const DURATION_UNITS = useMemo(
+    () => [
+      { value: "hours", label: t("postJob.durationType.HOURS") },
+      { value: "days", label: t("postJob.durationType.DAYS") },
+      { value: "weeks", label: t("postJob.durationType.WEEKS") },
+      { value: "months", label: t("postJob.durationType.MONTHS") },
+      { value: "custom", label: t("postJob.durationType.CUSTOM") },
+    ],
+    [t],
+  );
+
+  const TABS_WORKER = useMemo(
+    () => [
+      { id: "profile", icon: FaUser, label: t("settings.tabs.profile") },
+      { id: "work", icon: FaBriefcase, label: t("settings.tabs.workProfile") },
+      { id: "pricing", icon: FaDollarSign, label: t("settings.tabs.pricing") },
+      {
+        id: "currencies",
+        icon: FaSyncAlt,
+        label: t("settings.tabs.currencies"),
+      },
+      { id: "appearance", icon: FaSun, label: t("settings.tabs.appearance") },
+      {
+        id: "notifications",
+        icon: FaBell,
+        label: t("settings.tabs.notifications"),
+      },
+      { id: "privacy", icon: FaLock, label: t("settings.tabs.privacy") },
+      { id: "security", icon: FaShieldAlt, label: t("settings.tabs.security") },
+      { id: "pin", icon: FaKey, label: "Withdrawal PIN" },
+      { id: "accountInfo", icon: FaInfoCircle, label: "Account Info" },
+      {
+        id: "accountStatus",
+        icon: FaExclamationTriangle,
+        label: "Account Status",
+      },
+      { id: "activity", icon: FaChartLine, label: t("settings.tabs.activity") },
+    ],
+    [t],
+  );
+
+  const TABS_HIRER = useMemo(
+    () => [
+      { id: "profile", icon: FaUser, label: t("settings.tabs.profile") },
+      { id: "company", icon: FaBriefcase, label: t("settings.tabs.company") },
+      {
+        id: "hiring",
+        icon: FaClipboardCheck,
+        label: t("settings.tabs.hiringPrefs"),
+      },
+      {
+        id: "currencies",
+        icon: FaSyncAlt,
+        label: t("settings.tabs.currencies"),
+      },
+      { id: "appearance", icon: FaSun, label: t("settings.tabs.appearance") },
+      {
+        id: "notifications",
+        icon: FaBell,
+        label: t("settings.tabs.notifications"),
+      },
+      { id: "privacy", icon: FaLock, label: t("settings.tabs.privacy") },
+      { id: "security", icon: FaShieldAlt, label: t("settings.tabs.security") },
+      { id: "pin", icon: FaKey, label: "Withdrawal PIN" },
+      { id: "accountInfo", icon: FaInfoCircle, label: "Account Info" },
+      {
+        id: "accountStatus",
+        icon: FaExclamationTriangle,
+        label: "Account Status",
+      },
+      { id: "activity", icon: FaChartLine, label: t("settings.tabs.activity") },
+    ],
+    [t],
+  );
+
   const TABS = isWorker ? TABS_WORKER : TABS_HIRER;
 
   const [tab, setTab] = useState("profile");
@@ -370,7 +414,7 @@ export default function SettingsScreen() {
     setCheckLoading(true);
     const data = await refreshCheck();
     setCheckLoading(false);
-    if (!data) return showToast("Could not check your account status", "error");
+    if (!data) return showToast(t("toast.unknownError"), "error");
     if (!data.canPause) return setShowBlockerModal(true);
     setShowPauseModal(true);
   }
@@ -382,29 +426,34 @@ export default function SettingsScreen() {
     setCheckLoading(true);
     const data = await refreshCheck();
     setCheckLoading(false);
-    if (!data) return showToast("Could not check your account status", "error");
+    if (!data) return showToast(t("toast.unknownError"), "error");
     if (!data.canDelete) return setShowBlockerModal(true);
     setShowDeleteModal(true);
   }
 
   async function confirmPause() {
-    if (!pausePassword) return showToast("Please enter your password", "error");
+    if (!pausePassword)
+      return showToast(t("settings.security.enterCurrent"), "error");
     setSaving("pause");
     try {
       await client.post("/settings/pause", { password: pausePassword });
       showToast("Account paused.");
-      setTimeout(() => {
-        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-      }, 1500);
+      setTimeout(
+        () => navigation.reset({ index: 0, routes: [{ name: "Login" }] }),
+        1500,
+      );
     } catch (err) {
-      showToast(err.response?.data?.message || "Failed to pause", "error");
+      showToast(
+        err.response?.data?.message || t("toast.unknownError"),
+        "error",
+      );
       setSaving("");
     }
   }
 
   async function confirmDeleteAccount() {
     if (!deletePassword)
-      return showToast("Please enter your password", "error");
+      return showToast(t("settings.security.enterCurrent"), "error");
     if (deleteConfirmText !== "DELETE")
       return showToast('Type "DELETE" to confirm', "error");
     setSaving("delete");
@@ -417,12 +466,16 @@ export default function SettingsScreen() {
         },
       });
       showToast("Account scheduled for deletion.");
-      setTimeout(() => {
-        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-      }, 1500);
+      setTimeout(
+        () => navigation.reset({ index: 0, routes: [{ name: "Login" }] }),
+        1500,
+      );
     } catch (err) {
       const status = err.response?.status;
-      showToast(err.response?.data?.message || "Failed", "error");
+      showToast(
+        err.response?.data?.message || t("toast.unknownError"),
+        "error",
+      );
       if (status === 409) {
         await refreshCheck();
         setShowBlockerModal(true);
@@ -438,9 +491,12 @@ export default function SettingsScreen() {
       const updated = res.data.data.user;
       setProfile((p) => ({ ...p, ...updated }));
       updateUser?.(updated);
-      showToast("Profile saved");
+      showToast(t("settings.profile.saved"));
     } catch (e) {
-      showToast(e.response?.data?.message || "Save failed", "error");
+      showToast(
+        e.response?.data?.message || t("settings.profile.saveFailed"),
+        "error",
+      );
     } finally {
       setSaving("");
     }
@@ -457,9 +513,9 @@ export default function SettingsScreen() {
         defaultEstUnit: hiringPrefs.defaultEstimatedUnit,
         defaultEstValue: hiringPrefs.defaultEstimatedValue,
       });
-      showToast("Hiring preferences saved");
+      showToast(t("settings.hiringPrefs.saved"));
     } catch {
-      showToast("Save failed", "error");
+      showToast(t("settings.hiringPrefs.failed"), "error");
     } finally {
       setSaving("");
     }
@@ -486,9 +542,12 @@ export default function SettingsScreen() {
       const newAvatar = r.data.data.avatar;
       setProfile((p) => ({ ...p, avatar: newAvatar }));
       updateUser?.({ avatar: newAvatar });
-      showToast("Photo updated");
+      showToast(t("settings.profile.photoUpdated"));
     } catch (e) {
-      showToast(e.response?.data?.message || "Upload failed", "error");
+      showToast(
+        e.response?.data?.message || t("settings.profile.photoFailed"),
+        "error",
+      );
     } finally {
       setSaving("");
     }
@@ -498,9 +557,9 @@ export default function SettingsScreen() {
     setSaving("work");
     try {
       await client.patch("/settings/worker-profile", workForm);
-      showToast("Work profile saved");
+      showToast(t("settings.workProfile.saved"));
     } catch {
-      showToast("Save failed", "error");
+      showToast(t("settings.workProfile.saveFailed"), "error");
     } finally {
       setSaving("");
     }
@@ -510,9 +569,9 @@ export default function SettingsScreen() {
     setSaving("pricing");
     try {
       await client.patch("/settings/worker-profile", pricing);
-      showToast("Pricing saved");
+      showToast(t("settings.pricing.saved"));
     } catch {
-      showToast("Save failed", "error");
+      showToast(t("settings.pricing.saveFailed"), "error");
     } finally {
       setSaving("");
     }
@@ -522,17 +581,19 @@ export default function SettingsScreen() {
     setSaving("company");
     try {
       await client.patch("/settings/hirer-profile", companyForm);
-      showToast("Company profile saved");
+      showToast(t("settings.company.saved"));
     } catch {
-      showToast("Save failed", "error");
+      showToast(t("settings.company.saveFailed"), "error");
     } finally {
       setSaving("");
     }
   }
 
   async function savePassword() {
-    if (pw.next !== pw.confirm) return setPwError("Passwords do not match");
-    if (pw.next.length < 8) return setPwError("Min 8 characters");
+    if (pw.next !== pw.confirm)
+      return setPwError(t("settings.security.passwordsDontMatch"));
+    if (pw.next.length < 8)
+      return setPwError(t("settings.security.passwordTooShort"));
     setPwError("");
     setSaving("password");
     try {
@@ -541,9 +602,12 @@ export default function SettingsScreen() {
         newPassword: pw.next,
       });
       setPw({ current: "", next: "", confirm: "" });
-      showToast("Password updated");
+      showToast(t("settings.security.passwordChanged"));
     } catch (e) {
-      showToast(e.response?.data?.message || "Failed", "error");
+      showToast(
+        e.response?.data?.message || t("settings.security.passwordFailed"),
+        "error",
+      );
     } finally {
       setSaving("");
     }
@@ -593,9 +657,9 @@ export default function SettingsScreen() {
     try {
       await client.patch("/settings/notifications", notifs);
       updateUser?.(notifs);
-      showToast("Notifications saved");
+      showToast(t("settings.notifications.saved"));
     } catch {
-      showToast("Save failed", "error");
+      showToast(t("settings.notifications.failed"), "error");
     } finally {
       setSaving("");
     }
@@ -606,9 +670,9 @@ export default function SettingsScreen() {
     try {
       await client.patch("/settings/privacy", privacy);
       updateUser?.(privacy);
-      showToast("Privacy saved");
+      showToast(t("settings.privacy.saved"));
     } catch {
-      showToast("Save failed", "error");
+      showToast(t("settings.privacy.failed"), "error");
     } finally {
       setSaving("");
     }
@@ -622,7 +686,6 @@ export default function SettingsScreen() {
     );
   }
 
-  const tabs = TABS;
   const currentLangName =
     ALL_LANGUAGES.find((l) => l.code === language)?.name || "English";
 
@@ -631,7 +694,6 @@ export default function SettingsScreen() {
     setShowCurrencyPicker(true);
   };
 
-  // ── Derived: blockers + delete lock ──────────────────────────────
   const blockers = deactivationCheck?.blockers ?? [];
   const hasBlockers = blockers.length > 0;
   const canPause = deactivationCheck?.canPause ?? !hasBlockers;
@@ -683,10 +745,10 @@ export default function SettingsScreen() {
               color: c.text,
             }}
           >
-            Settings
+            {t("settings.title")}
           </AppText>
           <AppText style={{ fontSize: 12, color: c.textDim, marginTop: 2 }}>
-            Manage your account, preferences, and platform settings
+            {t("settings.subtitle")}
           </AppText>
         </View>
 
@@ -697,13 +759,13 @@ export default function SettingsScreen() {
           style={{ flexGrow: 0, marginBottom: 16 }}
           contentContainerStyle={{ gap: 6, paddingRight: 8 }}
         >
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
+          {TABS.map((tb) => {
+            const Icon = tb.icon;
+            const active = tab === tb.id;
             return (
               <Pressable
-                key={t.id}
-                onPress={() => setTab(t.id)}
+                key={tb.id}
+                onPress={() => setTab(tb.id)}
                 style={[
                   styles.navBtn,
                   {
@@ -721,7 +783,7 @@ export default function SettingsScreen() {
                     marginLeft: 6,
                   }}
                 >
-                  {t.label}
+                  {tb.label}
                 </AppText>
               </Pressable>
             );
@@ -731,9 +793,9 @@ export default function SettingsScreen() {
         {/* ═══════════════ PROFILE ═══════════════ */}
         {tab === "profile" && (
           <Card
-            title="Profile Information"
+            title={t("settings.profile.title")}
             icon={<FaUser size={18} color={c.orange} />}
-            desc="Your personal details visible to others"
+            desc={t("settings.profile.subtitle")}
             c={c}
           >
             <View style={styles.avatarBlock}>
@@ -794,95 +856,100 @@ export default function SettingsScreen() {
                       fontWeight: "600",
                     }}
                   >
-                    {saving === "avatar" ? "Uploading..." : "Change Photo"}
+                    {saving === "avatar"
+                      ? t("common.loading")
+                      : t("settings.profile.changePhoto")}
                   </AppText>
                 </Pressable>
                 <AppText
                   style={{ fontSize: 9, color: c.textMuted, marginTop: 4 }}
                 >
-                  JPG, PNG or WebP · max 5MB
+                  {t("settings.profile.photoHint")}
                 </AppText>
               </View>
             </View>
 
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               <Field
-                label="First Name"
+                label={t("settings.profile.firstName")}
                 value={form.firstName}
                 onChange={(v) => setForm((f) => ({ ...f, firstName: v }))}
                 c={c}
               />
               <Field
-                label="Last Name"
+                label={t("settings.profile.lastName")}
                 value={form.lastName}
                 onChange={(v) => setForm((f) => ({ ...f, lastName: v }))}
                 c={c}
               />
             </View>
             <Field
-              label="Phone"
+              label={t("settings.profile.phone")}
               value={form.phone}
               onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
               c={c}
               full
             />
             <Field
-              label="Bio"
+              label={t("settings.profile.bio")}
               value={form.bio}
               onChange={(v) => setForm((f) => ({ ...f, bio: v }))}
               c={c}
               multiline
               full
             />
-
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               <Field
-                label="Country"
+                label={t("settings.profile.country")}
                 value={form.country}
                 onChange={(v) => setForm((f) => ({ ...f, country: v }))}
                 c={c}
-                placeholder="e.g. Nigeria"
+                placeholder={t("country")}
               />
               <Field
-                label="State"
+                label={t("settings.profile.state")}
                 value={form.state}
                 onChange={(v) => setForm((f) => ({ ...f, state: v }))}
                 c={c}
-                placeholder="e.g. Lagos State"
+                placeholder={t("state")}
               />
               <Field
-                label="City"
+                label={t("settings.profile.city")}
                 value={form.city}
                 onChange={(v) => setForm((f) => ({ ...f, city: v }))}
                 c={c}
-                placeholder="e.g. Lagos"
+                placeholder={t("city")}
               />
               <Field
-                label="Address"
+                label={t("settings.profile.address")}
                 value={form.address}
                 onChange={(v) => setForm((f) => ({ ...f, address: v }))}
                 c={c}
-                placeholder="Street address"
               />
             </View>
-
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               <SelectField
-                label="Currency"
+                label={t("settings.profile.currency")}
                 value={form.currency}
                 onPress={() => openCurrencyPicker("profile")}
                 c={c}
               />
               <SelectField
-                label="Gender"
-                value={form.gender || "Prefer not to say"}
+                label={t("settings.profile.gender")}
+                value={
+                  form.gender
+                    ? t(
+                        GENDERS.find((g) => g.value === form.gender)?.key ||
+                          "settings.gender.preferNot",
+                      )
+                    : t("settings.gender.preferNot")
+                }
                 onPress={() => setShowGenderPicker(true)}
                 c={c}
               />
             </View>
-
             <SaveBtn
-              label="Save Profile"
+              label={t("settings.profile.save")}
               loading={saving === "profile"}
               onClick={saveProfile}
               c={c}
@@ -893,21 +960,21 @@ export default function SettingsScreen() {
         {/* ═══════════════ WORK PROFILE ═══════════════ */}
         {tab === "work" && isWorker && (
           <Card
-            title="Work Profile"
+            title={t("settings.workProfile.title")}
             icon={<FaBriefcase size={18} color={c.orange} />}
-            desc="Professional details hirers see on your profile"
+            desc={t("settings.workProfile.subtitle")}
             c={c}
           >
             <Field
-              label="Professional Title"
+              label={t("settings.workProfile.titleLabel")}
               value={workForm.title}
               onChange={(v) => setWorkForm((f) => ({ ...f, title: v }))}
               c={c}
-              placeholder="e.g. Certified Electrician"
+              placeholder={t("settings.workProfile.titlePlaceholder")}
               full
             />
             <Field
-              label="Description"
+              label={t("settings.workProfile.description")}
               value={workForm.description}
               onChange={(v) => setWorkForm((f) => ({ ...f, description: v }))}
               c={c}
@@ -916,7 +983,7 @@ export default function SettingsScreen() {
             />
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               <Field
-                label="Years of Experience"
+                label={t("settings.workProfile.yearsExperience")}
                 value={workForm.yearsExperience}
                 onChange={(v) =>
                   setWorkForm((f) => ({ ...f, yearsExperience: v }))
@@ -926,7 +993,7 @@ export default function SettingsScreen() {
                 numeric
               />
               <Field
-                label="Service Radius (km)"
+                label={t("settings.workProfile.serviceRadius")}
                 value={workForm.serviceRadius}
                 onChange={(v) =>
                   setWorkForm((f) => ({ ...f, serviceRadius: v }))
@@ -937,14 +1004,14 @@ export default function SettingsScreen() {
               />
             </View>
             <Toggle
-              label="Available for Bookings"
-              desc="Turn off to pause new booking requests"
+              label={t("settings.workProfile.availableLabel")}
+              desc={t("settings.workProfile.availableSub")}
               checked={workForm.isAvailable}
               onChange={(v) => setWorkForm((f) => ({ ...f, isAvailable: v }))}
               c={c}
             />
             <SaveBtn
-              label="Save Work Profile"
+              label={t("settings.workProfile.save")}
               loading={saving === "work"}
               onClick={saveWorkProfile}
               c={c}
@@ -955,67 +1022,56 @@ export default function SettingsScreen() {
         {/* ═══════════════ PRICING ═══════════════ */}
         {tab === "pricing" && isWorker && (
           <Card
-            title="Pricing"
+            title={t("settings.pricing.title")}
             icon={<FaDollarSign size={18} color={c.orange} />}
-            desc="Set your rates for different engagement types"
+            desc={t("settings.pricing.subtitle")}
             c={c}
           >
             <AppText
               style={{ fontSize: 11, color: c.textMuted, lineHeight: 16 }}
             >
-              Set rates for each duration type. Leave blank to hide that option
-              from your profile.
+              {t("settings.pricing.hint")}
             </AppText>
             <SelectField
-              label="Pricing Currency"
+              label={t("settings.pricing.currency")}
               value={pricing.currency}
               onPress={() => openCurrencyPicker("pricing")}
               c={c}
             />
-
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               <PriceField
-                label="Hourly Rate"
+                label={t("settings.pricing.hourly")}
                 suffix="/hr"
                 value={pricing.hourlyRate}
                 onChange={(v) => setPricing((p) => ({ ...p, hourlyRate: v }))}
                 c={c}
               />
               <PriceField
-                label="Daily Rate"
+                label={t("settings.pricing.daily")}
                 suffix="/day"
                 value={pricing.dailyRate}
                 onChange={(v) => setPricing((p) => ({ ...p, dailyRate: v }))}
                 c={c}
               />
               <PriceField
-                label="Weekly Rate"
+                label={t("settings.pricing.weekly")}
                 suffix="/wk"
                 value={pricing.weeklyRate}
                 onChange={(v) => setPricing((p) => ({ ...p, weeklyRate: v }))}
                 c={c}
               />
               <PriceField
-                label="Monthly Rate"
+                label={t("settings.pricing.monthly")}
                 suffix="/mo"
                 value={pricing.monthlyRate}
                 onChange={(v) => setPricing((p) => ({ ...p, monthlyRate: v }))}
                 c={c}
               />
-              <PriceField
-                label="Yearly Rate"
-                suffix="/yr"
-                value={pricing.yearlyRate}
-                onChange={(v) => setPricing((p) => ({ ...p, yearlyRate: v }))}
-                c={c}
-              />
             </View>
-
-            <Divider label="Custom Rate" c={c} />
-
+            <Divider label={t("settings.pricing.custom")} c={c} />
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               <Field
-                label="Custom Rate Amount"
+                label={t("settings.pricing.customAmount")}
                 value={pricing.customRate}
                 onChange={(v) => setPricing((p) => ({ ...p, customRate: v }))}
                 c={c}
@@ -1023,27 +1079,25 @@ export default function SettingsScreen() {
                 numeric
               />
               <Field
-                label="Custom Label"
+                label={t("settings.pricing.customLabel")}
                 value={pricing.customRateLabel}
                 onChange={(v) =>
                   setPricing((p) => ({ ...p, customRateLabel: v }))
                 }
                 c={c}
-                placeholder="e.g. per project"
+                placeholder={t("settings.pricing.customLabelPlaceholder")}
               />
             </View>
-
             <Field
-              label="Pricing Notes (optional)"
+              label={t("settings.pricing.notes")}
               value={pricing.pricingNote}
               onChange={(v) => setPricing((p) => ({ ...p, pricingNote: v }))}
               c={c}
               multiline
               full
             />
-
             <SaveBtn
-              label="Save Pricing"
+              label={t("settings.pricing.save")}
               loading={saving === "pricing"}
               onClick={savePricing}
               c={c}
@@ -1055,26 +1109,21 @@ export default function SettingsScreen() {
         {tab === "currencies" && (
           <>
             <Card
-              title="Currency Settings"
+              title={t("settings.currencies.title")}
               icon={<FaSyncAlt size={18} color={c.orange} />}
-              desc="Control how currencies appear across the platform"
+              desc={t("settings.currencies.subtitle")}
               c={c}
             >
-              <InfoBox
-                c={c}
-                text="SkilledProz supports multi-currency. Each setting serves a different purpose — set them independently for the best experience."
-              />
-
+              <InfoBox c={c} text={t("settings.currencies.info")} />
               <Section
-                label="Dashboard Display Currency"
+                label={t("settings.currencies.dashboardLabel")}
                 labelIcon={<FaChartLine size={11} color={c.orange} />}
                 c={c}
               >
                 <AppText
                   style={{ fontSize: 11, color: c.textMuted, lineHeight: 16 }}
                 >
-                  The currency your dashboard stats, earnings totals, and
-                  summaries are displayed in.
+                  {t("settings.currencies.dashboardDesc")}
                 </AppText>
                 <CurrencyPickerRow
                   current={dashboardCurrency}
@@ -1083,20 +1132,16 @@ export default function SettingsScreen() {
                   c={c}
                 />
               </Section>
-
               <Divider c={c} />
-
               <Section
-                label={isWorker ? "Payout Currency" : "Payment Currency"}
+                label={t("settings.currencies.paymentLabel")}
                 labelIcon={<FaCreditCard size={11} color={c.orange} />}
                 c={c}
               >
                 <AppText
                   style={{ fontSize: 11, color: c.textMuted, lineHeight: 16 }}
                 >
-                  {isWorker
-                    ? "The currency you receive payments in."
-                    : "The default currency you use to pay for bookings."}
+                  {t("settings.currencies.paymentDesc")}
                 </AppText>
                 <CurrencyPickerRow
                   current={paymentCurrency}
@@ -1105,86 +1150,27 @@ export default function SettingsScreen() {
                   c={c}
                 />
               </Section>
-
-              {isWorker && (
-                <>
-                  <Divider c={c} />
-                  <Section
-                    label="Profile Rate Currency"
-                    labelIcon={<FaTag size={11} color={c.orange} />}
-                    c={c}
-                  >
-                    <AppText
-                      style={{
-                        fontSize: 11,
-                        color: c.textMuted,
-                        lineHeight: 16,
-                      }}
-                    >
-                      The currency displayed on your profile cards and search
-                      results.
-                    </AppText>
-                    <CurrencyPickerRow
-                      current={pricing.currency || "USD"}
-                      onChange={(v) =>
-                        setPricing((p) => ({ ...p, currency: v }))
-                      }
-                      onOpen={() => openCurrencyPicker("pricing")}
-                      c={c}
-                    />
-                    <SaveBtn
-                      label="Save Profile Currency"
-                      loading={saving === "pricing"}
-                      onClick={async () => {
-                        setSaving("pricing");
-                        try {
-                          await client.patch("/settings/worker-profile", {
-                            currency: pricing.currency,
-                          });
-                          showToast("Profile currency saved");
-                        } catch {
-                          showToast("Save failed", "error");
-                        } finally {
-                          setSaving("");
-                        }
-                      }}
-                      c={c}
-                    />
-                  </Section>
-                </>
-              )}
             </Card>
-
             <Card
-              title="Currency Summary"
+              title={t("settings.currencies.summaryTitle")}
               icon={<FaFileAlt size={18} color={c.orange} />}
-              desc="How your currencies are configured"
+              desc={t("settings.currencies.summarySubtitle")}
               c={c}
             >
               <CurrencySummaryGrid
                 items={[
                   {
                     icon: <FaChartLine size={18} color={c.orange} />,
-                    label: "Dashboard shows stats in",
+                    label: t("settings.currencies.dashboardShows"),
                     value: `${CURRENCY_META[dashboardCurrency]?.symbol} ${dashboardCurrency}`,
-                    hint: "Display only",
+                    hint: t("settings.currencies.displayOnly"),
                   },
                   {
                     icon: <FaCreditCard size={18} color={c.orange} />,
-                    label: isWorker ? "You receive payments in" : "You pay in",
+                    label: t("settings.currencies.youPayIn"),
                     value: `${CURRENCY_META[paymentCurrency]?.symbol} ${paymentCurrency}`,
-                    hint: "Actual transactions",
+                    hint: t("settings.currencies.usedForTransactions"),
                   },
-                  ...(isWorker
-                    ? [
-                        {
-                          icon: <FaTag size={18} color={c.orange} />,
-                          label: "Profile rates shown in",
-                          value: `${CURRENCY_META[pricing.currency || "USD"]?.symbol} ${pricing.currency || "USD"}`,
-                          hint: "Displayed to hirers",
-                        },
-                      ]
-                    : []),
                 ]}
                 c={c}
               />
@@ -1195,23 +1181,23 @@ export default function SettingsScreen() {
         {/* ═══════════════ COMPANY ═══════════════ */}
         {tab === "company" && !isWorker && (
           <Card
-            title="Company Profile"
+            title={t("settings.company.title")}
             icon={<FaBriefcase size={18} color={c.orange} />}
-            desc="Company information visible to workers you hire"
+            desc={t("settings.company.subtitle")}
             c={c}
           >
             <Field
-              label="Company Name"
+              label={t("settings.company.companyName")}
               value={companyForm.companyName}
               onChange={(v) =>
                 setCompanyForm((f) => ({ ...f, companyName: v }))
               }
               c={c}
-              placeholder="Acme Corp"
+              placeholder={t("settings.company.namePlaceholder")}
               full
             />
             <OptionRow
-              label="Company Size"
+              label={t("settings.company.companySize")}
               options={COMPANY_SIZES}
               value={companyForm.companySize}
               onChange={(v) =>
@@ -1220,15 +1206,15 @@ export default function SettingsScreen() {
               c={c}
             />
             <Field
-              label="Website"
+              label={t("settings.company.website")}
               value={companyForm.website}
               onChange={(v) => setCompanyForm((f) => ({ ...f, website: v }))}
               c={c}
-              placeholder="https://yourcompany.com"
+              placeholder={t("settings.company.websitePlaceholder")}
               full
             />
             <SaveBtn
-              label="Save Company Profile"
+              label={t("settings.company.save")}
               loading={saving === "company"}
               onClick={saveCompany}
               c={c}
@@ -1239,19 +1225,18 @@ export default function SettingsScreen() {
         {/* ═══════════════ HIRING PREFS ═══════════════ */}
         {tab === "hiring" && !isWorker && (
           <Card
-            title="Hiring Preferences"
+            title={t("settings.hiringPrefs.title")}
             icon={<FaClipboardCheck size={18} color={c.orange} />}
-            desc="Default settings when creating bookings"
+            desc={t("settings.hiringPrefs.subtitle")}
             c={c}
           >
             <AppText
               style={{ fontSize: 11, color: c.textMuted, lineHeight: 16 }}
             >
-              Choose your default estimated duration format when creating new
-              bookings.
+              {t("settings.hiringPrefs.description")}
             </AppText>
             <AppText style={[labelStyle(c), { color: c.textDim }]}>
-              Default Estimated Duration Unit
+              {t("settings.hiringPrefs.durationUnit")}
             </AppText>
             <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
               {DURATION_UNITS.map((u) => {
@@ -1288,27 +1273,20 @@ export default function SettingsScreen() {
             </View>
             {hiringPrefs.defaultEstimatedUnit !== "" && (
               <Field
-                label={`Default Estimated Value (${hiringPrefs.defaultEstimatedUnit === "custom" ? "describe" : hiringPrefs.defaultEstimatedUnit})`}
+                label={t("settings.hiringPrefs.durationValue", {
+                  unit: hiringPrefs.defaultEstimatedUnit,
+                })}
                 value={hiringPrefs.defaultEstimatedValue}
                 onChange={(v) =>
                   setHiringPrefs((p) => ({ ...p, defaultEstimatedValue: v }))
                 }
                 c={c}
-                placeholder={
-                  hiringPrefs.defaultEstimatedUnit === "custom"
-                    ? "e.g. 2 weeks + weekend"
-                    : "e.g. 8"
-                }
-                numeric={hiringPrefs.defaultEstimatedUnit !== "custom"}
                 full
               />
             )}
-            <InfoBox
-              c={c}
-              text="These are defaults only — you can always change duration per booking."
-            />
+            <InfoBox c={c} text={t("settings.hiringPrefs.hint")} />
             <SaveBtn
-              label="Save Hiring Preferences"
+              label={t("settings.hiringPrefs.save")}
               loading={saving === "hiring"}
               onClick={saveHiringPrefs}
               c={c}
@@ -1319,13 +1297,13 @@ export default function SettingsScreen() {
         {/* ═══════════════ APPEARANCE ═══════════════ */}
         {tab === "appearance" && (
           <Card
-            title="Appearance"
+            title={t("settings.appearance.title")}
             icon={<FaSun size={18} color={c.orange} />}
-            desc="Theme and language preferences"
+            desc={t("settings.appearance.subtitle")}
             c={c}
           >
             <Section
-              label="Theme"
+              label={t("settings.appearance.themeLabel")}
               labelIcon={<FaMoon size={11} color={c.orange} />}
               c={c}
             >
@@ -1337,20 +1315,28 @@ export default function SettingsScreen() {
                   marginBottom: 8,
                 }}
               >
-                Choose how SkilledProz looks on your device.
+                {t("settings.appearance.themeDesc")}
               </AppText>
               <View style={{ flexDirection: "row", gap: 6 }}>
                 {[
-                  { id: "light", icon: FaSun, label: "Light" },
-                  { id: "dark", icon: FaMoon, label: "Dark" },
-                  { id: "system", icon: FaDesktop, label: "System" },
-                ].map((t) => {
-                  const Icon = t.icon;
-                  const active = mode === t.id;
+                  {
+                    id: "light",
+                    icon: FaSun,
+                    label: t("settings.theme.light"),
+                  },
+                  { id: "dark", icon: FaMoon, label: t("settings.theme.dark") },
+                  {
+                    id: "system",
+                    icon: FaDesktop,
+                    label: t("settings.theme.system"),
+                  },
+                ].map((thm) => {
+                  const Icon = thm.icon;
+                  const active = mode === thm.id;
                   return (
                     <Pressable
-                      key={t.id}
-                      onPress={() => changeTheme(t.id)}
+                      key={thm.id}
+                      onPress={() => changeTheme(thm.id)}
                       style={[
                         styles.themeCard,
                         {
@@ -1369,7 +1355,7 @@ export default function SettingsScreen() {
                           marginTop: 4,
                         }}
                       >
-                        {t.label}
+                        {thm.label}
                       </AppText>
                       {active ? (
                         <FaCheck
@@ -1383,18 +1369,16 @@ export default function SettingsScreen() {
                 })}
               </View>
             </Section>
-
             <Divider c={c} />
-
             <Section
-              label="Language"
+              label={t("settings.appearance.languageLabel")}
               labelIcon={<FaGlobe size={11} color={c.orange} />}
               c={c}
             >
               <AppText
                 style={{ fontSize: 11, color: c.textMuted, lineHeight: 16 }}
               >
-                Select your preferred language.
+                {t("settings.appearance.languageDesc")}
               </AppText>
               <Pressable
                 onPress={() => setShowLangPicker(true)}
@@ -1414,7 +1398,6 @@ export default function SettingsScreen() {
                 </AppText>
                 <FaChevronDown size={12} color={c.textDim} />
               </Pressable>
-              <InfoBox c={c} text="Select English to revert back." />
             </Section>
           </Card>
         )}
@@ -1422,53 +1405,53 @@ export default function SettingsScreen() {
         {/* ═══════════════ NOTIFICATIONS ═══════════════ */}
         {tab === "notifications" && (
           <Card
-            title="Notifications"
+            title={t("settings.notifications.title")}
             icon={<FaBell size={18} color={c.orange} />}
-            desc="Choose what you get notified about"
+            desc={t("settings.notifications.subtitle")}
             c={c}
           >
             <Toggle
-              label="Booking updates"
-              desc="New bookings, status changes, confirmations"
+              label={t("settings.notifications.bookings")}
+              desc={t("settings.notifications.bookingsSub")}
               checked={notifs.notifBookings}
               onChange={(v) => setNotifs((n) => ({ ...n, notifBookings: v }))}
               c={c}
               icon={<FaClipboardCheck size={13} color={c.orange} />}
             />
             <Toggle
-              label="Messages"
-              desc="New messages from hirers or workers"
+              label={t("settings.notifications.messages")}
+              desc={t("settings.notifications.messagesSub")}
               checked={notifs.notifMessages}
               onChange={(v) => setNotifs((n) => ({ ...n, notifMessages: v }))}
               c={c}
               icon={<FaCommentDots size={13} color={c.orange} />}
             />
             <Toggle
-              label="Payment alerts"
-              desc="Escrow releases, payment confirmations"
+              label={t("settings.notifications.payments")}
+              desc={t("settings.notifications.paymentsSub")}
               checked={notifs.notifPayments}
               onChange={(v) => setNotifs((n) => ({ ...n, notifPayments: v }))}
               c={c}
               icon={<FaCreditCard size={13} color={c.orange} />}
             />
             <Toggle
-              label="Reviews"
-              desc="New reviews on your profile"
+              label={t("settings.notifications.reviews")}
+              desc={t("settings.notifications.reviewsSub")}
               checked={notifs.notifReviews}
               onChange={(v) => setNotifs((n) => ({ ...n, notifReviews: v }))}
               c={c}
               icon={<FaStar size={13} color={c.orange} />}
             />
             <Toggle
-              label="Product updates"
-              desc="New features and platform news"
+              label={t("settings.notifications.marketing")}
+              desc={t("settings.notifications.marketingSub")}
               checked={notifs.notifMarketing}
               onChange={(v) => setNotifs((n) => ({ ...n, notifMarketing: v }))}
               c={c}
               icon={<FaChartLine size={13} color={c.orange} />}
             />
             <SaveBtn
-              label="Save Notification Preferences"
+              label={t("settings.notifications.save")}
               loading={saving === "notifs"}
               onClick={saveNotifs}
               c={c}
@@ -1479,48 +1462,48 @@ export default function SettingsScreen() {
         {/* ═══════════════ PRIVACY ═══════════════ */}
         {tab === "privacy" && (
           <Card
-            title="Privacy"
+            title={t("settings.privacy.title")}
             icon={<FaLock size={18} color={c.orange} />}
-            desc="Control who sees your information"
+            desc={t("settings.privacy.subtitle")}
             c={c}
           >
             <Toggle
-              label="Public Profile"
-              desc="Allow your profile to appear public or private"
+              label={t("settings.privacy.publicProfile")}
+              desc={t("settings.privacy.publicProfileSub")}
               checked={privacy.profileVisible}
               onChange={(v) => setPrivacy((p) => ({ ...p, profileVisible: v }))}
               c={c}
             />
             <Toggle
-              label="Show Phone Number"
-              desc="Display your phone number to hirers or workers"
+              label={t("settings.privacy.showPhone")}
+              desc={t("settings.privacy.showPhoneSub")}
               checked={privacy.showPhone}
               onChange={(v) => setPrivacy((p) => ({ ...p, showPhone: v }))}
               c={c}
             />
             <Toggle
-              label="Show Location"
-              desc="Display your city and country on your profile"
+              label={t("settings.privacy.showLocation")}
+              desc={t("settings.privacy.showLocationSub")}
               checked={privacy.showLocation}
               onChange={(v) => setPrivacy((p) => ({ ...p, showLocation: v }))}
               c={c}
             />
             <Toggle
-              label="Show Email Address"
-              desc="Display your email on your public profile"
+              label={t("settings.privacy.showEmail")}
+              desc={t("settings.privacy.showEmailSub")}
               checked={privacy.showEmail}
               onChange={(v) => setPrivacy((p) => ({ ...p, showEmail: v }))}
               c={c}
             />
             <Toggle
-              label="Show Gender"
-              desc="Display your gender on your public profile"
+              label={t("settings.privacy.showGender")}
+              desc={t("settings.privacy.showGenderSub")}
               checked={privacy.showGender}
               onChange={(v) => setPrivacy((p) => ({ ...p, showGender: v }))}
               c={c}
             />
             <SaveBtn
-              label="Save Privacy Settings"
+              label={t("settings.privacy.save")}
               loading={saving === "privacy"}
               onClick={savePrivacy}
               c={c}
@@ -1528,16 +1511,16 @@ export default function SettingsScreen() {
           </Card>
         )}
 
-        {/* ═══════════════ SECURITY (password only) ═══════════════ */}
+        {/* ═══════════════ SECURITY ═══════════════ */}
         {tab === "security" && (
           <Card
-            title="Change Password"
+            title={t("settings.security.passwordTitle")}
             icon={<FaKey size={18} color={c.orange} />}
-            desc="Keep your account secure"
+            desc={t("settings.security.passwordSubtitle")}
             c={c}
           >
             <Field
-              label="Current Password"
+              label={t("settings.security.currentPassword")}
               value={pw.current}
               onChange={(v) => setPw((p) => ({ ...p, current: v }))}
               c={c}
@@ -1545,7 +1528,7 @@ export default function SettingsScreen() {
               full
             />
             <Field
-              label="New Password (min 8 chars)"
+              label={t("settings.security.newPassword")}
               value={pw.next}
               onChange={(v) => setPw((p) => ({ ...p, next: v }))}
               c={c}
@@ -1553,7 +1536,7 @@ export default function SettingsScreen() {
               full
             />
             <Field
-              label="Confirm New Password"
+              label={t("settings.security.confirmPassword")}
               value={pw.confirm}
               onChange={(v) => setPw((p) => ({ ...p, confirm: v }))}
               c={c}
@@ -1566,7 +1549,7 @@ export default function SettingsScreen() {
               </AppText>
             ) : null}
             <SaveBtn
-              label="Update Password"
+              label={t("settings.security.updatePassword")}
               loading={saving === "password"}
               onClick={savePassword}
               c={c}
@@ -1574,7 +1557,7 @@ export default function SettingsScreen() {
           </Card>
         )}
 
-        {/* ═══════════════ WITHDRAWAL PIN (its own tab) ═══════════════ */}
+        {/* ═══════════════ WITHDRAWAL PIN ═══════════════ */}
         {tab === "pin" && (
           <Card
             title="Withdrawal PIN"
@@ -1620,41 +1603,8 @@ export default function SettingsScreen() {
                       : "No PIN set — you must set one before withdrawing"}
                   </AppText>
                 </View>
-                {pinStatus.isLocked ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: 10,
-                      borderRadius: 8,
-                      backgroundColor: "rgba(251,191,36,0.12)",
-                      borderWidth: 1,
-                      borderColor: "rgba(251,191,36,0.4)",
-                      marginTop: 6,
-                    }}
-                  >
-                    <FaLock size={13} color="#fbbf24" />
-                    <AppText
-                      style={{ fontSize: 12, color: "#fbbf24", flex: 1 }}
-                    >
-                      PIN locked — too many wrong attempts
-                    </AppText>
-                  </View>
-                ) : null}
-
                 {!pinStatus.pinSet ? (
                   <>
-                    <AppText
-                      style={{
-                        fontSize: 11,
-                        color: c.textMuted,
-                        lineHeight: 16,
-                      }}
-                    >
-                      Set a 4-digit PIN to secure your withdrawals. You'll enter
-                      this every time you request a payout.
-                    </AppText>
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <PinField
                         label="New PIN"
@@ -1689,15 +1639,6 @@ export default function SettingsScreen() {
                   </>
                 ) : (
                   <>
-                    <AppText
-                      style={{
-                        fontSize: 11,
-                        color: c.textMuted,
-                        lineHeight: 16,
-                      }}
-                    >
-                      Enter your current PIN then choose a new one.
-                    </AppText>
                     <View
                       style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
                     >
@@ -1747,57 +1688,69 @@ export default function SettingsScreen() {
           </Card>
         )}
 
-        {/* ═══════════════ ACCOUNT INFO (its own tab) ═══════════════ */}
+        {/* ═══════════════ ACCOUNT INFO ═══════════════ */}
         {tab === "accountInfo" && (
           <Card
-            title="Account Info"
+            title={t("settings.security.accountTitle")}
             icon={<FaShieldAlt size={18} color={c.orange} />}
-            desc="Your verification and account status"
+            desc={t("settings.security.accountSubtitle")}
             c={c}
           >
             {security ? (
               <>
-                <SecRow label="Email" value={security.email} c={c} />
                 <SecRow
-                  label="Email Verified"
+                  label={t("settings.security.email")}
+                  value={security.email}
+                  c={c}
+                />
+                <SecRow
+                  label={t("settings.security.emailVerified")}
                   value={
-                    security.isEmailVerified ? "✓ Verified" : "✗ Not verified"
+                    security.isEmailVerified
+                      ? t("settings.security.verified")
+                      : t("settings.security.notVerified")
                   }
                   color={security.isEmailVerified ? c.green : c.red}
                   c={c}
                 />
                 <SecRow
-                  label="Phone Verified"
+                  label={t("settings.security.phoneVerified")}
                   value={
-                    security.isPhoneVerified ? "✓ Verified" : "✗ Not verified"
+                    security.isPhoneVerified
+                      ? t("settings.security.verified")
+                      : t("settings.security.notVerified")
                   }
                   color={security.isPhoneVerified ? c.green : c.red}
                   c={c}
                 />
                 <SecRow
-                  label="2FA"
+                  label={t("settings.security.twoFA")}
                   value={
                     security.twoFactorEnabled
-                      ? "✓ Enabled"
-                      : "⚠ Not enabled (coming soon)"
+                      ? t("settings.security.enabled")
+                      : t("settings.security.notEnabled")
                   }
                   color={security.twoFactorEnabled ? c.green : "#fbbf24"}
                   c={c}
                 />
                 <SecRow
-                  label="Member Since"
+                  label={t("settings.security.memberSince")}
                   value={
                     security.accountCreated
                       ? new Date(security.accountCreated).toLocaleDateString(
                           "en-GB",
-                          { day: "numeric", month: "long", year: "numeric" },
+                          {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          },
                         )
                       : "—"
                   }
                   c={c}
                 />
                 <SecRow
-                  label="Last Seen"
+                  label={t("settings.security.lastSeen")}
                   value={
                     security.lastSeen
                       ? new Date(security.lastSeen).toLocaleString()
@@ -1816,159 +1769,9 @@ export default function SettingsScreen() {
           </Card>
         )}
 
-        {/* ═══════════════ ACCOUNT STATUS (new tab) ═══════════════ */}
+        {/* ═══════════════ ACCOUNT STATUS ═══════════════ */}
         {tab === "accountStatus" && (
           <>
-            {/* Current state banner */}
-            {deactivationCheck?.currentState?.deletionScheduledAt ? (
-              <View
-                style={{
-                  padding: 12,
-                  borderRadius: 12,
-                  backgroundColor: c.redDim,
-                  borderWidth: 1,
-                  borderColor: c.red,
-                  marginBottom: 12,
-                  flexDirection: "row",
-                  gap: 8,
-                  alignItems: "flex-start",
-                }}
-              >
-                <FaExclamationTriangle
-                  size={16}
-                  color={c.red}
-                  style={{ marginTop: 2 }}
-                />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <AppText
-                    style={{ fontSize: 12, fontWeight: "700", color: c.red }}
-                  >
-                    Account scheduled for deletion
-                  </AppText>
-                  <AppText
-                    style={{
-                      fontSize: 11,
-                      color: c.textDim,
-                      marginTop: 4,
-                      lineHeight: 16,
-                    }}
-                  >
-                    Your account will be permanently deleted on{" "}
-                    <AppText style={{ fontWeight: "700", color: c.text }}>
-                      {new Date(
-                        deactivationCheck.currentState.deletionScheduledAt,
-                      ).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })}
-                    </AppText>
-                    . Log in before then to cancel.
-                  </AppText>
-                  <Pressable
-                    onPress={async () => {
-                      try {
-                        await client.post("/settings/cancel-deletion");
-                        showToast("Deletion cancelled. Welcome back!");
-                        await refreshCheck();
-                      } catch {
-                        showToast("Failed to cancel deletion", "error");
-                      }
-                    }}
-                    style={[
-                      styles.outlineBtn,
-                      {
-                        borderColor: c.red,
-                        marginTop: 10,
-                        alignSelf: "flex-start",
-                      },
-                    ]}
-                  >
-                    <AppText
-                      style={{ fontSize: 11, fontWeight: "700", color: c.red }}
-                    >
-                      Cancel deletion
-                    </AppText>
-                  </Pressable>
-                </View>
-              </View>
-            ) : null}
-
-            {deactivationCheck?.currentState?.isPaused &&
-            !deactivationCheck?.currentState?.deletionScheduledAt ? (
-              <View
-                style={{
-                  padding: 12,
-                  borderRadius: 12,
-                  backgroundColor: "rgba(234,179,8,0.08)",
-                  borderWidth: 1,
-                  borderColor: "rgba(234,179,8,0.25)",
-                  marginBottom: 12,
-                  flexDirection: "row",
-                  gap: 8,
-                  alignItems: "flex-start",
-                }}
-              >
-                <FaPauseCircle
-                  size={16}
-                  color="#facc15"
-                  style={{ marginTop: 2 }}
-                />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <AppText
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: "#facc15",
-                    }}
-                  >
-                    Account currently paused
-                  </AppText>
-                  <AppText
-                    style={{
-                      fontSize: 11,
-                      color: c.textDim,
-                      marginTop: 4,
-                      lineHeight: 16,
-                    }}
-                  >
-                    Your profile is hidden and you won't receive new bookings.
-                    Resume anytime.
-                  </AppText>
-                  <Pressable
-                    onPress={async () => {
-                      try {
-                        await client.post("/settings/resume");
-                        showToast("Account resumed. Welcome back!");
-                        await refreshCheck();
-                      } catch {
-                        showToast("Failed to resume account", "error");
-                      }
-                    }}
-                    style={[
-                      styles.outlineBtn,
-                      {
-                        borderColor: "#facc15",
-                        marginTop: 10,
-                        alignSelf: "flex-start",
-                      },
-                    ]}
-                  >
-                    <AppText
-                      style={{
-                        fontSize: 11,
-                        fontWeight: "700",
-                        color: "#facc15",
-                      }}
-                    >
-                      Resume account
-                    </AppText>
-                  </Pressable>
-                </View>
-              </View>
-            ) : null}
-
-            {/* ── Blockers (show ALL) ── */}
             {hasBlockers ? (
               <View
                 style={{
@@ -2002,18 +1805,6 @@ export default function SettingsScreen() {
                     resolve first
                   </AppText>
                 </View>
-                <AppText
-                  style={{
-                    fontSize: 11,
-                    color: c.textDim,
-                    lineHeight: 16,
-                    marginBottom: 10,
-                  }}
-                >
-                  You cannot pause or delete your account while you have active
-                  commitments on the platform. Resolve the following, then come
-                  back:
-                </AppText>
                 {blockers.map((b) => (
                   <View
                     key={b.code}
@@ -2083,7 +1874,6 @@ export default function SettingsScreen() {
               </View>
             ) : null}
 
-            {/* ── Pause Account ── */}
             <Card
               title="Take a Break"
               icon={<FaPauseCircle size={18} color={c.orange} />}
@@ -2131,7 +1921,6 @@ export default function SettingsScreen() {
               </Pressable>
             </Card>
 
-            {/* ── Delete Account — hard-locked when blockers exist ── */}
             <Card
               title="Leave SkilledProz"
               icon={<FaTrash size={18} color={c.red} />}
@@ -2239,9 +2028,9 @@ export default function SettingsScreen() {
         {/* ═══════════════ ACTIVITY ═══════════════ */}
         {tab === "activity" && (
           <Card
-            title="Account Activity"
+            title={t("settings.activity.title")}
             icon={<FaChartLine size={18} color={c.orange} />}
-            desc="Your recent platform activity"
+            desc={t("settings.activity.subtitle")}
             c={c}
           >
             {activity ? (
@@ -2251,24 +2040,24 @@ export default function SettingsScreen() {
                 >
                   <StatCard
                     icon={<FaBell size={16} color={c.orange} />}
-                    label="Unread notifications"
+                    label={t("settings.activity.unreadNotifications")}
                     value={activity.summary.unreadNotifications}
                     c={c}
                   />
                   <StatCard
                     icon={<FaClipboardCheck size={16} color={c.orange} />}
-                    label="Total bookings"
+                    label={t("settings.activity.totalBookings")}
                     value={activity.summary.totalBookings}
                     c={c}
                   />
                   <StatCard
                     icon={<FaStar size={16} color={c.orange} />}
-                    label="Reviews received"
+                    label={t("settings.activity.reviewsReceived")}
                     value={activity.summary.totalReviews}
                     c={c}
                   />
                 </View>
-                <Divider label="Recent Activity" c={c} />
+                <Divider label={t("settings.activity.recentActivity")} c={c} />
                 {activity.recentActivity?.length === 0 ? (
                   <AppText
                     style={{
@@ -2278,7 +2067,7 @@ export default function SettingsScreen() {
                       padding: 20,
                     }}
                   >
-                    No recent activity yet.
+                    {t("notifications.empty")}
                   </AppText>
                 ) : (
                   activity.recentActivity?.map((n) => (
@@ -2352,7 +2141,7 @@ export default function SettingsScreen() {
           </Card>
         )}
 
-        {/* ═══════════════════ MODALS ═══════════════════ */}
+        {/* ═══════════════ MODALS ═══════════════ */}
         <Modal
           visible={showPauseModal}
           transparent
@@ -2376,43 +2165,18 @@ export default function SettingsScreen() {
               ]}
               onPress={(e) => e.stopPropagation()}
             >
-              <View
+              <AppText
                 style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  marginBottom: 16,
+                  fontSize: 15,
+                  fontWeight: "800",
+                  color: c.text,
+                  marginBottom: 8,
                 }}
               >
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    backgroundColor: c.orangeDim,
-                    borderWidth: 1,
-                    borderColor: c.orangeGlow,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <FaPauseCircle size={18} color={c.orange} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <AppText
-                    style={{ fontSize: 15, fontWeight: "800", color: c.text }}
-                  >
-                    Pause your account?
-                  </AppText>
-                  <AppText
-                    style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}
-                  >
-                    Reversible anytime — just log back in
-                  </AppText>
-                </View>
-              </View>
+                Pause your account?
+              </AppText>
               <Field
-                label="Password"
+                label={t("settings.security.currentPassword")}
                 value={pausePassword}
                 onChange={setPausePassword}
                 c={c}
@@ -2434,7 +2198,7 @@ export default function SettingsScreen() {
                       color: c.textDim,
                     }}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </AppText>
                 </Pressable>
                 <Pressable
@@ -2448,7 +2212,9 @@ export default function SettingsScreen() {
                   <AppText
                     style={{ fontSize: 12, fontWeight: "700", color: c.bg }}
                   >
-                    {saving === "pause" ? "Pausing…" : "Pause Account"}
+                    {saving === "pause"
+                      ? t("settings.hiringPrefs.saving")
+                      : "Pause Account"}
                   </AppText>
                 </Pressable>
               </View>
@@ -2483,90 +2249,22 @@ export default function SettingsScreen() {
               ]}
               onPress={(e) => e.stopPropagation()}
             >
-              <View
+              <AppText
                 style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  marginBottom: 16,
+                  fontSize: 15,
+                  fontWeight: "800",
+                  color: c.text,
+                  marginBottom: 8,
                 }}
               >
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    backgroundColor: c.redDim,
-                    borderWidth: 1,
-                    borderColor: "rgba(239,68,68,0.3)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <FaTrash size={18} color={c.red} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <AppText
-                    style={{ fontSize: 15, fontWeight: "800", color: c.text }}
-                  >
-                    Delete your account?
-                  </AppText>
-                  <AppText
-                    style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}
-                  >
-                    Permanent · 30-day grace period
-                  </AppText>
-                </View>
-              </View>
-              <View
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  backgroundColor: c.redDim,
-                  borderWidth: 1,
-                  borderColor: "rgba(239,68,68,0.2)",
-                  marginBottom: 12,
-                }}
-              >
-                <AppText
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    color: c.red,
-                    marginBottom: 4,
-                  }}
-                >
-                  Here's what happens when you delete:
-                </AppText>
-                {[
-                  "Your profile is hidden immediately",
-                  "Your data is deleted permanently after 30 days",
-                  "Your reviews remain (anonymised)",
-                  "Transaction records are kept for legal compliance",
-                  "Log in within 30 days to cancel",
-                ].map((line) => (
-                  <AppText
-                    key={line}
-                    style={{ fontSize: 11, color: c.textDim, lineHeight: 16 }}
-                  >
-                    • {line}
-                  </AppText>
-                ))}
-              </View>
+                Delete your account?
+              </AppText>
               <Field
-                label="Password"
+                label={t("settings.security.currentPassword")}
                 value={deletePassword}
                 onChange={setDeletePassword}
                 c={c}
                 secure
-                full
-              />
-              <Field
-                label="Why are you leaving? (optional)"
-                value={deleteReason}
-                onChange={setDeleteReason}
-                c={c}
-                multiline
                 full
               />
               <Field
@@ -2593,7 +2291,7 @@ export default function SettingsScreen() {
                       color: c.textDim,
                     }}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </AppText>
                 </Pressable>
                 <Pressable
@@ -2620,7 +2318,9 @@ export default function SettingsScreen() {
                   <AppText
                     style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}
                   >
-                    {saving === "delete" ? "Processing…" : "Delete Account"}
+                    {saving === "delete"
+                      ? t("settings.hiringPrefs.saving")
+                      : "Delete Account"}
                   </AppText>
                 </Pressable>
               </View>
@@ -2631,7 +2331,7 @@ export default function SettingsScreen() {
         <PickerSheet
           visible={showLangPicker}
           onClose={() => setShowLangPicker(false)}
-          title="Language"
+          title={t("settings.appearance.languageLabel")}
           options={ALL_LANGUAGES.map((l) => ({ label: l.name, value: l.code }))}
           selected={language}
           onSelect={(v) => {
@@ -2647,7 +2347,7 @@ export default function SettingsScreen() {
             setShowCurrencyPicker(false);
             setCurrencyPickerTarget(null);
           }}
-          title="Currency"
+          title={t("settings.select.currency")}
           options={ALL_CURRENCIES.map((code) => ({
             label: `${CURRENCY_META[code]?.symbol} ${code} — ${CURRENCY_META[code]?.name}`,
             value: code,
@@ -2678,10 +2378,10 @@ export default function SettingsScreen() {
         <PickerSheet
           visible={showGenderPicker}
           onClose={() => setShowGenderPicker(false)}
-          title="Gender"
+          title={t("settings.profile.gender")}
           options={[
-            { label: "Prefer not to say", value: "" },
-            ...GENDERS.map((g) => ({ label: g, value: g })),
+            { label: t("settings.gender.preferNot"), value: "" },
+            ...GENDERS.map((g) => ({ label: t(g.key), value: g.value })),
           ]}
           selected={form.gender}
           onSelect={(v) => {
@@ -2802,7 +2502,7 @@ export default function SettingsScreen() {
   );
 }
 
-// ═══════════════════ Sub-components (unchanged) ═══════════════════
+// ═══════════════ Sub-components ═══════════════
 function Card({ title, icon, desc, children, c }) {
   return (
     <View
@@ -2905,9 +2605,7 @@ function Field({
 }) {
   return (
     <View style={full ? { width: "100%" } : { flex: 1, minWidth: 140 }}>
-      <AppText style={[labelStyle(c), { color: c.textDim }]}>
-        {label}
-      </AppText>
+      <AppText style={[labelStyle(c), { color: c.textDim }]}>{label}</AppText>
       <TextInput
         value={String(value || "")}
         onChangeText={onChange}
@@ -2935,9 +2633,7 @@ function Field({
 function PinField({ label, value, onChange, c }) {
   return (
     <View style={{ flex: 1, minWidth: 100 }}>
-      <AppText style={[labelStyle(c), { color: c.textDim }]}>
-        {label}
-      </AppText>
+      <AppText style={[labelStyle(c), { color: c.textDim }]}>{label}</AppText>
       <TextInput
         value={value}
         onChangeText={(v) => onChange(v.replace(/\D/g, "").slice(0, 4))}
@@ -2966,9 +2662,7 @@ function PinField({ label, value, onChange, c }) {
 function SelectField({ label, value, onPress, c }) {
   return (
     <View style={{ flex: 1, minWidth: 140 }}>
-      <AppText style={[labelStyle(c), { color: c.textDim }]}>
-        {label}
-      </AppText>
+      <AppText style={[labelStyle(c), { color: c.textDim }]}>{label}</AppText>
       <Pressable
         onPress={onPress}
         style={[
@@ -2995,9 +2689,7 @@ function SelectField({ label, value, onPress, c }) {
 function PriceField({ label, suffix, value, onChange, c }) {
   return (
     <View style={{ flex: 1, minWidth: 140 }}>
-      <AppText style={[labelStyle(c), { color: c.textDim }]}>
-        {label}
-      </AppText>
+      <AppText style={[labelStyle(c), { color: c.textDim }]}>{label}</AppText>
       <View style={{ position: "relative" }}>
         <TextInput
           value={String(value || "")}
@@ -3035,9 +2727,7 @@ function PriceField({ label, suffix, value, onChange, c }) {
 function OptionRow({ label, options, value, onChange, c }) {
   return (
     <View>
-      <AppText style={[labelStyle(c), { color: c.textDim }]}>
-        {label}
-      </AppText>
+      <AppText style={[labelStyle(c), { color: c.textDim }]}>{label}</AppText>
       <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
         {options.map((o) => {
           const active = value === o;
@@ -3112,7 +2802,7 @@ function SaveBtn({ label, loading, onClick, c }) {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <ActivityIndicator size="small" color={c.bg} />
           <AppText style={{ fontSize: 12, fontWeight: "700", color: c.bg }}>
-            Saving...
+            {label}
           </AppText>
         </View>
       ) : (
@@ -3249,26 +2939,6 @@ function CurrencyPickerRow({ current, onChange, onOpen, c }) {
         </AppText>
         <FaChevronDown size={11} color={c.textDim} />
       </Pressable>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          borderRadius: 8,
-          backgroundColor: c.orangeDim,
-          borderWidth: 1,
-          borderColor: c.orangeGlow,
-        }}
-      >
-        <AppText style={{ fontSize: 16, fontWeight: "800", color: c.orange }}>
-          {meta.symbol}
-        </AppText>
-        <AppText style={{ fontSize: 11, color: c.textDim }}>
-          {meta.name}
-        </AppText>
-      </View>
     </View>
   );
 }
@@ -3462,21 +3132,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  dangerOption: {
-    flex: 1,
-    minWidth: 160,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 6,
-  },
-  outlineBtn: {
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 9,
-    borderWidth: 1,
   },
   primaryBtn: {
     alignItems: "center",

@@ -1,7 +1,9 @@
 // src/screens/main/CampaignDashboardScreen.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Verbatim mirror of the website's /referral/campaign page
-// (src/pages/referral/CampaignDashboard.jsx). All visuals use Ionicons.
+// Full i18n port. All visible strings use t() with keys already in en.json
+// under campaign.*. Font sizes are tuned down for small screens.
+// Page uses tight 16px horizontal padding to hug the screen edges like the
+// website's .page rule (padding: 20px 16px 60px).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -33,9 +35,6 @@ import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
 import client from "../../api/client";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTS
-// ─────────────────────────────────────────────────────────────────────────────
 const APP_URL = "https://skilledproz.com";
 
 const TASKS = [
@@ -119,9 +118,6 @@ const PLATFORM_STYLE = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
 const fmtAmt = (n) =>
   `₦${Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
@@ -174,10 +170,7 @@ function statusColors(cls, c) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ATOMS
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ─────────────── Atoms ───────────────
 function Badge({ status, meta, t, c }) {
   const m = meta[status] || { labelKey: null, cls: "dim" };
   const label = m.labelKey ? t(m.labelKey) : status;
@@ -188,7 +181,7 @@ function Badge({ status, meta, t, c }) {
     >
       <AppText
         style={{
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: "700",
           color: col.color,
           letterSpacing: 0.4,
@@ -222,13 +215,13 @@ function ReferralProgramBadge({ status, t, c }) {
     >
       <Ionicons
         name="people-outline"
-        size={11}
+        size={10}
         color={col.color}
-        style={{ marginRight: 4 }}
+        style={{ marginRight: 3 }}
       />
       <AppText
         style={{
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: "700",
           color: col.color,
           letterSpacing: 0.4,
@@ -240,7 +233,7 @@ function ReferralProgramBadge({ status, t, c }) {
   );
 }
 
-function Avatar({ name, avatar, size = 34, c }) {
+function Avatar({ name, avatar, size = 32, c }) {
   const initials =
     name
       ?.split(" ")
@@ -266,11 +259,7 @@ function Avatar({ name, avatar, size = 34, c }) {
         <Image source={{ uri: avatar }} style={{ width: size, height: size }} />
       ) : (
         <AppText
-          style={{
-            fontSize: size * 0.33,
-            color: c.orange,
-            fontWeight: "700",
-          }}
+          style={{ fontSize: size * 0.32, color: c.orange, fontWeight: "700" }}
         >
           {initials}
         </AppText>
@@ -298,15 +287,10 @@ function StatCard({ iconName, label, value, accent, c }) {
     accent === "green" ? "#22c55e" : accent === "orange" ? c.orange : c.textDim;
   return (
     <View style={[st.card, { backgroundColor: bg, borderColor: bd }]}>
-      <Ionicons name={iconName} size={17} color={iconColor} />
+      <Ionicons name={iconName} size={15} color={iconColor} />
       <AppText
         weight="displayBlack"
-        style={{
-          fontSize: 22,
-          lineHeight: 28,
-          color: valColor,
-          marginTop: 3,
-        }}
+        style={{ fontSize: 18, lineHeight: 22, color: valColor, marginTop: 2 }}
         numberOfLines={1}
         adjustsFontSizeToFit
       >
@@ -314,10 +298,10 @@ function StatCard({ iconName, label, value, accent, c }) {
       </AppText>
       <AppText
         style={{
-          fontSize: 9,
+          fontSize: 8,
           color: c.textMuted,
           fontWeight: "700",
-          letterSpacing: 0.8,
+          letterSpacing: 0.6,
           textTransform: "uppercase",
           marginTop: 2,
         }}
@@ -335,7 +319,7 @@ function TaskPips({ tasks, r, t, c }) {
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: 4,
+        gap: 3,
         marginTop: 5,
       }}
     >
@@ -345,9 +329,9 @@ function TaskPips({ tasks, r, t, c }) {
           <View
             key={task.key}
             style={{
-              width: 18,
-              height: 18,
-              borderRadius: 9,
+              width: 16,
+              height: 16,
+              borderRadius: 8,
               borderWidth: 1.5,
               alignItems: "center",
               justifyContent: "center",
@@ -358,14 +342,14 @@ function TaskPips({ tasks, r, t, c }) {
             {done && (
               <Ionicons
                 name="checkmark"
-                size={10}
+                size={9}
                 color={task.color === "#000000" ? "#000" : "#fff"}
               />
             )}
           </View>
         );
       })}
-      <AppText style={{ fontSize: 10, color: c.textMuted, marginLeft: 4 }}>
+      <AppText style={{ fontSize: 9, color: c.textMuted, marginLeft: 3 }}>
         {t("campaign.taskScore", {
           done: r.tasks?.completedCount ?? 0,
           total: r.tasks?.totalCount ?? 5,
@@ -375,9 +359,6 @@ function TaskPips({ tasks, r, t, c }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SKELETON
-// ─────────────────────────────────────────────────────────────────────────────
 function Skeleton({ height = 62, c, style }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -405,22 +386,14 @@ function Skeleton({ height = 62, c, style }) {
   return (
     <Animated.View
       style={[
-        {
-          height,
-          borderRadius: 12,
-          backgroundColor: bg,
-          marginBottom: 8,
-        },
+        { height, borderRadius: 12, backgroundColor: bg, marginBottom: 8 },
         style,
       ]}
     />
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FULLSCREEN LIGHTBOX
-// ─────────────────────────────────────────────────────────────────────────────
-function FullscreenImage({ src, alt, onClose }) {
+function FullscreenImage({ src, alt, onClose, t }) {
   if (!src) return null;
   return (
     <Modal
@@ -446,7 +419,7 @@ function FullscreenImage({ src, alt, onClose }) {
         >
           <Image
             source={{ uri: src }}
-            style={{ width: 320, height: 400, borderRadius: 12 }}
+            style={{ width: 300, height: 380, borderRadius: 12 }}
             resizeMode="contain"
           />
         </Pressable>
@@ -486,7 +459,7 @@ function FullscreenImage({ src, alt, onClose }) {
         >
           <Ionicons name="open-outline" size={14} color="#fff" />
           <AppText variant="small" weight="semibold" style={{ color: "#fff" }}>
-            {alt ? `Open ${alt}` : "Open"}
+            {t("campaign.social.viewScreenshot")}
           </AppText>
         </Pressable>
       </Pressable>
@@ -494,9 +467,6 @@ function FullscreenImage({ src, alt, onClose }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SOCIAL CARD
-// ─────────────────────────────────────────────────────────────────────────────
 function SocialCard({
   task,
   done,
@@ -558,25 +528,29 @@ function SocialCard({
         },
       ]}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <View
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
+            width: 34,
+            height: 34,
+            borderRadius: 17,
             backgroundColor: pc.bg,
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
           }}
         >
-          <Ionicons name={task.iconName} size={22} color={pc.color} />
+          <Ionicons name={task.iconName} size={19} color={pc.color} />
         </View>
         <View style={{ flex: 1 }}>
-          <AppText variant="body" weight="semibold" style={{ color: c.text }}>
+          <AppText
+            variant="body"
+            weight="semibold"
+            style={{ color: c.text, fontSize: 13 }}
+          >
             {t(task.labelKey)}
           </AppText>
-          <AppText variant="small" tone="dim">
+          <AppText variant="small" tone="dim" style={{ fontSize: 11 }}>
             @skilledproz
           </AppText>
         </View>
@@ -590,40 +564,38 @@ function SocialCard({
               },
             ]}
           >
-            <Ionicons name="checkmark-circle" size={12} color="#22c55e" />
+            <Ionicons name="checkmark-circle" size={11} color="#22c55e" />
             <AppText
               style={{
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: "700",
                 color: "#22c55e",
-                marginLeft: 4,
+                marginLeft: 3,
               }}
             >
               {t("campaign.social.done")}
             </AppText>
           </View>
         ) : (
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Pressable
-              onPress={() => Linking.openURL(link).catch(() => {})}
-              style={[sf.followBtn, { backgroundColor: pc.color }]}
+          <Pressable
+            onPress={() => Linking.openURL(link).catch(() => {})}
+            style={[sf.followBtn, { backgroundColor: pc.color }]}
+          >
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: task.platform === "tiktok" ? "#000" : "#000",
+              }}
             >
-              <AppText
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: task.platform === "tiktok" ? "#000" : "#000",
-                }}
-              >
-                {t("campaign.social.follow")}
-              </AppText>
-            </Pressable>
-          </View>
+              {t("campaign.social.follow")}
+            </AppText>
+          </Pressable>
         )}
       </View>
 
       {!done && (
-        <View style={{ marginTop: 12 }}>
+        <View style={{ marginTop: 10 }}>
           <View
             style={{
               flexDirection: "row",
@@ -632,8 +604,12 @@ function SocialCard({
               marginBottom: 8,
             }}
           >
-            <Ionicons name="attach-outline" size={12} color={c.textMuted} />
-            <AppText variant="small" tone="dim" style={{ flex: 1 }}>
+            <Ionicons name="attach-outline" size={11} color={c.textMuted} />
+            <AppText
+              variant="small"
+              tone="dim"
+              style={{ flex: 1, fontSize: 11 }}
+            >
               {t("campaign.social.uploadHint")}{" "}
               <AppText style={{ color: "#ef4444" }}>*</AppText>
             </AppText>
@@ -644,17 +620,14 @@ function SocialCard({
               onPress={pickFile}
               style={[
                 sf.chooseBtn,
-                {
-                  borderColor: c.border,
-                  backgroundColor: c.bgPanel,
-                },
+                { borderColor: c.border, backgroundColor: c.bgPanel },
               ]}
             >
-              <Ionicons name="cloud-upload-outline" size={14} color={c.text} />
+              <Ionicons name="cloud-upload-outline" size={13} color={c.text} />
               <AppText
                 variant="small"
                 weight="semibold"
-                style={{ color: c.text, marginLeft: 6 }}
+                style={{ color: c.text, marginLeft: 6, fontSize: 12 }}
               >
                 {t("campaign.social.chooseImage")}
               </AppText>
@@ -679,7 +652,12 @@ function SocialCard({
                     { borderColor: c.border, backgroundColor: c.bgCard },
                   ]}
                 >
-                  <AppText variant="small" weight="semibold" tone="dim">
+                  <AppText
+                    variant="small"
+                    weight="semibold"
+                    tone="dim"
+                    style={{ fontSize: 11 }}
+                  >
                     {t("campaign.social.replace")}
                   </AppText>
                 </Pressable>
@@ -696,7 +674,7 @@ function SocialCard({
                   <AppText
                     variant="small"
                     weight="semibold"
-                    style={{ color: "#ef4444" }}
+                    style={{ color: "#ef4444", fontSize: 11 }}
                   >
                     {t("campaign.social.remove")}
                   </AppText>
@@ -726,6 +704,7 @@ function SocialCard({
                 weight="semibold"
                 style={{
                   color: picked ? "#22c55e" : c.textMuted,
+                  fontSize: 12,
                 }}
               >
                 {t("campaign.social.markDone")}
@@ -745,11 +724,11 @@ function SocialCard({
             gap: 6,
           }}
         >
-          <Ionicons name="attach-outline" size={12} color={c.orange} />
+          <Ionicons name="attach-outline" size={11} color={c.orange} />
           <AppText
             variant="small"
             weight="semibold"
-            style={{ color: c.orange }}
+            style={{ color: c.orange, fontSize: 11 }}
           >
             {t("campaign.social.viewScreenshot")}
           </AppText>
@@ -759,9 +738,6 @@ function SocialCard({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUBMISSION CARD
-// ─────────────────────────────────────────────────────────────────────────────
 function SubmissionCard({ sub, t, c }) {
   const [open, setOpen] = useState(false);
   const meta = SUBMISSION_META[sub.status] || SUBMISSION_META.PENDING;
@@ -781,8 +757,12 @@ function SubmissionCard({ sub, t, c }) {
               marginBottom: 6,
             }}
           >
-            <Ionicons name="calendar-outline" size={14} color={c.text} />
-            <AppText variant="body" weight="semibold" style={{ color: c.text }}>
+            <Ionicons name="calendar-outline" size={13} color={c.text} />
+            <AppText
+              variant="body"
+              weight="semibold"
+              style={{ color: c.text, fontSize: 13 }}
+            >
               {sub.date}
             </AppText>
           </View>
@@ -795,18 +775,16 @@ function SubmissionCard({ sub, t, c }) {
             }}
           >
             <Badge status={sub.status} meta={SUBMISSION_META} t={t} c={c} />
-            <AppText variant="small" tone="dim">
-              {t("campaign.history.submitted", {
-                count: sub.totalSubmitted,
-              })}
+            <AppText variant="small" tone="dim" style={{ fontSize: 11 }}>
+              {t("campaign.history.submitted", { count: sub.totalSubmitted })}
             </AppText>
             {sub.totalApproved > 0 && (
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
               >
-                <Ionicons name="checkmark" size={11} color="#22c55e" />
+                <Ionicons name="checkmark" size={10} color="#22c55e" />
                 <AppText
-                  style={{ fontSize: 11, fontWeight: "700", color: "#22c55e" }}
+                  style={{ fontSize: 10, fontWeight: "700", color: "#22c55e" }}
                 >
                   {sub.totalApproved} {t("campaign.history.approved")}
                 </AppText>
@@ -816,9 +794,9 @@ function SubmissionCard({ sub, t, c }) {
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
               >
-                <Ionicons name="close" size={11} color="#ef4444" />
+                <Ionicons name="close" size={10} color="#ef4444" />
                 <AppText
-                  style={{ fontSize: 11, fontWeight: "700", color: "#ef4444" }}
+                  style={{ fontSize: 10, fontWeight: "700", color: "#ef4444" }}
                 >
                   {sub.totalRejected} {t("campaign.history.rejected")}
                 </AppText>
@@ -830,14 +808,14 @@ function SubmissionCard({ sub, t, c }) {
           {sub.netAmount > 0 && (
             <AppText
               weight="displayBlack"
-              style={{ fontSize: 18, color: "#22c55e" }}
+              style={{ fontSize: 16, color: "#22c55e" }}
             >
               {fmtAmt(sub.netAmount)}
             </AppText>
           )}
           <Ionicons
             name={open ? "chevron-up" : "chevron-down"}
-            size={14}
+            size={13}
             color={c.textMuted}
           />
         </View>
@@ -860,11 +838,15 @@ function SubmissionCard({ sub, t, c }) {
             >
               <Ionicons
                 name="document-text-outline"
-                size={13}
+                size={12}
                 color={c.orange}
                 style={{ marginTop: 1 }}
               />
-              <AppText variant="small" tone="dim" style={{ flex: 1 }}>
+              <AppText
+                variant="small"
+                tone="dim"
+                style={{ flex: 1, fontSize: 11 }}
+              >
                 {t("campaign.history.admin")}: {sub.adminNote}
               </AppText>
             </View>
@@ -877,19 +859,24 @@ function SubmissionCard({ sub, t, c }) {
                 key={r.id}
                 style={[sk.refRow, { borderBottomColor: c.border }]}
               >
-                <Avatar name={r.name} avatar={r.avatar} size={30} c={c} />
+                <Avatar name={r.name} avatar={r.avatar} size={28} c={c} />
                 <AppText
                   variant="body"
-                  style={{ flex: 1, color: c.text, marginLeft: 10 }}
+                  style={{
+                    flex: 1,
+                    color: c.text,
+                    marginLeft: 8,
+                    fontSize: 12,
+                  }}
                   numberOfLines={1}
                 >
                   {r.name}
                 </AppText>
                 <View
                   style={{
-                    paddingHorizontal: 8,
-                    paddingVertical: 3,
-                    borderRadius: 16,
+                    paddingHorizontal: 7,
+                    paddingVertical: 2,
+                    borderRadius: 14,
                     borderWidth: 1,
                     backgroundColor: rcol.bg,
                     borderColor: rcol.border,
@@ -897,7 +884,7 @@ function SubmissionCard({ sub, t, c }) {
                 >
                   <AppText
                     style={{
-                      fontSize: 9,
+                      fontSize: 8,
                       fontWeight: "700",
                       color: rcol.color,
                     }}
@@ -908,7 +895,7 @@ function SubmissionCard({ sub, t, c }) {
                 {r.status === "APPROVED" && (
                   <AppText
                     weight="semibold"
-                    style={{ fontSize: 13, color: "#22c55e", marginLeft: 8 }}
+                    style={{ fontSize: 12, color: "#22c55e", marginLeft: 6 }}
                   >
                     +{fmtAmt(r.reward)}
                   </AppText>
@@ -922,9 +909,6 @@ function SubmissionCard({ sub, t, c }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WITHDRAW MODAL
-// ─────────────────────────────────────────────────────────────────────────────
 function WithdrawModal({
   visible,
   balance,
@@ -1026,16 +1010,16 @@ function WithdrawModal({
                 flexDirection: "row",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: 16,
+                marginBottom: 14,
               }}
             >
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
               >
-                <Ionicons name="card-outline" size={18} color="#22c55e" />
+                <Ionicons name="card-outline" size={16} color="#22c55e" />
                 <AppText
                   weight="displayBlack"
-                  style={{ fontSize: 18, color: c.text }}
+                  style={{ fontSize: 16, color: c.text }}
                 >
                   {t("campaign.withdraw.title")}
                 </AppText>
@@ -1047,7 +1031,7 @@ function WithdrawModal({
                   { borderColor: c.border, backgroundColor: c.bgCard },
                 ]}
               >
-                <Ionicons name="close" size={16} color={c.text} />
+                <Ionicons name="close" size={15} color={c.text} />
               </Pressable>
             </View>
 
@@ -1067,9 +1051,9 @@ function WithdrawModal({
                 <View style={{ flex: 1 }}>
                   <AppText
                     style={{
-                      fontSize: 9,
+                      fontSize: 8,
                       color: "#22c55e",
-                      letterSpacing: 0.8,
+                      letterSpacing: 0.6,
                       fontWeight: "700",
                     }}
                   >
@@ -1077,7 +1061,7 @@ function WithdrawModal({
                   </AppText>
                   <AppText
                     weight="displayBlack"
-                    style={{ color: "#22c55e", fontSize: 22, marginTop: 2 }}
+                    style={{ color: "#22c55e", fontSize: 18, marginTop: 2 }}
                   >
                     {fmtAmt(balance)}
                   </AppText>
@@ -1085,9 +1069,9 @@ function WithdrawModal({
                 <View style={{ flex: 1, alignItems: "flex-end" }}>
                   <AppText
                     style={{
-                      fontSize: 9,
+                      fontSize: 8,
                       color: c.textMuted,
-                      letterSpacing: 0.8,
+                      letterSpacing: 0.6,
                       fontWeight: "700",
                     }}
                   >
@@ -1095,7 +1079,7 @@ function WithdrawModal({
                   </AppText>
                   <AppText
                     weight="semibold"
-                    style={{ color: c.textMuted, fontSize: 14, marginTop: 2 }}
+                    style={{ color: c.textMuted, fontSize: 13, marginTop: 2 }}
                   >
                     {fmtAmt(minWithdrawal)}
                   </AppText>
@@ -1108,17 +1092,14 @@ function WithdrawModal({
               <View
                 style={[
                   wm.amtRow,
-                  {
-                    borderColor: c.border,
-                    backgroundColor: c.bgInput,
-                  },
+                  { borderColor: c.border, backgroundColor: c.bgInput },
                 ]}
               >
                 <View style={[wm.curBadge, { backgroundColor: c.bgPanel }]}>
                   <AppText
                     variant="small"
                     weight="semibold"
-                    style={{ color: c.textMuted }}
+                    style={{ color: c.textMuted, fontSize: 11 }}
                   >
                     ₦ NGN
                   </AppText>
@@ -1132,7 +1113,7 @@ function WithdrawModal({
                   style={{
                     flex: 1,
                     color: c.text,
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: "700",
                     paddingHorizontal: 12,
                   }}
@@ -1151,7 +1132,7 @@ function WithdrawModal({
                     <AppText
                       variant="small"
                       weight="semibold"
-                      style={{ color: c.text }}
+                      style={{ color: c.text, fontSize: 11 }}
                     >
                       {p === 1 ? t("campaign.withdraw.max") : `${p * 100}%`}
                     </AppText>
@@ -1183,11 +1164,15 @@ function WithdrawModal({
                   ph: t("campaign.withdraw.accountNamePh"),
                 },
               ].map((f) => (
-                <View key={f.k} style={{ marginBottom: 12 }}>
+                <View key={f.k} style={{ marginBottom: 10 }}>
                   <AppText
                     variant="small"
                     weight="semibold"
-                    style={{ color: c.textMuted, marginBottom: 6 }}
+                    style={{
+                      color: c.textMuted,
+                      marginBottom: 5,
+                      fontSize: 11,
+                    }}
                   >
                     {f.label} *
                   </AppText>
@@ -1213,7 +1198,7 @@ function WithdrawModal({
               <AppText
                 variant="small"
                 weight="semibold"
-                style={{ color: c.textMuted, marginBottom: 6 }}
+                style={{ color: c.textMuted, marginBottom: 5, fontSize: 11 }}
               >
                 {t("campaign.withdraw.pin")} *
               </AppText>
@@ -1235,7 +1220,7 @@ function WithdrawModal({
                     backgroundColor: c.bgInput,
                     letterSpacing: 12,
                     textAlign: "center",
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: "700",
                   },
                 ]}
@@ -1243,7 +1228,12 @@ function WithdrawModal({
               <AppText
                 variant="small"
                 tone="dim"
-                style={{ marginTop: 4, marginBottom: 12, lineHeight: 16 }}
+                style={{
+                  marginTop: 4,
+                  marginBottom: 12,
+                  lineHeight: 15,
+                  fontSize: 11,
+                }}
               >
                 {t("campaign.withdraw.pinHint")}
               </AppText>
@@ -1269,11 +1259,12 @@ function WithdrawModal({
                     style={{
                       color: c.orange,
                       textDecorationLine: "underline",
+                      fontSize: 11,
                     }}
                   >
                     {t("campaign.withdraw.setPin")}
                   </AppText>
-                  <Ionicons name="arrow-forward" size={12} color={c.orange} />
+                  <Ionicons name="arrow-forward" size={11} color={c.orange} />
                 </Pressable>
               )}
 
@@ -1298,7 +1289,7 @@ function WithdrawModal({
                         submitting || !form.amount.trim()
                           ? c.textMuted
                           : "#000",
-                      fontSize: 14,
+                      fontSize: 13,
                     }}
                   >
                     {t("campaign.withdraw.submit")}
@@ -1308,7 +1299,12 @@ function WithdrawModal({
               <AppText
                 variant="small"
                 tone="dim"
-                style={{ textAlign: "center", marginTop: 8, marginBottom: 32 }}
+                style={{
+                  textAlign: "center",
+                  marginTop: 8,
+                  marginBottom: 32,
+                  fontSize: 11,
+                }}
               >
                 {t("campaign.withdraw.note")}
               </AppText>
@@ -1320,9 +1316,7 @@ function WithdrawModal({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────── Main Screen ───────────────
 export default function CampaignDashboardScreen() {
   const { t } = useTranslation();
   const { theme: th } = useTheme();
@@ -1353,9 +1347,7 @@ export default function CampaignDashboardScreen() {
         client.get("/campaign/submissions?limit=30"),
         client.get("/campaign/my-tasks"),
       ]);
-      if (sRes.status === "fulfilled") {
-        setStatus(sRes.value.data.data);
-      }
+      if (sRes.status === "fulfilled") setStatus(sRes.value.data.data);
       if (rRes.status === "fulfilled")
         setReferrals(rRes.value.data.data?.referrals || []);
       if (subRes.status === "fulfilled")
@@ -1478,11 +1470,7 @@ export default function CampaignDashboardScreen() {
     readyCount > 0 && !alreadySubmitted && !submitting && allReadyHaveProfile;
 
   const TABS = [
-    {
-      key: "earn",
-      label: t("campaign.tab.earn"),
-      iconName: "cash-outline",
-    },
+    { key: "earn", label: t("campaign.tab.earn"), iconName: "cash-outline" },
     ...(hasMyTasks
       ? [
           {
@@ -1503,7 +1491,12 @@ export default function CampaignDashboardScreen() {
     return (
       <ScrollView
         style={{ flex: 1, backgroundColor: c.bg }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 56 }}
+        contentContainerStyle={{
+          paddingHorizontal: 8,
+          paddingTop: 16,
+          paddingBottom: 48,
+          gap: 10,
+        }}
       >
         <Skeleton height={20} c={c} style={{ width: "40%" }} />
         <Skeleton height={36} c={c} style={{ width: "70%", marginTop: 8 }} />
@@ -1537,7 +1530,12 @@ export default function CampaignDashboardScreen() {
     <>
       <ScrollView
         style={{ flex: 1, backgroundColor: c.bg }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 56 }}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 20,
+          paddingBottom: 60,
+          gap: 14,
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -1550,8 +1548,8 @@ export default function CampaignDashboardScreen() {
           />
         }
       >
-        {/* ── Header ── */}
-        <View style={{ marginBottom: 18 }}>
+        {/* Header */}
+        <View>
           <View
             style={{
               flexDirection: "row",
@@ -1560,13 +1558,13 @@ export default function CampaignDashboardScreen() {
               flexWrap: "wrap",
             }}
           >
-            <View style={{ flex: 1, minWidth: 220 }}>
+            <View style={{ flex: 1, minWidth: 200 }}>
               <AppText
                 style={{
-                  fontSize: 10,
+                  fontSize: 9,
                   color: c.orange,
                   fontWeight: "700",
-                  letterSpacing: 1.4,
+                  letterSpacing: 1.2,
                   textTransform: "uppercase",
                 }}
               >
@@ -1575,16 +1573,20 @@ export default function CampaignDashboardScreen() {
               <AppText
                 weight="displayBlack"
                 style={{
-                  fontSize: 30,
-                  lineHeight: 36,
+                  fontSize: 24,
+                  lineHeight: 30,
                   color: c.text,
-                  letterSpacing: -0.5,
+                  letterSpacing: -0.4,
                   marginVertical: 4,
                 }}
               >
                 {t("campaign.title")}
               </AppText>
-              <AppText variant="body" tone="dim" style={{ lineHeight: 20 }}>
+              <AppText
+                variant="body"
+                tone="dim"
+                style={{ lineHeight: 18, fontSize: 13 }}
+              >
                 {t("campaign.subtitlePrefix")}{" "}
                 <AppText
                   weight="semibold"
@@ -1597,8 +1599,8 @@ export default function CampaignDashboardScreen() {
             </View>
             <View
               style={{
-                paddingHorizontal: 14,
-                paddingVertical: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
                 backgroundColor: "rgba(249,115,22,0.12)",
                 borderWidth: 1.5,
                 borderColor: "rgba(249,115,22,0.35)",
@@ -1608,10 +1610,10 @@ export default function CampaignDashboardScreen() {
                 gap: 6,
               }}
             >
-              <Ionicons name="cash" size={13} color={c.orange} />
+              <Ionicons name="cash" size={12} color={c.orange} />
               <AppText
                 style={{
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: "800",
                   color: c.orange,
                   letterSpacing: 0.2,
@@ -1623,11 +1625,10 @@ export default function CampaignDashboardScreen() {
           </View>
         </View>
 
-        {/* ── Wallet Card ── */}
+        {/* Wallet */}
         <Card
           padded
           style={{
-            marginBottom: 10,
             borderWidth: 1.5,
             borderColor: "rgba(34,197,94,0.25)",
             backgroundColor: "rgba(34,197,94,0.05)",
@@ -1635,10 +1636,10 @@ export default function CampaignDashboardScreen() {
         >
           <AppText
             style={{
-              fontSize: 10,
+              fontSize: 9,
               color: c.textMuted,
               fontWeight: "700",
-              letterSpacing: 0.9,
+              letterSpacing: 0.8,
               textTransform: "uppercase",
             }}
           >
@@ -1647,16 +1648,20 @@ export default function CampaignDashboardScreen() {
           <AppText
             weight="displayBlack"
             style={{
-              fontSize: 38,
-              lineHeight: 44,
+              fontSize: 30,
+              lineHeight: 34,
               color: "#22c55e",
-              letterSpacing: -1,
+              letterSpacing: -0.8,
               marginTop: 4,
             }}
           >
             {fmtAmt(walletBal)}
           </AppText>
-          <AppText variant="small" tone="dim" style={{ marginBottom: 14 }}>
+          <AppText
+            variant="small"
+            tone="dim"
+            style={{ marginBottom: 12, fontSize: 11 }}
+          >
             {t("campaign.wallet.lifetime")}:{" "}
             {fmtAmt(status?.wallet?.lifetimeTotal)}
           </AppText>
@@ -1664,7 +1669,7 @@ export default function CampaignDashboardScreen() {
             onPress={() => status?.wallet?.canWithdraw && setShowWd(true)}
             disabled={!status?.wallet?.canWithdraw}
             style={{
-              paddingVertical: 11,
+              paddingVertical: 10,
               borderRadius: 10,
               alignItems: "center",
               justifyContent: "center",
@@ -1679,13 +1684,13 @@ export default function CampaignDashboardScreen() {
           >
             <Ionicons
               name="card-outline"
-              size={14}
+              size={13}
               color={status?.wallet?.canWithdraw ? "#000" : c.textMuted}
             />
             <AppText
               weight="semibold"
               style={{
-                fontSize: 14,
+                fontSize: 13,
                 color: status?.wallet?.canWithdraw ? "#000" : c.textMuted,
               }}
             >
@@ -1696,7 +1701,7 @@ export default function CampaignDashboardScreen() {
             <AppText
               variant="small"
               tone="dim"
-              style={{ textAlign: "center", marginTop: 6 }}
+              style={{ textAlign: "center", marginTop: 6, fontSize: 11 }}
             >
               {t("campaign.wallet.needMin", {
                 min: fmtAmt(minWithdrawal),
@@ -1706,8 +1711,8 @@ export default function CampaignDashboardScreen() {
           )}
         </Card>
 
-        {/* ── Stats Grid 2×2 ── */}
-        <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+        {/* Stats 2×2 */}
+        <View style={{ flexDirection: "row", gap: 10 }}>
           <StatCard
             iconName="people-outline"
             label={t("campaign.stats.totalReferred")}
@@ -1722,7 +1727,7 @@ export default function CampaignDashboardScreen() {
             c={c}
           />
         </View>
-        <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
+        <View style={{ flexDirection: "row", gap: 10 }}>
           <StatCard
             iconName="time-outline"
             label={t("campaign.stats.tasksPending")}
@@ -1738,11 +1743,10 @@ export default function CampaignDashboardScreen() {
           />
         </View>
 
-        {/* ── Submit Banner ── */}
+        {/* Submit banner */}
         <Card
           padded
           style={{
-            marginBottom: 12,
             borderWidth: 1.5,
             borderColor: alreadySubmitted
               ? "rgba(34,197,94,0.35)"
@@ -1776,7 +1780,7 @@ export default function CampaignDashboardScreen() {
                       ? "flash"
                       : "time-outline"
               }
-              size={26}
+              size={24}
               color={
                 alreadySubmitted
                   ? "#22c55e"
@@ -1786,11 +1790,11 @@ export default function CampaignDashboardScreen() {
               }
               style={{ flexShrink: 0 }}
             />
-            <View style={{ flex: 1, minWidth: 180 }}>
+            <View style={{ flex: 1, minWidth: 160 }}>
               <AppText
                 variant="body"
                 weight="semibold"
-                style={{ color: c.text, marginBottom: 3 }}
+                style={{ color: c.text, marginBottom: 3, fontSize: 13 }}
               >
                 {alreadySubmitted
                   ? t("campaign.banner.doneTitle")
@@ -1820,7 +1824,7 @@ export default function CampaignDashboardScreen() {
                 <AppText
                   variant="small"
                   tone="dim"
-                  style={{ lineHeight: 18, flexShrink: 1 }}
+                  style={{ lineHeight: 16, flexShrink: 1, fontSize: 11 }}
                 >
                   {alreadySubmitted
                     ? t("campaign.banner.doneSub", {
@@ -1851,8 +1855,8 @@ export default function CampaignDashboardScreen() {
                 onPress={() => setShowConfirm(true)}
                 disabled={submitting}
                 style={{
-                  paddingHorizontal: 18,
-                  paddingVertical: 11,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
                   backgroundColor: c.orange,
                   borderRadius: 10,
                   flexDirection: "row",
@@ -1867,11 +1871,11 @@ export default function CampaignDashboardScreen() {
                     <AppText
                       variant="body"
                       weight="semibold"
-                      style={{ color: "#000" }}
+                      style={{ color: "#000", fontSize: 12 }}
                     >
                       {t("campaign.banner.submitNow")}
                     </AppText>
-                    <Ionicons name="send" size={14} color="#000" />
+                    <Ionicons name="send" size={13} color="#000" />
                   </>
                 )}
               </Pressable>
@@ -1879,7 +1883,7 @@ export default function CampaignDashboardScreen() {
           </View>
         </Card>
 
-        {/* ── Tabs ── */}
+        {/* Tabs */}
         <Card style={{ overflow: "hidden" }}>
           <View
             style={{
@@ -1894,7 +1898,7 @@ export default function CampaignDashboardScreen() {
                 onPress={() => setTab(tItem.key)}
                 style={{
                   flex: 1,
-                  paddingVertical: 12,
+                  paddingVertical: 11,
                   alignItems: "center",
                   justifyContent: "center",
                   flexDirection: "row",
@@ -1908,12 +1912,12 @@ export default function CampaignDashboardScreen() {
               >
                 <Ionicons
                   name={tItem.iconName}
-                  size={13}
+                  size={12}
                   color={tab === tItem.key ? c.orange : c.textMuted}
                 />
                 <AppText
                   style={{
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: tab === tItem.key ? "700" : "600",
                     color: tab === tItem.key ? c.orange : c.textMuted,
                   }}
@@ -1925,10 +1929,8 @@ export default function CampaignDashboardScreen() {
             ))}
           </View>
 
-          {/* ══════════ EARN TAB ══════════ */}
           {tab === "earn" && (
-            <View style={{ padding: 16 }}>
-              {/* Code Card */}
+            <View style={{ padding: 0 }}>
               <View
                 style={[
                   ec.codeBox,
@@ -1940,10 +1942,10 @@ export default function CampaignDashboardScreen() {
               >
                 <AppText
                   style={{
-                    fontSize: 10,
+                    fontSize: 9,
                     color: c.textMuted,
                     fontWeight: "700",
-                    letterSpacing: 0.8,
+                    letterSpacing: 0.7,
                     marginBottom: 6,
                     textTransform: "uppercase",
                   }}
@@ -1953,9 +1955,9 @@ export default function CampaignDashboardScreen() {
                 <AppText
                   weight="displayBlack"
                   style={{
-                    fontSize: 30,
+                    fontSize: 24,
                     color: c.orange,
-                    letterSpacing: 2,
+                    letterSpacing: 1.8,
                     marginBottom: 4,
                   }}
                   numberOfLines={1}
@@ -1972,20 +1974,19 @@ export default function CampaignDashboardScreen() {
                       ios: "Courier",
                       android: "monospace",
                     }),
-                    marginBottom: 14,
+                    marginBottom: 12,
+                    fontSize: 11,
                   }}
-                >
-                  {`${APP_URL}/signup?ref=${referralCode || ""}`}
-                </AppText>
+                >{`${APP_URL}/signup?ref=${referralCode || ""}`}</AppText>
                 <View
-                  style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}
+                  style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}
                 >
                   <Pressable
                     onPress={copyLink}
                     disabled={!referralCode}
                     style={{
                       flex: 1,
-                      paddingVertical: 11,
+                      paddingVertical: 10,
                       borderRadius: 10,
                       alignItems: "center",
                       justifyContent: "center",
@@ -1996,13 +1997,13 @@ export default function CampaignDashboardScreen() {
                   >
                     <Ionicons
                       name={copied ? "checkmark" : "copy-outline"}
-                      size={14}
+                      size={13}
                       color="#000"
                     />
                     <AppText
                       variant="body"
                       weight="semibold"
-                      style={{ color: "#000" }}
+                      style={{ color: "#000", fontSize: 12 }}
                     >
                       {copied
                         ? t("campaign.code.copied")
@@ -2020,8 +2021,8 @@ export default function CampaignDashboardScreen() {
                       }).catch(() => {})
                     }
                     style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 11,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
                       borderRadius: 10,
                       borderWidth: 1,
                       borderColor: "rgba(249,115,22,0.4)",
@@ -2031,11 +2032,11 @@ export default function CampaignDashboardScreen() {
                       gap: 5,
                     }}
                   >
-                    <Ionicons name="share-outline" size={14} color={c.orange} />
+                    <Ionicons name="share-outline" size={13} color={c.orange} />
                     <AppText
                       variant="small"
                       weight="semibold"
-                      style={{ color: c.orange }}
+                      style={{ color: c.orange, fontSize: 11 }}
                     >
                       {t("campaign.code.share")}
                     </AppText>
@@ -2055,15 +2056,15 @@ export default function CampaignDashboardScreen() {
                   <AppText
                     variant="small"
                     tone="dim"
-                    style={{ marginRight: 2 }}
+                    style={{ marginRight: 2, fontSize: 11 }}
                   >
                     {t("campaign.code.shareVia")}:
                   </AppText>
                   <Pressable
                     onPress={shareWhatsApp}
                     style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
                       borderRadius: 8,
                       borderWidth: 1,
                       backgroundColor: "rgba(37,211,102,0.08)",
@@ -2073,10 +2074,10 @@ export default function CampaignDashboardScreen() {
                       gap: 4,
                     }}
                   >
-                    <Ionicons name="logo-whatsapp" size={13} color="#25d366" />
+                    <Ionicons name="logo-whatsapp" size={12} color="#25d366" />
                     <AppText
                       style={{
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: "700",
                         color: "#25d366",
                       }}
@@ -2087,8 +2088,8 @@ export default function CampaignDashboardScreen() {
                   <Pressable
                     onPress={shareTwitter}
                     style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
                       borderRadius: 8,
                       borderWidth: 1,
                       backgroundColor: "rgba(255,255,255,0.06)",
@@ -2098,10 +2099,10 @@ export default function CampaignDashboardScreen() {
                       gap: 4,
                     }}
                   >
-                    <Ionicons name="logo-twitter" size={13} color="#e7e9ea" />
+                    <Ionicons name="logo-twitter" size={12} color="#e7e9ea" />
                     <AppText
                       style={{
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: "700",
                         color: "#e7e9ea",
                       }}
@@ -2112,13 +2113,12 @@ export default function CampaignDashboardScreen() {
                 </View>
               </View>
 
-              {/* How it works */}
               <Card padded style={{ marginTop: 12, marginBottom: 12 }}>
                 <AppText
                   variant="small"
                   weight="semibold"
                   tone="dim"
-                  style={{ letterSpacing: 0.8, marginBottom: 14 }}
+                  style={{ letterSpacing: 0.7, marginBottom: 12, fontSize: 11 }}
                 >
                   {t("campaign.how.title", {
                     reward: rewardPerReferral,
@@ -2156,17 +2156,17 @@ export default function CampaignDashboardScreen() {
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 12,
-                      paddingVertical: 8,
+                      gap: 10,
+                      paddingVertical: 7,
                       borderBottomWidth: i < 4 ? StyleSheet.hairlineWidth : 0,
                       borderBottomColor: c.border,
                     }}
                   >
                     <View
                       style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: 13,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 11,
                         backgroundColor: c.orange,
                         alignItems: "center",
                         justifyContent: "center",
@@ -2175,7 +2175,7 @@ export default function CampaignDashboardScreen() {
                     >
                       <AppText
                         style={{
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: "900",
                           color: "#000",
                         }}
@@ -2183,11 +2183,11 @@ export default function CampaignDashboardScreen() {
                         {s.n}
                       </AppText>
                     </View>
-                    <Ionicons name={s.iconName} size={17} color={c.textDim} />
+                    <Ionicons name={s.iconName} size={15} color={c.textDim} />
                     <AppText
                       variant="body"
                       tone="dim"
-                      style={{ flex: 1, lineHeight: 20 }}
+                      style={{ flex: 1, lineHeight: 18, fontSize: 12 }}
                     >
                       {s.text}
                     </AppText>
@@ -2195,13 +2195,12 @@ export default function CampaignDashboardScreen() {
                 ))}
               </Card>
 
-              {/* Task legend */}
               <View
                 style={{
                   flexDirection: "row",
                   flexWrap: "wrap",
-                  gap: 10,
-                  marginBottom: 14,
+                  gap: 9,
+                  marginBottom: 12,
                   paddingVertical: 4,
                 }}
               >
@@ -2211,33 +2210,32 @@ export default function CampaignDashboardScreen() {
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 5,
+                      gap: 4,
                     }}
                   >
                     <View
                       style={{
-                        width: 16,
-                        height: 16,
-                        borderRadius: 8,
+                        width: 14,
+                        height: 14,
+                        borderRadius: 7,
                         backgroundColor: task.color,
                         alignItems: "center",
                         justifyContent: "center",
                       }}
                     >
-                      <Ionicons
-                        name="checkmark"
-                        size={9}
-                        color={task.color === "#000000" ? "#fff" : "#fff"}
-                      />
+                      <Ionicons name="checkmark" size={8} color="#fff" />
                     </View>
-                    <AppText variant="small" tone="dim">
+                    <AppText
+                      variant="small"
+                      tone="dim"
+                      style={{ fontSize: 11 }}
+                    >
                       {t(task.labelKey)}
                     </AppText>
                   </View>
                 ))}
               </View>
 
-              {/* All referrals */}
               <View
                 style={{
                   flexDirection: "row",
@@ -2252,14 +2250,14 @@ export default function CampaignDashboardScreen() {
                   <AppText
                     variant="body"
                     weight="semibold"
-                    style={{ color: c.text }}
+                    style={{ color: c.text, fontSize: 13 }}
                   >
                     {t("campaign.referrals.title")}
                   </AppText>
                   {referrals.length > 0 && (
                     <View
                       style={{
-                        paddingHorizontal: 8,
+                        paddingHorizontal: 7,
                         paddingVertical: 2,
                         borderRadius: 10,
                         backgroundColor: c.bgCard,
@@ -2267,7 +2265,11 @@ export default function CampaignDashboardScreen() {
                         borderColor: c.border,
                       }}
                     >
-                      <AppText variant="small" tone="dim">
+                      <AppText
+                        variant="small"
+                        tone="dim"
+                        style={{ fontSize: 11 }}
+                      >
                         {referrals.length}
                       </AppText>
                     </View>
@@ -2276,10 +2278,10 @@ export default function CampaignDashboardScreen() {
               </View>
 
               {referrals.length === 0 ? (
-                <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                <View style={{ paddingVertical: 28, alignItems: "center" }}>
                   <Ionicons
                     name="people-outline"
-                    size={36}
+                    size={32}
                     color={c.textMuted}
                     style={{ marginBottom: 10, opacity: 0.5 }}
                   />
@@ -2290,6 +2292,7 @@ export default function CampaignDashboardScreen() {
                       color: c.text,
                       marginBottom: 4,
                       textAlign: "center",
+                      fontSize: 13,
                     }}
                   >
                     {t("campaign.referrals.empty")}
@@ -2297,7 +2300,7 @@ export default function CampaignDashboardScreen() {
                   <AppText
                     variant="small"
                     tone="dim"
-                    style={{ textAlign: "center" }}
+                    style={{ textAlign: "center", fontSize: 11 }}
                   >
                     {t("campaign.referrals.emptySub")}
                   </AppText>
@@ -2310,18 +2313,15 @@ export default function CampaignDashboardScreen() {
                       key={r.id}
                       style={[
                         ec.refRow,
-                        {
-                          borderColor: c.border,
-                          backgroundColor: c.bgCard,
-                        },
+                        { borderColor: c.border, backgroundColor: c.bgCard },
                       ]}
                     >
                       <Avatar name={r.name} avatar={r.avatar} c={c} />
-                      <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+                      <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
                         <AppText
                           variant="body"
                           weight="semibold"
-                          style={{ color: c.text }}
+                          style={{ color: c.text, fontSize: 13 }}
                           numberOfLines={1}
                         >
                           {r.name}
@@ -2337,7 +2337,7 @@ export default function CampaignDashboardScreen() {
                         >
                           <View
                             style={{
-                              paddingHorizontal: 7,
+                              paddingHorizontal: 6,
                               paddingVertical: 2,
                               borderRadius: 20,
                               backgroundColor:
@@ -2355,12 +2355,12 @@ export default function CampaignDashboardScreen() {
                                   ? "construct-outline"
                                   : "person-outline"
                               }
-                              size={9}
+                              size={8}
                               color={r.role === "WORKER" ? c.orange : "#818cf8"}
                             />
                             <AppText
                               style={{
-                                fontSize: 9,
+                                fontSize: 8,
                                 fontWeight: "700",
                                 color:
                                   r.role === "WORKER" ? c.orange : "#818cf8",
@@ -2371,7 +2371,11 @@ export default function CampaignDashboardScreen() {
                                 : t("campaign.role.hirer").toUpperCase()}
                             </AppText>
                           </View>
-                          <AppText variant="small" tone="dim">
+                          <AppText
+                            variant="small"
+                            tone="dim"
+                            style={{ fontSize: 10 }}
+                          >
                             · {timeAgo(r.joinedAt, t)}
                           </AppText>
                         </View>
@@ -2395,7 +2399,7 @@ export default function CampaignDashboardScreen() {
                               <AppText
                                 variant="small"
                                 tone="dim"
-                                style={{ fontSize: 10 }}
+                                style={{ fontSize: 9 }}
                               >
                                 {fmtAmt(r.referralProgram.bonus)}{" "}
                                 {t("campaign.referrals.bonus")}
@@ -2414,7 +2418,7 @@ export default function CampaignDashboardScreen() {
                         {r.status === "APPROVED" && (
                           <AppText
                             weight="semibold"
-                            style={{ fontSize: 13, color: "#22c55e" }}
+                            style={{ fontSize: 12, color: "#22c55e" }}
                           >
                             +{fmtAmt(r.rewardAmount)}
                           </AppText>
@@ -2427,14 +2431,13 @@ export default function CampaignDashboardScreen() {
             </View>
           )}
 
-          {/* ══════════ MY TASKS TAB ══════════ */}
           {tab === "tasks" && (
-            <View style={{ padding: 16 }}>
+            <View style={{ padding: 14 }}>
               {!hasMyTasks ? (
-                <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                <View style={{ paddingVertical: 28, alignItems: "center" }}>
                   <Ionicons
                     name="information-circle-outline"
-                    size={30}
+                    size={28}
                     color={c.textMuted}
                     style={{ marginBottom: 10, opacity: 0.5 }}
                   />
@@ -2445,6 +2448,7 @@ export default function CampaignDashboardScreen() {
                       color: c.text,
                       marginBottom: 4,
                       textAlign: "center",
+                      fontSize: 13,
                     }}
                   >
                     {t("campaign.myTasks.emptyTitle")}
@@ -2452,18 +2456,18 @@ export default function CampaignDashboardScreen() {
                   <AppText
                     variant="small"
                     tone="dim"
-                    style={{ textAlign: "center" }}
+                    style={{ textAlign: "center", fontSize: 11 }}
                   >
                     {t("campaign.myTasks.emptySub")}
                   </AppText>
                 </View>
               ) : (
                 <>
-                  <View style={{ marginBottom: 16 }}>
+                  <View style={{ marginBottom: 14 }}>
                     <View
                       style={{
-                        height: 8,
-                        borderRadius: 4,
+                        height: 7,
+                        borderRadius: 3.5,
                         overflow: "hidden",
                         backgroundColor: c.bgCard,
                         marginBottom: 8,
@@ -2471,12 +2475,10 @@ export default function CampaignDashboardScreen() {
                     >
                       <View
                         style={{
-                          height: 8,
-                          borderRadius: 4,
+                          height: 7,
+                          borderRadius: 3.5,
                           backgroundColor: c.orange,
-                          width: `${
-                            (myTasks.completedCount / myTasks.totalCount) * 100
-                          }%`,
+                          width: `${(myTasks.completedCount / myTasks.totalCount) * 100}%`,
                           minWidth: 4,
                         }}
                       />
@@ -2484,7 +2486,7 @@ export default function CampaignDashboardScreen() {
                     <AppText
                       variant="body"
                       weight="semibold"
-                      style={{ color: c.text }}
+                      style={{ color: c.text, fontSize: 13 }}
                     >
                       {t("campaign.myTasks.progress", {
                         done: myTasks.completedCount,
@@ -2500,8 +2502,8 @@ export default function CampaignDashboardScreen() {
                         borderWidth: 1,
                         borderColor: "rgba(34,197,94,0.3)",
                         borderRadius: 10,
-                        padding: 12,
-                        marginBottom: 14,
+                        padding: 10,
+                        marginBottom: 12,
                         flexDirection: "row",
                         alignItems: "flex-start",
                         gap: 6,
@@ -2509,14 +2511,14 @@ export default function CampaignDashboardScreen() {
                     >
                       <Ionicons
                         name="checkmark-circle"
-                        size={16}
+                        size={15}
                         color="#22c55e"
                         style={{ marginTop: 1 }}
                       />
                       <AppText
                         variant="small"
                         weight="semibold"
-                        style={{ color: "#22c55e", flex: 1 }}
+                        style={{ color: "#22c55e", flex: 1, fontSize: 11 }}
                       >
                         {t("campaign.myTasks.allDone", {
                           reward: rewardPerReferral,
@@ -2544,19 +2546,23 @@ export default function CampaignDashboardScreen() {
                       >
                         <Ionicons
                           name={task.done ? "checkmark-circle" : "time-outline"}
-                          size={22}
+                          size={20}
                           color={task.done ? "#22c55e" : c.textMuted}
                         />
-                        <View style={{ flex: 1, marginLeft: 12 }}>
+                        <View style={{ flex: 1, marginLeft: 10 }}>
                           <AppText
                             variant="body"
                             weight="semibold"
-                            style={{ color: c.text }}
+                            style={{ color: c.text, fontSize: 13 }}
                           >
                             {task.label}
                           </AppText>
                           {task.hint && (
-                            <AppText variant="small" tone="dim">
+                            <AppText
+                              variant="small"
+                              tone="dim"
+                              style={{ fontSize: 11 }}
+                            >
                               {task.hint}
                             </AppText>
                           )}
@@ -2564,8 +2570,8 @@ export default function CampaignDashboardScreen() {
                         {task.done && (
                           <View
                             style={{
-                              paddingHorizontal: 10,
-                              paddingVertical: 4,
+                              paddingHorizontal: 9,
+                              paddingVertical: 3,
                               borderRadius: 20,
                               backgroundColor: "rgba(34,197,94,0.15)",
                               borderWidth: 1,
@@ -2574,7 +2580,7 @@ export default function CampaignDashboardScreen() {
                           >
                             <AppText
                               style={{
-                                fontSize: 10,
+                                fontSize: 9,
                                 fontWeight: "700",
                                 color: "#22c55e",
                               }}
@@ -2589,7 +2595,12 @@ export default function CampaignDashboardScreen() {
                   <AppText
                     variant="body"
                     weight="semibold"
-                    style={{ color: c.text, marginTop: 16, marginBottom: 10 }}
+                    style={{
+                      color: c.text,
+                      marginTop: 14,
+                      marginBottom: 8,
+                      fontSize: 13,
+                    }}
                   >
                     {t("campaign.myTasks.socialTitle")}
                   </AppText>
@@ -2626,19 +2637,24 @@ export default function CampaignDashboardScreen() {
                       alignItems: "center",
                       justifyContent: "center",
                       gap: 4,
-                      marginTop: 12,
+                      marginTop: 10,
                       paddingHorizontal: 8,
                     }}
                   >
                     <Ionicons
                       name="document-text-outline"
-                      size={12}
+                      size={11}
                       color={c.textMuted}
                     />
                     <AppText
                       variant="small"
                       tone="dim"
-                      style={{ lineHeight: 16, textAlign: "center", flex: 1 }}
+                      style={{
+                        lineHeight: 15,
+                        textAlign: "center",
+                        flex: 1,
+                        fontSize: 11,
+                      }}
                     >
                       {t("campaign.myTasks.screenshotNote")}
                     </AppText>
@@ -2648,14 +2664,13 @@ export default function CampaignDashboardScreen() {
             </View>
           )}
 
-          {/* ══════════ HISTORY TAB ══════════ */}
           {tab === "history" && (
-            <View style={{ padding: 16 }}>
+            <View style={{ padding: 14 }}>
               {submissions.length === 0 ? (
-                <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                <View style={{ paddingVertical: 28, alignItems: "center" }}>
                   <Ionicons
                     name="document-text-outline"
-                    size={36}
+                    size={32}
                     color={c.textMuted}
                     style={{ marginBottom: 10, opacity: 0.5 }}
                   />
@@ -2666,6 +2681,7 @@ export default function CampaignDashboardScreen() {
                       color: c.text,
                       marginBottom: 4,
                       textAlign: "center",
+                      fontSize: 13,
                     }}
                   >
                     {t("campaign.history.empty")}
@@ -2673,7 +2689,7 @@ export default function CampaignDashboardScreen() {
                   <AppText
                     variant="small"
                     tone="dim"
-                    style={{ textAlign: "center" }}
+                    style={{ textAlign: "center", fontSize: 11 }}
                   >
                     {t("campaign.history.emptySub")}
                   </AppText>
@@ -2688,7 +2704,7 @@ export default function CampaignDashboardScreen() {
         </Card>
       </ScrollView>
 
-      {/* ── Confirm Submit Modal ── */}
+      {/* Confirm Submit */}
       <Modal
         visible={showConfirm}
         transparent
@@ -2704,22 +2720,18 @@ export default function CampaignDashboardScreen() {
           }}
         >
           <View
-            style={{
-              backgroundColor: modalBg,
-              borderRadius: 20,
-              padding: 20,
-            }}
+            style={{ backgroundColor: modalBg, borderRadius: 18, padding: 18 }}
           >
             <AppText
               weight="displayBlack"
-              style={{ fontSize: 20, color: c.text, marginBottom: 12 }}
+              style={{ fontSize: 18, color: c.text, marginBottom: 10 }}
             >
               {t("campaign.confirm.title", { count: readyCount })}
             </AppText>
             <AppText
               variant="body"
               tone="dim"
-              style={{ marginBottom: 8, lineHeight: 20 }}
+              style={{ marginBottom: 8, lineHeight: 18, fontSize: 12 }}
             >
               {t("campaign.confirm.body1Prefix")}{" "}
               <AppText weight="semibold" style={{ color: c.text }}>
@@ -2730,7 +2742,7 @@ export default function CampaignDashboardScreen() {
             <AppText
               variant="body"
               tone="dim"
-              style={{ marginBottom: 14, lineHeight: 20 }}
+              style={{ marginBottom: 12, lineHeight: 18, fontSize: 12 }}
             >
               {t("campaign.confirm.body2Prefix")}{" "}
               <AppText weight="semibold" style={{ color: c.orange }}>
@@ -2744,8 +2756,8 @@ export default function CampaignDashboardScreen() {
                 borderWidth: 1,
                 borderColor: "rgba(239,68,68,0.20)",
                 borderRadius: 10,
-                padding: 10,
-                marginBottom: 18,
+                padding: 9,
+                marginBottom: 16,
                 flexDirection: "row",
                 alignItems: "flex-start",
                 gap: 6,
@@ -2753,14 +2765,14 @@ export default function CampaignDashboardScreen() {
             >
               <Ionicons
                 name="warning-outline"
-                size={14}
+                size={13}
                 color={c.orange}
                 style={{ marginTop: 1 }}
               />
               <AppText
                 variant="small"
                 tone="dim"
-                style={{ flex: 1, lineHeight: 16 }}
+                style={{ flex: 1, lineHeight: 15, fontSize: 11 }}
               >
                 {t("campaign.confirm.note")}
               </AppText>
@@ -2770,15 +2782,20 @@ export default function CampaignDashboardScreen() {
                 onPress={() => setShowConfirm(false)}
                 style={{
                   flex: 1,
-                  paddingVertical: 13,
-                  borderRadius: 12,
+                  paddingVertical: 12,
+                  borderRadius: 11,
                   borderWidth: 1,
                   borderColor: c.border,
                   backgroundColor: c.bgCard,
                   alignItems: "center",
                 }}
               >
-                <AppText variant="body" weight="semibold" tone="dim">
+                <AppText
+                  variant="body"
+                  weight="semibold"
+                  tone="dim"
+                  style={{ fontSize: 12 }}
+                >
                   {t("common.cancel")}
                 </AppText>
               </Pressable>
@@ -2787,8 +2804,8 @@ export default function CampaignDashboardScreen() {
                 disabled={submitting}
                 style={{
                   flex: 1,
-                  paddingVertical: 13,
-                  borderRadius: 12,
+                  paddingVertical: 12,
+                  borderRadius: 11,
                   backgroundColor: c.orange,
                   alignItems: "center",
                   flexDirection: "row",
@@ -2803,7 +2820,7 @@ export default function CampaignDashboardScreen() {
                   <AppText
                     variant="body"
                     weight="semibold"
-                    style={{ color: "#000" }}
+                    style={{ color: "#000", fontSize: 12 }}
                   >
                     {t("campaign.confirm.submit")}
                   </AppText>
@@ -2814,7 +2831,6 @@ export default function CampaignDashboardScreen() {
         </View>
       </Modal>
 
-      {/* ── Withdraw Modal ── */}
       <WithdrawModal
         visible={showWd}
         balance={walletBal}
@@ -2827,25 +2843,25 @@ export default function CampaignDashboardScreen() {
         toast={toast}
       />
 
-      {/* ── Lightbox ── */}
       {lightbox && (
         <FullscreenImage
           src={lightbox.src}
           alt={lightbox.alt}
           onClose={() => setLightbox(null)}
+          t={t}
         />
       )}
     </>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STYLES
-// ─────────────────────────────────────────────────────────────────────────────
+// Only the spacing that affects the referral card stack and stat rows.
+// Replace the entire styles object at the bottom of the file (const a, st, sf, sk, wm, ec).
+
 const a = StyleSheet.create({
   badge: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 20,
     borderWidth: 1,
     alignSelf: "flex-start",
@@ -2855,38 +2871,33 @@ const a = StyleSheet.create({
 const st = StyleSheet.create({
   card: {
     flex: 1,
-    borderRadius: 13,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 12,
-    minHeight: 78,
+    padding: 11,
+    minHeight: 72,
   },
 });
 
 const sf = StyleSheet.create({
-  card: {
-    borderRadius: 14,
-    borderWidth: 1.5,
-    padding: 14,
-    marginBottom: 10,
-  },
+  card: { borderRadius: 13, borderWidth: 1.5, padding: 12, marginBottom: 6 }, // was 10
   doneBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
   },
   followBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   chooseBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
@@ -2894,21 +2905,21 @@ const sf = StyleSheet.create({
     alignSelf: "flex-start",
   },
   previewImg: {
-    width: 120,
-    height: 120,
-    borderRadius: 10,
+    width: 110,
+    height: 110,
+    borderRadius: 9,
     borderWidth: 1,
     borderColor: "rgba(128,128,128,0.2)",
   },
   previewBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
   },
   markBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
@@ -2918,27 +2929,18 @@ const sf = StyleSheet.create({
 
 const sk = StyleSheet.create({
   card: {
-    borderRadius: 14,
+    borderRadius: 13,
     borderWidth: 1,
-    marginBottom: 10,
+    marginBottom: 6, // was 10 — tighter stack
     overflow: "hidden",
   },
-  topRow: { flexDirection: "row", alignItems: "center", padding: 14 },
-  expanded: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    gap: 6,
-  },
-  adminNote: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 10,
-    marginBottom: 8,
-  },
+  topRow: { flexDirection: "row", alignItems: "center", padding: 12 },
+  expanded: { borderTopWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6 },
+  adminNote: { borderRadius: 8, borderWidth: 1, padding: 9, marginBottom: 8 },
   refRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
 });
@@ -2949,21 +2951,21 @@ const wm = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 20,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    padding: 18,
     maxHeight: "92%",
   },
   handle: {
-    width: 40,
+    width: 36,
     height: 4,
     borderRadius: 2,
     alignSelf: "center",
-    marginBottom: 14,
+    marginBottom: 12,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
@@ -2971,52 +2973,47 @@ const wm = StyleSheet.create({
   },
   balRow: {
     flexDirection: "row",
-    padding: 14,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: 11,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   sectionLabel: {
-    fontSize: 10,
-    letterSpacing: 0.8,
+    fontSize: 9,
+    letterSpacing: 0.7,
     fontWeight: "700",
-    marginBottom: 8,
+    marginBottom: 7,
     textTransform: "uppercase",
   },
   amtRow: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderRadius: 12,
-    height: 54,
+    borderRadius: 11,
+    height: 50,
     overflow: "hidden",
-    marginBottom: 10,
+    marginBottom: 9,
   },
   curBadge: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: "rgba(128,128,128,0.2)",
   },
-  pctRow: { flexDirection: "row", gap: 8, marginBottom: 18 },
+  pctRow: { flexDirection: "row", gap: 7, marginBottom: 16 },
   pctBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 9,
+    borderRadius: 9,
     borderWidth: 1,
     alignItems: "center",
   },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 13,
-    fontSize: 14,
-  },
+  input: { borderWidth: 1, borderRadius: 9, padding: 11, fontSize: 13 },
   submitBtn: {
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 4,
@@ -3024,26 +3021,21 @@ const wm = StyleSheet.create({
 });
 
 const ec = StyleSheet.create({
-  codeBox: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 16,
-    marginBottom: 4,
-  },
+  codeBox: { borderRadius: 15, borderWidth: 1.5, padding: 14, marginBottom: 4 },
   refRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    padding: 12,
-    borderRadius: 13,
+    padding: 11,
+    borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 8,
+    marginBottom: 6, // was 8 — tighter gap between referral cards
   },
   autoRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
+    padding: 11,
+    borderRadius: 11,
     borderWidth: 1,
-    marginBottom: 8,
+    marginBottom: 6, // was 8
   },
 });

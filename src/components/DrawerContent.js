@@ -2,6 +2,7 @@
 //
 // Verbatim port of HirerLayout.module.css sidebar + logout modal.
 // The modal buttons now use a 5px radius for a subtle rounded look.
+// Logo + user name use Syne (bold display) to match the app's header treatment.
 
 import React, { useEffect, useState } from "react";
 import {
@@ -286,7 +287,7 @@ export default function DrawerContent({ state }) {
         { backgroundColor: c.bgPanel, paddingBottom: insets.bottom },
       ]}
     >
-      {/* Logo */}
+      {/* Logo — Syne ExtraBold (bold display, matches other screen headers) */}
       <View
         style={[
           styles.logoBlock,
@@ -516,7 +517,7 @@ export default function DrawerContent({ state }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  // Logo block
+  // Logo block — Syne 800 (bold display, matches all screen headers)
   logoBlock: {
     paddingHorizontal: rem(1.5),
     paddingBottom: rem(1.125),
@@ -565,11 +566,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   userInfo: { flex: 1, minWidth: 0 },
+  // ⬇ Name now uses Syne_700Bold (bold header family) like other screen titles
   userName: {
-    fontFamily: "DMSans_600SemiBold",
-    fontSize: rem(0.875),
-    fontWeight: "600",
-    lineHeight: rem(0.875) * 1.3,
+    fontFamily: "Syne_700Bold",
+    fontSize: rem(0.9375),
+    fontWeight: "700",
+    lineHeight: rem(0.9375) * 1.3,
     marginBottom: rem(3 / 14),
   },
   userBadge: {
@@ -682,7 +684,7 @@ const styles = StyleSheet.create({
   modalBox: {
     width: "100%",
     maxWidth: 420,
-    borderRadius: RADII.modal, // 20px — matches web .modalBox
+    borderRadius: RADII.modal,
     borderWidth: 1,
     padding: rem(1.8),
     shadowColor: "#000",
@@ -708,12 +710,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: rem(0.75),
   },
-  // ⬇⬇  Was RADII.lg (10). Now hardcoded 5 — subtle rounding.
   modalCancelBtn: {
     flex: 1,
     paddingVertical: rem(0.7),
     paddingHorizontal: rem(1),
-    borderRadius: 5, // ← was 10, now 5
+    borderRadius: 5,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -722,7 +723,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: rem(0.7),
     paddingHorizontal: rem(1),
-    borderRadius: 5, // ← was 10, now 5
+    borderRadius: 5,
     alignItems: "center",
     justifyContent: "center",
   },
