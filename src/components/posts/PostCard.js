@@ -40,9 +40,14 @@ import ReportButton from "../ReportButton";
 import ReactionsModal from "./ReactionsModal";
 
 // ─── URL resolver ───────────────────────────────────────
-// Mirrors what the browser does automatically — any relative path
-// (/uploads/..., /media/...) is prefixed with the API base URL.
-const API_BASE = client?.defaults?.baseURL || "https://api.skilledproz.com";
+// The web browser resolves relative <img src="/uploads/..."> against the
+// web domain (skilledproz.com). In RN there's no base origin, so we must
+// do it manually — use the web domain for /uploads paths, the API domain
+// for everything else.
+const API_BASE = (
+  client?.defaults?.baseURL || "https://api.skilledproz.com"
+).replace(/\/api\/?$/, "");
+const UPLOADS_BASE = "https://skilledproz.com";
 
 function resolveUrl(raw) {
   if (!raw || typeof raw !== "string") return null;
@@ -50,6 +55,9 @@ function resolveUrl(raw) {
   if (!trimmed) return null;
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
     return trimmed;
+  }
+  if (trimmed.startsWith("/uploads/")) {
+    return `${UPLOADS_BASE}${trimmed}`;
   }
   return `${API_BASE}${trimmed.startsWith("/") ? "" : "/"}${trimmed}`;
 }
@@ -178,7 +186,26 @@ export default function PostCard({ post: initialPost, onDelete }) {
 
   // ─── Normalize post images across every backend shape ─────
   const postImages = useMemo(() => {
-    const candidates = [
+    const pickUrl = (item) => {
+      if (!item) return null;
+      if (typeof item === "string") return item;
+      if (typeof item === "object") {
+        return (
+          item.url ||
+          item.uri ||
+          item.src ||
+          item.path ||
+          item.secure_url ||
+          item.fileUrl ||
+          item.file_url ||
+          item.publicUrl ||
+          null
+        );
+      }
+      return null;
+    };
+
+    const arrays = [
       post.images,
       post.media,
       post.imageUrls,
@@ -186,22 +213,43 @@ export default function PostCard({ post: initialPost, onDelete }) {
       post.postImages,
       post.files,
     ];
-    for (const c of candidates) {
-      if (Array.isArray(c) && c.length > 0) {
-        return c
-          .map((item) =>
-            typeof item === "string"
-              ? item
-              : item?.url ||
-                item?.uri ||
-                item?.src ||
-                item?.path ||
-                item?.secure_url ||
-                null,
-          )
-          .filter(Boolean);
+    for (const arr of arrays) {
+      if (Array.isArray(arr) && arr.length > 0) {
+        const mapped = arr.map(pickUrl).filter(Boolean);
+        console.log("[PostCard] array matched:", mapped);
+        if (mapped.length > 0) {
+          console.log("[PostCard] final URLs:", mapped.map(resolveUrl));
+          return mapped;
+        }
       }
     }
+
+    const singles = [
+      post.imageUrl,
+      post.image,
+      post.photo,
+      post.photoUrl,
+      post.postImage,
+    ];
+    const mappedSingles = singles.map(pickUrl).filter(Boolean);
+    if (mappedSingles.length > 0) {
+      console.log("[PostCard] singles final:", mappedSingles.map(resolveUrl));
+      return mappedSingles;
+    }
+
+    if (post.media && typeof post.media === "object") {
+      const nested =
+        post.media.images || post.media.photos || post.media.files || null;
+      if (Array.isArray(nested) && nested.length > 0) {
+        const mapped = nested.map(pickUrl).filter(Boolean);
+        if (mapped.length > 0) {
+          console.log("[PostCard] nested final:", mapped.map(resolveUrl));
+          return mapped;
+        }
+      }
+    }
+
+    console.log("[PostCard] NO IMAGES FOUND for post", post.id);
     return [];
   }, [post]);
 
@@ -1607,7 +1655,11 @@ const styles = StyleSheet.create({
   },
   imageGrid: { marginTop: 12, borderRadius: 10, overflow: "hidden" },
   imagePressable: { width: "100%" },
-  mainImage: { width: "100%", backgroundColor: "#0f0f1a" },
+  mainImage: {
+    width: "100%",
+    aspectRatio: 1,
+    backgroundColor: "#0f0f1a",
+  },
   imageDots: {
     flexDirection: "row",
     justifyContent: "center",

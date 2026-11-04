@@ -17,12 +17,14 @@
 //               payment status, actions (cancel dispute + view booking)
 //   · Cancel dispute confirmation modal
 //   · Image lightbox modal
+//   · PDF viewer modal (in-app WebView via Google Docs Viewer — same as Chat)
 //   · Empty state
 //   · PageSkeleton during initial load
 //
 // Port notes:
 //   · window.confirm → ConfirmModal (React Native Modal)
 //   · <img> with onClick lightbox → Pressable + Modal Image
+//   · PDF evidence → full-screen WebView modal (matches ChatScreen PDF viewer)
 //   · <button> → Pressable throughout
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -38,6 +40,8 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { WebView } from "react-native-webview";
 
 import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
@@ -59,6 +63,7 @@ import {
   FaTrash,
   FaEye,
   FaTimes,
+  FaFilePdf,
 } from "../../icons/fa";
 
 // ── Status meta — verbatim from web ──────────────────────────────────
@@ -105,6 +110,12 @@ function fmtCurrency(amount, currency = "NGN") {
   })}`;
 }
 
+function isPdfUrl(url) {
+  if (!url) return false;
+  const clean = String(url).split("?")[0].split("#")[0].toLowerCase();
+  return clean.endsWith(".pdf");
+}
+
 export default function MyDisputesScreen({ route }) {
   const { t } = useTranslation();
   const navigation = useNavigation();
@@ -125,6 +136,9 @@ export default function MyDisputesScreen({ route }) {
 
   // Image lightbox
   const [lightboxImage, setLightboxImage] = useState(null);
+
+  // PDF viewer (in-app WebView — same pattern as ChatScreen)
+  const [pdfViewerSrc, setPdfViewerSrc] = useState(null);
 
   // ── Fetch ───────────────────────────────────────────────────────────
   const load = useCallback(
@@ -192,6 +206,22 @@ export default function MyDisputesScreen({ route }) {
       closeCancelModal();
     } finally {
       setCancelling(null);
+    }
+  };
+
+  // ── Evidence open — same behavior as ChatScreen ────────────────────
+  // PDFs → full-screen WebView (Google Docs Viewer).
+  // Everything else → image lightbox.
+  const openEvidence = (url) => {
+    if (!url) return;
+    // Resolve to absolute using the same expression Chat uses.
+    const absoluteUrl = /^https?:\/\//i.test(url)
+      ? url
+      : `${client.defaults.baseURL.replace(/\/api\/?$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+    if (isPdfUrl(absoluteUrl)) {
+      setPdfViewerSrc(absoluteUrl);
+    } else {
+      setLightboxImage(absoluteUrl);
     }
   };
 
@@ -514,32 +544,54 @@ export default function MyDisputesScreen({ route }) {
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={{ gap: 8 }}
                           >
-                            {dispute.disputeEvidence.map((url, idx) => (
-                              <Pressable
-                                key={idx}
-                                onPress={() => setLightboxImage(url)}
-                                style={[
-                                  styles.evidenceThumb,
-                                  {
-                                    backgroundColor: c.bgInput,
-                                    borderColor: c.border,
-                                  },
-                                ]}
-                              >
-                                <Image
-                                  source={{ uri: url }}
-                                  style={styles.evidenceImg}
-                                />
-                                <View
+                            {dispute.disputeEvidence.map((url, idx) => {
+                              const pdf = isPdfUrl(url);
+                              return (
+                                <Pressable
+                                  key={idx}
+                                  onPress={() => openEvidence(url)}
                                   style={[
-                                    styles.evidenceOverlay,
-                                    { backgroundColor: "rgba(0,0,0,0.4)" },
+                                    styles.evidenceThumb,
+                                    {
+                                      backgroundColor: c.bgInput,
+                                      borderColor: c.border,
+                                    },
                                   ]}
                                 >
-                                  <FaEye size={12} color="#fff" />
-                                </View>
-                              </Pressable>
-                            ))}
+                                  {pdf ? (
+                                    <View style={styles.pdfThumb}>
+                                      <FaFilePdf size={22} color={c.red} />
+                                      <AppText
+                                        style={{
+                                          fontSize: 8,
+                                          fontWeight: "700",
+                                          color: c.textMuted,
+                                          marginTop: 2,
+                                        }}
+                                      >
+                                        PDF
+                                      </AppText>
+                                    </View>
+                                  ) : (
+                                    <Image
+                                      source={{ uri: url }}
+                                      style={styles.evidenceImg}
+                                    />
+                                  )}
+                                  <View
+                                    pointerEvents="none"
+                                    style={[
+                                      styles.evidenceOverlay,
+                                      {
+                                        backgroundColor: "rgba(0,0,0,0.4)",
+                                      },
+                                    ]}
+                                  >
+                                    <FaEye size={12} color="#fff" />
+                                  </View>
+                                </Pressable>
+                              );
+                            })}
                           </ScrollView>
                         </DetailBlock>
                       ) : null}
@@ -863,6 +915,69 @@ export default function MyDisputesScreen({ route }) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* ── In-app PDF viewer — full-screen WebView via Google Docs Viewer
+             (same pattern used in ChatScreen) ────────────────────── */}
+      <Modal
+        visible={!!pdfViewerSrc}
+        animationType="slide"
+        onRequestClose={() => setPdfViewerSrc(null)}
+      >
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: c.bg }}
+          edges={["top", "bottom"]}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: c.border,
+              backgroundColor: c.bgPanel,
+            }}
+          >
+            <Pressable
+              onPress={() => setPdfViewerSrc(null)}
+              hitSlop={8}
+              accessibilityLabel={t("common.close", "Close")}
+            >
+              <FaTimes size={20} color={c.text} />
+            </Pressable>
+            <AppText
+              style={{ fontSize: 14, fontWeight: "600", color: c.text }}
+              numberOfLines={1}
+            >
+              {t("messages.pdfViewerTitle", "PDF")}
+            </AppText>
+            <View style={{ width: 20 }} />
+          </View>
+          {pdfViewerSrc ? (
+            <WebView
+              source={{
+                uri: `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(pdfViewerSrc)}`,
+              }}
+              style={{ flex: 1 }}
+              originWhitelist={["*"]}
+              startInLoadingState
+              renderLoading={() => (
+                <View
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: c.bg,
+                  }}
+                >
+                  <ActivityIndicator size="large" color={c.orange} />
+                </View>
+              )}
+            />
+          ) : null}
+        </SafeAreaView>
+      </Modal>
     </AppScreen>
   );
 }
@@ -1108,6 +1223,12 @@ const styles = StyleSheet.create({
   },
   evidenceOverlay: {
     ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pdfThumb: {
+    width: "100%",
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
   },

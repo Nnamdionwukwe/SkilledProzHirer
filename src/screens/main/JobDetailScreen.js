@@ -30,10 +30,9 @@
 //   · Sidebar: hirer card + quick facts list + guest CTA
 //   · Not-found and skeleton states
 //
-// Route registration:
-//   <Drawer.Screen name="JobDetail">
-//     {() => <ScreenWithChrome Screen={JobDetailScreen} />}
-//   </Drawer.Screen>
+// i18n:
+//   · Every visible string uses t() under the `jobs.detail.*` namespace
+//     (and `common.*` where applicable).
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -167,7 +166,6 @@ const EDUCATION_LEVEL_LABELS = {
   OTHER: "Other",
 };
 
-// ── Notes parsing helpers ─────────────────────────────────────────
 function parseRecurring(notes) {
   if (!notes) return null;
   const match = notes.match(/Recurring:\s*([^.]+)\./i);
@@ -188,7 +186,6 @@ function stripSystemNotes(notes) {
     .trim();
 }
 
-// ── Duration helper (inline fallback if formatJobDurationParts missing) ──
 function formatJobDurationParts(job) {
   if (!job) return null;
   const value = job.estimatedValue;
@@ -224,7 +221,6 @@ function formatJobDurationParts(job) {
   return null;
 }
 
-// ── Payment breakdown math (verbatim from web) ────────────────────
 function computeJobPaymentBreakdown(jobPost) {
   if (!jobPost) return null;
 
@@ -367,11 +363,13 @@ function computeJobPaymentBreakdown(jobPost) {
   };
 }
 
-function timeAgo(date) {
+function timeAgo(date, t) {
   const diff = (Date.now() - date) / 1000;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 3600)
+    return t("jobs.detail.timeMinutesAgo", { count: Math.floor(diff / 60) });
+  if (diff < 86400)
+    return t("jobs.detail.timeHoursAgo", { count: Math.floor(diff / 3600) });
+  return t("jobs.detail.timeDaysAgo", { count: Math.floor(diff / 86400) });
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -417,7 +415,7 @@ export default function JobDetailScreen() {
   // ── Fetch ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!jobId) {
-      setError("Job not found.");
+      setError(t("jobs.notFound"));
       setLoading(false);
       return;
     }
@@ -441,12 +439,13 @@ export default function JobDetailScreen() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err?.response?.data?.message || "Job not found.");
+        setError(err?.response?.data?.message || t("jobs.notFound"));
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
   // ── Apply ─────────────────────────────────────────────────────
@@ -461,13 +460,11 @@ export default function JobDetailScreen() {
     try {
       await client.post(`/jobs/${jobId}/apply`, { message });
       setJob((j) => ({ ...j, hasApplied: true, applicationStatus: "PENDING" }));
-      setSuccess("Application submitted! The hirer will be notified.");
+      setSuccess(t("jobs.apply.success"));
       setShowForm(false);
       setMessage("");
     } catch (err) {
-      setError(
-        err?.response?.data?.message || "Failed to apply. Please try again.",
-      );
+      setError(err?.response?.data?.message || t("jobs.apply.failed"));
     } finally {
       setApplying(false);
     }
@@ -478,9 +475,9 @@ export default function JobDetailScreen() {
     try {
       await client.patch(`/jobs/${jobId}/status`, { status });
       setJob((j) => ({ ...j, status }));
-      setSuccess(`Job marked as ${status.toLowerCase()}.`);
+      setSuccess(t("jobs.jobUpdated", { status: status.toLowerCase() }));
     } catch {
-      setError("Failed to update status.");
+      setError(t("jobs.detail.statusUpdateFailed"));
     }
   }
 
@@ -490,55 +487,64 @@ export default function JobDetailScreen() {
       if (isSaved) {
         await client.delete(`/jobs/${jobId}/save`);
         setIsSaved(false);
-        setSuccess("Job removed from your saved list.");
+        setSuccess(t("jobs.detail.savedRemoved"));
       } else {
         await client.post(`/jobs/${jobId}/save`);
         setIsSaved(true);
-        setSuccess("Job saved to your list.");
+        setSuccess(t("jobs.detail.savedAdded"));
       }
     } catch (err) {
-      setError(
-        err?.response?.data?.message || "Failed to update saved status.",
-      );
+      setError(err?.response?.data?.message || t("jobs.detail.savedFailed"));
     }
   }
 
   // ── Derived labels ────────────────────────────────────────────
   const scheduled = job ? new Date(job.scheduledAt) : null;
 
-  const statusMeta = {
-    OPEN: { label: "Open", color: c.green },
-    FILLED: { label: "Filled", color: "#818cf8" },
-    CANCELLED: { label: "Cancelled", color: c.red },
-  };
+  const statusMeta = job
+    ? {
+        OPEN: { label: t("jobs.open"), color: c.green },
+        FILLED: { label: t("jobs.filled"), color: "#818cf8" },
+        CANCELLED: { label: t("jobs.cancelled"), color: c.red },
+      }
+    : null;
   const sm = job ? statusMeta[job.status] || statusMeta.OPEN : null;
 
   const jobTypeMeta = job
     ? {
-        FULL_TIME: { icon: FaBriefcase, label: "Full-time" },
-        PART_TIME: { icon: FaClock, label: "Part-time" },
-        CONTRACT: { icon: FaFileAlt, label: "Contract" },
-        TEMPORARY: { icon: FaClock, label: "Temporary" },
+        FULL_TIME: {
+          icon: FaBriefcase,
+          label: t("jobs.detail.jobTypeFullTime"),
+        },
+        PART_TIME: { icon: FaClock, label: t("jobs.detail.jobTypePartTime") },
+        CONTRACT: { icon: FaFileAlt, label: t("jobs.detail.jobTypeContract") },
+        TEMPORARY: { icon: FaClock, label: t("jobs.detail.jobTypeTemporary") },
       }[job.jobType]
     : null;
 
   const locationTypeMeta = job
     ? {
-        REMOTE: { icon: FaGlobe, label: "Remote" },
-        ON_SITE: { icon: FaMapMarkerAlt, label: "On-site" },
-        HYBRID: { icon: FaRandom, label: "Hybrid" },
+        REMOTE: { icon: FaGlobe, label: t("jobs.detail.workStyleRemote") },
+        ON_SITE: {
+          icon: FaMapMarkerAlt,
+          label: t("jobs.detail.workStyleOnSite"),
+        },
+        HYBRID: { icon: FaRandom, label: t("jobs.detail.workStyleHybrid") },
       }[job.locationType]
     : null;
 
   const budgetTypeMeta = job
     ? {
-        FIXED: { icon: FaDollarSign, label: "Fixed" },
-        HOURLY: { icon: FaClock, label: "Hourly" },
-        DAILY: { icon: FaSun, label: "Daily" },
-        WEEKLY: { icon: FaCalendarAlt, label: "Weekly" },
-        MONTHLY: { icon: FaCalendarAlt, label: "Monthly" },
-        YEARLY: { icon: FaCalendarAlt, label: "Yearly" },
-        CUSTOM: { icon: FaEdit, label: "Custom" },
+        FIXED: { icon: FaDollarSign, label: t("jobs.detail.paymentFixed") },
+        HOURLY: { icon: FaClock, label: t("jobs.detail.paymentHourly") },
+        DAILY: { icon: FaSun, label: t("jobs.detail.paymentDaily") },
+        WEEKLY: { icon: FaCalendarAlt, label: t("jobs.detail.paymentWeekly") },
+        MONTHLY: {
+          icon: FaCalendarAlt,
+          label: t("jobs.detail.paymentMonthly"),
+        },
+        YEARLY: { icon: FaCalendarAlt, label: t("jobs.detail.paymentYearly") },
+        CUSTOM: { icon: FaEdit, label: t("jobs.detail.paymentCustom") },
       }[job.budgetType]
     : null;
 
@@ -582,22 +588,22 @@ export default function JobDetailScreen() {
       ? salaryRangeText
       : hasBudget
         ? `${job.currency} ${parseFloat(job.budget).toLocaleString()}`
-        : "—";
+        : t("jobs.detail.noAmount");
 
   const mainPaymentLabel = hasSalaryText
-    ? "Salary"
+    ? t("jobs.detail.labelSalary")
     : hasSalaryRange
-      ? "Salary Range"
-      : "Budget";
+      ? t("jobs.detail.labelSalaryRange")
+      : t("jobs.detail.budget");
 
   const budgetSuffix =
     job?.budgetType && job.budgetType !== "FIXED"
       ? job.budgetType === "CUSTOM"
         ? job.budgetCustomLabel
           ? ` · ${job.budgetCustomLabel}`
-          : " · Custom"
+          : ` · ${t("jobs.detail.paymentCustom")}`
         : ` · ${BUDGET_TYPE_LABELS[job.budgetType] || job.budgetType}`
-      : " total";
+      : ` ${t("jobs.detail.budgetSuffixTotal")}`;
 
   const durationParts = job ? formatJobDurationParts(job) : null;
   const hasEstimatedDuration = !!(durationParts || job?.estimatedHours);
@@ -629,12 +635,12 @@ export default function JobDetailScreen() {
     ? [
         job.minQualification && {
           icon: <FaAward size={14} color={c.orange} />,
-          label: "Minimum Qualification",
+          label: t("jobs.detail.requirementMinQualification"),
           value: job.minQualification,
         },
         job.experienceLevel && {
           icon: <FaChartLine size={14} color={c.orange} />,
-          label: "Experience Level",
+          label: t("jobs.detail.requirementExperienceLevel"),
           value: job.experienceLength
             ? `${job.experienceLevel} · ${job.experienceLength}`
             : job.experienceLevel,
@@ -642,27 +648,27 @@ export default function JobDetailScreen() {
         job.experienceLength &&
           !job.experienceLevel && {
             icon: <FaChartLine size={14} color={c.orange} />,
-            label: "Experience Length",
+            label: t("jobs.detail.requirementExperienceLength"),
             value: job.experienceLength,
           },
         educationLevelLabel && {
           icon: <FaBookOpen size={14} color={c.orange} />,
-          label: "Education Level",
+          label: t("jobs.detail.requirementEducationLevel"),
           value: educationLevelLabel,
         },
         languageLabel && {
           icon: <FaGlobe size={14} color={c.orange} />,
-          label: "Language",
+          label: t("jobs.detail.requirementLanguage"),
           value: languageLabel,
         },
         job.workingHours && {
           icon: <FaClock size={14} color={c.orange} />,
-          label: "Working Hours",
+          label: t("jobs.detail.requirementWorkingHours"),
           value: job.workingHours,
         },
         job.applicantLocation && {
           icon: <FaMapMarkerAlt size={14} color={c.orange} />,
-          label: "Preferred Applicant Location",
+          label: t("jobs.detail.requirementPreferredLocation"),
           value: job.applicantLocation,
         },
       ].filter(Boolean)
@@ -701,7 +707,7 @@ export default function JobDetailScreen() {
               marginTop: 16,
             }}
           >
-            Job not found
+            {t("jobs.detail.notFoundTitle")}
           </AppText>
           <Pressable
             onPress={() => navigation.navigate(backDestination)}
@@ -716,7 +722,7 @@ export default function JobDetailScreen() {
           >
             <FaChevronLeft size={12} color={c.textDim} />
             <AppText style={{ fontSize: 13, color: c.textDim, marginLeft: 6 }}>
-              Back to Jobs
+              {t("jobs.detail.backToJobs")}
             </AppText>
           </Pressable>
         </View>
@@ -726,9 +732,6 @@ export default function JobDetailScreen() {
 
   if (!job) return null;
 
-  // ═════════════════════════════════════════════════════════════════
-  // RENDER
-  // ═════════════════════════════════════════════════════════════════
   return (
     <AppScreen contentContainerStyle={{ paddingBottom: 40 }}>
       {/* Back link */}
@@ -741,7 +744,7 @@ export default function JobDetailScreen() {
       >
         <FaChevronLeft size={12} color={c.textDim} />
         <AppText style={{ fontSize: 13, color: c.textDim, marginLeft: 6 }}>
-          Back to Jobs
+          {t("jobs.detail.backToJobs")}
         </AppText>
       </Pressable>
 
@@ -781,16 +784,13 @@ export default function JobDetailScreen() {
         </Pressable>
       ) : null}
 
-      {/* ═══════════════════════════════════════════════════════════
-          HEADER CARD
-          ═══════════════════════════════════════════════════════════ */}
+      {/* HEADER CARD */}
       <View
         style={[
           styles.headerCard,
           { backgroundColor: c.bgPanel, borderColor: c.border },
         ]}
       >
-        {/* Header top: category chip + status badge + save */}
         <View style={styles.headerTop}>
           {job.category?.name ? (
             <View
@@ -812,7 +812,9 @@ export default function JobDetailScreen() {
                 numberOfLines={1}
               >
                 {job.category.name}
-                {job.category.isUserSubmitted ? " (custom)" : ""}
+                {job.category.isUserSubmitted
+                  ? ` ${t("jobs.detail.customSuffix")}`
+                  : ""}
               </AppText>
             </View>
           ) : null}
@@ -864,13 +866,12 @@ export default function JobDetailScreen() {
                   marginLeft: 4,
                 }}
               >
-                {isSaved ? "Saved" : "Save Job"}
+                {isSaved ? t("jobs.detail.saved") : t("jobs.detail.saveJob")}
               </AppText>
             </Pressable>
           ) : null}
         </View>
 
-        {/* Company line */}
         {companyDisplay ? (
           <AppText
             style={{
@@ -884,7 +885,6 @@ export default function JobDetailScreen() {
           </AppText>
         ) : null}
 
-        {/* Title */}
         <AppText
           style={{
             fontFamily: "Syne_800ExtraBold",
@@ -898,7 +898,6 @@ export default function JobDetailScreen() {
           {job.title}
         </AppText>
 
-        {/* Type pills row */}
         {(jobTypeMeta ||
           locationTypeMeta ||
           job.budgetType ||
@@ -936,26 +935,27 @@ export default function JobDetailScreen() {
             {hasRecurring ? (
               <TypePill
                 icon={<FaSyncAlt size={11} color={c.orange} />}
-                label="Recurring"
+                label={t("jobs.detail.recurring")}
                 c={c}
               />
             ) : null}
             {job.sourcePlatform ? (
               <TypePill
                 icon={<FaExternalLinkAlt size={11} color={c.orange} />}
-                label={`via ${job.sourcePlatform}`}
+                label={t("jobs.detail.viaPlatform", {
+                  platform: job.sourcePlatform,
+                })}
                 c={c}
               />
             ) : null}
           </View>
         )}
 
-        {/* Meta row */}
         <View style={styles.metaRow}>
           {scheduled ? (
             <MetaItem
               icon={<FaCalendarAlt size={12} color={c.orange} />}
-              text={`${scheduled.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })} at ${scheduled.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+              text={`${scheduled.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })} ${t("jobs.apply.at")} ${scheduled.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
               c={c}
             />
           ) : null}
@@ -975,12 +975,13 @@ export default function JobDetailScreen() {
           ) : null}
           <MetaItem
             icon={<FaCalendarAlt size={12} color={c.orange} />}
-            text={`Posted ${timeAgo(new Date(job.createdAt))}`}
+            text={t("jobs.detail.postedAgo", {
+              time: timeAgo(new Date(job.createdAt), t),
+            })}
             c={c}
           />
         </View>
 
-        {/* Budget block */}
         <View
           style={[
             styles.budgetBlock,
@@ -1016,18 +1017,17 @@ export default function JobDetailScreen() {
                 marginLeft: 4,
               }}
             >
-              {job._count?.applications || 0} applicant
-              {job._count?.applications !== 1 ? "s" : ""}
+              {t("jobs.detail.applicantsCount", {
+                count: job._count?.applications || 0,
+              })}
             </AppText>
           </View>
         </View>
       </View>
 
-      {/* ═══════════════════════════════════════════════════════════
-          DESCRIPTION
-          ═══════════════════════════════════════════════════════════ */}
-      <Section title="Job Description" c={c}>
-        <AppText style={[styles.description, { color: theme.colors.textDim }]}>{job.description}</AppText>
+      {/* DESCRIPTION */}
+      <Section title={t("jobs.detail.jobDesc")} c={c}>
+        <AppText style={styles.description}>{job.description}</AppText>
         {cleanNotes ? (
           <View
             style={[
@@ -1054,30 +1054,28 @@ export default function JobDetailScreen() {
       {/* RESPONSIBILITIES */}
       {job.responsibilities ? (
         <Section
-          title="Responsibilities"
+          title={t("jobs.detail.responsibilities")}
           icon={<FaAlignLeft size={13} color={c.textDim} />}
           c={c}
         >
-          <AppText style={[styles.description, { color: theme.colors.textDim }]}>
-            {job.responsibilities}
-          </AppText>
+          <AppText style={styles.description}>{job.responsibilities}</AppText>
         </Section>
       ) : null}
 
       {/* REQUIREMENTS (free text) */}
       {job.requirements ? (
         <Section
-          title="Requirements"
+          title={t("jobs.detail.requirements")}
           icon={<FaCheckCircle size={13} color={c.textDim} />}
           c={c}
         >
-          <AppText style={[styles.description, { color: theme.colors.textDim }]}>{job.requirements}</AppText>
+          <AppText style={styles.description}>{job.requirements}</AppText>
         </Section>
       ) : null}
 
       {/* SKILLS */}
       {job.skills?.length > 0 ? (
-        <Section title="Required Skills" c={c}>
+        <Section title={t("jobs.detail.skills")} c={c}>
           <View style={styles.chipsWrap}>
             {job.skills.map((skill, i) => (
               <View
@@ -1101,7 +1099,7 @@ export default function JobDetailScreen() {
       {/* QUALIFICATIONS */}
       {qualificationsList.length > 0 ? (
         <Section
-          title="Required Qualifications"
+          title={t("jobs.detail.qualifications")}
           icon={<FaAward size={13} color={c.textDim} />}
           c={c}
         >
@@ -1133,7 +1131,7 @@ export default function JobDetailScreen() {
       {/* WORK CONDITIONS */}
       {hasWorkConditions ? (
         <Section
-          title="Work Conditions"
+          title={t("jobs.detail.workConditions")}
           icon={<FaHome size={13} color={c.textDim} />}
           c={c}
         >
@@ -1141,16 +1139,16 @@ export default function JobDetailScreen() {
             {job.providesAccommodation ? (
               <DetailCard
                 icon={<FaHome size={13} color={c.orange} />}
-                label="Accommodation"
-                value="Provided"
+                label={t("jobs.detail.accommodation")}
+                value={t("jobs.detail.provided")}
                 c={c}
               />
             ) : null}
             {job.providesMeals ? (
               <DetailCard
                 icon={<FaCoffee size={13} color={c.orange} />}
-                label="Meals"
-                value="Provided"
+                label={t("jobs.detail.meals")}
+                value={t("jobs.detail.provided")}
                 c={c}
               />
             ) : null}
@@ -1159,18 +1157,18 @@ export default function JobDetailScreen() {
       ) : null}
 
       {/* DETAILS GRID */}
-      <Section title="Details" c={c}>
+      <Section title={t("jobs.detail.details")} c={c}>
         <View style={styles.detailGrid}>
           {job.category?.name ? (
             <DetailCard
               icon={<FaFileAlt size={13} color={c.orange} />}
-              label="Category"
-              value={`${job.category.icon ? `${job.category.icon} ` : ""}${job.category.name}${job.category.isUserSubmitted ? " (custom)" : ""}`}
+              label={t("jobs.detail.category")}
+              value={`${job.category.icon ? `${job.category.icon} ` : ""}${job.category.name}${job.category.isUserSubmitted ? ` ${t("jobs.detail.customSuffix")}` : ""}`}
               c={c}
             />
           ) : null}
 
-          {mainPaymentText !== "—" ? (
+          {mainPaymentText !== t("jobs.detail.noAmount") ? (
             <DetailCard
               icon={<FaDollarSign size={13} color={c.orange} />}
               label={mainPaymentLabel}
@@ -1183,7 +1181,7 @@ export default function JobDetailScreen() {
           {hasSalaryText && hasSalaryRange ? (
             <DetailCard
               icon={<FaDollarSign size={13} color={c.orange} />}
-              label="Salary Range (numeric)"
+              label={t("jobs.detail.labelSalaryRangeNumeric")}
               value={salaryRangeText}
               c={c}
             />
@@ -1192,7 +1190,7 @@ export default function JobDetailScreen() {
           {scheduled ? (
             <DetailCard
               icon={<FaCalendarAlt size={13} color={c.orange} />}
-              label="Scheduled"
+              label={t("jobs.detail.scheduled")}
               value={scheduled.toLocaleDateString("en-GB", {
                 day: "numeric",
                 month: "long",
@@ -1205,7 +1203,7 @@ export default function JobDetailScreen() {
           {hasEstimatedDuration && durationParts ? (
             <DetailCard
               icon={<FaClock size={13} color={c.orange} />}
-              label="Estimated Duration"
+              label={t("jobs.detail.estimatedDuration")}
               value={`${durationParts.primary}${
                 durationParts.equivalents?.length > 0
                   ? ` (${durationParts.equivalents.map((e) => e.label).join(", ")})`
@@ -1218,7 +1216,7 @@ export default function JobDetailScreen() {
           {hasCustomDuration ? (
             <DetailCard
               icon={<FaClock size={13} color={c.orange} />}
-              label="Custom Duration"
+              label={t("jobs.detail.customDuration")}
               value={customDurationLabel}
               c={c}
             />
@@ -1227,7 +1225,7 @@ export default function JobDetailScreen() {
           {hasRecurring ? (
             <DetailCard
               icon={<FaSyncAlt size={13} color={c.orange} />}
-              label="Recurring Schedule"
+              label={t("jobs.detail.recurringSchedule")}
               value={recurringLabel}
               c={c}
             />
@@ -1236,7 +1234,7 @@ export default function JobDetailScreen() {
           {hasProjectDuration ? (
             <DetailCard
               icon={<FaClock size={13} color={c.orange} />}
-              label="Project Duration"
+              label={t("jobs.detail.projectDuration")}
               value={`${job.durationValue} ${job.durationType.toLowerCase()}`}
               c={c}
             />
@@ -1245,7 +1243,7 @@ export default function JobDetailScreen() {
           {job.locationType && job.address ? (
             <DetailCard
               icon={<FaMapMarkerAlt size={13} color={c.orange} />}
-              label="Location"
+              label={t("jobs.detail.location")}
               value={job.address}
               c={c}
             />
@@ -1265,7 +1263,9 @@ export default function JobDetailScreen() {
             >
               <FaLocationArrow size={13} color={c.orange} />
               <View style={{ flex: 1, marginLeft: 8, minWidth: 0 }}>
-                <AppText style={[styles.detailLabel, { color: theme.colors.textMuted }]}>Coordinates</AppText>
+                <AppText style={styles.detailLabel}>
+                  {t("jobs.detail.coordinates")}
+                </AppText>
                 <AppText
                   style={{ fontSize: 12, fontWeight: "600", color: c.orange }}
                   numberOfLines={1}
@@ -1279,7 +1279,7 @@ export default function JobDetailScreen() {
 
           <DetailCard
             icon={<FaTag size={13} color={c.orange} />}
-            label="Status"
+            label={t("jobs.detail.status")}
             value={sm.label}
             c={c}
           />
@@ -1287,7 +1287,7 @@ export default function JobDetailScreen() {
           {jobTypeMeta ? (
             <DetailCard
               icon={<JobTypeIcon size={13} color={c.orange} />}
-              label="Job Type"
+              label={t("jobs.detail.jobType")}
               value={jobTypeMeta.label}
               c={c}
             />
@@ -1296,7 +1296,7 @@ export default function JobDetailScreen() {
           {locationTypeMeta ? (
             <DetailCard
               icon={<LocationTypeIcon size={13} color={c.orange} />}
-              label="Work Style"
+              label={t("jobs.detail.workStyle")}
               value={locationTypeMeta.label}
               c={c}
             />
@@ -1305,7 +1305,7 @@ export default function JobDetailScreen() {
           {job.languageRequirement ? (
             <DetailCard
               icon={<FaGlobe size={13} color={c.orange} />}
-              label="Language Required"
+              label={t("jobs.detail.languageRequired")}
               value={languageLabel}
               c={c}
             />
@@ -1314,7 +1314,7 @@ export default function JobDetailScreen() {
           {job.budgetType && budgetTypeLabel ? (
             <DetailCard
               icon={<FaCreditCard size={13} color={c.orange} />}
-              label="Payment Type"
+              label={t("jobs.detail.paymentType")}
               value={`${budgetTypeLabel}${job.budgetType === "CUSTOM" && job.budgetCustomLabel ? ` (${job.budgetCustomLabel})` : ""}`}
               c={c}
             />
@@ -1323,7 +1323,7 @@ export default function JobDetailScreen() {
           {job.currency ? (
             <DetailCard
               icon={<FaDollarSign size={13} color={c.orange} />}
-              label="Currency"
+              label={t("jobs.detail.currency")}
               value={job.currency}
               c={c}
             />
@@ -1332,7 +1332,7 @@ export default function JobDetailScreen() {
           {job.sourcePlatform ? (
             <DetailCard
               icon={<FaExternalLinkAlt size={13} color={c.orange} />}
-              label="Source Platform"
+              label={t("jobs.detail.sourcePlatform")}
               value={job.sourcePlatform}
               c={c}
             />
@@ -1341,7 +1341,7 @@ export default function JobDetailScreen() {
           {job.expiryDate ? (
             <DetailCard
               icon={<FaCalendarAlt size={13} color={c.orange} />}
-              label="Expires"
+              label={t("jobs.detail.expires")}
               value={new Date(job.expiryDate).toLocaleDateString("en-GB", {
                 day: "numeric",
                 month: "long",
@@ -1354,7 +1354,7 @@ export default function JobDetailScreen() {
           {job.createdAt ? (
             <DetailCard
               icon={<FaCalendarAlt size={13} color={c.orange} />}
-              label="Posted"
+              label={t("jobs.detail.posted")}
               value={new Date(job.createdAt).toLocaleDateString("en-GB", {
                 day: "numeric",
                 month: "long",
@@ -1366,12 +1366,10 @@ export default function JobDetailScreen() {
         </View>
       </Section>
 
-      {/* ═══════════════════════════════════════════════════════════
-          PAYMENT BREAKDOWN
-          ═══════════════════════════════════════════════════════════ */}
+      {/* PAYMENT BREAKDOWN */}
       {paymentBreakdown ? (
         <Section
-          title="Payment Breakdown"
+          title={t("jobs.detail.paymentBreakdown")}
           icon={<FaDollarSign size={13} color={c.textDim} />}
           c={c}
         >
@@ -1400,7 +1398,7 @@ export default function JobDetailScreen() {
                   flex: 1,
                 }}
               >
-                What the worker will be paid
+                {t("jobs.detail.whatWorkerWillBePaid")}
               </AppText>
               <View
                 style={[
@@ -1422,12 +1420,13 @@ export default function JobDetailScreen() {
             </View>
 
             <View style={styles.paymentBreakdownBody}>
-              {/* Rate */}
               <View style={styles.paymentBreakdownRow}>
-                <AppText style={[styles.paymentBreakdownLabel, { color: theme.colors.textDim }]}>
-                  {paymentBreakdown.isFixed ? "Fixed Price" : "Rate"}
+                <AppText style={styles.paymentBreakdownLabel}>
+                  {paymentBreakdown.isFixed
+                    ? t("jobs.detail.fixedPrice")
+                    : t("jobs.detail.rate")}
                 </AppText>
-                <AppText style={[styles.paymentBreakdownValue, { color: theme.colors.text }]}>
+                <AppText style={styles.paymentBreakdownValue}>
                   {paymentBreakdown.currency}{" "}
                   {paymentBreakdown.rate.toLocaleString()}
                   {!paymentBreakdown.isFixed && paymentBreakdown.periodLabel ? (
@@ -1445,14 +1444,15 @@ export default function JobDetailScreen() {
                 </AppText>
               </View>
 
-              {/* Duration */}
               {paymentBreakdown.isRecurring &&
               paymentBreakdown.durationLabel ? (
                 <View style={styles.paymentBreakdownRow}>
-                  <AppText style={[styles.paymentBreakdownLabel, { color: theme.colors.textDim }]}>
-                    Duration ({paymentBreakdown.budgetTypeLabel})
+                  <AppText style={styles.paymentBreakdownLabel}>
+                    {t("jobs.detail.durationBracket", {
+                      type: paymentBreakdown.budgetTypeLabel,
+                    })}
                   </AppText>
-                  <AppText style={[styles.paymentBreakdownValue, { color: theme.colors.text }]}>
+                  <AppText style={styles.paymentBreakdownValue}>
                     {paymentBreakdown.durationLabel}
                     {paymentBreakdown.multiplierLabel &&
                     paymentBreakdown.multiplierLabel !==
@@ -1472,7 +1472,6 @@ export default function JobDetailScreen() {
                 </View>
               ) : null}
 
-              {/* Calculation */}
               {paymentBreakdown.calculationText ? (
                 <View
                   style={[
@@ -1496,24 +1495,24 @@ export default function JobDetailScreen() {
                 </View>
               ) : null}
 
-              {/* Subtotal */}
               {!paymentBreakdown.isFixed ? (
                 <View style={styles.paymentBreakdownRow}>
-                  <AppText style={[styles.paymentBreakdownLabel, { color: theme.colors.textDim }]}>
-                    Subtotal
+                  <AppText style={styles.paymentBreakdownLabel}>
+                    {t("jobs.detail.subtotal")}
                   </AppText>
-                  <AppText style={[styles.paymentBreakdownValue, { color: theme.colors.text }]}>
+                  <AppText style={styles.paymentBreakdownValue}>
                     {paymentBreakdown.currency}{" "}
                     {paymentBreakdown.subtotal.toLocaleString()}
                   </AppText>
                 </View>
               ) : null}
 
-              {/* Platform fee */}
               <View style={styles.paymentBreakdownRow}>
                 <View style={{ flex: 1 }}>
-                  <AppText style={[styles.paymentBreakdownLabel, { color: theme.colors.textDim }]}>
-                    Platform fee ({paymentBreakdown.platformFeePercent}%)
+                  <AppText style={styles.paymentBreakdownLabel}>
+                    {t("jobs.detail.platformFeePct", {
+                      percent: paymentBreakdown.platformFeePercent,
+                    })}
                   </AppText>
                   <AppText
                     style={{
@@ -1523,10 +1522,10 @@ export default function JobDetailScreen() {
                       marginTop: 2,
                     }}
                   >
-                    covers escrow, support, and payment processing
+                    {t("jobs.detail.platformFeeNote")}
                   </AppText>
                 </View>
-                <AppText style={[styles.paymentBreakdownValue, { color: theme.colors.text }]}>
+                <AppText style={styles.paymentBreakdownValue}>
                   + {paymentBreakdown.currency}{" "}
                   {paymentBreakdown.platformFee.toLocaleString()}
                 </AppText>
@@ -1540,7 +1539,6 @@ export default function JobDetailScreen() {
                 }}
               />
 
-              {/* Total */}
               <View
                 style={[
                   styles.paymentBreakdownTotal,
@@ -1556,7 +1554,7 @@ export default function JobDetailScreen() {
                     letterSpacing: 0.6,
                   }}
                 >
-                  Total to hire
+                  {t("jobs.detail.totalToHire")}
                 </AppText>
                 <AppText
                   style={{
@@ -1571,22 +1569,24 @@ export default function JobDetailScreen() {
                 </AppText>
               </View>
 
-              {/* Notes */}
               {paymentBreakdown.isFixed ? (
-                <PaymentNote
-                  text="This is a fixed-price job — the agreed amount is the total, plus the platform fee."
-                  c={c}
-                />
+                <PaymentNote text={t("jobs.detail.noteFixed")} c={c} />
               ) : null}
               {paymentBreakdown.isCustom ? (
-                <PaymentNote
-                  text="This job has a custom rate. The final amount will be confirmed when you create the booking."
-                  c={c}
-                />
+                <PaymentNote text={t("jobs.detail.noteCustom")} c={c} />
               ) : null}
               {paymentBreakdown.isRecurring ? (
                 <PaymentNote
-                  text={`${paymentBreakdown.currency} ${paymentBreakdown.rate.toLocaleString()} ${paymentBreakdown.periodLabel} × ${paymentBreakdown.multiplierLabel || paymentBreakdown.durationLabel}. The worker is paid per ${paymentBreakdown.budgetType.toLowerCase()} for the full ${paymentBreakdown.durationLabel} engagement.`}
+                  text={t("jobs.detail.noteRecurring", {
+                    currency: paymentBreakdown.currency,
+                    rate: paymentBreakdown.rate.toLocaleString(),
+                    period: paymentBreakdown.periodLabel,
+                    multiplier:
+                      paymentBreakdown.multiplierLabel ||
+                      paymentBreakdown.durationLabel,
+                    budgetType: paymentBreakdown.budgetType.toLowerCase(),
+                    duration: paymentBreakdown.durationLabel,
+                  })}
                   c={c}
                 />
               ) : null}
@@ -1598,7 +1598,7 @@ export default function JobDetailScreen() {
       {/* REQUIREMENTS & QUALIFICATIONS grouped */}
       {hasRequirementsBlock ? (
         <Section
-          title="Requirements"
+          title={t("jobs.detail.requirements")}
           icon={<FaCheckCircle size={13} color={c.textDim} />}
           c={c}
         >
@@ -1616,9 +1616,9 @@ export default function JobDetailScreen() {
         </Section>
       ) : null}
 
-      {/* HOW TO APPLY (external channels) */}
+      {/* HOW TO APPLY */}
       {hasExternalApplyChannels ? (
-        <Section title="How to Apply" c={c}>
+        <Section title={t("jobs.detail.howToApply")} c={c}>
           <View style={styles.chipsWrap}>
             {job.applicationUrl ? (
               <Pressable
@@ -1633,8 +1633,8 @@ export default function JobDetailScreen() {
                 ]}
               >
                 <FaLink size={12} color={c.orange} />
-                <AppText style={[styles.applyChannelText, { color: theme.colors.textDim }]}>
-                  Apply via link
+                <AppText style={styles.applyChannelText}>
+                  {t("jobs.detail.applyViaLink")}
                 </AppText>
               </Pressable>
             ) : null}
@@ -1653,7 +1653,7 @@ export default function JobDetailScreen() {
                 ]}
               >
                 <FaEnvelope size={12} color={c.orange} />
-                <AppText style={[styles.applyChannelText, { color: theme.colors.textDim }]} numberOfLines={1}>
+                <AppText style={styles.applyChannelText} numberOfLines={1}>
                   {job.applicationEmail}
                 </AppText>
               </Pressable>
@@ -1675,7 +1675,7 @@ export default function JobDetailScreen() {
                 ]}
               >
                 <FaCommentDots size={12} color={c.orange} />
-                <AppText style={[styles.applyChannelText, { color: theme.colors.textDim }]} numberOfLines={1}>
+                <AppText style={styles.applyChannelText} numberOfLines={1}>
                   {job.applicationWhatsApp}
                 </AppText>
               </Pressable>
@@ -1693,7 +1693,7 @@ export default function JobDetailScreen() {
                 ]}
               >
                 <FaPhone size={12} color={c.orange} />
-                <AppText style={[styles.applyChannelText, { color: theme.colors.textDim }]} numberOfLines={1}>
+                <AppText style={styles.applyChannelText} numberOfLines={1}>
                   {job.applicationPhone}
                 </AppText>
               </Pressable>
@@ -1702,11 +1702,9 @@ export default function JobDetailScreen() {
         </Section>
       ) : null}
 
-      {/* ═══════════════════════════════════════════════════════════
-          APPLY (worker, job open)
-          ═══════════════════════════════════════════════════════════ */}
+      {/* APPLY (worker, job open) */}
       {isWorker && !canManage && isOpen ? (
-        <Section title="Apply for this Job" c={c}>
+        <Section title={t("jobs.detail.applyForJob")} c={c}>
           {wasRejected ? (
             <View
               style={[
@@ -1727,8 +1725,7 @@ export default function JobDetailScreen() {
                   lineHeight: 18,
                 }}
               >
-                You previously applied to this job but your application wasn't
-                selected. You can apply again.
+                {t("jobs.detail.wasRejectedBanner")}
               </AppText>
             </View>
           ) : null}
@@ -1754,10 +1751,9 @@ export default function JobDetailScreen() {
                 }}
               >
                 <AppText style={{ fontWeight: "700", color: c.green }}>
-                  Congratulations!
+                  {t("jobs.detail.congratulations")}
                 </AppText>{" "}
-                The hirer accepted your application. They'll create a booking to
-                formalize the job, and you'll be notified once it's ready.
+                {t("jobs.detail.wasAcceptedBody")}
               </AppText>
             </View>
           ) : null}
@@ -1782,8 +1778,7 @@ export default function JobDetailScreen() {
                   lineHeight: 18,
                 }}
               >
-                You've already applied to this job. The hirer will review your
-                application.
+                {t("jobs.detail.alreadyAppliedBanner")}
               </AppText>
             </View>
           ) : showForm ? (
@@ -1797,15 +1792,15 @@ export default function JobDetailScreen() {
                   letterSpacing: 0.6,
                 }}
               >
-                Message to Hirer{" "}
+                {t("jobs.apply.message")}{" "}
                 <AppText style={{ color: c.textMuted, textTransform: "none" }}>
-                  (optional)
+                  {t("common.optional")}
                 </AppText>
               </AppText>
               <TextInput
                 value={message}
                 onChangeText={setMessage}
-                placeholder="Introduce yourself, explain your experience with this type of job..."
+                placeholder={t("jobs.apply.messagePlaceholder")}
                 placeholderTextColor={c.textMuted}
                 multiline
                 numberOfLines={4}
@@ -1837,7 +1832,7 @@ export default function JobDetailScreen() {
                     <AppText
                       style={{ fontSize: 13, fontWeight: "700", color: c.bg }}
                     >
-                      Submit Application
+                      {t("jobs.detail.submitApplication")}
                     </AppText>
                   )}
                 </Pressable>
@@ -1855,7 +1850,7 @@ export default function JobDetailScreen() {
                       color: c.textDim,
                     }}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </AppText>
                 </Pressable>
               </View>
@@ -1877,7 +1872,9 @@ export default function JobDetailScreen() {
                   marginLeft: 8,
                 }}
               >
-                {wasRejected ? "Apply Again" : "Apply Now"}
+                {wasRejected
+                  ? t("jobs.detail.applyAgain")
+                  : t("jobs.detail.applyNow")}
               </AppText>
             </Pressable>
           )}
@@ -1903,17 +1900,15 @@ export default function JobDetailScreen() {
             }}
           >
             {isFilled
-              ? "This job has been filled. Applications are closed."
-              : "This job has been cancelled. Applications are closed."}
+              ? t("jobs.detail.filledBanner")
+              : t("jobs.detail.cancelledBanner")}
           </AppText>
         </View>
       ) : null}
 
-      {/* ═══════════════════════════════════════════════════════════
-          MANAGE (owner / admin)
-          ═══════════════════════════════════════════════════════════ */}
+      {/* MANAGE (owner / admin) */}
       {canManage ? (
-        <Section title="Manage Job" c={c}>
+        <Section title={t("jobs.detail.manageJob")} c={c}>
           <View style={styles.manageActions}>
             <Pressable
               onPress={() => navigation.navigate("JobApplications", { jobId })}
@@ -1935,7 +1930,9 @@ export default function JobDetailScreen() {
                   marginLeft: 6,
                 }}
               >
-                View Applications ({job._count?.applications || 0})
+                {t("jobs.detail.viewApplicationsCount", {
+                  count: job._count?.applications || 0,
+                })}
               </AppText>
             </Pressable>
 
@@ -1961,7 +1958,7 @@ export default function JobDetailScreen() {
                       marginLeft: 6,
                     }}
                   >
-                    Edit Job
+                    {t("jobs.detail.editJob")}
                   </AppText>
                 </Pressable>
                 <Pressable
@@ -1982,7 +1979,7 @@ export default function JobDetailScreen() {
                       color: "#818cf8",
                     }}
                   >
-                    Mark as Filled
+                    {t("jobs.detail.markFilled")}
                   </AppText>
                 </Pressable>
                 <Pressable
@@ -2003,7 +2000,7 @@ export default function JobDetailScreen() {
                       color: c.red,
                     }}
                   >
-                    Cancel Job
+                    {t("jobs.detail.cancelJob")}
                   </AppText>
                 </Pressable>
               </>
@@ -2024,17 +2021,13 @@ export default function JobDetailScreen() {
                 <AppText
                   style={{ fontSize: 12, fontWeight: "700", color: c.green }}
                 >
-                  Reopen Job
+                  {t("jobs.detail.reopenJob")}
                 </AppText>
               </Pressable>
             ) : null}
           </View>
         </Section>
       ) : null}
-
-      {/* ═══════════════════════════════════════════════════════════
-          SIDEBAR — hirer card + quick facts + guest CTA
-          ═══════════════════════════════════════════════════════════ */}
 
       {/* Hirer card */}
       {job.hirer ? (
@@ -2054,7 +2047,7 @@ export default function JobDetailScreen() {
               marginBottom: 6,
             }}
           >
-            Posted by
+            {t("jobs.detail.postedBy")}
           </AppText>
           <View
             style={[
@@ -2111,7 +2104,9 @@ export default function JobDetailScreen() {
               <AppText
                 style={{ fontSize: 11, fontWeight: "600", color: c.textDim }}
               >
-                {job.hirer.hirerProfile.totalHires} hires
+                {t("jobs.detail.hiresCount", {
+                  count: job.hirer.hirerProfile.totalHires,
+                })}
               </AppText>
             ) : null}
             {job.hirer.hirerProfile?.avgRating > 0 ? (
@@ -2142,15 +2137,15 @@ export default function JobDetailScreen() {
                 color: c.orange,
               }}
             >
-              View Profile →
+              {t("jobs.detail.viewProfile")}
             </AppText>
           </Pressable>
         </View>
       ) : null}
 
       {/* Quick facts */}
-      <Section title="Quick Facts" c={c}>
-        {mainPaymentText !== "—" ? (
+      <Section title={t("jobs.detail.quickFacts")} c={c}>
+        {mainPaymentText !== t("jobs.detail.noAmount") ? (
           <FactRow
             label={mainPaymentLabel}
             value={mainPaymentText}
@@ -2159,43 +2154,68 @@ export default function JobDetailScreen() {
           />
         ) : null}
         {job.category?.name ? (
-          <FactRow label="Category" value={job.category.name} c={c} />
+          <FactRow
+            label={t("jobs.detail.category")}
+            value={job.category.name}
+            c={c}
+          />
         ) : null}
         <FactRow
-          label="Applicants"
+          label={t("jobs.detail.applicants")}
           value={String(job._count?.applications || 0)}
           c={c}
         />
-        <FactRow label="Status" value={sm.label} valueColor={sm.color} c={c} />
+        <FactRow
+          label={t("jobs.detail.status")}
+          value={sm.label}
+          valueColor={sm.color}
+          c={c}
+        />
         {jobTypeMeta ? (
-          <FactRow label="Job Type" value={jobTypeMeta.label} c={c} />
+          <FactRow
+            label={t("jobs.detail.jobType")}
+            value={jobTypeMeta.label}
+            c={c}
+          />
         ) : null}
         {locationTypeMeta ? (
-          <FactRow label="Work Style" value={locationTypeMeta.label} c={c} />
+          <FactRow
+            label={t("jobs.detail.workStyle")}
+            value={locationTypeMeta.label}
+            c={c}
+          />
         ) : null}
         {job.skills?.length > 0 ? (
           <FactRow
-            label="Skills"
-            value={`${job.skills.length} required`}
+            label={t("jobs.detail.skills")}
+            value={t("jobs.detail.skillsRequiredCount", {
+              count: job.skills.length,
+            })}
             c={c}
           />
         ) : null}
         {qualificationsList.length > 0 ? (
           <FactRow
-            label="Qualifications"
-            value={`${qualificationsList.length} required`}
+            label={t("jobs.detail.qualifications")}
+            value={t("jobs.detail.qualificationsRequiredCount", {
+              count: qualificationsList.length,
+            })}
             c={c}
           />
         ) : null}
         {job.languageRequirement ? (
-          <FactRow label="Language" value={languageLabel} c={c} />
+          <FactRow
+            label={t("jobs.detail.language")}
+            value={languageLabel}
+            c={c}
+          />
         ) : null}
         {hasWorkConditions ? (
           <FactRow
-            label="Includes"
+            label={t("jobs.detail.includes")}
             value={[
-              job.providesAccommodation && "Accommodation",
-              job.providesMeals && "Meals",
+              job.providesAccommodation && t("jobs.detail.accommodation"),
+              job.providesMeals && t("jobs.detail.meals"),
             ]
               .filter(Boolean)
               .join(", ")}
@@ -2204,14 +2224,14 @@ export default function JobDetailScreen() {
         ) : null}
         {hasProjectDuration ? (
           <FactRow
-            label="Project Duration"
+            label={t("jobs.detail.projectDuration")}
             value={`${job.durationValue} ${job.durationType.toLowerCase()}`}
             c={c}
           />
         ) : null}
         {hasEstimatedDuration && durationParts ? (
           <FactRow
-            label="Est. Duration"
+            label={t("jobs.detail.estDuration")}
             value={`${durationParts.primary}${
               durationParts.equivalents?.[0]
                 ? ` (${durationParts.equivalents[0].label})`
@@ -2221,27 +2241,43 @@ export default function JobDetailScreen() {
           />
         ) : null}
         {hasRecurring ? (
-          <FactRow label="Recurring" value={recurringLabel} c={c} />
+          <FactRow
+            label={t("jobs.detail.recurring")}
+            value={recurringLabel}
+            c={c}
+          />
         ) : null}
         {hasCustomDuration ? (
-          <FactRow label="Duration" value={customDurationLabel} c={c} />
+          <FactRow
+            label={t("jobs.detail.duration")}
+            value={customDurationLabel}
+            c={c}
+          />
         ) : null}
         {job.experienceLevel ? (
-          <FactRow label="Experience" value={job.experienceLevel} c={c} />
+          <FactRow
+            label={t("jobs.detail.experience")}
+            value={job.experienceLevel}
+            c={c}
+          />
         ) : null}
         {educationLevelLabel ? (
-          <FactRow label="Education" value={educationLevelLabel} c={c} />
+          <FactRow
+            label={t("jobs.detail.education")}
+            value={educationLevelLabel}
+            c={c}
+          />
         ) : null}
         {job.applicantLocation ? (
           <FactRow
-            label="Preferred Location"
+            label={t("jobs.detail.preferredLocation")}
             value={job.applicantLocation}
             c={c}
           />
         ) : null}
         {job.expiryDate ? (
           <FactRow
-            label="Expires"
+            label={t("jobs.detail.expires")}
             value={new Date(job.expiryDate).toLocaleDateString("en-GB", {
               day: "numeric",
               month: "short",
@@ -2266,7 +2302,7 @@ export default function JobDetailScreen() {
           <AppText
             style={{ fontSize: 12, color: c.textDim, textAlign: "center" }}
           >
-            Sign in as a worker to apply for this job.
+            {t("jobs.detail.guestSignInBody")}
           </AppText>
           <Pressable
             onPress={() => navigation.navigate("Login")}
@@ -2276,7 +2312,7 @@ export default function JobDetailScreen() {
             ]}
           >
             <AppText style={{ fontSize: 12, fontWeight: "700", color: c.bg }}>
-              Sign In to Apply
+              {t("jobs.detail.guestSignInBtn")}
             </AppText>
           </Pressable>
         </View>
@@ -2366,7 +2402,9 @@ function DetailCard({ icon, label, value, accent, c }) {
     >
       {icon}
       <View style={{ flex: 1, marginLeft: 8, minWidth: 0 }}>
-        <AppText style={[styles.detailLabel, { color: theme.colors.textMuted }]}>{label}</AppText>
+        <AppText style={[styles.detailLabel, { color: c.textMuted }]}>
+          {label}
+        </AppText>
         <AppText
           style={{
             fontSize: accent ? 14 : 12,
@@ -2677,11 +2715,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     maxWidth: "100%",
   },
-  applyChannelText: (c) => ({
-    fontSize: 11,
-    fontWeight: "600",
-    color: c.textDim,
-  }),
   manageActions: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2732,28 +2765,29 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
   },
-  description: (c) => ({
+  // Plain object styles (color set inline at each usage)
+  applyChannelText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  description: {
     fontSize: 13,
-    color: c.textDim,
     lineHeight: 22,
-  }),
-  detailLabel: (c) => ({
+  },
+  detailLabel: {
     fontSize: 9,
-    color: c.textMuted,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 3,
-  }),
-  paymentBreakdownLabel: (c) => ({
+  },
+  paymentBreakdownLabel: {
     fontSize: 12,
-    color: c.textDim,
     flex: 1,
-  }),
-  paymentBreakdownValue: (c) => ({
+  },
+  paymentBreakdownValue: {
     fontSize: 12,
     fontWeight: "700",
-    color: c.text,
     textAlign: "right",
-  }),
+  },
 });

@@ -99,7 +99,7 @@ export default function MyPostsScreen() {
         }
       >
         {/* ─── Header ──────────────────────────────────── */}
-        <View style={{ marginBottom: 12, paddingHorizontal: 8 }}>
+        <View style={{ marginBottom: 12, paddingHorizontal: 1 }}>
           <AppText
             weight="displayBlack"
             style={{
@@ -122,7 +122,7 @@ export default function MyPostsScreen() {
         </View>
 
         {/* ─── CreatePost (expanded, full editor) ──────── */}
-        <View style={{ paddingHorizontal: 4 }}>
+        <View style={{ paddingHorizontal: 1 }}>
           <CreatePost onPostCreated={handlePostCreated} />
         </View>
 

@@ -189,7 +189,7 @@ export default function CommunityFeedScreen() {
     <AppScreen
       scroll={false}
       contentContainerStyle={{
-        paddingHorizontal: 8,
+        paddingHorizontal: 1,
         paddingVertical: 10,
         gap: 8,
       }}
