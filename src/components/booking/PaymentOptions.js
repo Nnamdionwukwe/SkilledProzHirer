@@ -5,27 +5,25 @@
 // Flow:
 //   1. Pricing summary — agreed total (or rate × qty), platform fee,
 //      referral deduction, "You Pay" total
-//   2. Crypto token picker — USDC / USDT / BTC / ETH
-//   3. "Pay with {token}" → POST /payments/crypto/:id (opens wallet step)
-//   4. Wallet details — asset, network, wallet, amount, memo
-//   5. Tx hash input + optional amount + optional receipt upload
-//   6. "Confirm Transaction" → PATCH /payments/crypto/:id/confirm
-//   7. On success → onSuccess callback fires; parent refetches booking
+//   2. Card option → navigates to the InitiatePayment screen
+//   3. Crypto token picker — USDC / USDT / BTC / ETH
+//   4. "Pay with {token}" → POST /payments/crypto/:id (opens wallet step)
+//   5. Wallet details — asset, network, wallet, amount, memo
+//   6. Tx hash input + optional amount + optional receipt upload
+//   7. "Confirm Transaction" → PATCH /payments/crypto/:id/confirm
+//   8. On success → onSuccess callback fires; parent refetches booking
 //
-// The web version used window.navigator.clipboard and window.open; the
-// mobile version uses expo-clipboard (if available) and Linking.openURL.
-// Both are guarded so missing deps don't crash.
+// i18n: every visible string uses t() under `payment.options.*`.
 
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 
 import AppText from "../AppText";
@@ -41,6 +39,7 @@ import {
   FaGift,
   FaMoneyBillWave,
   FaBitcoin,
+  FaCreditCard,
 } from "../../icons/fa";
 
 // ── Optional expo-clipboard / expo-image-picker — guarded ─────────────
@@ -64,20 +63,22 @@ function fmtMoney(amount, currency = "NGN") {
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const CRYPTO_TOKENS = [
-  { id: "USDC", label: "USDC", network: "Ethereum", icon: "$" },
-  { id: "USDT", label: "USDT", network: "Tron (TRC20)", icon: "₮" },
-  { id: "BTC", label: "Bitcoin", network: "Bitcoin", icon: "₿" },
-  { id: "ETH", label: "Ethereum", network: "Ethereum", icon: "Ξ" },
+  { id: "USDC", label: "USDC", networkKey: "ethereum", icon: "$" },
+  { id: "USDT", label: "USDT", networkKey: "tron", icon: "₮" },
+  { id: "BTC", label: "Bitcoin", networkKey: "bitcoin", icon: "₿" },
+  { id: "ETH", label: "Ethereum", networkKey: "ethereum", icon: "Ξ" },
 ];
 
 export default function PaymentOptions({
   booking,
+  bookingId: bookingIdProp,
   onSuccess,
   referralAmount = 0,
   referralApplied = false,
   onReferralToggle,
 }) {
   const { t } = useTranslation();
+  const navigation = useNavigation();
   const { theme } = useTheme();
   const { toast } = useToast();
   const c = theme.colors;
@@ -92,7 +93,7 @@ export default function PaymentOptions({
   const [cryptoDetails, setCryptoDetails] = useState(null);
   const [cryptoReceiptFile, setCryptoReceiptFile] = useState(null);
 
-  // ── Pricing (mirror the web's manual job-post fix) ───────────────────
+  // ── Pricing ─────────────────────────────────────────────────────────
   const p = calcPricing(booking);
   const isJobPost = booking?.source === "JOB_POST";
 
@@ -119,12 +120,15 @@ export default function PaymentOptions({
       ? `${booking.estimatedValue} ${booking.estimatedUnit || "hours"}`
       : null;
 
-  // ── File size guard ──────────────────────────────────────────────────
+  // ── File size guard ────────────────────────────────────────────────
   const validateFileSize = (file) => {
     if (!file) return true;
     if (file.size && file.size > MAX_FILE_SIZE) {
       setError(
-        `File "${file.name}" is too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Maximum size is 5MB.`,
+        t("payment.options.errors.fileTooLarge", {
+          name: file.name,
+          size: (file.size / (1024 * 1024)).toFixed(1),
+        }),
       );
       return false;
     }
@@ -132,16 +136,16 @@ export default function PaymentOptions({
     return true;
   };
 
-  // ── Receipt picker ───────────────────────────────────────────────────
+  // ── Receipt picker ─────────────────────────────────────────────────
   const pickReceipt = async () => {
     if (!ImagePicker) {
-      toast.info("Receipt upload requires expo-image-picker.");
+      toast.info(t("payment.options.errors.imagePickerUnavailable"));
       return;
     }
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        toast.error("Media library permission required.");
+        toast.error(t("payment.options.errors.mediaPermission"));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -156,26 +160,48 @@ export default function PaymentOptions({
         type: asset.mimeType || "image/jpeg",
         size: asset.fileSize,
       });
-    } catch (e) {
-      toast.error("Could not pick image.");
+    } catch {
+      toast.error(t("payment.options.errors.imagePickerFailed"));
     }
   };
 
-  // ── Copy to clipboard ────────────────────────────────────────────────
+  // ── Copy to clipboard ──────────────────────────────────────────────
   const copyToClipboard = async (text) => {
     if (!Clipboard) {
-      toast.info("Copy requires expo-clipboard.");
+      toast.info(t("payment.options.errors.clipboardUnavailable"));
       return;
     }
     try {
       await Clipboard.setStringAsync(String(text));
-      toast.success("Copied.");
+      toast.success(t("payment.options.toast.copied"));
     } catch {
-      toast.error("Could not copy.");
+      toast.error(t("payment.options.errors.copyFailed"));
     }
   };
 
-  // ── Initiate crypto ──────────────────────────────────────────────────
+  // ── Pay by card → navigate to InitiatePayment ──────────────────────
+  const handleCardPay = () => {
+    const resolvedBookingId =
+      booking?.id || booking?.bookingId || bookingIdProp;
+    console.log("💳 CARD TAP → resolvedBookingId:", resolvedBookingId);
+    console.log("💳 booking:", booking);
+    if (!resolvedBookingId) {
+      console.log("💳 ABORT: no booking id available");
+      toast.error(t("payment.options.errors.missingBookingId"));
+      return;
+    }
+    try {
+      navigation.navigate("InitiatePayment", {
+        bookingId: resolvedBookingId,
+      });
+      console.log("💳 navigate() returned OK for", resolvedBookingId);
+    } catch (err) {
+      console.log("💳 navigate() threw:", err?.message);
+      toast.error(err?.message || t("payment.options.errors.navFailed"));
+    }
+  };
+
+  // ── Initiate crypto ────────────────────────────────────────────────
   async function handleCryptoInitiate() {
     setLoading(true);
     setError("");
@@ -192,17 +218,18 @@ export default function PaymentOptions({
       setStep("details");
     } catch (e) {
       setError(
-        e?.response?.data?.message || "Failed to initiate crypto payment",
+        e?.response?.data?.message ||
+          t("payment.options.errors.cryptoInitiateFailed"),
       );
     } finally {
       setLoading(false);
     }
   }
 
-  // ── Confirm crypto ───────────────────────────────────────────────────
+  // ── Confirm crypto ─────────────────────────────────────────────────
   async function handleCryptoConfirm() {
     if (!cryptoTxHash.trim()) {
-      setError("Transaction hash is required");
+      setError(t("payment.options.errors.txHashRequired"));
       return;
     }
     setLoading(true);
@@ -228,17 +255,19 @@ export default function PaymentOptions({
       });
 
       onSuccess?.();
-      toast.success("Crypto payment submitted.");
+      toast.success(t("payment.options.toast.cryptoSubmitted"));
     } catch (e) {
-      setError(e?.response?.data?.message || "Confirmation failed");
+      setError(
+        e?.response?.data?.message || t("payment.options.errors.confirmFailed"),
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  // ═════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════
   // RENDER
-  // ═════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════
   return (
     <View style={{ gap: 12 }}>
       {/* ── PRICING BREAKDOWN ──────────────────────────────────────── */}
@@ -266,7 +295,7 @@ export default function PaymentOptions({
               flex: 1,
             }}
           >
-            Payment Breakdown
+            {t("payment.options.breakdown.title")}
           </AppText>
           {isJobPost ? (
             <View
@@ -280,29 +309,33 @@ export default function PaymentOptions({
               <AppText
                 style={{ fontSize: 9, fontWeight: "700", color: "#818cf8" }}
               >
-                FROM JOB POST
+                {t("payment.options.breakdown.fromJobPost")}
               </AppText>
             </View>
           ) : null}
         </View>
 
-        {/* Agreed Total / Rate */}
         <FeeLine
-          label={isJobPost ? "Agreed Total" : "Agreed Rate"}
+          label={
+            isJobPost
+              ? t("payment.options.labels.agreedTotal")
+              : t("payment.options.labels.agreedRate")
+          }
           value={`${fmtMoney(agreedTotal, currency)}${!isJobPost ? p.unitSuffix || "" : ""}`}
         />
 
-        {/* Duration */}
         {isJobPost && durationText ? (
           <FeeLine
-            label="Duration"
+            label={t("payment.options.labels.duration")}
             value={
               <AppText style={{ fontSize: 13, color: c.text }}>
                 {durationText}
                 {booking.estimatedHours ? (
                   <AppText style={{ color: c.textMuted, fontSize: 11 }}>
                     {" "}
-                    (≈ {booking.estimatedHours}h)
+                    {t("payment.options.labels.approxHours", {
+                      hours: booking.estimatedHours,
+                    })}
                   </AppText>
                 ) : null}
               </AppText>
@@ -311,25 +344,28 @@ export default function PaymentOptions({
         ) : null}
         {!isJobPost && p.hasQty ? (
           <FeeLine
-            label="Duration"
+            label={t("payment.options.labels.duration")}
             value={`${p.qty} ${p.unitLabel}${p.qty !== 1 ? "s" : ""}`}
           />
         ) : null}
         {!isJobPost && p.hasQty ? (
           <FeeLine
-            label={`Subtotal (${p.qty} × ${fmtMoney(p.agreedRate, currency)})`}
+            label={t("payment.options.labels.subtotalLine", {
+              qty: p.qty,
+              rate: fmtMoney(p.agreedRate, currency),
+            })}
             value={fmtMoney(p.subtotal, currency)}
           />
         ) : null}
 
-        {/* Platform Fee */}
         <FeeLine
-          label={`Platform Fee (${PLATFORM_FEE_PCT}%)`}
+          label={t("payment.options.labels.platformFee", {
+            percent: PLATFORM_FEE_PCT,
+          })}
           value={`+ ${fmtMoney(platformFee, currency)}`}
           muted
         />
 
-        {/* Referral */}
         {referralDeduct > 0 ? (
           <View style={styles.row}>
             <View
@@ -337,7 +373,7 @@ export default function PaymentOptions({
             >
               <FaGift size={11} color={c.green} />
               <AppText style={{ fontSize: 12, color: c.green }}>
-                Referral bonus
+                {t("payment.options.labels.referralBonus")}
               </AppText>
             </View>
             <AppText
@@ -353,7 +389,7 @@ export default function PaymentOptions({
         />
         <View style={styles.row}>
           <AppText style={{ fontSize: 14, fontWeight: "700", color: c.text }}>
-            You Pay
+            {t("payment.options.labels.youPay")}
           </AppText>
           <AppText
             style={{
@@ -368,12 +404,50 @@ export default function PaymentOptions({
         </View>
       </View>
 
-      {/* ── STEP 1: TOKEN SELECT ──────────────────────────────────── */}
+      {/* ── STEP 1: METHOD SELECTION ──────────────────────────────── */}
       {step === "select" ? (
         <View style={{ gap: 12 }}>
           <AppText style={{ fontSize: 12, color: c.textDim, lineHeight: 18 }}>
-            Pay with cryptocurrency. Send to our wallet and submit your
-            transaction hash.
+            {t("payment.options.select.intro")}
+          </AppText>
+
+          {/* Card option — opens the InitiatePayment screen */}
+          <Pressable
+            onPress={handleCardPay}
+            style={({ pressed }) => [
+              styles.cardBtn,
+              {
+                borderColor: c.border,
+                backgroundColor: c.bgCard,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <FaCreditCard size={20} color={c.orange} />
+            <View style={{ flex: 1 }}>
+              <AppText
+                style={{ fontSize: 13, fontWeight: "700", color: c.text }}
+              >
+                {t("payment.options.card.title")}
+              </AppText>
+              <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                {t("payment.options.card.desc")}
+              </AppText>
+            </View>
+          </Pressable>
+
+          {/* Crypto section header */}
+          <AppText
+            style={{
+              fontSize: 10,
+              fontWeight: "700",
+              color: c.textMuted,
+              textTransform: "uppercase",
+              letterSpacing: 0.7,
+              marginTop: 4,
+            }}
+          >
+            {t("payment.options.crypto.sectionTitle")}
           </AppText>
 
           {/* Token grid */}
@@ -413,7 +487,7 @@ export default function PaymentOptions({
                     {tok.label}
                   </AppText>
                   <AppText style={{ fontSize: 10, color: c.textMuted }}>
-                    {tok.network}
+                    {t(`payment.options.networks.${tok.networkKey}`)}
                   </AppText>
                 </Pressable>
               );
@@ -441,7 +515,9 @@ export default function PaymentOptions({
                 <AppText
                   style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}
                 >
-                  Pay with {cryptoAsset}
+                  {t("payment.options.actions.payWithToken", {
+                    token: cryptoAsset,
+                  })}
                 </AppText>
               </View>
             )}
@@ -453,7 +529,7 @@ export default function PaymentOptions({
       {step === "details" && cryptoDetails ? (
         <View style={{ gap: 10 }}>
           <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-            Send to this wallet
+            {t("payment.options.details.sendToWallet")}
           </AppText>
 
           <View
@@ -463,25 +539,28 @@ export default function PaymentOptions({
             ]}
           >
             <BankRow
-              label="Asset"
+              label={t("payment.options.details.asset")}
               value={cryptoDetails.currency || cryptoAsset}
             />
-            <BankRow label="Network" value={cryptoDetails.network || "—"} />
             <BankRow
-              label="Wallet"
+              label={t("payment.options.details.network")}
+              value={cryptoDetails.network || "—"}
+            />
+            <BankRow
+              label={t("payment.options.details.wallet")}
               value={cryptoDetails.wallet || "—"}
               mono
               copyable
               onCopy={copyToClipboard}
             />
             <BankRow
-              label="Amount"
+              label={t("payment.options.details.amount")}
               value={fmtMoney(finalTotal, currency)}
               accent
             />
             {cryptoDetails.note ? (
               <BankRow
-                label="Memo"
+                label={t("payment.options.details.memo")}
                 value={cryptoDetails.note}
                 mono
                 copyable
@@ -513,20 +592,20 @@ export default function PaymentOptions({
                 lineHeight: 18,
               }}
             >
-              Only send {cryptoDetails.currency || cryptoAsset} on the{" "}
-              {cryptoDetails.network || "correct"} network. Wrong network may
-              result in permanent loss of funds.
+              {t("payment.options.details.networkWarning", {
+                token: cryptoDetails.currency || cryptoAsset,
+                network: cryptoDetails.network || "—",
+              })}
             </AppText>
           </View>
 
-          {/* Tx hash input */}
           <AppText style={[styles.label, { color: c.textDim }]}>
-            Transaction Hash / TX ID *
+            {t("payment.options.details.fields.txHash")}
           </AppText>
           <TextInput
             value={cryptoTxHash}
             onChangeText={setCryptoTxHash}
-            placeholder="0x... or transaction ID"
+            placeholder={t("payment.options.details.placeholders.txHash")}
             placeholderTextColor={c.textMuted}
             style={[
               styles.input,
@@ -539,15 +618,16 @@ export default function PaymentOptions({
             ]}
           />
 
-          {/* Amount input */}
           <AppText style={[styles.label, { color: c.textDim }]}>
-            Amount Sent (optional)
+            {t("payment.options.details.fields.amountOptional")}
           </AppText>
           <TextInput
             value={cryptoAmount}
             onChangeText={(v) => setCryptoAmount(v.replace(/[^0-9.]/g, ""))}
             keyboardType="decimal-pad"
-            placeholder="Amount in crypto"
+            placeholder={t("payment.options.details.placeholders.amount", {
+              token: cryptoAsset,
+            })}
             placeholderTextColor={c.textMuted}
             style={[
               styles.input,
@@ -559,9 +639,8 @@ export default function PaymentOptions({
             ]}
           />
 
-          {/* Receipt upload */}
           <AppText style={[styles.label, { color: c.textDim }]}>
-            Transaction Screenshot (optional)
+            {t("payment.options.details.fields.receipt")}
           </AppText>
           <Pressable
             onPress={pickReceipt}
@@ -586,8 +665,8 @@ export default function PaymentOptions({
               numberOfLines={1}
             >
               {cryptoReceiptFile
-                ? `✅ ${cryptoReceiptFile.name}`
-                : "Upload screenshot"}
+                ? cryptoReceiptFile.name
+                : t("payment.options.details.placeholders.receipt")}
             </AppText>
           </Pressable>
           {cryptoReceiptFile ? (
@@ -600,13 +679,12 @@ export default function PaymentOptions({
               >
                 <FaTimes size={10} color={c.red} />
                 <AppText style={{ fontSize: 11, color: c.red }}>
-                  Remove screenshot
+                  {t("payment.options.details.removeReceipt")}
                 </AppText>
               </View>
             </Pressable>
           ) : null}
 
-          {/* Back + Confirm */}
           <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
             <Pressable
               onPress={() => setStep("select")}
@@ -622,7 +700,7 @@ export default function PaymentOptions({
               <AppText
                 style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
               >
-                ← Back
+                {t("payment.options.actions.back")}
               </AppText>
             </Pressable>
             <Pressable
@@ -647,7 +725,7 @@ export default function PaymentOptions({
                   <AppText
                     style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
                   >
-                    Confirm Transaction
+                    {t("payment.options.actions.confirmTransaction")}
                   </AppText>
                 </View>
               )}
@@ -656,7 +734,6 @@ export default function PaymentOptions({
         </View>
       ) : null}
 
-      {/* Error */}
       {error ? (
         <View
           style={[
@@ -673,7 +750,6 @@ export default function PaymentOptions({
         </View>
       ) : null}
 
-      {/* Disclaimer */}
       <AppText
         style={{
           fontSize: 11,
@@ -682,8 +758,7 @@ export default function PaymentOptions({
           lineHeight: 15,
         }}
       >
-        All payments are held in escrow and only released after you confirm job
-        completion.
+        {t("payment.options.disclaimer")}
       </AppText>
     </View>
   );
@@ -786,6 +861,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     alignItems: "center",
+  },
+  cardBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1.5,
   },
   payBtn: {
     paddingVertical: 12,

@@ -1927,6 +1927,337 @@
     "noMyPosts": "No posts yet",
     "noMyPostsSub": "Posts you create will appear here."
   },
+  "payment": {
+    "initiate": {
+      "secureBadge": "Secure Payment",
+      "disclaimer": "Powered by Flutterwave & Paystack · Escrow protected · Refund policy applies",
+      "actions": {
+        "backToBookings": "Back to Bookings",
+        "backToBooking": "Back to Booking",
+        "viewBooking": "View Booking",
+        "checkUpdates": "Check for Updates",
+        "changeMethod": "Change Method",
+        "confirmTransfer": "I Have Transferred — Confirm",
+        "payCard": "Pay {{amount}} Securely",
+        "payCrypto": "Get {{token}} Wallet"
+      },
+      "labels": {
+        "agreedRate": "Agreed Rate",
+        "agreedTotal": "Agreed Total",
+        "duration": "Duration",
+        "jobValue": "Job Value ({{qty}} × {{rate}})",
+        "serviceFee": "Service Fee ({{percent}}%)",
+        "workerReceives": "Worker receives (no fee)",
+        "referralBonus": "Referral bonus",
+        "youPay": "You Pay",
+        "youWillPay": "You Will Pay"
+      },
+      "summary": {
+        "youPayingFor": "You're paying for",
+        "fromJobPost": "From Job Post",
+        "fromJobPostBody": "This booking was created from a job post. The final amount is the rate you selected (or negotiated) on the booking creation page."
+      },
+      "referral": {
+        "balanceLabel": "Referral Wallet Balance: {{amount}}",
+        "apply": "Apply",
+        "remove": "Remove"
+      },
+      "breakdown": {
+        "title": "Payment Breakdown",
+        "escrowNote": "Funds are held in escrow and only released to the worker after you confirm the job is complete."
+      },
+      "method": {
+        "title": "Payment Method",
+        "card": {
+          "title": "Card / Mobile Money",
+          "desc": "Redirected to Flutterwave or Paystack",
+          "paystackNote": "You'll be redirected to Paystack to pay securely in NGN.",
+          "flutterwaveNote": "You'll be redirected to Flutterwave to pay securely."
+        },
+        "crypto": {
+          "title": "Crypto",
+          "desc": "USDC · USDT · BTC · ETH",
+          "selectToken": "Select Token"
+        }
+      },
+      "crypto": {
+        "sendExactly": "Send exactly",
+        "refLabel": "Ref: {{reference}}",
+        "walletDetails": "Wallet Details",
+        "fields": {
+          "network": "Network",
+          "wallet": "Wallet",
+          "token": "Token",
+          "memo": "Memo",
+          "txHash": "Transaction Hash *",
+          "amountOptional": "Amount Sent (optional)",
+          "receipt": "Transaction Screenshot (optional)"
+        },
+        "placeholders": {
+          "txHash": "0x... or TRC20 / BTC tx hash",
+          "amount": "Amount in {{token}}",
+          "receipt": "Upload screenshot"
+        },
+        "networkWarning": "Only send {{token}} on the {{network}} network. Wrong network may result in permanent loss of funds.",
+        "removeReceipt": "Remove screenshot",
+        "confirmDisclaimer": "We'll verify on-chain within 30 minutes. By confirming, you agree to our Refund Policy."
+      },
+      "pending": {
+        "badge": "Pending Acceptance",
+        "bookingCreated": "Booking created",
+        "paymentPreview": "Payment Preview",
+        "waitingForWorker": "Waiting for Worker",
+        "waitingBody": "Once they accept, you'll be able to complete payment here. This page checks every 8 seconds.",
+        "statusUpdated": "Booking status: {{status}}"
+      },
+      "success": {
+        "cryptoSubmitted": "Crypto payment submitted."
+      },
+      "errors": {
+        "title": "Payment Error",
+        "loadBooking": "Could not load booking details.",
+        "copyFailed": "Could not copy.",
+        "mediaPermission": "Media library permission required.",
+        "imagePicker": "Could not pick image.",
+        "fileTooLarge": "File is too large. Maximum size is {{size}}MB.",
+        "noPaymentUrl": "Payment URL not received. Try again.",
+        "cannotOpenUrl": "Cannot open payment URL on this device.",
+        "cardInitiateFailed": "Payment initiation failed.",
+        "cryptoInitiateFailed": "Could not load crypto details.",
+        "cryptoConfirmFailed": "Confirmation failed.",
+        "txHashRequired": "Transaction hash is required."
+      }
+    },
+    "options": {
+      "breakdown": {
+        "title": "Payment Breakdown",
+        "fromJobPost": "FROM JOB POST"
+      },
+      "labels": {
+        "agreedRate": "Agreed Rate",
+        "agreedTotal": "Agreed Total",
+        "duration": "Duration",
+        "approxHours": "(≈ {{hours}}h)",
+        "subtotalLine": "Subtotal ({{qty}} × {{rate}})",
+        "platformFee": "Platform Fee ({{percent}}%)",
+        "referralBonus": "Referral bonus",
+        "youPay": "You Pay"
+      },
+      "card": {
+        "title": "Pay with Card / Mobile Money",
+        "desc": "Securely pay via Paystack or Flutterwave"
+      },
+      "crypto": {
+        "sectionTitle": "Or pay with crypto"
+      },
+      "networks": {
+        "ethereum": "Ethereum",
+        "tron": "Tron (TRC20)",
+        "bitcoin": "Bitcoin"
+      },
+      "select": {
+        "intro": "Choose a payment method. Card payments are handled on the next screen."
+      },
+      "actions": {
+        "payWithToken": "Pay with {{token}}",
+        "back": "← Back",
+        "confirmTransaction": "Confirm Transaction"
+      },
+      "details": {
+        "sendToWallet": "Send to this wallet",
+        "asset": "Asset",
+        "network": "Network",
+        "wallet": "Wallet",
+        "amount": "Amount",
+        "memo": "Memo",
+        "networkWarning": "Only send {{token}} on the {{network}} network. Wrong network may result in permanent loss of funds.",
+        "removeReceipt": "Remove screenshot",
+        "fields": {
+          "txHash": "Transaction Hash / TX ID *",
+          "amountOptional": "Amount Sent (optional)",
+          "receipt": "Transaction Screenshot (optional)"
+        },
+        "placeholders": {
+          "txHash": "0x... or transaction ID",
+          "amount": "Amount in {{token}}",
+          "receipt": "Upload screenshot"
+        }
+      },
+      "toast": {
+        "copied": "Copied.",
+        "cryptoSubmitted": "Crypto payment submitted."
+      },
+      "disclaimer": "All payments are held in escrow and only released after you confirm job completion.",
+      "errors": {
+        "fileTooLarge": "File \"{{name}}\" is too large ({{size}}MB). Maximum size is 5MB.",
+        "imagePickerUnavailable": "Receipt upload requires expo-image-picker.",
+        "imagePickerFailed": "Could not pick image.",
+        "mediaPermission": "Media library permission required.",
+        "clipboardUnavailable": "Copy requires expo-clipboard.",
+        "copyFailed": "Could not copy.",
+        "cryptoInitiateFailed": "Failed to initiate crypto payment.",
+        "confirmFailed": "Confirmation failed.",
+        "txHashRequired": "Transaction hash is required.",
+        "missingBookingId": "Could not open payment — booking id is missing.",
+        "navFailed": "Could not open the payment screen. Please try again."
+      }
+    },
+    "detail": {
+      "titles": {
+        "agreedTotalNegotiated": "Agreed Total (Negotiated)",
+        "yourEarnings": "Your Earnings",
+        "yourEarningsJobPost": "Your Earnings (From Job Post)",
+        "paymentBreakdown": "Payment Breakdown",
+        "paymentBreakdownJobPost": "Payment Breakdown (From Job Post)"
+      },
+      "labels": {
+        "agreedTotal": "Agreed Total",
+        "agreedRate": "Agreed Rate",
+        "selectedAmount": "Selected Amount",
+        "duration": "Duration",
+        "approxHours": "(≈ {{hours}}h)",
+        "subtotalLine": "Subtotal ({{qty}} × {{rate}})",
+        "platformFee": "Platform Fee ({{percent}}%)",
+        "referralBonus": "Referral bonus",
+        "youEarn": "You Earn",
+        "youPay": "You Pay",
+        "pluralSuffix": "s"
+      },
+      "units": {
+        "hour": "hour",
+        "hours": "hours",
+        "day": "day",
+        "days": "days",
+        "week": "week",
+        "weeks": "weeks",
+        "month": "month",
+        "months": "months",
+        "year": "year",
+        "years": "years",
+        "perHour": "/hr",
+        "perDay": "/day",
+        "perWeek": "/wk",
+        "perMonth": "/mo"
+      },
+      "referral": {
+        "balanceLabel": "Referral Wallet Balance: {{amount}}",
+        "apply": "Apply",
+        "remove": "Remove",
+        "noBonusYet": "You don't have any referral bonus yet. Invite friends to earn!"
+      },
+      "payBanner": {
+        "workerWaiting": "Worker is waiting for you to complete payment.",
+        "referralApplied": "Referral bonus of {{amount}} will be deducted at checkout",
+        "referralAvailable": "Apply your {{amount}} referral bonus using the slider above",
+        "refundPrefix": "By proceeding, you agree to our",
+        "refundLink": "Refund Policy",
+        "refundSuffix": ". Platform fees are non-refundable.",
+        "hideOptions": "Hide Payment Options",
+        "chooseMethod": "Choose a Different Method",
+        "payNow": "Pay Now",
+        "payByCard": "Pay by Card"
+      },
+      "receipt": {
+        "title": "Payment",
+        "total": "Total",
+        "workerPayout": "Worker Payout",
+        "provider": "Provider",
+        "status": "Status",
+        "ref": "Ref"
+      },
+      "status": {
+        "pending": "Pending",
+        "held": "Held",
+        "released": "Released",
+        "refunded": "Refunded",
+        "failed": "Failed"
+      }
+    }
+  },
+  "workers": {
+    "publicProfile": {
+      "back": "Back",
+      "backToSearch": "Back to Search",
+      "notFound": "Worker not found",
+      "notFoundSub": "This worker profile is not available.",
+      "privateProfile": "Private Profile",
+      "new": "New",
+      "jobsDone": "jobs done",
+      "response": "response",
+      "lastSeen": "last seen",
+      "reviewCount": "{{count}} reviews",
+      "reviewCount_one": "{{count}} review",
+      "perHour": "/hr",
+      "perDay": "/day",
+      "perWeek": "/wk",
+      "perMonth": "/mo",
+      "perYear": "/yr",
+      "perCustom": "/custom",
+      "editProfile": "Edit Profile",
+      "tabAbout": "About",
+      "tabPortfolio": "Portfolio",
+      "tabVideo": "Video Intro",
+      "tabCertifications": "Certifications",
+      "tabAvailability": "Availability",
+      "tabReviews": "Reviews",
+      "aboutTitle": "About",
+      "yearsExp": "Years Exp.",
+      "yearsValue": "{{count}} yr",
+      "yearsValue_one": "{{count}} yr",
+      "joined": "Joined",
+      "background": "Background",
+      "cleared": "Cleared",
+      "videoIntroTitle": "Video Introduction",
+      "videoTitle": "{{name}}'s Introduction",
+      "tapToWatch": "Tap to watch",
+      "issuedBy": "Issued by {{issuer}}",
+      "verified": "Verified",
+      "view": "View",
+      "noAvailability": "No availability set.",
+      "dash": "—",
+      "timeToday": "Today",
+      "timeDaysAgo": "{{count}}d ago",
+      "timeMonthsAgo": "{{count}}mo ago",
+      "timeYearsAgo": "{{count}}y ago",
+      "daySun": "Sun",
+      "dayMon": "Mon",
+      "dayTue": "Tue",
+      "dayWed": "Wed",
+      "dayThu": "Thu",
+      "dayFri": "Fri",
+      "daySat": "Sat",
+      "language": {
+        "en": "English",
+        "fr": "French",
+        "ar": "Arabic",
+        "yo": "Yoruba",
+        "ha": "Hausa",
+        "ig": "Igbo",
+        "sw": "Swahili",
+        "pt": "Portuguese",
+        "es": "Spanish",
+        "de": "German",
+        "zh": "Chinese",
+        "hi": "Hindi",
+        "bn": "Bengali",
+        "ur": "Urdu",
+        "tr": "Turkish",
+        "ko": "Korean",
+        "ja": "Japanese",
+        "ru": "Russian",
+        "id": "Indonesian",
+        "vi": "Vietnamese",
+        "it": "Italian",
+        "nl": "Dutch",
+        "pl": "Polish",
+        "fa": "Persian",
+        "am": "Amharic",
+        "zu": "Zulu",
+        "af": "Afrikaans",
+        "so": "Somali"
+      }
+    }
+  },
   "pricingNote": "Pricing Note",
   "profile": {
     "addBio": "Add bio",

@@ -1,6 +1,11 @@
 // src/screens/main/WorkerPublicProfileScreen.js
-import React, { useEffect, useState } from "react";
+//
+// i18n: all visible strings use t() under `workerProfile.*` (existing) or
+// `workers.publicProfile.*` (new keys added to en.json).
+
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Linking,
   Modal,
@@ -10,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import { WebView } from "react-native-webview";
 
 import AppScreen from "../../components/AppScreen";
@@ -45,56 +51,57 @@ import {
   FaTimes,
   FaExpand,
   FaGlobe,
-  FaClock, // Added for Last Seen
+  FaClock,
 } from "../../icons/fa";
-
-const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const isPdfUrl = (url) => !!url && /\.pdf$/i.test(url.split("?")[0]);
 
-const LANGUAGE_NAMES = {
-  en: "English",
-  fr: "French",
-  ar: "Arabic",
-  yo: "Yoruba",
-  ha: "Hausa",
-  ig: "Igbo",
-  sw: "Swahili",
-  pt: "Portuguese",
-  es: "Spanish",
-  de: "German",
-  zh: "Chinese",
-  hi: "Hindi",
-  bn: "Bengali",
-  ur: "Urdu",
-  tr: "Turkish",
-  ko: "Korean",
-  ja: "Japanese",
-  ru: "Russian",
-  id: "Indonesian",
-  vi: "Vietnamese",
-  it: "Italian",
-  nl: "Dutch",
-  pl: "Polish",
-  fa: "Persian",
-  am: "Amharic",
-  zu: "Zulu",
-  af: "Afrikaans",
-  so: "Somali",
-};
+const LANGUAGE_CODES = [
+  "en",
+  "fr",
+  "ar",
+  "yo",
+  "ha",
+  "ig",
+  "sw",
+  "pt",
+  "es",
+  "de",
+  "zh",
+  "hi",
+  "bn",
+  "ur",
+  "tr",
+  "ko",
+  "ja",
+  "ru",
+  "id",
+  "vi",
+  "it",
+  "nl",
+  "pl",
+  "fa",
+  "am",
+  "zu",
+  "af",
+  "so",
+];
 
-function timeAgo(date) {
-  if (!date) return "—";
+function timeAgo(date, t) {
+  if (!date) return t("workers.publicProfile.dash");
   const diff = Date.now() - new Date(date).getTime();
   const d = Math.floor(diff / 86400000);
-  if (d < 1) return "Today";
-  if (d < 30) return `${d}d ago`;
+  if (d < 1) return t("workers.publicProfile.timeToday");
+  if (d < 30) return t("workers.publicProfile.timeDaysAgo", { count: d });
   const m = Math.floor(d / 30);
-  if (m < 12) return `${m}mo ago`;
-  return `${Math.floor(m / 12)}y ago`;
+  if (m < 12) return t("workers.publicProfile.timeMonthsAgo", { count: m });
+  return t("workers.publicProfile.timeYearsAgo", {
+    count: Math.floor(m / 12),
+  });
 }
 
 export default function WorkerPublicProfileScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
   const { theme } = useTheme();
@@ -111,14 +118,63 @@ export default function WorkerPublicProfileScreen() {
   const [avatarLightbox, setAvatarLightbox] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [videoOpen, setVideoOpen] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
 
   const isOwnProfile = viewerUser?.id === userId;
   const isHirer = viewerUser?.role === "HIRER";
   const saved = useSavedWorker(userId, { enabled: isHirer && !isOwnProfile });
 
+  const languageName = (code) => {
+    if (!code) return "";
+    const key = `workers.publicProfile.language.${code}`;
+    const val = t(key, { defaultValue: code });
+    return val === key ? code : val;
+  };
+
+  const openChatWithWorker = useCallback(async () => {
+    if (!userId || openingChat) return;
+    setOpeningChat(true);
+    try {
+      const res = await client.get("/messages/conversations", {
+        params: { page: 1, limit: 100, _t: Date.now() },
+      });
+      const convos = res.data?.data?.conversations || [];
+      const peerIdStr = String(userId);
+      const myIdStr = String(viewerUser?.id || "");
+      const existing = convos.find((convo) => {
+        const usersArr = convo.users || [];
+        const other = usersArr.find((u) => {
+          const uid = String(u.userId || u.user?.id || u.id);
+          return uid !== myIdStr;
+        });
+        const otherId = other
+          ? String(other.userId || other.user?.id || other.id)
+          : null;
+        if (otherId === peerIdStr) return true;
+        const last = convo.messages?.[0] ?? convo.lastMessage;
+        if (last?.senderId === peerIdStr || last?.receiverId === peerIdStr)
+          return true;
+        return false;
+      });
+
+      if (existing?.id) {
+        navigation.navigate("Chat", {
+          conversationId: existing.id,
+          withUserId: userId,
+        });
+      } else {
+        navigation.navigate("Chat", { withUserId: userId });
+      }
+    } catch {
+      navigation.navigate("Chat", { withUserId: userId });
+    } finally {
+      setOpeningChat(false);
+    }
+  }, [userId, viewerUser?.id, openingChat, navigation]);
+
   useEffect(() => {
     if (!userId) {
-      setError("Worker not found");
+      setError(t("workers.publicProfile.notFound"));
       setLoading(false);
       return;
     }
@@ -136,9 +192,12 @@ export default function WorkerPublicProfileScreen() {
         setReviews(rRes.data.data.reviews || []);
       })
       .catch((e) => {
-        setError(e.response?.data?.message || "Profile not found");
+        setError(
+          e.response?.data?.message || t("workers.publicProfile.notFound"),
+        );
       })
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   if (loading) {
@@ -160,10 +219,12 @@ export default function WorkerPublicProfileScreen() {
             <FaSearch size={40} color={c.textMuted} />
           )}
           <AppText style={styles.errorTitle(c)}>
-            {isPrivate ? "Private Profile" : "Worker not found"}
+            {isPrivate
+              ? t("workers.publicProfile.privateProfile")
+              : t("workers.publicProfile.notFound")}
           </AppText>
           <AppText style={styles.errorSub(c)}>
-            {error || "This worker profile is not available."}
+            {error || t("workers.publicProfile.notFoundSub")}
           </AppText>
           <Pressable
             onPress={() => navigation.goBack()}
@@ -171,7 +232,7 @@ export default function WorkerPublicProfileScreen() {
           >
             <FaArrowLeft size={12} color={c.textDim} />
             <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>
-              Back to Search
+              {t("workers.publicProfile.backToSearch")}
             </AppText>
           </Pressable>
         </View>
@@ -191,16 +252,29 @@ export default function WorkerPublicProfileScreen() {
     worker.customRate > 0;
 
   const tabs = [
-    { key: "about", label: "About" },
-    { key: "portfolio", label: "Portfolio", count: portfolio.length },
-    ...(hasVideo ? [{ key: "video", label: "Video Intro" }] : []),
+    { key: "about", label: t("workers.publicProfile.tabAbout") },
+    {
+      key: "portfolio",
+      label: t("workers.publicProfile.tabPortfolio"),
+      count: portfolio.length,
+    },
+    ...(hasVideo
+      ? [{ key: "video", label: t("workers.publicProfile.tabVideo") }]
+      : []),
     {
       key: "certifications",
-      label: "Certifications",
+      label: t("workers.publicProfile.tabCertifications"),
       count: certifications.length,
     },
-    { key: "availability", label: "Availability" },
-    { key: "reviews", label: "Reviews", count: worker.totalReviews },
+    {
+      key: "availability",
+      label: t("workers.publicProfile.tabAvailability"),
+    },
+    {
+      key: "reviews",
+      label: t("workers.publicProfile.tabReviews"),
+      count: worker.totalReviews,
+    },
   ];
 
   return (
@@ -208,7 +282,7 @@ export default function WorkerPublicProfileScreen() {
       <Pressable onPress={() => navigation.goBack()} style={styles.topBack}>
         <FaArrowLeft size={12} color={c.textDim} />
         <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>
-          Back
+          {t("workers.publicProfile.back")}
         </AppText>
       </Pressable>
 
@@ -273,7 +347,9 @@ export default function WorkerPublicProfileScreen() {
                   { color: worker.isAvailable ? c.green : c.textMuted },
                 ]}
               >
-                {worker.isAvailable ? "Available" : "Unavailable"}
+                {worker.isAvailable
+                  ? t("workerProfile.available")
+                  : t("workerProfile.unavailable")}
               </AppText>
             </View>
           </View>
@@ -313,22 +389,28 @@ export default function WorkerPublicProfileScreen() {
         <View style={[styles.statsRow, { borderTopColor: c.border }]}>
           <StatItem
             icon={<FaStar size={12} color={c.orange} />}
-            value={worker.avgRating > 0 ? worker.avgRating.toFixed(1) : "New"}
-            label={`${worker.totalReviews} review${worker.totalReviews !== 1 ? "s" : ""}`}
+            value={
+              worker.avgRating > 0
+                ? worker.avgRating.toFixed(1)
+                : t("workers.publicProfile.new")
+            }
+            label={t("workers.publicProfile.reviewCount", {
+              count: worker.totalReviews,
+            })}
             c={c}
           />
           <View style={[styles.statDivider, { backgroundColor: c.border }]} />
           <StatItem
             icon={<FaCheckCircle size={12} color={c.orange} />}
             value={worker.completedJobs}
-            label="jobs done"
+            label={t("workers.publicProfile.jobsDone")}
             c={c}
           />
           <View style={[styles.statDivider, { backgroundColor: c.border }]} />
           <StatItem
             icon={<FaBolt size={12} color={c.orange} />}
             value={`${worker.responseRate}%`}
-            label="response"
+            label={t("workers.publicProfile.response")}
             c={c}
           />
           {user?.lastSeen ? (
@@ -338,15 +420,15 @@ export default function WorkerPublicProfileScreen() {
               />
               <StatItem
                 icon={<FaClock size={12} color={c.orange} />}
-                value={timeAgo(user.lastSeen)}
-                label="last seen"
+                value={timeAgo(user.lastSeen, t)}
+                label={t("workers.publicProfile.lastSeen")}
                 c={c}
               />
             </>
           ) : null}
         </View>
 
-        {/* ── CONTACT CHIPS (Phone + Email clickable) ── */}
+        {/* ── CONTACT CHIPS ── */}
         <View style={styles.contactRow}>
           {user?.phone ? (
             <Pressable
@@ -398,7 +480,7 @@ export default function WorkerPublicProfileScreen() {
             >
               <FaGlobe size={10} color={c.textDim} />
               <AppText style={styles.contactText(c)}>
-                {LANGUAGE_NAMES[user.language] || user.language}
+                {languageName(user.language)}
               </AppText>
             </View>
           ) : null}
@@ -416,7 +498,9 @@ export default function WorkerPublicProfileScreen() {
           <AppText style={styles.rateMain(c)}>
             {worker.currency} {worker.hourlyRate?.toLocaleString()}
           </AppText>
-          <AppText style={styles.rateSuffix(c)}>/hr</AppText>
+          <AppText style={styles.rateSuffix(c)}>
+            {t("workers.publicProfile.perHour")}
+          </AppText>
         </View>
 
         {hasMultiRate ? (
@@ -424,7 +508,7 @@ export default function WorkerPublicProfileScreen() {
             {worker.dailyRate > 0 ? (
               <RatePill
                 value={worker.dailyRate}
-                suffix="/day"
+                suffix={t("workers.publicProfile.perDay")}
                 currency={worker.currency}
                 c={c}
               />
@@ -432,7 +516,7 @@ export default function WorkerPublicProfileScreen() {
             {worker.weeklyRate > 0 ? (
               <RatePill
                 value={worker.weeklyRate}
-                suffix="/wk"
+                suffix={t("workers.publicProfile.perWeek")}
                 currency={worker.currency}
                 c={c}
               />
@@ -440,7 +524,7 @@ export default function WorkerPublicProfileScreen() {
             {worker.monthlyRate > 0 ? (
               <RatePill
                 value={worker.monthlyRate}
-                suffix="/mo"
+                suffix={t("workers.publicProfile.perMonth")}
                 currency={worker.currency}
                 c={c}
               />
@@ -448,7 +532,7 @@ export default function WorkerPublicProfileScreen() {
             {worker.yearlyRate > 0 ? (
               <RatePill
                 value={worker.yearlyRate}
-                suffix="/yr"
+                suffix={t("workers.publicProfile.perYear")}
                 currency={worker.currency}
                 c={c}
               />
@@ -459,7 +543,7 @@ export default function WorkerPublicProfileScreen() {
                 suffix={
                   worker.customRateLabel
                     ? `/${worker.customRateLabel}`
-                    : "/custom"
+                    : t("workers.publicProfile.perCustom")
                 }
                 currency={worker.currency}
                 c={c}
@@ -484,7 +568,9 @@ export default function WorkerPublicProfileScreen() {
                   { backgroundColor: c.orange, opacity: pressed ? 0.9 : 1 },
                 ]}
               >
-                <AppText style={styles.bookBtnText(c)}>Book Now</AppText>
+                <AppText style={styles.bookBtnText(c)}>
+                  {t("workerProfile.bookNow")}
+                </AppText>
               </Pressable>
 
               {isHirer ? (
@@ -508,17 +594,22 @@ export default function WorkerPublicProfileScreen() {
               ) : null}
 
               <Pressable
-                onPress={() => navigation.navigate("Chat", { userId })}
+                onPress={openChatWithWorker}
+                disabled={openingChat}
                 style={({ pressed }) => [
                   styles.iconActionBtn,
                   {
                     backgroundColor: c.bgCard,
                     borderColor: c.border,
-                    opacity: pressed ? 0.85 : 1,
+                    opacity: openingChat ? 0.5 : pressed ? 0.85 : 1,
                   },
                 ]}
               >
-                <FaCommentDots size={16} color={c.textDim} />
+                {openingChat ? (
+                  <ActivityIndicator size="small" color={c.textDim} />
+                ) : (
+                  <FaCommentDots size={16} color={c.textDim} />
+                )}
               </Pressable>
             </View>
 
@@ -540,7 +631,7 @@ export default function WorkerPublicProfileScreen() {
           >
             <FaEdit size={13} color={c.textDim} />
             <AppText style={{ fontSize: 13, color: c.textDim, marginLeft: 6 }}>
-              Edit Profile
+              {t("workers.publicProfile.editProfile")}
             </AppText>
           </Pressable>
         )}
@@ -553,12 +644,12 @@ export default function WorkerPublicProfileScreen() {
         style={{ flexGrow: 0, marginTop: 14, marginBottom: 12 }}
         contentContainerStyle={{ gap: 4, paddingHorizontal: 4 }}
       >
-        {tabs.map((t) => {
-          const active = tab === t.key;
+        {tabs.map((tabItem) => {
+          const active = tab === tabItem.key;
           return (
             <Pressable
-              key={t.key}
-              onPress={() => setTab(t.key)}
+              key={tabItem.key}
+              onPress={() => setTab(tabItem.key)}
               style={[
                 styles.tabBtn,
                 { borderBottomColor: active ? c.orange : "transparent" },
@@ -571,9 +662,9 @@ export default function WorkerPublicProfileScreen() {
                   color: active ? c.orange : c.textMuted,
                 }}
               >
-                {t.label}
+                {tabItem.label}
               </AppText>
-              {typeof t.count === "number" && t.count > 0 ? (
+              {typeof tabItem.count === "number" && tabItem.count > 0 ? (
                 <View
                   style={[
                     styles.tabCount,
@@ -581,7 +672,7 @@ export default function WorkerPublicProfileScreen() {
                   ]}
                 >
                   <AppText style={{ fontSize: 9, color: c.textMuted }}>
-                    {t.count}
+                    {tabItem.count}
                   </AppText>
                 </View>
               ) : null}
@@ -596,6 +687,7 @@ export default function WorkerPublicProfileScreen() {
           worker={worker}
           user={user}
           availability={availability}
+          t={t}
           c={c}
         />
       ) : null}
@@ -610,6 +702,7 @@ export default function WorkerPublicProfileScreen() {
               description: item.description,
             })
           }
+          t={t}
           c={c}
         />
       ) : null}
@@ -618,6 +711,7 @@ export default function WorkerPublicProfileScreen() {
           worker={worker}
           user={user}
           onPlay={() => setVideoOpen(true)}
+          t={t}
           c={c}
         />
       ) : null}
@@ -633,17 +727,19 @@ export default function WorkerPublicProfileScreen() {
               issuer: cert.issuedBy,
             });
           }}
+          t={t}
           c={c}
         />
       ) : null}
       {tab === "availability" ? (
-        <AvailabilityTab availability={availability} c={c} />
+        <AvailabilityTab availability={availability} t={t} c={c} />
       ) : null}
       {tab === "reviews" ? (
         <ReviewsTab
           reviews={reviews}
           total={worker.totalReviews}
           avgRating={worker.avgRating}
+          t={t}
           c={c}
         />
       ) : null}
@@ -652,7 +748,9 @@ export default function WorkerPublicProfileScreen() {
       <VideoPlayerModal
         visible={videoOpen}
         videoUrl={worker.videoIntroUrl}
-        title={`${user?.firstName || ""}'s Introduction`}
+        title={t("workers.publicProfile.videoTitle", {
+          name: user?.firstName || "",
+        })}
         onClose={() => setVideoOpen(false)}
       />
 
@@ -773,7 +871,17 @@ function RatePill({ value, suffix, currency, c }) {
   );
 }
 
-function AboutTab({ worker, user, availability, c }) {
+function AboutTab({ worker, user, availability, t, c }) {
+  const days = [
+    t("workers.publicProfile.daySun"),
+    t("workers.publicProfile.dayMon"),
+    t("workers.publicProfile.dayTue"),
+    t("workers.publicProfile.dayWed"),
+    t("workers.publicProfile.dayThu"),
+    t("workers.publicProfile.dayFri"),
+    t("workers.publicProfile.daySat"),
+  ];
+
   return (
     <View style={{ gap: 12 }}>
       <View
@@ -782,28 +890,31 @@ function AboutTab({ worker, user, availability, c }) {
           { backgroundColor: c.bgPanel, borderColor: c.border },
         ]}
       >
-        <AppText style={styles.sectionTitle(c)}>About</AppText>
+        <AppText style={styles.sectionTitle(c)}>
+          {t("workers.publicProfile.aboutTitle")}
+        </AppText>
         <AppText style={styles.aboutBio(c)}>
-          {worker.description || "No description provided."}
+          {worker.description || t("workerProfile.empty.noBio")}
         </AppText>
 
-        {/* ── 2-COLUMN GRID ── */}
         <View style={styles.infoCardsGrid}>
           <InfoCard
             icon={<FaAward size={14} color={c.orange} />}
-            label="Years Exp."
-            value={`${worker.yearsExperience || 0} yr${worker.yearsExperience !== 1 ? "s" : ""}`}
+            label={t("workers.publicProfile.yearsExp")}
+            value={t("workers.publicProfile.yearsValue", {
+              count: worker.yearsExperience || 0,
+            })}
             c={c}
           />
           <InfoCard
             icon={<FaMapMarkerAlt size={14} color={c.orange} />}
-            label="Radius"
+            label={t("workerProfile.serviceRadius")}
             value={`${worker.serviceRadius} km`}
             c={c}
           />
           <InfoCard
             icon={<FaCalendarAlt size={14} color={c.orange} />}
-            label="Joined"
+            label={t("workers.publicProfile.joined")}
             value={new Date(user.createdAt).toLocaleDateString("en-GB", {
               month: "short",
               year: "numeric",
@@ -813,8 +924,8 @@ function AboutTab({ worker, user, availability, c }) {
           {worker.backgroundCheck && (
             <InfoCard
               icon={<FaShieldAlt size={14} color={c.green} />}
-              label="Background"
-              value="Cleared"
+              label={t("workers.publicProfile.background")}
+              value={t("workers.publicProfile.cleared")}
               accent
               c={c}
             />
@@ -828,9 +939,11 @@ function AboutTab({ worker, user, availability, c }) {
           { backgroundColor: c.bgPanel, borderColor: c.border },
         ]}
       >
-        <AppText style={styles.sectionTitle(c)}>Weekly Availability</AppText>
+        <AppText style={styles.sectionTitle(c)}>
+          {t("workerProfile.weeklyAvailability")}
+        </AppText>
         <View style={styles.weekRow}>
-          {DAYS_SHORT.map((d, i) => {
+          {days.map((d, i) => {
             const slot = availability.find(
               (a) => a.dayOfWeek === i && a.isAvailable,
             );
@@ -900,7 +1013,7 @@ function InfoCard({ icon, label, value, accent, c }) {
   );
 }
 
-function PortfolioTab({ portfolio, onOpen, c }) {
+function PortfolioTab({ portfolio, onOpen, t, c }) {
   if (!portfolio?.length) {
     return (
       <View
@@ -910,7 +1023,9 @@ function PortfolioTab({ portfolio, onOpen, c }) {
         ]}
       >
         <FaImage size={36} color={c.textMuted} />
-        <AppText style={styles.emptyText(c)}>No portfolio items yet.</AppText>
+        <AppText style={styles.emptyText(c)}>
+          {t("workerProfile.empty.noPortfolio")}
+        </AppText>
       </View>
     );
   }
@@ -946,7 +1061,7 @@ function PortfolioTab({ portfolio, onOpen, c }) {
   );
 }
 
-function VideoTab({ worker, user, onPlay, c }) {
+function VideoTab({ worker, user, onPlay, t, c }) {
   return (
     <View
       style={[
@@ -954,7 +1069,9 @@ function VideoTab({ worker, user, onPlay, c }) {
         { backgroundColor: c.bgPanel, borderColor: c.border },
       ]}
     >
-      <AppText style={styles.sectionTitle(c)}>Video Introduction</AppText>
+      <AppText style={styles.sectionTitle(c)}>
+        {t("workers.publicProfile.videoIntroTitle")}
+      </AppText>
       <Pressable
         onPress={onPlay}
         style={({ pressed }) => [
@@ -968,15 +1085,19 @@ function VideoTab({ worker, user, onPlay, c }) {
       >
         <FaVideo size={40} color={c.orange} />
         <AppText style={styles.videoName(c)}>
-          {user.firstName}'s Introduction
+          {t("workers.publicProfile.videoTitle", {
+            name: user.firstName,
+          })}
         </AppText>
-        <AppText style={styles.videoHint(c)}>Tap to watch</AppText>
+        <AppText style={styles.videoHint(c)}>
+          {t("workers.publicProfile.tapToWatch")}
+        </AppText>
       </Pressable>
     </View>
   );
 }
 
-function CertificationsTab({ certifications, onOpen, c }) {
+function CertificationsTab({ certifications, onOpen, t, c }) {
   if (!certifications?.length) {
     return (
       <View
@@ -986,7 +1107,9 @@ function CertificationsTab({ certifications, onOpen, c }) {
         ]}
       >
         <FaFileAlt size={36} color={c.textMuted} />
-        <AppText style={styles.emptyText(c)}>No certifications added.</AppText>
+        <AppText style={styles.emptyText(c)}>
+          {t("workerProfile.empty.noCertifications")}
+        </AppText>
       </View>
     );
   }
@@ -1013,7 +1136,9 @@ function CertificationsTab({ certifications, onOpen, c }) {
               {cert.name}
             </AppText>
             <AppText style={styles.certIssuer(c)} numberOfLines={1}>
-              Issued by {cert.issuedBy}
+              {t("workers.publicProfile.issuedBy", {
+                issuer: cert.issuedBy,
+              })}
             </AppText>
             {cert.issueDate ? (
               <AppText style={styles.certDate(c)}>
@@ -1035,7 +1160,9 @@ function CertificationsTab({ certifications, onOpen, c }) {
               ]}
             >
               <FaCheckCircle size={9} color={c.green} />
-              <AppText style={styles.certVerifiedText(c)}>Verified</AppText>
+              <AppText style={styles.certVerifiedText(c)}>
+                {t("workers.publicProfile.verified")}
+              </AppText>
             </View>
           )}
           {cert.documentUrl && (
@@ -1050,7 +1177,9 @@ function CertificationsTab({ certifications, onOpen, c }) {
                 },
               ]}
             >
-              <AppText style={styles.certViewText(c)}>View</AppText>
+              <AppText style={styles.certViewText(c)}>
+                {t("workers.publicProfile.view")}
+              </AppText>
               <FaChevronRight size={10} color={c.orange} />
             </Pressable>
           )}
@@ -1060,7 +1189,7 @@ function CertificationsTab({ certifications, onOpen, c }) {
   );
 }
 
-function AvailabilityTab({ availability, c }) {
+function AvailabilityTab({ availability, t, c }) {
   if (!availability?.length) {
     return (
       <View
@@ -1070,10 +1199,21 @@ function AvailabilityTab({ availability, c }) {
         ]}
       >
         <FaCalendarAlt size={36} color={c.textMuted} />
-        <AppText style={styles.emptyText(c)}>No availability set.</AppText>
+        <AppText style={styles.emptyText(c)}>
+          {t("workers.publicProfile.noAvailability")}
+        </AppText>
       </View>
     );
   }
+  const days = [
+    t("workers.publicProfile.daySun"),
+    t("workers.publicProfile.dayMon"),
+    t("workers.publicProfile.dayTue"),
+    t("workers.publicProfile.dayWed"),
+    t("workers.publicProfile.dayThu"),
+    t("workers.publicProfile.dayFri"),
+    t("workers.publicProfile.daySat"),
+  ];
   return (
     <View
       style={[
@@ -1081,7 +1221,7 @@ function AvailabilityTab({ availability, c }) {
         { backgroundColor: c.bgPanel, borderColor: c.border },
       ]}
     >
-      {DAYS_SHORT.map((day, i) => {
+      {days.map((day, i) => {
         const slot = availability.find((a) => a.dayOfWeek === i);
         return (
           <View
@@ -1094,7 +1234,9 @@ function AvailabilityTab({ availability, c }) {
                 {slot.startTime?.slice(0, 5)} – {slot.endTime?.slice(0, 5)}
               </AppText>
             ) : (
-              <AppText style={styles.availOff(c)}>Unavailable</AppText>
+              <AppText style={styles.availOff(c)}>
+                {t("workerProfile.unavailable")}
+              </AppText>
             )}
             <View
               style={[
@@ -1112,7 +1254,7 @@ function AvailabilityTab({ availability, c }) {
   );
 }
 
-function ReviewsTab({ reviews, total, avgRating, c }) {
+function ReviewsTab({ reviews, total, avgRating, t, c }) {
   if (!reviews?.length) {
     return (
       <View
@@ -1122,7 +1264,9 @@ function ReviewsTab({ reviews, total, avgRating, c }) {
         ]}
       >
         <FaStar size={36} color={c.textMuted} />
-        <AppText style={styles.emptyText(c)}>No reviews yet.</AppText>
+        <AppText style={styles.emptyText(c)}>
+          {t("workerProfile.empty.noReviews")}
+        </AppText>
       </View>
     );
   }
@@ -1136,10 +1280,12 @@ function ReviewsTab({ reviews, total, avgRating, c }) {
       >
         <View style={{ alignItems: "center" }}>
           <AppText style={styles.reviewAvg(c)}>
-            {avgRating > 0 ? avgRating.toFixed(1) : "—"}
+            {avgRating > 0
+              ? avgRating.toFixed(1)
+              : t("workers.publicProfile.dash")}
           </AppText>
           <AppText style={styles.reviewTotalLabel(c)}>
-            {total} review{total !== 1 ? "s" : ""}
+            {t("workers.publicProfile.reviewCount", { count: total })}
           </AppText>
         </View>
         <View style={{ flex: 1, alignItems: "flex-end" }}>
@@ -1218,9 +1364,7 @@ function ReviewsTab({ reviews, total, avgRating, c }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// STYLES
-// ═══════════════════════════════════════════════════════════════
+// ═══ STYLES — unchanged ═══
 const styles = StyleSheet.create({
   errorWrap: {
     flex: 1,
@@ -1255,7 +1399,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginBottom: 8,
   },
-
   hero: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 12 },
   heroInner: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   avatarWrap: {
@@ -1308,7 +1451,6 @@ const styles = StyleSheet.create({
   },
   availDot: { width: 8, height: 8, borderRadius: 4 },
   availText: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
-
   catRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
   catChip: {
     flexDirection: "row",
@@ -1320,7 +1462,6 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   catText: { fontSize: 10, fontWeight: "600", marginLeft: 4 },
-
   statsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1340,7 +1481,6 @@ const styles = StyleSheet.create({
   }),
   statItemLabel: (c) => ({ fontSize: 9, color: c.textMuted, marginLeft: 2 }),
   statDivider: { width: 1, height: 14 },
-
   contactRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
   contactChip: {
     flexDirection: "row",
@@ -1352,7 +1492,6 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   contactText: (c) => ({ fontSize: 10, color: c.textDim, marginLeft: 4 }),
-
   actionCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -1385,7 +1524,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontStyle: "italic",
   }),
-
   actionBtns: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
   bookBtn: {
     flex: 1,
@@ -1413,7 +1551,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-
   tabBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1428,7 +1565,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-
   section: { borderRadius: 16, borderWidth: 1, padding: 16 },
   sectionTitle: (c) => ({
     fontFamily: "Syne_700Bold",
@@ -1439,10 +1575,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.7,
     marginBottom: 12,
   }),
-
   aboutBio: (c) => ({ fontSize: 13, color: c.textDim, lineHeight: 20 }),
-
-  // Fixed info cards grid
   infoCardsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1467,8 +1600,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   infoCardValue: { fontSize: 13, fontWeight: "700", marginTop: 2 },
-
-  // Fixed weekly row (7 equal columns)
   weekRow: { flexDirection: "row", flexWrap: "nowrap", gap: 4 },
   dayCell: {
     flex: 1,
@@ -1481,7 +1612,6 @@ const styles = StyleSheet.create({
   },
   dayText: { fontSize: 10, fontWeight: "700" },
   dayTime: { fontSize: 8, marginTop: 2 },
-
   emptySection: {
     alignItems: "center",
     paddingVertical: 40,
@@ -1491,7 +1621,6 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
   },
   emptyText: (c) => ({ fontSize: 13, color: c.textDim, marginTop: 10 }),
-
   portfolioGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1508,7 +1637,6 @@ const styles = StyleSheet.create({
   portfolioBody: { padding: 8 },
   portfolioTitle: (c) => ({ fontSize: 12, fontWeight: "700", color: c.text }),
   portfolioDesc: (c) => ({ fontSize: 10, color: c.textMuted, marginTop: 2 }),
-
   videoPlaceholder: {
     alignItems: "center",
     justifyContent: "center",
@@ -1524,7 +1652,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
   }),
   videoHint: (c) => ({ fontSize: 11, color: c.textDim, marginTop: 4 }),
-
   certCard: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1577,7 +1704,6 @@ const styles = StyleSheet.create({
     color: c.orange,
     marginRight: 3,
   }),
-
   availRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1594,7 +1720,6 @@ const styles = StyleSheet.create({
   availTime: { fontSize: 12, fontWeight: "600" },
   availOff: (c) => ({ fontSize: 12, color: c.textMuted, fontStyle: "italic" }),
   availDotSmall: { width: 8, height: 8, borderRadius: 4 },
-
   ratingSummary: {
     flexDirection: "row",
     alignItems: "center",
@@ -1641,7 +1766,6 @@ const styles = StyleSheet.create({
     borderLeftColor: c.orangeGlow,
   }),
   reviewDate: (c) => ({ fontSize: 10, color: c.textMuted, marginTop: 8 }),
-
   lightboxBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.9)",

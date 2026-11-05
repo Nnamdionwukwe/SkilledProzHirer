@@ -11,9 +11,13 @@
 //   · payment HELD / RELEASED / REFUNDED / FAILED → renderPaymentCard() receipt
 //
 // Currency-aware fees: getHirerFeeRate(currency) × 100 (never hardcoded).
+//
+// i18n: every visible string uses t() under `payment.detail.*`.
 
 import React from "react";
 import { Linking, Pressable, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -223,6 +227,8 @@ export default function BookingDetailPayment({
   isHirer,
   isWorker,
 }) {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
   const { theme } = useTheme();
   const c = theme.colors;
 
@@ -236,15 +242,36 @@ export default function BookingDetailPayment({
     booking?.estimatedValue && booking?.estimatedUnit
       ? `${booking.estimatedValue} ${
           {
-            hours: booking.estimatedValue == 1 ? "hour" : "hours",
-            days: booking.estimatedValue == 1 ? "day" : "days",
-            weeks: booking.estimatedValue == 1 ? "week" : "weeks",
-            months: booking.estimatedValue == 1 ? "month" : "months",
-            years: booking.estimatedValue == 1 ? "year" : "years",
+            hours:
+              booking.estimatedValue == 1
+                ? t("payment.detail.units.hour")
+                : t("payment.detail.units.hours"),
+            days:
+              booking.estimatedValue == 1
+                ? t("payment.detail.units.day")
+                : t("payment.detail.units.days"),
+            weeks:
+              booking.estimatedValue == 1
+                ? t("payment.detail.units.week")
+                : t("payment.detail.units.weeks"),
+            months:
+              booking.estimatedValue == 1
+                ? t("payment.detail.units.month")
+                : t("payment.detail.units.months"),
+            years:
+              booking.estimatedValue == 1
+                ? t("payment.detail.units.year")
+                : t("payment.detail.units.years"),
             custom: "",
           }[booking.estimatedUnit] || booking.estimatedUnit
         }`
       : null;
+
+  // ── Card pay → navigate to InitiatePayment screen ──────────────────
+  const handleCardPay = () => {
+    if (!booking?.id) return;
+    navigation.navigate("InitiatePayment", { bookingId: booking.id });
+  };
 
   // ══════════════════════════════════════════════════════════════════════
   // renderFeeBreakdown
@@ -283,29 +310,35 @@ export default function BookingDetailPayment({
             }}
           >
             {isNegotiated
-              ? "Agreed Total (Negotiated)"
+              ? t("payment.detail.titles.agreedTotalNegotiated")
               : isJobPostBooking
-                ? "Your Earnings (From Job Post)"
-                : "Your Earnings"}
+                ? t("payment.detail.titles.yourEarningsJobPost")
+                : t("payment.detail.titles.yourEarnings")}
           </AppText>
 
           {isFixedTotalView ? (
             <>
               <FeeRow
-                label={isNegotiated ? "Agreed Total" : "Selected Amount"}
+                label={
+                  isNegotiated
+                    ? t("payment.detail.labels.agreedTotal")
+                    : t("payment.detail.labels.selectedAmount")
+                }
                 value={formatPrice(agreedRate, cur)}
                 c={c}
               />
               {isJobPostBooking && realDurationText ? (
                 <FeeRow
-                  label="Duration"
+                  label={t("payment.detail.labels.duration")}
                   value={
                     <AppText style={{ fontSize: 13, color: c.text }}>
                       {realDurationText}
                       {booking.estimatedHours ? (
                         <AppText style={{ color: c.textMuted, fontSize: 11 }}>
                           {" "}
-                          (≈ {booking.estimatedHours}h)
+                          {t("payment.detail.labels.approxHours", {
+                            hours: booking.estimatedHours,
+                          })}
                         </AppText>
                       ) : null}
                     </AppText>
@@ -314,12 +347,14 @@ export default function BookingDetailPayment({
                 />
               ) : null}
               <FeeRow
-                label={`Platform Fee (${feePercent}%)`}
+                label={t("payment.detail.labels.platformFee", {
+                  percent: feePercent,
+                })}
                 value={`+ ${formatPrice(feeBreakdown.platformFee || 0, cur)}`}
                 c={c}
               />
               <FeeTotal
-                label="You Earn"
+                label={t("payment.detail.labels.youEarn")}
                 value={formatPrice(workerPayout, cur)}
                 c={c}
               />
@@ -327,40 +362,47 @@ export default function BookingDetailPayment({
           ) : (
             <>
               <FeeRow
-                label="Agreed Rate"
+                label={t("payment.detail.labels.agreedRate")}
                 value={`${formatPrice(agreedRate, cur)}${
-                  { hours: "/hr", days: "/day", weeks: "/wk", months: "/mo" }[
-                    feeBreakdown.estimatedUnit
-                  ] || ""
+                  {
+                    hours: t("payment.detail.units.perHour"),
+                    days: t("payment.detail.units.perDay"),
+                    weeks: t("payment.detail.units.perWeek"),
+                    months: t("payment.detail.units.perMonth"),
+                  }[feeBreakdown.estimatedUnit] || ""
                 }`}
                 c={c}
               />
               {feeBreakdown.hasQty ? (
                 <FeeRow
-                  label="Duration"
+                  label={t("payment.detail.labels.duration")}
                   value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${
-                    feeBreakdown.qty !== 1 ? "s" : ""
+                    feeBreakdown.qty !== 1
+                      ? t("payment.detail.labels.pluralSuffix")
+                      : ""
                   }`}
                   c={c}
                 />
               ) : null}
               {feeBreakdown.hasQty ? (
                 <FeeRow
-                  label={`Subtotal (${feeBreakdown.qty} × ${formatPrice(
-                    agreedRate,
-                    cur,
-                  )})`}
+                  label={t("payment.detail.labels.subtotalLine", {
+                    qty: feeBreakdown.qty,
+                    rate: formatPrice(agreedRate, cur),
+                  })}
                   value={formatPrice(feeBreakdown.subtotal || 0, cur)}
                   c={c}
                 />
               ) : null}
               <FeeRow
-                label={`Platform Fee (${feePercent}%)`}
+                label={t("payment.detail.labels.platformFee", {
+                  percent: feePercent,
+                })}
                 value={`+ ${formatPrice(feeBreakdown.platformFee || 0, cur)}`}
                 c={c}
               />
               <FeeTotal
-                label="You Earn"
+                label={t("payment.detail.labels.youEarn")}
                 value={formatPrice(workerPayout, cur)}
                 c={c}
               />
@@ -409,29 +451,35 @@ export default function BookingDetailPayment({
           }}
         >
           {isNegotiated
-            ? "Agreed Total (Negotiated)"
+            ? t("payment.detail.titles.agreedTotalNegotiated")
             : isJobPostBooking
-              ? "Payment Breakdown (From Job Post)"
-              : "Payment Breakdown"}
+              ? t("payment.detail.titles.paymentBreakdownJobPost")
+              : t("payment.detail.titles.paymentBreakdown")}
         </AppText>
 
         {isFixedTotalView ? (
           <>
             <FeeRow
-              label={isNegotiated ? "Agreed Total" : "Selected Amount"}
+              label={
+                isNegotiated
+                  ? t("payment.detail.labels.agreedTotal")
+                  : t("payment.detail.labels.selectedAmount")
+              }
               value={formatPrice(agreedRate, cur)}
               c={c}
             />
             {isJobPostBooking && realDurationText ? (
               <FeeRow
-                label="Duration"
+                label={t("payment.detail.labels.duration")}
                 value={
                   <AppText style={{ fontSize: 13, color: c.text }}>
                     {realDurationText}
                     {booking.estimatedHours ? (
                       <AppText style={{ color: c.textMuted, fontSize: 11 }}>
                         {" "}
-                        (≈ {booking.estimatedHours}h)
+                        {t("payment.detail.labels.approxHours", {
+                          hours: booking.estimatedHours,
+                        })}
                       </AppText>
                     ) : null}
                   </AppText>
@@ -441,15 +489,19 @@ export default function BookingDetailPayment({
             ) : null}
             {isNegotiated && (feeBreakdown.hasQty || isCustom) ? (
               <FeeRow
-                label="Duration"
+                label={t("payment.detail.labels.duration")}
                 value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${
-                  feeBreakdown.qty !== 1 ? "s" : ""
+                  feeBreakdown.qty !== 1
+                    ? t("payment.detail.labels.pluralSuffix")
+                    : ""
                 }`}
                 c={c}
               />
             ) : null}
             <FeeRow
-              label={`Platform Fee (${feePercent}%)`}
+              label={t("payment.detail.labels.platformFee", {
+                percent: feePercent,
+              })}
               value={`+ ${formatPrice(platformFee, cur)}`}
               c={c}
             />
@@ -469,7 +521,7 @@ export default function BookingDetailPayment({
                   <AppText
                     style={{ fontSize: 12, color: c.green, fontWeight: "600" }}
                   >
-                    Referral bonus
+                    {t("payment.detail.labels.referralBonus")}
                   </AppText>
                 </View>
                 <AppText
@@ -480,7 +532,7 @@ export default function BookingDetailPayment({
               </View>
             ) : null}
             <FeeTotal
-              label="You Pay"
+              label={t("payment.detail.labels.youPay")}
               value={formatPrice(finalTotal, cur)}
               c={c}
             />
@@ -488,35 +540,42 @@ export default function BookingDetailPayment({
         ) : (
           <>
             <FeeRow
-              label="Agreed Rate"
+              label={t("payment.detail.labels.agreedRate")}
               value={`${formatPrice(agreedRate, cur)}${
-                { hours: "/hr", days: "/day", weeks: "/wk", months: "/mo" }[
-                  feeBreakdown.estimatedUnit
-                ] || ""
+                {
+                  hours: t("payment.detail.units.perHour"),
+                  days: t("payment.detail.units.perDay"),
+                  weeks: t("payment.detail.units.perWeek"),
+                  months: t("payment.detail.units.perMonth"),
+                }[feeBreakdown.estimatedUnit] || ""
               }`}
               c={c}
             />
             {feeBreakdown.hasQty || isCustom ? (
               <FeeRow
-                label="Duration"
+                label={t("payment.detail.labels.duration")}
                 value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${
-                  feeBreakdown.qty !== 1 ? "s" : ""
+                  feeBreakdown.qty !== 1
+                    ? t("payment.detail.labels.pluralSuffix")
+                    : ""
                 }`}
                 c={c}
               />
             ) : null}
             {feeBreakdown.hasQty || isCustom ? (
               <FeeRow
-                label={`Subtotal (${feeBreakdown.qty} × ${formatPrice(
-                  agreedRate,
-                  cur,
-                )})`}
+                label={t("payment.detail.labels.subtotalLine", {
+                  qty: feeBreakdown.qty,
+                  rate: formatPrice(agreedRate, cur),
+                })}
                 value={formatPrice(subtotal, cur)}
                 c={c}
               />
             ) : null}
             <FeeRow
-              label={`Platform Fee (${feePercent}%)`}
+              label={t("payment.detail.labels.platformFee", {
+                percent: feePercent,
+              })}
               value={`+ ${formatPrice(platformFee, cur)}`}
               c={c}
             />
@@ -536,7 +595,7 @@ export default function BookingDetailPayment({
                   <AppText
                     style={{ fontSize: 12, color: c.green, fontWeight: "600" }}
                   >
-                    Referral bonus
+                    {t("payment.detail.labels.referralBonus")}
                   </AppText>
                 </View>
                 <AppText
@@ -547,7 +606,7 @@ export default function BookingDetailPayment({
               </View>
             ) : null}
             <FeeTotal
-              label="You Pay"
+              label={t("payment.detail.labels.youPay")}
               value={formatPrice(finalTotal, cur)}
               c={c}
             />
@@ -582,7 +641,9 @@ export default function BookingDetailPayment({
                   flex: 1,
                 }}
               >
-                Referral Wallet Balance: {formatPrice(walletBalance, "NGN")}
+                {t("payment.detail.referral.balanceLabel", {
+                  amount: formatPrice(walletBalance, "NGN"),
+                })}
               </AppText>
             </View>
             <ReferralSlider
@@ -637,7 +698,9 @@ export default function BookingDetailPayment({
                     color: referralApplied ? "#fff" : c.textDim,
                   }}
                 >
-                  {referralApplied ? "Remove" : "Apply"}
+                  {referralApplied
+                    ? t("payment.detail.referral.remove")
+                    : t("payment.detail.referral.apply")}
                 </AppText>
               </Pressable>
             </View>
@@ -664,7 +727,7 @@ export default function BookingDetailPayment({
             <AppText
               style={{ fontSize: 12, color: c.green, flex: 1, lineHeight: 18 }}
             >
-              You don't have any referral bonus yet. Invite friends to earn!
+              {t("payment.detail.referral.noBonusYet")}
             </AppText>
           </View>
         ) : null}
@@ -704,7 +767,7 @@ export default function BookingDetailPayment({
                   }}
                 >
                   <AppText style={{ fontWeight: "700" }}>
-                    Worker is waiting for you to complete payment.
+                    {t("payment.detail.payBanner.workerWaiting")}
                   </AppText>
                 </AppText>
               </View>
@@ -740,9 +803,9 @@ export default function BookingDetailPayment({
                         lineHeight: 18,
                       }}
                     >
-                      Referral bonus of{" "}
-                      {formatPrice(referralAmount, booking.currency)} will be
-                      deducted at checkout
+                      {t("payment.detail.payBanner.referralApplied", {
+                        amount: formatPrice(referralAmount, booking.currency),
+                      })}
                     </AppText>
                   </>
                 ) : (
@@ -760,8 +823,9 @@ export default function BookingDetailPayment({
                         lineHeight: 18,
                       }}
                     >
-                      Apply your {formatPrice(referralAmount, booking.currency)}{" "}
-                      referral bonus using the slider above
+                      {t("payment.detail.payBanner.referralAvailable", {
+                        amount: formatPrice(referralAmount, booking.currency),
+                      })}
                     </AppText>
                   </>
                 )}
@@ -771,7 +835,7 @@ export default function BookingDetailPayment({
             <AppText
               style={{ fontSize: 12, color: c.textMuted, lineHeight: 17 }}
             >
-              By proceeding, you agree to our{" "}
+              {t("payment.detail.payBanner.refundPrefix")}{" "}
               <AppText
                 onPress={() =>
                   Linking.openURL("https://skilledproz.com/refund-policy")
@@ -782,9 +846,9 @@ export default function BookingDetailPayment({
                   fontWeight: "600",
                 }}
               >
-                Refund Policy
+                {t("payment.detail.payBanner.refundLink")}
               </AppText>
-              . Platform fees are non-refundable.
+              {t("payment.detail.payBanner.refundSuffix")}
             </AppText>
 
             <Pressable
@@ -815,7 +879,7 @@ export default function BookingDetailPayment({
                       color: c.textDim,
                     }}
                   >
-                    Hide Payment Options
+                    {t("payment.detail.payBanner.hideOptions")}
                   </AppText>
                 </>
               ) : isPaymentPending ? (
@@ -824,7 +888,7 @@ export default function BookingDetailPayment({
                   <AppText
                     style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}
                   >
-                    Choose a Different Method
+                    {t("payment.detail.payBanner.chooseMethod")}
                   </AppText>
                 </>
               ) : (
@@ -833,7 +897,7 @@ export default function BookingDetailPayment({
                   <AppText
                     style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}
                   >
-                    Pay Now
+                    {t("payment.detail.payBanner.payNow")}
                   </AppText>
                 </>
               )}
@@ -849,7 +913,7 @@ export default function BookingDetailPayment({
                 }}
               >
                 <Pressable
-                  onPress={() => onSuccess?.("Opening card checkout…")}
+                  onPress={handleCardPay}
                   style={({ pressed }) => [
                     {
                       height: 42,
@@ -867,7 +931,7 @@ export default function BookingDetailPayment({
                   <AppText
                     style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
                   >
-                    Pay by Card
+                    {t("payment.detail.payBanner.payByCard")}
                   </AppText>
                 </Pressable>
               </View>
@@ -931,17 +995,23 @@ export default function BookingDetailPayment({
             marginBottom: 10,
           }}
         >
-          Payment
+          {t("payment.detail.receipt.title")}
         </AppText>
-        <PayRow label="Total" value={formatPrice(total, cur)} c={c} />
         <PayRow
-          label={`Platform Fee (${cardFeePercent}%)`}
+          label={t("payment.detail.receipt.total")}
+          value={formatPrice(total, cur)}
+          c={c}
+        />
+        <PayRow
+          label={t("payment.detail.labels.platformFee", {
+            percent: cardFeePercent,
+          })}
           value={formatPrice(platformFee, cur)}
           muted
           c={c}
         />
         <PayRow
-          label="Worker Payout"
+          label={t("payment.detail.receipt.workerPayout")}
           value={formatPrice(workerPayout, cur)}
           green
           c={c}
@@ -949,9 +1019,14 @@ export default function BookingDetailPayment({
         <View
           style={{ height: 1, backgroundColor: c.border, marginVertical: 4 }}
         />
-        <PayRow label="Provider" value={payment.provider} capitalize c={c} />
         <PayRow
-          label="Status"
+          label={t("payment.detail.receipt.provider")}
+          value={payment.provider}
+          capitalize
+          c={c}
+        />
+        <PayRow
+          label={t("payment.detail.receipt.status")}
           extra={
             <View
               style={{
@@ -972,14 +1047,22 @@ export default function BookingDetailPayment({
                   textTransform: "uppercase",
                 }}
               >
-                {payment.status}
+                {t(
+                  `payment.detail.status.${String(payment.status).toLowerCase()}`,
+                  { defaultValue: payment.status },
+                )}
               </AppText>
             </View>
           }
           c={c}
         />
         {payment.providerRef ? (
-          <PayRow label="Ref" value={payment.providerRef} mono c={c} />
+          <PayRow
+            label={t("payment.detail.receipt.ref")}
+            value={payment.providerRef}
+            mono
+            c={c}
+          />
         ) : null}
       </View>
     );

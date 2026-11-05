@@ -20,6 +20,7 @@ import JobApplicationsScreen from "../screens/main/JobApplicationsScreen";
 import BookingDetailScreen from "../screens/main/BookingDetailScreen";
 import BookingsScreen from "../screens/main/BookingsScreen";
 import CreateBookingScreen from "../screens/main/CreateBookingScreen";
+import InitiatePaymentScreen from "../screens/main/InitiatePaymentScreen";
 import PaymentHistoryScreen from "../screens/main/PaymentHistoryScreen";
 import DisputesScreen from "../screens/main/DisputesScreen";
 import MyPostsScreen from "../screens/main/MyPostsScreen";
@@ -94,6 +95,12 @@ export default function HirerNavigator() {
         </Drawer.Screen>
         <Drawer.Screen name="BookingDetail">
           {() => <ScreenWithChrome Screen={BookingDetailScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen
+          name="InitiatePayment"
+          options={{ drawerItemStyle: { display: "none" } }}
+        >
+          {() => <ScreenWithChrome Screen={InitiatePaymentScreen} />}
         </Drawer.Screen>
         <Drawer.Screen name="PaymentHistory">
           {() => <ScreenWithChrome Screen={PaymentHistoryScreen} />}

@@ -1,463 +1,1708 @@
-// src/components/booking/CryptoRateConverter.js
+// src/screens/main/InitiatePaymentScreen.js
 //
-// Verbatim port of components/payment/CryptoRateConverter.jsx.
+// React Native port of components/payment/InitiatePayment.jsx.
 //
-// · Fetches live fiat↔crypto rates from CoinGecko's public API
-// · Refreshes every 30s (configurable via refreshInterval prop)
-// · Renders 4 token cards (USDC / USDT / BTC / ETH) with:
-//     - live rate in fiat
-//     - converted amount in crypto for the current fiatAmount
-//     - selection indicator
-// · Emits onAmountChange({ token, amount, rate, fiatAmount, fiatCurrency })
-//   whenever the crypto amount changes (debounced naturally by state)
+// Route:      InitiatePayment { bookingId, redirectTo? }
+// Fetches:    GET /bookings/:id
+//             GET /referral/wallet
+// Posts:      POST /payments/initiate/:bookingId      (card)
+//             POST /payments/crypto/:bookingId        (crypto details)
+//             PATCH /payments/crypto/:bookingId/confirm
 //
-// Port notes:
-//   · navigator.clipboard.writeText → expo-clipboard (guarded require)
-//   · <button> → <Pressable>
-//   · CSS grid 2-col → flexDirection row + flexWrap (2 columns via width: 48%)
-//   · Sizes match CSS at phone root 14
+// Steps:
+//   1. Booking PENDING          → "Waiting for Worker" state with poll
+//   2. Method selection         → Card / Crypto
+//   3. Crypto details step      → wallet + tx hash + receipt
+//   4. Card action              → opens Paystack/Flutterwave in browser,
+//                                 then deep-links back to the app on success
+//
+// i18n: every visible string uses t() under `payment.initiate.*`.
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
-
-import AppText from "../AppText";
-import { useTheme } from "../../contexts/ThemeContext";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from "react-native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
+import * as ImagePicker from "expo-image-picker";
+import * as Clipboard from "expo-clipboard";
+
+import AppScreen from "../../components/AppScreen";
+import AppText from "../../components/AppText";
+import PageSkeleton from "../../components/PageSkeleton";
+import CryptoRateConverter from "../../components/booking/CryptoRateConverter";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useToast } from "../../contexts/ToastContext";
+import client from "../../api/client";
+import { calcPricing, getHirerFeeRate } from "../../utils/pricing";
+import {
+  FaArrowLeft,
+  FaCreditCard,
   FaBitcoin,
-  FaDollarSign,
-  FaMoneyBillWave,
-  FaSync,
+  FaCheckCircle,
   FaExclamationTriangle,
+  FaGift,
+  FaLock,
+  FaShieldAlt,
+  FaTimes,
   FaCopy,
+  FaCheck,
+  FaPaperclip,
+  FaUser,
+  FaCalendarAlt,
+  FaMapMarkerAlt,
+  FaGlobe,
+  FaWallet,
+  FaFileAlt,
+  FaClipboardList,
+  FaBriefcase,
 } from "../../icons/fa";
 
-// Optional expo-clipboard — guarded
-let Clipboard = null;
-try {
-  Clipboard = require("expo-clipboard");
-} catch {}
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
-const CRYPTO_TOKENS = [
-  { id: "USDC", label: "USDC", icon: "dollar", coingeckoId: "usd-coin" },
-  { id: "USDT", label: "USDT", icon: "bill", coingeckoId: "tether" },
-  { id: "BTC", label: "Bitcoin", icon: "bitcoin", coingeckoId: "bitcoin" },
-  { id: "ETH", label: "Ethereum", icon: "eth", coingeckoId: "ethereum" },
-];
-
-const COINGECKO_IDS = CRYPTO_TOKENS.map((t) => t.coingeckoId).join(",");
-
-function TokenIcon({ iconName, size = 20, color }) {
-  if (iconName === "dollar") return <FaDollarSign size={size} color={color} />;
-  if (iconName === "bill") return <FaMoneyBillWave size={size} color={color} />;
-  if (iconName === "bitcoin") return <FaBitcoin size={size} color={color} />;
-  // eth — no direct Ionicon, use diamond outline
-  return <FaMoneyBillWave size={size} color={color} />;
+function fmtMoney(amount, currency = "NGN") {
+  const n = Number(amount) || 0;
+  return `${currency} ${n.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
-export default function CryptoRateConverter({
-  fiatAmount,
-  fiatCurrency = "NGN",
-  onAmountChange,
-  selectedToken: initialToken = "USDC",
-  refreshInterval = 30000,
-}) {
+const CRYPTO_TOKENS = ["USDC", "USDT", "BTC", "ETH"];
+
+export default function InitiatePaymentScreen() {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
+  const route = useRoute();
   const { theme } = useTheme();
+  const { toast } = useToast();
   const c = theme.colors;
 
-  const [rates, setRates] = useState(null);
+  const bookingId = route.params?.bookingId;
+  const redirectTo = route.params?.redirectTo || null;
+
+  const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedToken, setSelectedToken] = useState(initialToken);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState("");
+  const [method, setMethod] = useState("card");
+  const [selectedCryptoToken, setSelectedCryptoToken] = useState("USDC");
+  const [convertedCryptoAmount, setConvertedCryptoAmount] = useState(null);
+  const [step, setStep] = useState("method"); // "method" | "crypto"
+  const [cryptoDetails, setCryptoDetails] = useState(null);
+  const [cryptoTxHash, setCryptoTxHash] = useState("");
+  const [cryptoAmount, setCryptoAmount] = useState("");
+  const [cryptoReceipt, setCryptoReceipt] = useState(null);
+  const [confirming, setConfirming] = useState(false);
+  const [bookingStatus, setBookingStatus] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [referralPercent, setReferralPercent] = useState(0);
+  const [referralAmount, setReferralAmount] = useState(0);
+  const [referralApplied, setReferralApplied] = useState(false);
+  const [copied, setCopied] = useState({});
 
-  const lastEmittedRef = useRef(null);
+  const pollRef = useRef(null);
+  const awaitingBrowserReturnRef = useRef(false);
 
-  const fetchRates = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // ── Load booking ─────────────────────────────────────────────────────
+  const loadBooking = useCallback(async () => {
+    if (!bookingId) return;
     try {
-      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${COINGECKO_IDS}&vs_currencies=${fiatCurrency.toLowerCase()}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const newRates = {};
-      CRYPTO_TOKENS.forEach((token) => {
-        const price = data[token.coingeckoId]?.[fiatCurrency.toLowerCase()];
-        newRates[token.id] = price || null;
-      });
-      setRates(newRates);
-      setLastUpdated(new Date());
-    } catch (err) {
-      setError(err?.message || "Network error");
+      const res = await client.get(`/bookings/${bookingId}`);
+      const b = res.data.data.booking;
+      setBooking(b);
+      setBookingStatus(b.status);
+      return b;
+    } catch (e) {
+      setError(
+        e?.response?.data?.message || t("payment.initiate.errors.loadBooking"),
+      );
+      return null;
     } finally {
       setLoading(false);
     }
-  }, [fiatCurrency]);
+  }, [bookingId, t]);
 
   useEffect(() => {
-    fetchRates();
-    const id = setInterval(fetchRates, refreshInterval);
-    return () => clearInterval(id);
-  }, [fetchRates, refreshInterval]);
+    loadBooking();
+  }, [loadBooking]);
 
-  const selectedRate = rates?.[selectedToken];
-  const cryptoAmount =
-    selectedRate && fiatAmount > 0 ? fiatAmount / selectedRate : 0;
-
-  // Emit on change
+  // ── Poll status while PENDING ────────────────────────────────────────
   useEffect(() => {
-    if (!onAmountChange || cryptoAmount <= 0) return;
-    const payload = {
-      token: selectedToken,
-      amount: cryptoAmount,
-      rate: selectedRate,
-      fiatAmount,
-      fiatCurrency,
-    };
-    // Avoid emitting identical payloads multiple times (causes parent re-renders)
-    const key = `${payload.token}|${payload.amount.toFixed(8)}|${payload.rate}`;
-    if (lastEmittedRef.current === key) return;
-    lastEmittedRef.current = key;
-    onAmountChange(payload);
-  }, [
-    cryptoAmount,
-    selectedToken,
-    selectedRate,
-    fiatAmount,
-    fiatCurrency,
-    onAmountChange,
-  ]);
-
-  const handleCopy = async () => {
-    if (!cryptoAmount || !selectedToken) return;
-    const text = `${cryptoAmount.toFixed(6)} ${selectedToken}`;
-    if (Clipboard) {
+    if (bookingStatus !== "PENDING") return;
+    pollRef.current = setInterval(async () => {
       try {
-        await Clipboard.setStringAsync(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-        return;
+        const res = await client.get(`/bookings/${bookingId}`);
+        const b = res.data.data.booking;
+        setBooking(b);
+        if (b.status !== bookingStatus) {
+          setBookingStatus(b.status);
+          toast.success(
+            t("payment.initiate.pending.statusUpdated", { status: b.status }),
+          );
+        }
       } catch {}
-    }
-    // Fallback if clipboard not available
-    setCopied(false);
+    }, 8000);
+    return () => clearInterval(pollRef.current);
+  }, [bookingId, bookingStatus, toast, t]);
+
+  // ── Wallet balance ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!booking) return;
+    client
+      .get("/referral/wallet")
+      .then((res) => setWalletBalance(Number(res.data?.data?.balance) || 0))
+      .catch(() => {});
+  }, [booking]);
+
+  // ── Card payment return: check booking status when app regains focus ─
+  // This runs when the user comes back from Paystack/Flutterwave in the
+  // browser. If the payment succeeded, we detect the new booking status
+  // and route the user back to the booking detail (in-app).
+  useFocusEffect(
+    useCallback(() => {
+      if (!awaitingBrowserReturnRef.current) return;
+      (async () => {
+        const b = await loadBooking();
+        awaitingBrowserReturnRef.current = false;
+        if (!b) return;
+        if (b.status === "ACCEPTED" && b.payment?.status === "HELD") {
+          toast.success(t("payment.initiate.success.cardHeld"));
+          navigation.replace("BookingDetail", {
+            bookingId,
+            payment: "success",
+          });
+        } else if (b.payment?.status === "PENDING") {
+          toast.info(t("payment.initiate.success.cardPending"));
+          navigation.replace("BookingDetail", {
+            bookingId,
+            payment: "pending",
+          });
+        } else {
+          // Fallback — just send them to booking detail either way so
+          // they're never stranded in the browser.
+          navigation.replace("BookingDetail", {
+            bookingId,
+            payment: "returned",
+          });
+        }
+      })();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bookingId]),
+  );
+
+  // ── Pricing ──────────────────────────────────────────────────────────
+  const p = useMemo(
+    () => calcPricing(booking, referralApplied ? referralAmount : 0),
+    [booking, referralApplied, referralAmount],
+  );
+
+  const isJobPostBooking = booking?.source === "JOB_POST";
+
+  // Compute final displayed total using the same logic as the web.
+  const currency = p.currency || booking?.currency || "NGN";
+  const PLATFORM_FEE_RATE = getHirerFeeRate(currency);
+  const referralDeduct =
+    referralApplied && referralAmount > 0 ? Number(referralAmount) : 0;
+  const finalTotal = Math.max(
+    0,
+    Number(p.totalCharged || 0) - (referralApplied ? 0 : 0),
+  );
+  // p.totalCharged already includes the referral discount when calcPricing
+  // is called with referralAmount. If the user un-applies it we recompute:
+  const displayedTotal = referralApplied
+    ? Math.max(0, Number(p.totalCharged || 0))
+    : Number(p.grossTotal || p.totalCharged || 0);
+
+  // ── Referral slider ──────────────────────────────────────────────────
+  const handlePercentChange = (pct) => {
+    const subtotal = p.subtotal || 0;
+    const maxDiscount = Math.min(subtotal, walletBalance);
+    const amount = Math.round((pct / 100) * subtotal);
+    const final = Math.min(amount, maxDiscount);
+    setReferralPercent(pct);
+    setReferralAmount(final);
+    setReferralApplied(final > 0);
   };
 
-  // ── Initial loading ─────────────────────────────────────────────────
-  if (loading && !rates) {
+  const handleReferralToggle = () => {
+    if (referralAmount === 0) return;
+    setReferralApplied((v) => !v);
+  };
+
+  // ── Copy helper ──────────────────────────────────────────────────────
+  const handleCopy = async (text, key) => {
+    try {
+      await Clipboard.setStringAsync(String(text));
+      setCopied((prev) => ({ ...prev, [key]: true }));
+      setTimeout(() => setCopied((prev) => ({ ...prev, [key]: false })), 2000);
+    } catch {
+      toast.error(t("payment.initiate.errors.copyFailed"));
+    }
+  };
+
+  // ── Receipt pick ─────────────────────────────────────────────────────
+  const pickReceipt = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        toast.error(t("payment.initiate.errors.mediaPermission"));
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      if (res.canceled) return;
+      const asset = res.assets[0];
+      if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
+        toast.error(t("payment.initiate.errors.fileTooLarge", { size: 5 }));
+        return;
+      }
+      setCryptoReceipt({
+        uri: asset.uri,
+        name: asset.fileName || `receipt_${Date.now()}.jpg`,
+        type: asset.mimeType || "image/jpeg",
+        size: asset.fileSize,
+      });
+    } catch {
+      toast.error(t("payment.initiate.errors.imagePicker"));
+    }
+  };
+
+  // ── Card pay ─────────────────────────────────────────────────────────
+  const handleCardPay = async () => {
+    if (paying) return;
+    setPaying(true);
+    setError("");
+    try {
+      const res = await client.post(`/payments/initiate/${bookingId}`, {
+        referralAmount: referralApplied ? referralAmount : 0,
+      });
+      const { paymentUrl } = res.data.data;
+      if (!paymentUrl) {
+        setError(t("payment.initiate.errors.noPaymentUrl"));
+        return;
+      }
+      const canOpen = await Linking.canOpenURL(paymentUrl);
+      if (!canOpen) {
+        setError(t("payment.initiate.errors.cannotOpenUrl"));
+        return;
+      }
+      // Mark that we're about to leave for the browser. When the app
+      // regains focus, `useFocusEffect` above will refresh the booking
+      // and route the user to BookingDetail with the correct payment
+      // status — even if the payment provider redirects back to a deep
+      // link rather than firing a screen event.
+      awaitingBrowserReturnRef.current = true;
+      await Linking.openURL(paymentUrl);
+    } catch (e) {
+      setError(
+        e?.response?.data?.message ||
+          t("payment.initiate.errors.cardInitiateFailed"),
+      );
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  // ── Crypto: initiate ─────────────────────────────────────────────────
+  const handleCryptoInitiate = async () => {
+    if (paying) return;
+    setPaying(true);
+    setError("");
+    try {
+      const res = await client.post(`/payments/crypto/${bookingId}`, {
+        cryptoCurrency: selectedCryptoToken,
+        amount: displayedTotal,
+        currency,
+        referralAmount: referralApplied ? referralAmount : 0,
+      });
+      setCryptoDetails(res.data.data?.cryptoDetails || res.data.data);
+      setStep("crypto");
+    } catch (e) {
+      setError(
+        e?.response?.data?.message ||
+          t("payment.initiate.errors.cryptoInitiateFailed"),
+      );
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  // ── Crypto: confirm ──────────────────────────────────────────────────
+  const handleCryptoConfirm = async () => {
+    if (!cryptoTxHash.trim()) {
+      setError(t("payment.initiate.errors.txHashRequired"));
+      return;
+    }
+    setConfirming(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("txHash", cryptoTxHash.trim());
+      form.append("cryptoCurrency", selectedCryptoToken);
+      if (cryptoAmount) form.append("cryptoAmount", cryptoAmount);
+      if (referralApplied && referralAmount > 0) {
+        form.append("referralAmount", String(referralAmount));
+      }
+      if (cryptoReceipt) {
+        form.append("proof", {
+          uri: cryptoReceipt.uri,
+          name: cryptoReceipt.name,
+          type: cryptoReceipt.type,
+        });
+      }
+      await client.patch(`/payments/crypto/${bookingId}/confirm`, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      toast.success(t("payment.initiate.success.cryptoSubmitted"));
+      navigation.replace("BookingDetail", {
+        bookingId,
+        payment: "success",
+      });
+    } catch (e) {
+      setError(
+        e?.response?.data?.message ||
+          t("payment.initiate.errors.cryptoConfirmFailed"),
+      );
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // ── Back / reset ─────────────────────────────────────────────────────
+  const resetToMethod = () => {
+    setStep("method");
+    setCryptoDetails(null);
+    setCryptoTxHash("");
+    setCryptoAmount("");
+    setCryptoReceipt(null);
+    setError("");
+  };
+
+  // ── Loading / error states ───────────────────────────────────────────
+  if (loading) {
     return (
-      <View
-        style={[
-          styles.converter,
-          { backgroundColor: c.bgPanel, borderColor: c.border },
-        ]}
-      >
-        <View style={{ alignItems: "center", paddingVertical: 24, gap: 8 }}>
-          <ActivityIndicator color={c.orange} />
-          <AppText style={{ fontSize: 12, color: c.textDim }}>
-            Loading live exchange rates…
-          </AppText>
-        </View>
-      </View>
+      <AppScreen scroll={false}>
+        <PageSkeleton variant="detail" />
+      </AppScreen>
     );
   }
 
-  // ── Error ───────────────────────────────────────────────────────────
-  if (error) {
+  if (error && !booking) {
     return (
-      <View
-        style={[
-          styles.converter,
-          { backgroundColor: c.bgPanel, borderColor: c.border },
-        ]}
-      >
-        <View style={{ alignItems: "center", paddingVertical: 20, gap: 10 }}>
-          <FaExclamationTriangle size={20} color={c.red} />
+      <AppScreen scroll={false}>
+        <View style={styles.center}>
+          <FaExclamationTriangle size={44} color={c.red} />
           <AppText
-            style={{ fontSize: 12, color: c.textDim, textAlign: "center" }}
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 18,
+              fontWeight: "800",
+              color: c.text,
+              marginTop: 14,
+              textAlign: "center",
+            }}
           >
-            Could not load rates: {error}
+            {t("payment.initiate.errors.title")}
+          </AppText>
+          <AppText
+            style={{
+              fontSize: 13,
+              color: c.textDim,
+              textAlign: "center",
+              marginTop: 6,
+              paddingHorizontal: 20,
+            }}
+          >
+            {error}
           </AppText>
           <Pressable
-            onPress={fetchRates}
-            style={({ pressed }) => [
-              styles.retryBtn,
-              { backgroundColor: c.orange, opacity: pressed ? 0.85 : 1 },
-            ]}
+            onPress={() => navigation.navigate("Bookings")}
+            style={[styles.backBtn, { borderColor: c.border, marginTop: 20 }]}
           >
-            <AppText style={{ fontSize: 12, fontWeight: "700", color: c.bg }}>
-              Retry
+            <FaArrowLeft size={12} color={c.textDim} />
+            <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>
+              {t("payment.initiate.actions.backToBookings")}
             </AppText>
           </Pressable>
         </View>
-      </View>
+      </AppScreen>
     );
   }
 
-  // ═════════════════════════════════════════════════════════════════════
-  // MAIN
-  // ═════════════════════════════════════════════════════════════════════
-  return (
-    <View
-      style={[
-        styles.converter,
-        { backgroundColor: c.bgPanel, borderColor: c.border },
-      ]}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-          Live Crypto Rates
-        </AppText>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <AppText style={{ fontSize: 10, color: c.textMuted }}>
-            {lastUpdated ? `Updated: ${lastUpdated.toLocaleTimeString()}` : "—"}
+  // ── PENDING state ────────────────────────────────────────────────────
+  if (bookingStatus === "PENDING") {
+    return (
+      <AppScreen contentContainerStyle={{ paddingBottom: 40 }}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.topBack}>
+          <FaArrowLeft size={12} color={c.textDim} />
+          <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>
+            {t("payment.initiate.actions.viewBooking")}
           </AppText>
-          <Pressable
-            onPress={fetchRates}
-            disabled={loading}
-            hitSlop={6}
-            style={{ opacity: loading ? 0.4 : 1 }}
-          >
-            <FaSync size={12} color={c.textDim} />
-          </Pressable>
-        </View>
-      </View>
+        </Pressable>
 
-      {/* Fiat amount */}
-      <View
-        style={[
-          styles.fiatBox,
-          { backgroundColor: c.bgCard, borderColor: c.orangeGlow },
-        ]}
-      >
-        <AppText style={{ fontSize: 13, color: c.textDim }}>You pay:</AppText>
-        <AppText
-          style={{
-            fontFamily: "Syne_800ExtraBold",
-            fontSize: 16,
-            fontWeight: "800",
-            color: c.orange,
-          }}
-        >
-          {fiatCurrency} {(Number(fiatAmount) || 0).toFixed(2)}
-        </AppText>
-      </View>
-
-      {/* Token grid */}
-      <View style={styles.tokenGrid}>
-        {CRYPTO_TOKENS.map((token) => {
-          const rate = rates?.[token.id];
-          const isSelected = selectedToken === token.id;
-          const isZero = rate === null || rate === 0;
-          const tokenAmount = rate ? fiatAmount / rate : 0;
-
-          return (
-            <Pressable
-              key={token.id}
-              onPress={() => {
-                if (!isZero && rate) setSelectedToken(token.id);
-              }}
-              disabled={isZero || !rate}
-              style={({ pressed }) => [
-                styles.tokenCard,
-                {
-                  backgroundColor: isSelected ? c.orangeDim : c.bgCard,
-                  borderColor: isSelected ? c.orange : c.border,
-                  opacity: isZero ? 0.5 : pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <TokenIcon
-                iconName={token.icon}
-                size={22}
-                color={isSelected ? c.orange : c.textDim}
-              />
-              <View style={{ flex: 1, minWidth: 0, marginLeft: 8 }}>
-                <AppText
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "700",
-                    color: isSelected ? c.orange : c.text,
-                  }}
-                >
-                  {token.label}
-                </AppText>
-                <AppText
-                  style={{ fontSize: 9, color: c.textMuted, marginTop: 2 }}
-                  numberOfLines={1}
-                >
-                  {rate
-                    ? `1 ${token.label} = ${fiatCurrency} ${Number(rate).toFixed(4)}`
-                    : "No rate"}
-                </AppText>
-                <AppText
-                  style={{
-                    fontSize: 10,
-                    fontWeight: "600",
-                    color: isSelected ? c.orange : c.textDim,
-                    marginTop: 3,
-                  }}
-                  numberOfLines={1}
-                >
-                  {isSelected && rate
-                    ? `${tokenAmount.toFixed(6)} ${token.label}`
-                    : rate
-                      ? `${tokenAmount.toFixed(6)} ${token.label}`
-                      : "—"}
-                </AppText>
-              </View>
-              {isSelected ? (
-                <View style={[styles.checkmark, { backgroundColor: c.green }]}>
-                  <AppText
-                    style={{
-                      fontSize: 8,
-                      fontWeight: "800",
-                      color: "#fff",
-                    }}
-                  >
-                    ✓
-                  </AppText>
-                </View>
-              ) : null}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Result + copy */}
-      {selectedRate && cryptoAmount > 0 ? (
         <View
           style={[
-            styles.resultBox,
+            styles.badge,
+            { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+          ]}
+        >
+          <AppText style={{ fontSize: 11, fontWeight: "700", color: c.orange }}>
+            {t("payment.initiate.pending.badge")}
+          </AppText>
+        </View>
+
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: c.bgPanel, borderColor: c.border },
+          ]}
+        >
+          <AppText style={styles.cardEyebrow(c)}>
+            {t("payment.initiate.pending.bookingCreated")}
+          </AppText>
+          <AppText
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 18,
+              fontWeight: "800",
+              color: c.text,
+            }}
+          >
+            {booking?.title}
+          </AppText>
+          <AppText style={{ fontSize: 12, color: c.orange, marginTop: 4 }}>
+            {booking?.worker?.firstName} {booking?.worker?.lastName} ·{" "}
+            {booking?.category?.name}
+          </AppText>
+        </View>
+
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: c.bgPanel, borderColor: c.border },
+          ]}
+        >
+          <AppText style={styles.cardEyebrow(c)}>
+            {t("payment.initiate.pending.paymentPreview")}
+          </AppText>
+
+          <PreviewRow
+            label={
+              isJobPostBooking
+                ? t("payment.initiate.labels.agreedTotal")
+                : t("payment.initiate.labels.agreedRate")
+            }
+            value={`${fmtMoney(p.agreedRate, currency)}${!isJobPostBooking ? p.unitSuffix || "" : ""}`}
+            c={c}
+          />
+
+          {isJobPostBooking && booking?.estimatedValue ? (
+            <PreviewRow
+              label={t("payment.initiate.labels.duration")}
+              value={`${booking.estimatedValue} ${booking.estimatedUnit || "hours"}`}
+              c={c}
+            />
+          ) : null}
+
+          <PreviewRow
+            label={t("payment.initiate.labels.serviceFee", {
+              percent: p.feePercent,
+            })}
+            value={`+ ${fmtMoney(p.hirerFee, currency)}`}
+            c={c}
+          />
+
+          <PreviewRow
+            label={t("payment.initiate.labels.workerReceives")}
+            value={fmtMoney(p.workerPayout, currency)}
+            valueColor={c.green}
+            c={c}
+          />
+
+          {referralApplied && referralAmount > 0 ? (
+            <PreviewRow
+              label={t("payment.initiate.labels.referralBonus")}
+              value={`− ${fmtMoney(referralAmount, currency)}`}
+              valueColor={c.green}
+              c={c}
+            />
+          ) : null}
+
+          <View
+            style={{
+              height: 1,
+              backgroundColor: c.border,
+              marginVertical: 8,
+            }}
+          />
+
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <AppText style={{ fontSize: 14, fontWeight: "700", color: c.text }}>
+              {t("payment.initiate.labels.youWillPay")}
+            </AppText>
+            <AppText
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 18,
+                fontWeight: "800",
+                color: c.orange,
+              }}
+            >
+              {fmtMoney(displayedTotal, currency)}
+            </AppText>
+          </View>
+        </View>
+
+        <View style={styles.pendingWrap}>
+          <ActivityIndicator size="large" color={c.orange} />
+          <AppText
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 17,
+              fontWeight: "800",
+              color: c.text,
+              marginTop: 16,
+            }}
+          >
+            {t("payment.initiate.pending.waitingForWorker")}
+          </AppText>
+          <AppText
+            style={{
+              fontSize: 13,
+              color: c.textDim,
+              textAlign: "center",
+              marginTop: 6,
+              lineHeight: 18,
+            }}
+          >
+            {t("payment.initiate.pending.waitingBody")}
+          </AppText>
+        </View>
+
+        <Pressable
+          onPress={loadBooking}
+          style={[
+            styles.secondaryBtn,
+            { borderColor: c.border, backgroundColor: c.bgCard },
+          ]}
+        >
+          <AppText style={{ fontSize: 13, color: c.textDim }}>
+            {t("payment.initiate.actions.checkUpdates")}
+          </AppText>
+        </Pressable>
+      </AppScreen>
+    );
+  }
+
+  // ── CRYPTO DETAILS STEP ──────────────────────────────────────────────
+  if (step === "crypto" && cryptoDetails) {
+    return (
+      <AppScreen contentContainerStyle={{ paddingBottom: 40 }}>
+        <Pressable onPress={resetToMethod} style={styles.topBack}>
+          <FaArrowLeft size={12} color={c.textDim} />
+          <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>
+            {t("payment.initiate.actions.changeMethod")}
+          </AppText>
+        </Pressable>
+
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: c.bgPanel, borderColor: c.border },
+          ]}
+        >
+          <AppText style={styles.cardEyebrow(c)}>
+            {t("payment.initiate.crypto.sendExactly")}
+          </AppText>
+          <AppText
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 22,
+              fontWeight: "800",
+              color: c.orange,
+              marginBottom: 6,
+            }}
+          >
+            {convertedCryptoAmount && selectedCryptoToken
+              ? `${convertedCryptoAmount.toFixed(6)} ${selectedCryptoToken}`
+              : fmtMoney(displayedTotal, currency)}
+          </AppText>
+          {referralApplied && referralAmount > 0 ? (
+            <AppText style={{ fontSize: 11, color: c.green, marginBottom: 4 }}>
+              <FaCheckCircle size={10} color={c.green} />{" "}
+              {t("payment.initiate.crypto.includesReferral", {
+                amount: fmtMoney(referralAmount, currency),
+              })}
+            </AppText>
+          ) : null}
+          <AppText style={{ fontSize: 11, color: c.textMuted }}>
+            {t("payment.initiate.crypto.refLabel", {
+              reference: cryptoDetails.reference || "",
+            })}
+          </AppText>
+        </View>
+
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: c.bgPanel, borderColor: c.border },
+          ]}
+        >
+          <AppText style={styles.cardEyebrow(c)}>
+            {t("payment.initiate.crypto.walletDetails")}
+          </AppText>
+
+          <MetaRow
+            icon={<FaGlobe size={11} color={c.textDim} />}
+            label={t("payment.initiate.crypto.fields.network")}
+            value={cryptoDetails.network || "—"}
+            c={c}
+          />
+          <MetaRow
+            icon={<FaWallet size={11} color={c.textDim} />}
+            label={t("payment.initiate.crypto.fields.wallet")}
+            value={cryptoDetails.wallet || "—"}
+            mono
+            copyable
+            copied={copied.cryptoWallet}
+            onCopy={() => handleCopy(cryptoDetails.wallet, "cryptoWallet")}
+            c={c}
+          />
+          <MetaRow
+            icon={<FaBitcoin size={11} color={c.textDim} />}
+            label={t("payment.initiate.crypto.fields.token")}
+            value={cryptoDetails.currency || selectedCryptoToken}
+            c={c}
+          />
+          {cryptoDetails.note ? (
+            <MetaRow
+              icon={<FaFileAlt size={11} color={c.textDim} />}
+              label={t("payment.initiate.crypto.fields.memo")}
+              value={cryptoDetails.note}
+              copyable
+              copied={copied.cryptoMemo}
+              onCopy={() => handleCopy(cryptoDetails.note, "cryptoMemo")}
+              c={c}
+            />
+          ) : null}
+        </View>
+
+        <View
+          style={[
+            styles.warnBox,
+            { backgroundColor: c.redDim, borderColor: "rgba(239,68,68,0.2)" },
+          ]}
+        >
+          <FaExclamationTriangle size={11} color={c.red} />
+          <AppText
+            style={{
+              fontSize: 12,
+              color: c.red,
+              flex: 1,
+              marginLeft: 6,
+              lineHeight: 17,
+            }}
+          >
+            {t("payment.initiate.crypto.networkWarning", {
+              token: cryptoDetails.currency || selectedCryptoToken,
+              network: cryptoDetails.network || "—",
+            })}
+          </AppText>
+        </View>
+
+        <AppText style={[styles.fieldLabel, { color: c.textDim }]}>
+          {t("payment.initiate.crypto.fields.txHash")}
+        </AppText>
+        <TextInput
+          value={cryptoTxHash}
+          onChangeText={setCryptoTxHash}
+          placeholder={t("payment.initiate.crypto.placeholders.txHash")}
+          placeholderTextColor={c.textMuted}
+          autoCapitalize="none"
+          style={[
+            styles.input,
             {
-              backgroundColor: c.greenDim,
-              borderColor: "rgba(34,197,94,0.2)",
+              color: c.text,
+              borderColor: c.border,
+              backgroundColor: c.bgInput,
+              fontFamily: "DMSans_400Regular",
+            },
+          ]}
+        />
+
+        <AppText style={[styles.fieldLabel, { color: c.textDim }]}>
+          {t("payment.initiate.crypto.fields.amountOptional")}
+        </AppText>
+        <TextInput
+          value={cryptoAmount}
+          onChangeText={(v) => setCryptoAmount(v.replace(/[^0-9.]/g, ""))}
+          keyboardType="decimal-pad"
+          placeholder={t("payment.initiate.crypto.placeholders.amount", {
+            token: selectedCryptoToken,
+          })}
+          placeholderTextColor={c.textMuted}
+          style={[
+            styles.input,
+            {
+              color: c.text,
+              borderColor: c.border,
+              backgroundColor: c.bgInput,
+              fontFamily: "DMSans_400Regular",
+            },
+          ]}
+        />
+
+        <AppText style={[styles.fieldLabel, { color: c.textDim }]}>
+          {t("payment.initiate.crypto.fields.receipt")}
+        </AppText>
+        <Pressable
+          onPress={pickReceipt}
+          style={[
+            styles.uploadBtn,
+            { borderColor: c.border, backgroundColor: c.bgCard },
+          ]}
+        >
+          <FaPaperclip size={12} color={c.textDim} />
+          <AppText
+            style={{
+              fontSize: 12,
+              color: c.textDim,
+              fontWeight: "600",
+              marginLeft: 6,
+              flex: 1,
+              fontFamily: "DMSans_400Regular",
+            }}
+            numberOfLines={1}
+          >
+            {cryptoReceipt
+              ? cryptoReceipt.name
+              : t("payment.initiate.crypto.placeholders.receipt")}
+          </AppText>
+        </Pressable>
+        {cryptoReceipt ? (
+          <Pressable
+            onPress={() => setCryptoReceipt(null)}
+            style={{ alignSelf: "flex-start", marginTop: 6 }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              <FaTimes size={10} color={c.red} />
+              <AppText style={{ fontSize: 11, color: c.red }}>
+                {t("payment.initiate.crypto.removeReceipt")}
+              </AppText>
+            </View>
+          </Pressable>
+        ) : null}
+
+        {error ? (
+          <View
+            style={[
+              styles.inlineError,
+              { backgroundColor: c.redDim, borderColor: "rgba(239,68,68,0.2)" },
+            ]}
+          >
+            <FaExclamationTriangle size={11} color={c.red} />
+            <AppText
+              style={{ fontSize: 12, color: c.red, flex: 1, marginLeft: 6 }}
+            >
+              {error}
+            </AppText>
+          </View>
+        ) : null}
+
+        <Pressable
+          onPress={handleCryptoConfirm}
+          disabled={confirming}
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            {
+              backgroundColor: confirming ? c.bgCard : c.orange,
+              opacity: confirming ? 0.6 : pressed ? 0.9 : 1,
             },
           ]}
         >
-          <View style={styles.resultRow}>
-            <AppText
-              style={{ fontSize: 12, color: c.text, flex: 1, lineHeight: 18 }}
+          {confirming ? (
+            <ActivityIndicator color={c.bg} />
+          ) : (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
-              You need to send{" "}
-              <AppText style={{ fontWeight: "700", color: c.green }}>
-                {cryptoAmount.toFixed(6)} {selectedToken}
-              </AppText>
-            </AppText>
-            <Pressable
-              onPress={handleCopy}
-              style={({ pressed }) => [
-                styles.copyBtn,
-                {
-                  backgroundColor: copied ? c.greenDim : c.bgCard,
-                  borderColor: copied ? c.green : c.border,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <FaCopy size={10} color={copied ? c.green : c.textDim} />
+              <FaCheckCircle size={14} color={c.bg} />
               <AppText
                 style={{
-                  fontSize: 10,
-                  fontWeight: "600",
-                  color: copied ? c.green : c.textDim,
-                  marginLeft: 4,
+                  fontFamily: "Syne_800ExtraBold",
+                  fontSize: 14,
+                  fontWeight: "800",
+                  color: c.bg,
                 }}
               >
-                {copied ? "Copied!" : "Copy"}
+                {t("payment.initiate.actions.confirmTransfer")}
               </AppText>
-            </Pressable>
-          </View>
-          <AppText
+            </View>
+          )}
+        </Pressable>
+
+        <AppText
+          style={{
+            fontSize: 11,
+            color: c.textMuted,
+            textAlign: "center",
+            marginTop: 10,
+            lineHeight: 15,
+            fontFamily: "DMSans_400Regular",
+          }}
+        >
+          {t("payment.initiate.crypto.confirmDisclaimer")}
+        </AppText>
+      </AppScreen>
+    );
+  }
+
+  // ── METHOD SELECTION STEP ────────────────────────────────────────────
+  return (
+    <AppScreen contentContainerStyle={{ paddingBottom: 40 }}>
+      <Pressable onPress={() => navigation.goBack()} style={styles.topBack}>
+        <FaArrowLeft size={12} color={c.textDim} />
+        <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>
+          {t("payment.initiate.actions.backToBooking")}
+        </AppText>
+      </Pressable>
+
+      <View
+        style={[
+          styles.badge,
+          { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+        ]}
+      >
+        <FaLock size={10} color={c.orange} />
+        <AppText
+          style={{
+            fontSize: 11,
+            fontWeight: "700",
+            color: c.orange,
+            marginLeft: 4,
+            letterSpacing: 0.8,
+            textTransform: "uppercase",
+          }}
+        >
+          {t("payment.initiate.secureBadge")}
+        </AppText>
+      </View>
+
+      {/* Summary card */}
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: c.bgPanel, borderColor: c.border },
+        ]}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 12,
+          }}
+        >
+          <View
             style={{
-              fontSize: 10,
-              color: c.textMuted,
-              marginTop: 4,
-              lineHeight: 14,
+              width: 44,
+              height: 44,
+              borderRadius: 10,
+              backgroundColor: c.orangeDim,
+              borderWidth: 1,
+              borderColor: c.orangeGlow,
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            Rates are live and may change. The exact amount may vary slightly
-            when you complete the transfer.
+            <FaClipboardList size={18} color={c.orange} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText style={styles.cardEyebrow(c)}>
+              {t("payment.initiate.summary.youPayingFor")}
+            </AppText>
+            <AppText
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 16,
+                fontWeight: "800",
+                color: c.text,
+                marginTop: 2,
+              }}
+            >
+              {booking?.title}
+            </AppText>
+            <AppText style={{ fontSize: 12, color: c.orange, marginTop: 2 }}>
+              {booking?.category?.name}
+            </AppText>
+          </View>
+        </View>
+
+        {isJobPostBooking ? (
+          <View
+            style={[
+              styles.jobPostNote,
+              {
+                backgroundColor: "rgba(129,140,248,0.08)",
+                borderColor: "rgba(129,140,248,0.25)",
+              },
+            ]}
+          >
+            <FaBriefcase size={13} color="#818cf8" />
+            <View style={{ flex: 1 }}>
+              <AppText
+                style={{
+                  fontSize: 11,
+                  fontWeight: "700",
+                  color: "#818cf8",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                }}
+              >
+                {t("payment.initiate.summary.fromJobPost")}
+              </AppText>
+              <AppText
+                style={{
+                  fontSize: 11,
+                  color: c.textDim,
+                  marginTop: 2,
+                  lineHeight: 15,
+                  fontFamily: "DMSans_400Regular",
+                }}
+              >
+                {t("payment.initiate.summary.fromJobPostBody")}
+              </AppText>
+            </View>
+          </View>
+        ) : null}
+
+        <View style={{ marginTop: 12, gap: 6 }}>
+          <MetaRow
+            icon={<FaUser size={11} color={c.textDim} />}
+            value={`${booking?.worker?.firstName || ""} ${booking?.worker?.lastName || ""}`}
+            c={c}
+          />
+          {booking?.scheduledAt ? (
+            <MetaRow
+              icon={<FaCalendarAlt size={11} color={c.textDim} />}
+              value={new Date(booking.scheduledAt).toLocaleDateString("en-GB", {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+              c={c}
+            />
+          ) : null}
+          {booking?.address ? (
+            <MetaRow
+              icon={<FaMapMarkerAlt size={11} color={c.textDim} />}
+              value={booking.address}
+              c={c}
+            />
+          ) : null}
+        </View>
+      </View>
+
+      {/* Referral slider */}
+      {walletBalance > 0 && booking?.currency === "NGN" ? (
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: c.bgCard, borderColor: c.border },
+          ]}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              marginBottom: 8,
+            }}
+          >
+            <FaGift size={13} color={c.green} />
+            <AppText
+              style={{
+                fontSize: 13,
+                fontWeight: "600",
+                color: c.text,
+                flex: 1,
+                fontFamily: "DMSans_400Regular",
+              }}
+            >
+              {t("payment.initiate.referral.balanceLabel", {
+                amount: fmtMoney(walletBalance, "NGN"),
+              })}
+            </AppText>
+          </View>
+          <View style={styles.presetRow}>
+            {[25, 50, 75, 100].map((pct) => (
+              <Pressable
+                key={pct}
+                onPress={() => handlePercentChange(pct)}
+                style={[
+                  styles.presetPill,
+                  {
+                    borderColor: referralPercent === pct ? c.orange : c.border,
+                    backgroundColor:
+                      referralPercent === pct ? c.orangeDim : c.bgInput,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{
+                    fontFamily: "Syne_800ExtraBold",
+                    fontSize: 14,
+                    fontWeight: "800",
+                    color: c.orange,
+                  }}
+                >
+                  {pct}%
+                </AppText>
+                <AppText style={{ fontSize: 10, color: c.textDim }}>
+                  {fmtMoney(
+                    Math.min(
+                      Math.round((pct / 100) * (p.subtotal || 0)),
+                      walletBalance,
+                    ),
+                    "NGN",
+                  )}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable
+            onPress={handleReferralToggle}
+            disabled={referralAmount === 0}
+            style={[
+              styles.referralApplyBtn,
+              {
+                backgroundColor: referralApplied ? c.orange : c.bgCard,
+                borderColor: referralApplied ? c.orange : c.border,
+                opacity: referralAmount === 0 ? 0.4 : 1,
+              },
+            ]}
+          >
+            <AppText
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: referralApplied ? "#fff" : c.textDim,
+              }}
+            >
+              {referralApplied
+                ? t("payment.initiate.referral.remove")
+                : t("payment.initiate.referral.apply")}
+            </AppText>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* Breakdown */}
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: c.bgPanel, borderColor: c.border },
+        ]}
+      >
+        <AppText style={styles.cardEyebrow(c)}>
+          {t("payment.initiate.breakdown.title")}
+        </AppText>
+
+        <PreviewRow
+          label={
+            isJobPostBooking
+              ? t("payment.initiate.labels.agreedTotal")
+              : t("payment.initiate.labels.agreedRate")
+          }
+          value={`${fmtMoney(p.agreedRate, currency)}${!isJobPostBooking ? p.unitSuffix || "" : ""}`}
+          c={c}
+        />
+
+        {isJobPostBooking && booking?.estimatedValue ? (
+          <PreviewRow
+            label={t("payment.initiate.labels.duration")}
+            value={`${booking.estimatedValue} ${booking.estimatedUnit || "hours"}`}
+            c={c}
+          />
+        ) : null}
+
+        {!isJobPostBooking && p.hasQty ? (
+          <>
+            <PreviewRow
+              label={t("payment.initiate.labels.duration")}
+              value={`${p.qty} ${p.unitLabel}${p.qty !== 1 ? "s" : ""}`}
+              c={c}
+            />
+            <PreviewRow
+              label={t("payment.initiate.labels.jobValue", {
+                qty: p.qty,
+                rate: fmtMoney(p.agreedRate, currency),
+              })}
+              value={fmtMoney(p.subtotal, currency)}
+              c={c}
+            />
+          </>
+        ) : null}
+
+        <PreviewRow
+          label={t("payment.initiate.labels.serviceFee", {
+            percent: p.feePercent,
+          })}
+          value={`+ ${fmtMoney(p.hirerFee, currency)}`}
+          c={c}
+        />
+        <PreviewRow
+          label={t("payment.initiate.labels.workerReceives")}
+          value={fmtMoney(p.workerPayout, currency)}
+          valueColor={c.green}
+          c={c}
+        />
+
+        {referralApplied && referralAmount > 0 ? (
+          <PreviewRow
+            label={t("payment.initiate.labels.referralBonus")}
+            value={`− ${fmtMoney(referralAmount, currency)}`}
+            valueColor={c.green}
+            c={c}
+          />
+        ) : null}
+
+        <View
+          style={{
+            height: 1,
+            backgroundColor: c.border,
+            marginVertical: 8,
+          }}
+        />
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <AppText
+            style={{
+              fontSize: 14,
+              fontWeight: "700",
+              color: c.text,
+              fontFamily: "Syne_700Bold",
+            }}
+          >
+            {t("payment.initiate.labels.youPay")}
+          </AppText>
+          <AppText
+            style={{
+              fontFamily: "Syne_800ExtraBold",
+              fontSize: 18,
+              fontWeight: "800",
+              color: c.orange,
+            }}
+          >
+            {fmtMoney(displayedTotal, currency)}
           </AppText>
         </View>
+
+        <View
+          style={[
+            styles.escrowNote,
+            { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+          ]}
+        >
+          <FaShieldAlt size={12} color={c.orange} />
+          <AppText
+            style={{
+              fontSize: 11,
+              color: c.textDim,
+              flex: 1,
+              marginLeft: 6,
+              lineHeight: 15,
+              fontFamily: "DMSans_400Regular",
+            }}
+          >
+            {t("payment.initiate.breakdown.escrowNote")}
+          </AppText>
+        </View>
+      </View>
+
+      {/* Method select */}
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: c.bgPanel, borderColor: c.border },
+        ]}
+      >
+        <AppText style={styles.cardEyebrow(c)}>
+          {t("payment.initiate.method.title")}
+        </AppText>
+
+        <Pressable
+          onPress={() => setMethod("card")}
+          style={[
+            styles.methodCard,
+            {
+              borderColor: method === "card" ? c.orange : c.border,
+              backgroundColor: method === "card" ? c.orangeDim : c.bgCard,
+            },
+          ]}
+        >
+          <FaCreditCard
+            size={18}
+            color={method === "card" ? c.orange : c.textDim}
+          />
+          <View style={{ flex: 1 }}>
+            <AppText
+              style={{
+                fontFamily: "DMSans_400Regular",
+                fontSize: 13,
+                fontWeight: "700",
+                color: method === "card" ? c.orange : c.text,
+              }}
+            >
+              {t("payment.initiate.method.card.title")}
+            </AppText>
+            <AppText
+              style={{
+                fontSize: 11,
+                color: c.textMuted,
+                fontFamily: "DMSans_400Regular",
+              }}
+            >
+              {t("payment.initiate.method.card.desc")}
+            </AppText>
+          </View>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setMethod("crypto")}
+          style={[
+            styles.methodCard,
+            {
+              borderColor: method === "crypto" ? c.orange : c.border,
+              backgroundColor: method === "crypto" ? c.orangeDim : c.bgCard,
+            },
+          ]}
+        >
+          <FaBitcoin
+            size={18}
+            color={method === "crypto" ? c.orange : c.textDim}
+          />
+          <View style={{ flex: 1 }}>
+            <AppText
+              style={{
+                fontFamily: "DMSans_400Regular",
+                fontSize: 13,
+                fontWeight: "700",
+                color: method === "crypto" ? c.orange : c.text,
+              }}
+            >
+              {t("payment.initiate.method.crypto.title")}
+            </AppText>
+            <AppText
+              style={{
+                fontSize: 11,
+                color: c.textMuted,
+                fontFamily: "DMSans_400Regular",
+              }}
+            >
+              {t("payment.initiate.method.crypto.desc")}
+            </AppText>
+          </View>
+        </Pressable>
+
+        {/* CryptoRateConverter — same as web, live rates + token cards */}
+        {method === "crypto" ? (
+          <View style={{ marginTop: 10 }}>
+            <CryptoRateConverter
+              fiatAmount={displayedTotal}
+              fiatCurrency={currency || "NGN"}
+              selectedToken={selectedCryptoToken}
+              onAmountChange={(data) => {
+                setSelectedCryptoToken(data.token);
+                setConvertedCryptoAmount(data.amount);
+              }}
+            />
+          </View>
+        ) : null}
+
+        {method === "card" ? (
+          <View
+            style={[
+              styles.providerNote,
+              { backgroundColor: c.bgCard, borderColor: c.border },
+            ]}
+          >
+            <AppText
+              style={{
+                fontSize: 11,
+                color: c.textDim,
+                fontFamily: "DMSans_400Regular",
+              }}
+            >
+              {booking?.currency === "NGN"
+                ? t("payment.initiate.method.card.paystackNote")
+                : t("payment.initiate.method.card.flutterwaveNote")}
+            </AppText>
+          </View>
+        ) : null}
+      </View>
+
+      {error ? (
+        <View
+          style={[
+            styles.inlineError,
+            { backgroundColor: c.redDim, borderColor: "rgba(239,68,68,0.2)" },
+          ]}
+        >
+          <FaExclamationTriangle size={11} color={c.red} />
+          <AppText
+            style={{ fontSize: 12, color: c.red, flex: 1, marginLeft: 6 }}
+          >
+            {error}
+          </AppText>
+        </View>
+      ) : null}
+
+      <Pressable
+        onPress={method === "card" ? handleCardPay : handleCryptoInitiate}
+        disabled={paying}
+        style={({ pressed }) => [
+          styles.primaryBtn,
+          {
+            backgroundColor: paying ? c.bgCard : c.orange,
+            opacity: paying ? 0.6 : pressed ? 0.9 : 1,
+          },
+        ]}
+      >
+        {paying ? (
+          <ActivityIndicator color={c.bg} />
+        ) : method === "card" ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <FaCreditCard size={14} color={c.bg} />
+            <AppText
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 14,
+                fontWeight: "800",
+                color: c.bg,
+              }}
+            >
+              {t("payment.initiate.actions.payCard", {
+                amount: fmtMoney(displayedTotal, currency),
+              })}
+            </AppText>
+          </View>
+        ) : (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <FaBitcoin size={14} color={c.bg} />
+            <AppText
+              style={{
+                fontFamily: "Syne_800ExtraBold",
+                fontSize: 14,
+                fontWeight: "800",
+                color: c.bg,
+              }}
+            >
+              {t("payment.initiate.actions.payCrypto", {
+                token: selectedCryptoToken,
+              })}
+            </AppText>
+          </View>
+        )}
+      </Pressable>
+
+      <AppText
+        style={{
+          fontSize: 11,
+          color: c.textMuted,
+          textAlign: "center",
+          marginTop: 8,
+          lineHeight: 15,
+          fontFamily: "DMSans_400Regular",
+        }}
+      >
+        {t("payment.initiate.disclaimer")}
+      </AppText>
+    </AppScreen>
+  );
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────
+function PreviewRow({ label, value, valueColor, c }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingVertical: 4,
+        gap: 8,
+      }}
+    >
+      <AppText
+        style={{
+          fontSize: 12,
+          color: c.textDim,
+          flex: 1,
+          fontFamily: "DMSans_400Regular",
+        }}
+      >
+        {label}
+      </AppText>
+      <AppText
+        style={{
+          fontSize: 12,
+          fontWeight: "700",
+          color: valueColor || c.text,
+          textAlign: "right",
+          fontFamily: "DMSans_400Regular",
+        }}
+      >
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
+function MetaRow({ icon, label, value, mono, copyable, copied, onCopy, c }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingVertical: 4,
+      }}
+    >
+      {icon}
+      {label ? (
+        <AppText style={{ fontSize: 11, color: c.textMuted, minWidth: 60 }}>
+          {label}
+        </AppText>
+      ) : null}
+      <AppText
+        style={{
+          fontSize: 12,
+          fontWeight: "600",
+          color: c.text,
+          fontFamily: mono ? "monospace" : "DMSans_400Regular",
+          flex: 1,
+          textAlign: label ? "right" : "left",
+        }}
+        numberOfLines={2}
+      >
+        {value}
+      </AppText>
+      {copyable ? (
+        <Pressable onPress={onCopy} hitSlop={8}>
+          {copied ? (
+            <FaCheck size={12} color={c.green} />
+          ) : (
+            <FaCopy size={12} color={c.textDim} />
+          )}
+        </Pressable>
       ) : null}
     </View>
   );
 }
 
+// ── Styles ─────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  converter: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    marginTop: 4,
-    gap: 12,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
-  },
-  fiatBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  tokenGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  tokenCard: {
-    width: "48.5%",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    position: "relative",
-    minHeight: 68,
-  },
-  checkmark: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+  center: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    padding: 24,
   },
-  retryBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+  topBack: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    marginBottom: 10,
   },
-  resultBox: {
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  card: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 12,
+  },
+  cardEyebrow: (c) => ({
+    fontSize: 10,
+    fontWeight: "700",
+    color: c.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    marginBottom: 10,
+    fontFamily: "Syne_700Bold",
+  }),
+  jobPostNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  pendingWrap: {
+    alignItems: "center",
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+  },
+  secondaryBtn: {
+    paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  primaryBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
+  presetRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+  },
+  presetPill: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  referralApplyBtn: {
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  escrowNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  methodCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    marginBottom: 8,
+  },
+  tokenRow: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  tokenPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  providerNote: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  inlineError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  warnBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    marginTop: 10,
+    marginBottom: 5,
+    fontFamily: "Syne_700Bold",
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    fontSize: 13,
   },
-  resultRow: {
+  uploadBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  copyBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
   },
 });

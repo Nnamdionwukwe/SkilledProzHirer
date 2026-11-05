@@ -162,6 +162,7 @@ const MAP = {
   FaXmark: "close",
   FaVolumeUp: "volume-high",
   FaVolumeMute: "volume-mute",
+  FaBitcoin: "logo-bitcoin",
 };
 
 const make = (ionName) =>
@@ -333,3 +334,4 @@ export const FaPauseCircle = make(MAP.FaPauseCircle);
 export const FaGripVertical = make(MAP.FaGripVertical);
 export const FaComments = make(MAP.FaComments);
 export const FaSend = make(MAP.FaSend);
+export const FaBitcoin = make(MAP.FaBitcoin);
