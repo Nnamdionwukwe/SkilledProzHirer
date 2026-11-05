@@ -824,6 +824,12 @@ export default function BookingDetailMain({
     }
   };
 
+  const handleOpenJobPost = () => {
+    if (booking.jobPostId) {
+      navigation.navigate("JobDetail", { jobId: booking.jobPostId });
+    }
+  };
+
   const renderDuration = () => {
     if (!dur) {
       if (booking.estimatedHours || booking.estimatedValue) {
@@ -1447,19 +1453,23 @@ export default function BookingDetailMain({
               </AppText>
             </View>
           ) : null}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              alignSelf: "flex-start",
-              paddingHorizontal: 10,
-              paddingVertical: 3,
-              backgroundColor: "rgba(129,140,248,0.1)",
-              borderWidth: 1,
-              borderColor: "rgba(129,140,248,0.25)",
-              borderRadius: 12,
-            }}
+          <Pressable
+            onPress={handleOpenJobPost}
+            style={({ pressed }) => [
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                alignSelf: "flex-start",
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                backgroundColor: "rgba(129,140,248,0.1)",
+                borderWidth: 1,
+                borderColor: "rgba(129,140,248,0.25)",
+                borderRadius: 12,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
           >
             <FaBriefcase size={10} color="#818cf8" />
             <AppText
@@ -1472,7 +1482,12 @@ export default function BookingDetailMain({
             >
               {t("booking.jobPost.fromJobPost")}
             </AppText>
-          </View>
+            <FaExternalLinkAlt
+              size={9}
+              color="#818cf8"
+              style={{ marginLeft: 2 }}
+            />
+          </Pressable>
         </View>
 
         {step >= 0 ? <Timeline step={step} c={c} t={t} /> : null}
