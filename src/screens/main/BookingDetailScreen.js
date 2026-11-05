@@ -5,6 +5,7 @@
 //  1. Invoice download (with Android "activity no longer available" retry)
 //  2. Payment routing (navigates to InitiatePayment for card, ReleaseEscrow for release)
 //  3. Uses the fully-ported BookingDetailMain
+//  4. Removed refund-status inline display (matches website — refunds shown only on refund detail page)
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -23,6 +24,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../components/AppText";
 import PageSkeleton from "../../components/PageSkeleton";
@@ -39,7 +41,7 @@ import RaiseDisputeSheet from "../../components/booking/RaiseDisputeSheet";
 import { FaArrowLeft, FaExclamationCircle, FaTimes } from "../../icons/fa";
 
 // ═══════════════════════════════════════════════════════════════════════
-// Inline stubs — RefundRequest / RefundStatus
+// Inline stub — RefundRequest
 // ═══════════════════════════════════════════════════════════════════════
 
 function RefundRequestInline({
@@ -49,6 +51,7 @@ function RefundRequestInline({
   isHirer,
   onRequestRefund,
 }) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const c = theme.colors;
   const [reason, setReason] = useState("");
@@ -57,14 +60,22 @@ function RefundRequestInline({
   if (!isHirer) {
     return (
       <AppText style={{ fontSize: 13, color: c.textDim, textAlign: "center" }}>
-        Only the hirer can request a refund.
+        {t(
+          "refund.onlyHirerCanRequest",
+          "Only the hirer can request a refund.",
+        )}
       </AppText>
     );
   }
 
   const handleSubmit = () => {
     if (!reason.trim()) {
-      setError("Please describe the reason for the refund request.");
+      setError(
+        t(
+          "refund.reasonRequired",
+          "Please describe the reason for the refund request.",
+        ),
+      );
       return;
     }
     const amount = Number(payment?.amount) || Number(booking?.agreedRate) || 0;
@@ -79,8 +90,10 @@ function RefundRequestInline({
   return (
     <View style={{ gap: 12 }}>
       <AppText style={{ fontSize: 13, color: c.textDim, lineHeight: 20 }}>
-        Request a refund for this booking. Our team will review it within 24-48
-        hours.
+        {t(
+          "refund.requestIntro",
+          "Request a refund for this booking. Our team will review it within 24-48 hours.",
+        )}
       </AppText>
 
       <View>
@@ -94,7 +107,8 @@ function RefundRequestInline({
             marginBottom: 6,
           }}
         >
-          Reason for refund <AppText style={{ color: c.red }}>*</AppText>
+          {t("refund.reasonLabel", "Reason for refund")}{" "}
+          <AppText style={{ color: c.red }}>*</AppText>
         </AppText>
         <View
           style={{
@@ -107,11 +121,14 @@ function RefundRequestInline({
         >
           <TextInput
             value={reason}
-            onChangeText={(t) => {
-              setReason(t);
+            onChangeText={(v) => {
+              setReason(v);
               setError("");
             }}
-            placeholder="Explain why you're requesting a refund…"
+            placeholder={t(
+              "refund.reasonPlaceholder",
+              "Explain why you're requesting a refund…",
+            )}
             placeholderTextColor={c.textMuted}
             multiline
             numberOfLines={4}
@@ -149,105 +166,10 @@ function RefundRequestInline({
           <ActivityIndicator color="#fff" size="small" />
         ) : (
           <AppText style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>
-            Submit Refund Request
+            {t("refund.submit", "Submit Refund Request")}
           </AppText>
         )}
       </Pressable>
-    </View>
-  );
-}
-
-function RefundStatusInline({ refund, isHirer, onViewDetails }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-  if (!refund) return null;
-
-  const statusColors = {
-    PENDING: { bg: "rgba(251,191,36,0.1)", fg: "#fbbf24" },
-    APPROVED: { bg: c.greenDim, fg: c.green },
-    PROCESSING: { bg: "rgba(129,140,248,0.12)", fg: "#818cf8" },
-    COMPLETED: { bg: c.greenDim, fg: c.green },
-    REJECTED: { bg: c.redDim, fg: c.red },
-    DISPUTED: { bg: "rgba(245,158,11,0.1)", fg: "#f59e0b" },
-  };
-  const sc = statusColors[refund.status] || { bg: c.bgCard, fg: c.textDim };
-
-  return (
-    <View
-      style={{
-        backgroundColor: c.bgPanel,
-        borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: 14,
-        padding: 16,
-        gap: 10,
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          flexWrap: "wrap",
-        }}
-      >
-        <AppText style={{ fontSize: 12, fontWeight: "700", color: c.text }}>
-          Refund Request
-        </AppText>
-        <View
-          style={{
-            paddingHorizontal: 8,
-            paddingVertical: 2,
-            backgroundColor: sc.bg,
-            borderRadius: 10,
-          }}
-        >
-          <AppText
-            style={{
-              fontSize: 10,
-              fontWeight: "700",
-              color: sc.fg,
-              textTransform: "uppercase",
-              letterSpacing: 0.4,
-            }}
-          >
-            {refund.status}
-          </AppText>
-        </View>
-      </View>
-      <AppText style={{ fontSize: 12, color: c.textDim }}>
-        Amount: {refund.currency || "NGN"}{" "}
-        {Number(refund.amount || 0).toLocaleString()}
-      </AppText>
-      {refund.reason ? (
-        <AppText
-          style={{ fontSize: 12, color: c.textDim, fontStyle: "italic" }}
-          numberOfLines={3}
-        >
-          "{refund.reason}"
-        </AppText>
-      ) : null}
-      {onViewDetails ? (
-        <Pressable
-          onPress={onViewDetails}
-          style={({ pressed }) => [
-            {
-              alignSelf: "flex-start",
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              backgroundColor: c.orangeDim,
-              borderWidth: 1,
-              borderColor: c.orange,
-              borderRadius: 8,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-        >
-          <AppText style={{ fontSize: 12, fontWeight: "600", color: c.orange }}>
-            View Details →
-          </AppText>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -372,6 +294,7 @@ const STATUS_STEP = {
 // ═══════════════════════════════════════════════════════════════════════
 
 export default function BookingDetailScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
   const { theme } = useTheme();
@@ -390,7 +313,6 @@ export default function BookingDetailScreen() {
   const [invoiceLoading, setInvoiceLoading] = useState(false);
 
   // Refund / dispute
-  const [refunds, setRefunds] = useState([]);
   const [refundLoading, setRefundLoading] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [showDispute, setShowDispute] = useState(false);
@@ -426,7 +348,7 @@ export default function BookingDetailScreen() {
       try {
         const bRes = await client.get(`/bookings/${bookingId}`);
         const b = bRes.data?.data?.booking;
-        if (!b) throw new Error("Booking not found");
+        if (!b) throw new Error(t("booking.notFound", "Booking not found"));
         setBooking(b);
 
         if (b.emergencyContact) {
@@ -466,18 +388,10 @@ export default function BookingDetailScreen() {
             setWalletBalance(0);
           }
         }
-
-        try {
-          const rRes = await client.get(`/refunds/my`, {
-            params: { bookingId },
-          });
-          setRefunds(rRes.data?.data?.refunds || []);
-        } catch {
-          setRefunds([]);
-        }
       } catch (err) {
         toast.error(
-          err?.response?.data?.message || "Could not load booking details.",
+          err?.response?.data?.message ||
+            t("booking.loadFailed", "Could not load booking details."),
         );
       } finally {
         setLoading(false);
@@ -536,7 +450,7 @@ export default function BookingDetailScreen() {
     if (!booking) return null;
     const p = calcPricing(booking);
     return {
-      label: "Payment Breakdown",
+      label: t("booking.payment.breakdown", "Payment Breakdown"),
       subtotal: p.subtotal,
       total: p.grossTotal,
       platformFee: p.hirerFee,
@@ -551,17 +465,12 @@ export default function BookingDetailScreen() {
       suffix: p.unitSuffix,
       noDuration: !p.hasQty,
     };
-  }, [booking]);
+  }, [booking, t]);
 
   const paymentRequired =
     isHirer &&
     ["ACCEPTED", "IN_PROGRESS"].includes(booking?.status) &&
     (!payment || payment.status === "PENDING");
-
-  // Active refund — only for THIS booking
-  const activeRefund = refunds.find((r) =>
-    ["PENDING", "APPROVED", "PROCESSING", "DISPUTED"].includes(r.status),
-  );
 
   // ── Actions ────────────────────────────────────────────────────
   const updateStatus = async (status, extra = {}) => {
@@ -574,13 +483,16 @@ export default function BookingDetailScreen() {
       const updated = res.data?.data?.booking || booking;
       setBooking(updated);
       toast.success(
-        `Booking ${String(status).toLowerCase().replace("_", " ")}.`,
+        t("booking.statusUpdated", { status: status.toLowerCase() }),
       );
       setShowCancel(false);
       setCancelReason("");
       setCancelError("");
     } catch (e) {
-      toast.error(e?.response?.data?.message || "Action failed.");
+      toast.error(
+        e?.response?.data?.message ||
+          t("booking.actionFailed", "Action failed."),
+      );
     } finally {
       setActing(false);
     }
@@ -588,7 +500,9 @@ export default function BookingDetailScreen() {
 
   const handleCancelSubmit = () => {
     if (!cancelReason.trim()) {
-      setCancelError("Please provide a reason.");
+      setCancelError(
+        t("booking.cancel.reasonRequired", "Please provide a reason."),
+      );
       return;
     }
     updateStatus("CANCELLED", { cancelReason: cancelReason.trim() });
@@ -598,10 +512,13 @@ export default function BookingDetailScreen() {
     setResolvingSOS(true);
     try {
       await client.patch(`/bookings/${bookingId}/sos/resolve`);
-      toast.success("SOS marked as resolved.");
+      toast.success(t("booking.sos.resolved", "SOS marked as resolved."));
       fetchAll(true);
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to resolve SOS.");
+      toast.error(
+        err?.response?.data?.message ||
+          t("booking.sos.failed", "Failed to resolve SOS."),
+      );
     } finally {
       setResolvingSOS(false);
       setSosConfirmVisible(false);
@@ -612,11 +529,14 @@ export default function BookingDetailScreen() {
     setRefundLoading(true);
     try {
       await client.post("/refunds/request", refundData);
-      toast.success("Refund request submitted.");
+      toast.success(t("refund.submitted", "Refund request submitted."));
       setShowRefundModal(false);
       fetchAll(true);
     } catch (e) {
-      toast.error(e?.response?.data?.message || "Refund request failed.");
+      toast.error(
+        e?.response?.data?.message ||
+          t("refund.failed", "Refund request failed."),
+      );
     } finally {
       setRefundLoading(false);
     }
@@ -655,7 +575,10 @@ export default function BookingDetailScreen() {
         currency: booking.currency || "NGN",
         status: "COMPLETED",
         createdAt: booking.createdAt || new Date().toISOString(),
-        description: `Payment for booking: ${booking.title}`,
+        description: t("booking.invoice.paymentFor", {
+          title: booking.title,
+          defaultValue: `Payment for booking: ${booking.title}`,
+        }),
         fee: p.hirerFee || 0,
         netAmount: p.subtotal || booking.amount || 0,
         bookingId: booking.id,
@@ -674,8 +597,6 @@ export default function BookingDetailScreen() {
       const html = generateReceiptHTML(transaction);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
 
-      // Give Android a tick to settle the activity before opening the
-      // share sheet — fixes "activity is no longer available".
       await new Promise((resolve) =>
         setTimeout(resolve, Platform.OS === "android" ? 300 : 0),
       );
@@ -684,16 +605,21 @@ export default function BookingDetailScreen() {
 
       if (!canShare) {
         Alert.alert(
-          "Invoice Ready",
-          "The share sheet isn't available on this device. Opening the invoice...",
+          t("booking.invoice.ready", "Invoice Ready"),
+          t(
+            "booking.invoice.notAvailable",
+            "The share sheet isn't available on this device. Opening the invoice...",
+          ),
           [
             {
-              text: "OK",
+              text: t("common.ok", "OK"),
               onPress: async () => {
                 try {
                   await Linking.openURL(uri);
                 } catch {
-                  toast.error("Could not open invoice.");
+                  toast.error(
+                    t("booking.invoice.openFailed", "Could not open invoice."),
+                  );
                 }
               },
             },
@@ -705,7 +631,10 @@ export default function BookingDetailScreen() {
       try {
         await Sharing.shareAsync(uri, {
           mimeType: "application/pdf",
-          dialogTitle: `Invoice — ${booking.title}`,
+          dialogTitle: t("booking.invoice.dialogTitle", {
+            title: booking.title,
+            defaultValue: `Invoice — ${booking.title}`,
+          }),
           UTI: "com.adobe.pdf",
         });
       } catch (firstErr) {
@@ -718,7 +647,10 @@ export default function BookingDetailScreen() {
           await new Promise((resolve) => setTimeout(resolve, 800));
           await Sharing.shareAsync(uri, {
             mimeType: "application/pdf",
-            dialogTitle: `Invoice — ${booking.title}`,
+            dialogTitle: t("booking.invoice.dialogTitle", {
+              title: booking.title,
+              defaultValue: `Invoice — ${booking.title}`,
+            }),
             UTI: "com.adobe.pdf",
           });
         } else {
@@ -729,8 +661,11 @@ export default function BookingDetailScreen() {
       console.error("Invoice error:", e);
       toast.error(
         e?.message?.includes("activity")
-          ? "Couldn't open share sheet. Please try again."
-          : "Failed to generate invoice.",
+          ? t(
+              "booking.invoice.shareFailedRetry",
+              "Couldn't open share sheet. Please try again.",
+            )
+          : t("booking.invoice.generateFailed", "Failed to generate invoice."),
       );
     } finally {
       setInvoiceLoading(false);
@@ -778,7 +713,7 @@ export default function BookingDetailScreen() {
               color: c.text,
             }}
           >
-            Booking not found
+            {t("booking.notFound", "Booking not found")}
           </AppText>
           <Pressable
             onPress={handleBack}
@@ -805,7 +740,7 @@ export default function BookingDetailScreen() {
                 color: "#000",
               }}
             >
-              Back to Bookings
+              {t("booking.backToBookings", "Back to Bookings")}
             </AppText>
           </Pressable>
         </View>
@@ -845,7 +780,7 @@ export default function BookingDetailScreen() {
           <AppText
             style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
           >
-            Back to Bookings
+            {t("booking.backToBookings", "Back to Bookings")}
           </AppText>
         </Pressable>
 
@@ -869,12 +804,15 @@ export default function BookingDetailScreen() {
               <AppText
                 style={{ fontSize: 13, fontWeight: "700", color: c.red }}
               >
-                SOS Alert Active
+                {t("booking.sos.bannerTitle", "SOS Alert Active")}
               </AppText>
               <AppText style={{ fontSize: 12, color: c.textDim, marginTop: 2 }}>
-                The worker has triggered an emergency alert.
+                {t(
+                  "booking.sos.bannerDesc",
+                  "The worker has triggered an emergency alert.",
+                )}
                 {booking.sosActivatedAt
-                  ? ` Activated ${new Date(booking.sosActivatedAt).toLocaleTimeString()}`
+                  ? ` ${t("booking.sos.bannerActivated", "Activated")} ${new Date(booking.sosActivatedAt).toLocaleTimeString()}`
                   : ""}
               </AppText>
             </View>
@@ -895,7 +833,9 @@ export default function BookingDetailScreen() {
                 <AppText
                   style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}
                 >
-                  {resolvingSOS ? "Resolving…" : "Mark Resolved"}
+                  {resolvingSOS
+                    ? t("booking.sos.resolving", "Resolving…")
+                    : t("booking.sos.resolve", "Mark Resolved")}
                 </AppText>
               </Pressable>
             ) : null}
@@ -923,7 +863,7 @@ export default function BookingDetailScreen() {
           isWorker={isWorker}
           workerName={booking.worker?.firstName}
           refundLoading={refundLoading}
-          hasActiveRefund={!!activeRefund}
+          hasActiveRefund={false}
           onShowRefundModal={handleShowRefundModal}
         />
 
@@ -992,17 +932,6 @@ export default function BookingDetailScreen() {
             navigation.navigate("VideoCall", { bookingId: booking.id })
           }
         />
-
-        {/* Refund status — ONLY for this booking */}
-        {activeRefund ? (
-          <RefundStatusInline
-            refund={activeRefund}
-            isHirer={isHirer}
-            onViewDetails={() =>
-              navigation.navigate("RefundDetail", { id: activeRefund.id })
-            }
-          />
-        ) : null}
       </ScrollView>
 
       {/* SOS confirmation modal */}
@@ -1043,7 +972,7 @@ export default function BookingDetailScreen() {
                 marginBottom: 8,
               }}
             >
-              Resolve SOS Alert
+              {t("booking.sos.confirmTitle", "Resolve SOS Alert")}
             </AppText>
             <AppText
               style={{
@@ -1053,7 +982,10 @@ export default function BookingDetailScreen() {
                 marginBottom: 16,
               }}
             >
-              Are you sure you want to mark this SOS alert as resolved?
+              {t(
+                "booking.sos.confirmMessage",
+                "Are you sure you want to mark this SOS alert as resolved?",
+              )}
             </AppText>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <Pressable
@@ -1074,7 +1006,7 @@ export default function BookingDetailScreen() {
                 <AppText
                   style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
                 >
-                  Cancel
+                  {t("booking.sos.confirmNo", "Cancel")}
                 </AppText>
               </Pressable>
               <Pressable
@@ -1094,7 +1026,9 @@ export default function BookingDetailScreen() {
                 <AppText
                   style={{ fontSize: 13, fontWeight: "700", color: "#000" }}
                 >
-                  {resolvingSOS ? "…" : "Yes, Resolve"}
+                  {resolvingSOS
+                    ? "…"
+                    : t("booking.sos.confirmYes", "Yes, Resolve")}
                 </AppText>
               </Pressable>
             </View>
@@ -1110,7 +1044,10 @@ export default function BookingDetailScreen() {
           onClose={() => setShowDispute(false)}
           onSuccess={() => {
             toast.success(
-              "Dispute raised. Our team will review within 24–48 hours.",
+              t(
+                "booking.dispute.raised",
+                "Dispute raised. Our team will review within 24–48 hours.",
+              ),
             );
             setShowDispute(false);
             fetchAll(true);
@@ -1159,7 +1096,7 @@ export default function BookingDetailScreen() {
                   color: c.text,
                 }}
               >
-                Request Refund
+                {t("refund.title", "Request Refund")}
               </AppText>
               <Pressable onPress={() => setShowRefundModal(false)} hitSlop={10}>
                 <FaTimes size={16} color={c.textDim} />
