@@ -424,7 +424,8 @@
     "confirmCancelBtn": "Yes, Cancel Cycle",
     "keepCycle": "Keep Cycle",
     "statusActive": "Active Payroll",
-    "detailsTitle": "Retained Staff Details"
+    "detailsTitle": "Retained Staff Details",
+    "payrollPill": "Retained Staff Payroll"
   },
   "booking": {
     "status": {

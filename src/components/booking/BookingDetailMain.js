@@ -39,13 +39,13 @@ import {
 
 // ── Status meta ────────────────────────────────────────────────────────
 const STATUS_META = {
-  PENDING: { labelKey: "booking.status.pending", color: "yellow" },
-  ACCEPTED: { labelKey: "booking.status.accepted", color: "orange" },
-  IN_PROGRESS: { labelKey: "booking.status.inProgress", color: "indigo" },
-  COMPLETED: { labelKey: "booking.status.completed", color: "green" },
-  PAID: { labelKey: "booking.status.completed", color: "green" },
-  CANCELLED: { labelKey: "booking.status.cancelled", color: "red" },
-  DISPUTED: { labelKey: "booking.status.disputed", color: "rose" },
+  PENDING: { label: "Pending", color: "yellow" },
+  ACCEPTED: { label: "Accepted", color: "orange" },
+  IN_PROGRESS: { label: "In Progress", color: "indigo" },
+  COMPLETED: { label: "Completed", color: "green" },
+  PAID: { label: "Paid", color: "green" },
+  CANCELLED: { label: "Cancelled", color: "red" },
+  DISPUTED: { label: "Disputed", color: "rose" },
 };
 
 function badgePalette(key, c) {
@@ -775,14 +775,7 @@ export default function BookingDetailMain({
   const { theme } = useTheme();
   const c = theme.colors;
 
-  // Dynamic status based on booking.status
-  let meta = STATUS_META[booking.status] || {};
-  if (booking.source === "RETAINED_STAFF" && booking.status === "ACCEPTED") {
-    meta = { labelKey: "retainedStaff.statusPaid", color: "orange" }; // Active Payroll style
-  }
-  if (booking.source === "RETAINED_STAFF" && booking.status === "PAID") {
-    meta = { labelKey: "booking.status.completed", color: "green" };
-  }
+  const meta = STATUS_META[booking.status] || {};
 
   const badgeColor = badgePalette(meta.color, c);
   const isCompletedOrPaid = ["COMPLETED", "PAID"].includes(booking.status);
@@ -938,7 +931,7 @@ export default function BookingDetailMain({
             <AppText
               style={{
                 fontFamily: "Syne_700Bold",
-                fontSize: 20,
+                fontSize: 14,
                 fontWeight: "800",
                 color: c.text,
                 flex: 1,
@@ -965,9 +958,7 @@ export default function BookingDetailMain({
                   fontFamily: "DMSans_700Bold",
                 }}
               >
-                {booking.status === "ACCEPTED"
-                  ? t("retainedStaff.statusActive", "Active Payroll")
-                  : t(meta.labelKey, meta.labelKey)}
+                {meta.label}
               </AppText>
             </View>
           </View>
@@ -1016,7 +1007,7 @@ export default function BookingDetailMain({
                 fontFamily: "DMSans_700Bold",
               }}
             >
-              {t("retainedStaff.title", "Retained Staff Payroll")}
+              {t("retainedStaff.payrollPill", "Retained Staff Payroll")}
             </AppText>
           </View>
         </View>
@@ -1221,10 +1212,10 @@ export default function BookingDetailMain({
             label={t("booking.detail.status")}
             value={
               booking.status === "PAID"
-                ? t("booking.status.completed")
+                ? "Paid & Completed"
                 : booking.status === "ACCEPTED"
-                  ? t("retainedStaff.statusActive", "Active Payroll")
-                  : t(`booking.status.${booking.status.toLowerCase()}`)
+                  ? "Active Payroll"
+                  : booking.status
             }
             accent={booking.status === "PAID"}
             c={c}
@@ -1402,7 +1393,7 @@ export default function BookingDetailMain({
                   fontFamily: "DMSans_700Bold",
                 }}
               >
-                {t(meta.labelKey, meta.labelKey)}
+                {meta.label}
               </AppText>
             </View>
           </View>
@@ -1819,7 +1810,7 @@ export default function BookingDetailMain({
                 fontFamily: "DMSans_700Bold",
               }}
             >
-              {t(meta.labelKey, meta.labelKey)}
+              {meta.label}
             </AppText>
           </View>
         </View>
