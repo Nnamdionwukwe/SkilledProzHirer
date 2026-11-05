@@ -26,6 +26,14 @@ const CRYPTO_TOKENS = [
 
 const COINGECKO_IDS = CRYPTO_TOKENS.map((t) => t.coingeckoId).join(",");
 
+// Helper to format numbers with commas
+function formatNumber(amount, decimals = 2) {
+  return Number(amount).toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
 export default function CryptoRateConverter({
   fiatAmount,
   fiatCurrency = "NGN",
@@ -246,7 +254,7 @@ export default function CryptoRateConverter({
             fontFamily: "Syne_800ExtraBold",
           }}
         >
-          {fiatCurrency} {safeFiat.toFixed(2)}
+          {fiatCurrency} {formatNumber(safeFiat, 2)}
         </AppText>
       </View>
 
@@ -298,7 +306,7 @@ export default function CryptoRateConverter({
                   }}
                 >
                   {rate
-                    ? `1 ${token.label} = ${fiatCurrency} ${rate.toFixed(2)}`
+                    ? `1 ${token.label} = ${fiatCurrency} ${formatNumber(rate, 2)}`
                     : t("payment.cryptoConverter.noRate", "No rate")}
                 </AppText>
                 <AppText
