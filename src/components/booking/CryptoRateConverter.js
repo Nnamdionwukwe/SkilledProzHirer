@@ -132,7 +132,10 @@ export default function CryptoRateConverter({
               fontFamily: "DMSans_400Regular",
             }}
           >
-            Loading live exchange rates…
+            {t(
+              "payment.cryptoConverter.loading",
+              "Loading live exchange rates…",
+            )}
           </AppText>
         </View>
       </View>
@@ -157,7 +160,8 @@ export default function CryptoRateConverter({
               fontFamily: "DMSans_400Regular",
             }}
           >
-            Could not load rates: {error}
+            {t("payment.cryptoConverter.error", "Could not load rates")}:{" "}
+            {error}
           </AppText>
           <Pressable
             onPress={fetchRates}
@@ -171,7 +175,7 @@ export default function CryptoRateConverter({
                 fontFamily: "DMSans_700Bold",
               }}
             >
-              Retry
+              {t("payment.cryptoConverter.retry", "Retry")}
             </AppText>
           </Pressable>
         </View>
@@ -195,7 +199,7 @@ export default function CryptoRateConverter({
             fontFamily: "Syne_700Bold",
           }}
         >
-          Live Crypto Rates
+          {t("payment.cryptoConverter.title", "Live Crypto Rates")}
         </AppText>
         <View style={styles.headerRight}>
           <AppText
@@ -205,7 +209,9 @@ export default function CryptoRateConverter({
               fontFamily: "DMSans_400Regular",
             }}
           >
-            {lastUpdated ? `Updated: ${lastUpdated.toLocaleTimeString()}` : "—"}
+            {lastUpdated
+              ? `${t("payment.cryptoConverter.updated", "Updated")}: ${lastUpdated.toLocaleTimeString()}`
+              : "—"}
           </AppText>
           <Pressable
             onPress={fetchRates}
@@ -235,14 +241,14 @@ export default function CryptoRateConverter({
             fontFamily: "DMSans_400Regular",
           }}
         >
-          You pay:
+          {t("payment.cryptoConverter.youPay", "You pay")}:
         </AppText>
         <AppText
           style={{
-            fontWeight: "800",
+            fontWeight: "700",
             fontSize: 16,
             color: c.orange,
-            fontFamily: "Syne_800ExtraBold",
+            fontFamily: "DMSans_700Bold",
           }}
         >
           {fiatCurrency} {formatNumber(safeFiat, 2)}
@@ -280,7 +286,7 @@ export default function CryptoRateConverter({
                 <AppText
                   style={{
                     fontWeight: "700",
-                    fontSize: 12,
+                    fontSize: 10,
                     color: isSelected ? c.orange : c.text,
                     fontFamily: "DMSans_700Bold",
                   }}
@@ -289,7 +295,7 @@ export default function CryptoRateConverter({
                 </AppText>
                 <AppText
                   style={{
-                    fontSize: 9,
+                    fontSize: 8,
                     color: c.textMuted,
                     fontFamily: "DMSans_400Regular",
                     marginTop: 1,
@@ -297,11 +303,11 @@ export default function CryptoRateConverter({
                 >
                   {rate
                     ? `1 ${token.label} = ${fiatCurrency} ${formatNumber(rate, 2)}`
-                    : "No rate"}
+                    : t("payment.cryptoConverter.noRate", "No rate")}
                 </AppText>
                 <AppText
                   style={{
-                    fontSize: 11,
+                    fontSize: 9,
                     fontWeight: "700",
                     color: isSelected ? c.orange : c.textDim,
                     fontFamily: "DMSans_700Bold",
@@ -341,7 +347,7 @@ export default function CryptoRateConverter({
                 fontFamily: "DMSans_400Regular",
               }}
             >
-              You need to send{" "}
+              {t("payment.cryptoConverter.needToSend", "You need to send")}{" "}
               <AppText
                 style={{
                   fontWeight: "800",
@@ -371,7 +377,9 @@ export default function CryptoRateConverter({
                   fontFamily: "DMSans_700Bold",
                 }}
               >
-                {copied ? "Copied!" : "Copy"}
+                {copied
+                  ? t("payment.cryptoConverter.copied", "Copied!")
+                  : t("payment.cryptoConverter.copy", "Copy")}
               </AppText>
             </Pressable>
           </View>
@@ -384,8 +392,10 @@ export default function CryptoRateConverter({
               fontFamily: "DMSans_400Regular",
             }}
           >
-            Rates are live and may change. The exact amount may vary slightly
-            when you complete the transfer.
+            {t(
+              "payment.cryptoConverter.note",
+              "Rates are live and may change. The exact amount may vary slightly when you complete the transfer.",
+            )}
           </AppText>
         </View>
       )}

@@ -115,7 +115,7 @@ export default function InitiatePaymentScreen() {
       setCopied((prev) => ({ ...prev, [key]: true }));
       setTimeout(() => setCopied((prev) => ({ ...prev, [key]: false })), 2000);
     } catch {
-      toast.error("Copy failed");
+      toast.error(t("payment.initiate.errors.copyFailed", "Copy failed"));
     }
   };
 
@@ -128,12 +128,15 @@ export default function InitiatePaymentScreen() {
       setBookingStatus(b.status);
       return b;
     } catch (e) {
-      setError(e?.response?.data?.message || "Could not load booking");
+      setError(
+        e?.response?.data?.message ||
+          t("payment.initiate.errors.loadBooking", "Could not load booking"),
+      );
       return null;
     } finally {
       setLoading(false);
     }
-  }, [bookingId]);
+  }, [bookingId, t]);
 
   useEffect(() => {
     loadBooking();
@@ -168,13 +171,17 @@ export default function InitiatePaymentScreen() {
         awaitingBrowserReturnRef.current = false;
         if (!b) return;
         if (b.status === "ACCEPTED" && b.payment?.status === "HELD") {
-          toast.success("Payment successful");
+          toast.success(
+            t("payment.initiate.success.cardHeld", "Payment successful"),
+          );
           navigation.replace("BookingDetail", {
             bookingId,
             payment: "success",
           });
         } else if (b.payment?.status === "PENDING") {
-          toast.info("Payment pending");
+          toast.info(
+            t("payment.initiate.success.cardPending", "Payment pending"),
+          );
           navigation.replace("BookingDetail", {
             bookingId,
             payment: "pending",
@@ -186,7 +193,7 @@ export default function InitiatePaymentScreen() {
           });
         }
       })();
-    }, [bookingId]),
+    }, [bookingId, t, navigation]),
   );
 
   const p = useMemo(
@@ -241,7 +248,10 @@ export default function InitiatePaymentScreen() {
   const pickReceipt = async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) return toast.error("Permission required");
+      if (!perm.granted)
+        return toast.error(
+          t("payment.initiate.errors.mediaPermission", "Permission required"),
+        );
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
@@ -249,7 +259,9 @@ export default function InitiatePaymentScreen() {
       if (res.canceled) return;
       const asset = res.assets[0];
       if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE)
-        return toast.error("File too large (max 5MB)");
+        return toast.error(
+          t("payment.initiate.errors.fileTooLarge", "File too large (max 5MB)"),
+        );
       setCryptoReceiptFile({
         uri: asset.uri,
         name: asset.fileName || `receipt_${Date.now()}.jpg`,
@@ -257,7 +269,9 @@ export default function InitiatePaymentScreen() {
         size: asset.fileSize,
       });
     } catch {
-      toast.error("Could not open gallery");
+      toast.error(
+        t("payment.initiate.errors.imagePicker", "Could not open gallery"),
+      );
     }
   };
 
@@ -270,13 +284,28 @@ export default function InitiatePaymentScreen() {
         referralAmount: referralApplied ? referralAmount : 0,
       });
       const { paymentUrl } = res.data.data;
-      if (!paymentUrl) return setError("No payment URL received");
+      if (!paymentUrl)
+        return setError(
+          t("payment.initiate.errors.noPaymentUrl", "No payment URL received"),
+        );
       const canOpen = await Linking.canOpenURL(paymentUrl);
-      if (!canOpen) return setError("Cannot open payment link");
+      if (!canOpen)
+        return setError(
+          t(
+            "payment.initiate.errors.cannotOpenUrl",
+            "Cannot open payment link",
+          ),
+        );
       awaitingBrowserReturnRef.current = true;
       await Linking.openURL(paymentUrl);
     } catch (e) {
-      setError(e?.response?.data?.message || "Payment initiation failed");
+      setError(
+        e?.response?.data?.message ||
+          t(
+            "payment.initiate.errors.cardInitiateFailed",
+            "Payment initiation failed",
+          ),
+      );
     } finally {
       setPaying(false);
     }
@@ -296,14 +325,26 @@ export default function InitiatePaymentScreen() {
       setManualData(res.data.data);
       setConfirmStep("crypto");
     } catch (e) {
-      setError(e?.response?.data?.message || "Could not load crypto details");
+      setError(
+        e?.response?.data?.message ||
+          t(
+            "payment.initiate.errors.cryptoInitiateFailed",
+            "Could not load crypto details",
+          ),
+      );
     } finally {
       setPaying(false);
     }
   };
 
   const confirmCrypto = async () => {
-    if (!confirmForm.txHash) return setError("Transaction hash is required");
+    if (!confirmForm.txHash)
+      return setError(
+        t(
+          "payment.initiate.errors.txHashRequired",
+          "Transaction hash is required",
+        ),
+      );
     setConfirming(true);
     setError("");
     try {
@@ -323,10 +364,18 @@ export default function InitiatePaymentScreen() {
       await client.patch(`/payments/crypto/${bookingId}/confirm`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      toast.success("Transfer confirmed");
+      toast.success(
+        t("payment.initiate.success.cryptoSubmitted", "Transfer confirmed"),
+      );
       navigation.replace("BookingDetail", { bookingId, payment: "success" });
     } catch (e) {
-      setError(e?.response?.data?.message || "Confirmation failed");
+      setError(
+        e?.response?.data?.message ||
+          t(
+            "payment.initiate.errors.cryptoConfirmFailed",
+            "Confirmation failed",
+          ),
+      );
     } finally {
       setConfirming(false);
     }
@@ -373,7 +422,7 @@ export default function InitiatePaymentScreen() {
           <Pressable onPress={handleBack} style={styles.backLink}>
             <FaArrowLeft size={12} color={c.textDim} />
             <AppText style={{ fontSize: 13, color: c.textDim, marginLeft: 4 }}>
-              Back to Bookings
+              {t("payment.initiate.actions.backToBookings", "Back to Bookings")}
             </AppText>
           </Pressable>
         </View>
@@ -401,7 +450,7 @@ export default function InitiatePaymentScreen() {
                   marginLeft: 4,
                 }}
               >
-                Change method
+                {t("payment.initiate.actions.changeMethod", "Change method")}
               </AppText>
             </Pressable>
             <View
@@ -440,7 +489,9 @@ export default function InitiatePaymentScreen() {
                 <FaBitcoin size={20} color={c.orange} />
               </View>
               <View style={{ flex: 1 }}>
-                <AppText style={styles.summaryLabel}>SEND EXACTLY</AppText>
+                <AppText style={styles.summaryLabel}>
+                  {t("payment.initiate.crypto.sendExactly", "SEND EXACTLY")}
+                </AppText>
                 <View
                   style={{
                     flexDirection: "row",
@@ -475,12 +526,18 @@ export default function InitiatePaymentScreen() {
                   <AppText
                     style={{ fontSize: 11, color: c.green, marginTop: 4 }}
                   >
-                    <FaCheckCircle size={10} color={c.green} /> Includes{" "}
-                    {formatPrice(referralAmount, currency)} referral discount
+                    <FaCheckCircle size={10} color={c.green} />{" "}
+                    {t("payment.initiate.crypto.includesReferral", {
+                      amount: formatPrice(referralAmount, currency),
+                      defaultValue: "Includes {{amount}} referral discount",
+                    })}
                   </AppText>
                 )}
                 <AppText style={[styles.summaryCategory, { marginTop: 4 }]}>
-                  Ref: {manualData.reference}
+                  {t("payment.initiate.crypto.refLabel", {
+                    reference: manualData.reference,
+                    defaultValue: "Ref: {{reference}}",
+                  })}
                 </AppText>
               </View>
             </View>
@@ -491,7 +548,9 @@ export default function InitiatePaymentScreen() {
                   <View style={styles.metaItem}>
                     <FaGlobe size={12} color={c.textDim} />
                     <View style={{ flex: 1 }}>
-                      <AppText style={styles.metaRowLabel}>NETWORK</AppText>
+                      <AppText style={styles.metaRowLabel}>
+                        {t("payment.initiate.crypto.fields.network", "NETWORK")}
+                      </AppText>
                       <AppText style={styles.metaRowValue}>
                         {cd.network}
                       </AppText>
@@ -502,7 +561,9 @@ export default function InitiatePaymentScreen() {
                   <View style={styles.metaItem}>
                     <FaWallet size={12} color={c.textDim} />
                     <View style={{ flex: 1 }}>
-                      <AppText style={styles.metaRowLabel}>WALLET</AppText>
+                      <AppText style={styles.metaRowLabel}>
+                        {t("payment.initiate.crypto.fields.wallet", "WALLET")}
+                      </AppText>
                       <View
                         style={{ flexDirection: "row", alignItems: "center" }}
                       >
@@ -530,7 +591,9 @@ export default function InitiatePaymentScreen() {
                   <View style={styles.metaItem}>
                     <FaBitcoin size={12} color={c.textDim} />
                     <View style={{ flex: 1 }}>
-                      <AppText style={styles.metaRowLabel}>TOKEN</AppText>
+                      <AppText style={styles.metaRowLabel}>
+                        {t("payment.initiate.crypto.fields.token", "TOKEN")}
+                      </AppText>
                       <View
                         style={{ flexDirection: "row", alignItems: "center" }}
                       >
@@ -555,7 +618,9 @@ export default function InitiatePaymentScreen() {
                   <View style={styles.metaItem}>
                     <FaFileAlt size={12} color={c.textDim} />
                     <View style={{ flex: 1 }}>
-                      <AppText style={styles.metaRowLabel}>MEMO</AppText>
+                      <AppText style={styles.metaRowLabel}>
+                        {t("payment.initiate.crypto.fields.memo", "MEMO")}
+                      </AppText>
                       <View
                         style={{ flexDirection: "row", alignItems: "center" }}
                       >
@@ -590,11 +655,19 @@ export default function InitiatePaymentScreen() {
             ]}
           >
             <AppText style={styles.breakdownTitle}>
-              CONFIRM YOUR TRANSFER
+              {t(
+                "payment.initiate.crypto.confirmTransferTitle",
+                "CONFIRM YOUR TRANSFER",
+              )}
             </AppText>
             <View style={styles.manualFields}>
               <View style={styles.manualField}>
-                <AppText style={styles.manualLabel}>TRANSACTION HASH *</AppText>
+                <AppText style={styles.manualLabel}>
+                  {t(
+                    "payment.initiate.crypto.fields.txHash",
+                    "TRANSACTION HASH *",
+                  )}
+                </AppText>
                 <TextInput
                   style={[
                     styles.manualInput,
@@ -605,7 +678,10 @@ export default function InitiatePaymentScreen() {
                       fontFamily: "monospace",
                     },
                   ]}
-                  placeholder="0x... or TRC20 / BTC tx hash"
+                  placeholder={t(
+                    "payment.initiate.crypto.placeholders.txHash",
+                    "0x... or TRC20 / BTC tx hash",
+                  )}
                   placeholderTextColor={c.textMuted}
                   value={confirmForm.txHash || ""}
                   onChangeText={(v) =>
@@ -616,7 +692,10 @@ export default function InitiatePaymentScreen() {
               </View>
               <View style={styles.manualField}>
                 <AppText style={styles.manualLabel}>
-                  AMOUNT SENT (OPTIONAL)
+                  {t(
+                    "payment.initiate.crypto.fields.amountOptional",
+                    "AMOUNT SENT (OPTIONAL)",
+                  )}
                 </AppText>
                 <TextInput
                   style={[
@@ -627,7 +706,13 @@ export default function InitiatePaymentScreen() {
                       backgroundColor: c.bgInput,
                     },
                   ]}
-                  placeholder={`Amount in ${selectedCryptoToken}`}
+                  placeholder={t(
+                    "payment.initiate.crypto.placeholders.amount",
+                    {
+                      token: selectedCryptoToken,
+                      defaultValue: "Amount in {{token}}",
+                    },
+                  )}
                   placeholderTextColor={c.textMuted}
                   keyboardType="decimal-pad"
                   value={confirmForm.cryptoAmount || ""}
@@ -641,7 +726,10 @@ export default function InitiatePaymentScreen() {
               </View>
               <View style={styles.manualField}>
                 <AppText style={styles.manualLabel}>
-                  TRANSACTION SCREENSHOT (OPTIONAL)
+                  {t(
+                    "payment.initiate.crypto.fields.receipt",
+                    "TRANSACTION SCREENSHOT (OPTIONAL)",
+                  )}
                 </AppText>
                 <Pressable
                   onPress={pickReceipt}
@@ -663,7 +751,10 @@ export default function InitiatePaymentScreen() {
                   >
                     {cryptoReceiptFile
                       ? cryptoReceiptFile.name
-                      : "Upload screenshot"}
+                      : t(
+                          "payment.initiate.crypto.placeholders.receipt",
+                          "Upload screenshot",
+                        )}
                   </AppText>
                 </Pressable>
                 {cryptoReceiptFile && (
@@ -672,7 +763,7 @@ export default function InitiatePaymentScreen() {
                     style={{ alignSelf: "flex-start", marginTop: 6 }}
                   >
                     <AppText style={{ fontSize: 12, color: c.red }}>
-                      ✕ Remove
+                      ✕ {t("payment.initiate.crypto.removeReceipt", "Remove")}
                     </AppText>
                   </Pressable>
                 )}
@@ -722,7 +813,7 @@ export default function InitiatePaymentScreen() {
                     color: c.bg,
                   }}
                 >
-                  Submitting…
+                  {t("payment.initiate.actions.submitting", "Submitting…")}
                 </AppText>
               </View>
             ) : (
@@ -733,11 +824,14 @@ export default function InitiatePaymentScreen() {
                 <AppText
                   style={{
                     fontFamily: "Syne_800ExtraBold",
-                    fontSize: 15,
+                    fontSize: 10,
                     color: c.bg,
                   }}
                 >
-                  I Have Transferred — Confirm
+                  {t(
+                    "payment.initiate.actions.confirmTransfer",
+                    "I Have Transferred — Confirm",
+                  )}
                 </AppText>
               </View>
             )}
@@ -752,8 +846,10 @@ export default function InitiatePaymentScreen() {
               lineHeight: 16,
             }}
           >
-            We'll verify on-chain within 30 minutes. By confirming, you agree to
-            our Refund Policy.
+            {t(
+              "payment.initiate.crypto.confirmDisclaimer",
+              "We'll verify on-chain within 30 minutes. By confirming, you agree to our Refund Policy.",
+            )}
           </AppText>
         </ScrollView>
       </View>
@@ -770,7 +866,7 @@ export default function InitiatePaymentScreen() {
               <AppText
                 style={{ fontSize: 13, color: c.textDim, marginLeft: 4 }}
               >
-                View Booking
+                {t("payment.initiate.actions.viewBooking", "View Booking")}
               </AppText>
             </Pressable>
             <View
@@ -782,7 +878,7 @@ export default function InitiatePaymentScreen() {
               <AppText
                 style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
               >
-                ⏳ Pending Acceptance
+                ⏳ {t("payment.initiate.pending.badge", "Pending Acceptance")}
               </AppText>
             </View>
           </View>
@@ -803,7 +899,12 @@ export default function InitiatePaymentScreen() {
                 <FaClipboardList size={18} color={c.orange} />
               </View>
               <View style={{ flex: 1 }}>
-                <AppText style={styles.summaryLabel}>Booking created</AppText>
+                <AppText style={styles.summaryLabel}>
+                  {t(
+                    "payment.initiate.pending.bookingCreated",
+                    "Booking created",
+                  )}
+                </AppText>
                 <AppText style={styles.summaryTitle}>{booking?.title}</AppText>
                 <AppText style={styles.summaryCategory}>
                   {booking?.worker?.firstName} {booking?.worker?.lastName} ·{" "}
@@ -819,16 +920,22 @@ export default function InitiatePaymentScreen() {
               { backgroundColor: c.bgPanel, borderColor: c.border },
             ]}
           >
-            <AppText style={styles.breakdownTitle}>Payment Preview</AppText>
+            <AppText style={styles.breakdownTitle}>
+              {t("payment.initiate.pending.paymentPreview", "Payment Preview")}
+            </AppText>
             <View style={styles.breakdownRows}>
               <BreakdownRow
-                label={isJobPostBooking ? "Agreed Total" : "Agreed Rate"}
+                label={
+                  isJobPostBooking
+                    ? t("payment.initiate.labels.agreedTotal", "Agreed Total")
+                    : t("payment.initiate.labels.agreedRate", "Agreed Rate")
+                }
                 value={`${formatPrice(p.agreedRate, currency)}${!isJobPostBooking ? p.unitSuffix || "" : ""}`}
                 c={c}
               />
               {isJobPostBooking && booking?.estimatedValue && (
                 <BreakdownRow
-                  label="Duration"
+                  label={t("payment.initiate.labels.duration", "Duration")}
                   value={`${booking.estimatedValue} ${booking.estimatedUnit || "hours"}`}
                   c={c}
                 />
@@ -836,31 +943,44 @@ export default function InitiatePaymentScreen() {
               {!isJobPostBooking && p.hasQty && (
                 <>
                   <BreakdownRow
-                    label="Duration"
+                    label={t("payment.initiate.labels.duration", "Duration")}
                     value={`${p.qty} ${p.unitLabel}${p.qty !== 1 ? "s" : ""}`}
                     c={c}
                   />
                   <BreakdownRow
-                    label={`Job Value (${p.qty} × ${formatPrice(p.agreedRate, currency)})`}
+                    label={t("payment.initiate.labels.jobValue", {
+                      qty: p.qty,
+                      rate: formatPrice(p.agreedRate, currency),
+                      defaultValue: "Job Value ({{qty}} × {{rate}})",
+                    })}
                     value={formatPrice(p.subtotal, currency)}
                     c={c}
                   />
                 </>
               )}
               <BreakdownRow
-                label={`Service Fee (${feePercentDisplay}%)`}
+                label={t("payment.initiate.labels.serviceFee", {
+                  percent: feePercentDisplay,
+                  defaultValue: "Service Fee ({{percent}}%)",
+                })}
                 value={`+ ${formatPrice(p.hirerFee, currency)}`}
                 c={c}
               />
               <BreakdownRow
-                label="Worker receives (no fee)"
+                label={t(
+                  "payment.initiate.labels.workerReceives",
+                  "Worker receives (no fee)",
+                )}
                 value={formatPrice(p.workerPayout, currency)}
                 valueColor={c.green}
                 c={c}
               />
               {referralApplied && referralAmount > 0 && (
                 <BreakdownRow
-                  label="Referral bonus"
+                  label={t(
+                    "payment.initiate.labels.referralBonus",
+                    "Referral bonus",
+                  )}
                   value={`− ${formatPrice(referralAmount, currency)}`}
                   valueColor={c.green}
                   c={c}
@@ -870,7 +990,7 @@ export default function InitiatePaymentScreen() {
                 style={[styles.breakdownDivider, { backgroundColor: c.border }]}
               />
               <BreakdownRow
-                label="You Will Pay"
+                label={t("payment.initiate.labels.youWillPay", "You Will Pay")}
                 value={formatPrice(displayedTotal, currency)}
                 total
                 c={c}
@@ -881,11 +1001,16 @@ export default function InitiatePaymentScreen() {
           <View style={styles.verifyWrap}>
             <ActivityIndicator size="large" color="#eab308" />
             <AppText style={[styles.verifyTitle, { color: "#eab308" }]}>
-              Waiting for Worker
+              {t(
+                "payment.initiate.pending.waitingForWorker",
+                "Waiting for Worker",
+              )}
             </AppText>
             <AppText style={styles.verifyText}>
-              Once they accept, you'll be able to complete payment here. This
-              page checks every 8 seconds.
+              {t(
+                "payment.initiate.pending.waitingBody",
+                "Once they accept, you'll be able to complete payment here. This page checks every 8 seconds.",
+              )}
             </AppText>
           </View>
 
@@ -908,7 +1033,8 @@ export default function InitiatePaymentScreen() {
                 color: c.textDim,
               }}
             >
-              🔄 Check for Updates
+              🔄{" "}
+              {t("payment.initiate.actions.checkUpdates", "Check for Updates")}
             </AppText>
           </Pressable>
         </ScrollView>
@@ -923,7 +1049,7 @@ export default function InitiatePaymentScreen() {
           <Pressable onPress={handleBack} style={styles.backLink}>
             <FaArrowLeft size={11} color={c.textDim} />
             <AppText style={{ fontSize: 13, color: c.textDim, marginLeft: 4 }}>
-              Back to Booking
+              {t("payment.initiate.actions.backToBooking", "Back to Booking")}
             </AppText>
           </Pressable>
           <View
@@ -943,7 +1069,7 @@ export default function InitiatePaymentScreen() {
                 letterSpacing: 0.8,
               }}
             >
-              Secure Payment
+              {t("payment.initiate.secureBadge", "Secure Payment")}
             </AppText>
           </View>
         </View>
@@ -964,7 +1090,12 @@ export default function InitiatePaymentScreen() {
               <FaClipboardList size={20} color={c.orange} />
             </View>
             <View style={{ flex: 1 }}>
-              <AppText style={styles.summaryLabel}>You're paying for</AppText>
+              <AppText style={styles.summaryLabel}>
+                {t(
+                  "payment.initiate.summary.youPayingFor",
+                  "You're paying for",
+                )}
+              </AppText>
               <AppText style={styles.summaryTitle}>{booking?.title}</AppText>
               <AppText style={styles.summaryCategory}>
                 {booking?.category?.name}
@@ -994,14 +1125,15 @@ export default function InitiatePaymentScreen() {
                     marginBottom: 2,
                   }}
                 >
-                  From Job Post
+                  {t("payment.initiate.summary.fromJobPost", "From Job Post")}
                 </AppText>
                 <AppText
                   style={{ fontSize: 11, color: c.textDim, lineHeight: 15 }}
                 >
-                  This booking was created from a job post. The final amount is
-                  the rate you selected (or negotiated) on the booking creation
-                  page.
+                  {t(
+                    "payment.initiate.summary.fromJobPostBody",
+                    "This booking was created from a job post. The final amount is the rate you selected (or negotiated) on the booking creation page.",
+                  )}
                 </AppText>
               </View>
             </View>
@@ -1046,7 +1178,10 @@ export default function InitiatePaymentScreen() {
             <View style={styles.referralHeader}>
               <FaGift size={13} color={c.green} />
               <AppText style={styles.referralTitle}>
-                Referral Wallet Balance: {formatPrice(walletBalance, "NGN")}
+                {t("payment.initiate.referral.balanceLabel", {
+                  amount: formatPrice(walletBalance, "NGN"),
+                  defaultValue: "Referral Wallet Balance: {{amount}}",
+                })}
               </AppText>
             </View>
             <View style={styles.referralSliderWrap}>
@@ -1112,7 +1247,9 @@ export default function InitiatePaymentScreen() {
                       color: referralApplied ? "#fff" : c.textDim,
                     }}
                   >
-                    {referralApplied ? "Remove" : "Apply"}
+                    {referralApplied
+                      ? t("payment.initiate.referral.remove", "Remove")
+                      : t("payment.initiate.referral.apply", "Apply")}
                   </AppText>
                 </Pressable>
               </View>
@@ -1126,16 +1263,22 @@ export default function InitiatePaymentScreen() {
             { backgroundColor: c.bgPanel, borderColor: c.border },
           ]}
         >
-          <AppText style={styles.breakdownTitle}>Payment Breakdown</AppText>
+          <AppText style={styles.breakdownTitle}>
+            {t("payment.initiate.breakdown.title", "Payment Breakdown")}
+          </AppText>
           <View style={styles.breakdownRows}>
             <BreakdownRow
-              label={isJobPostBooking ? "Agreed Total" : "Agreed Rate"}
+              label={
+                isJobPostBooking
+                  ? t("payment.initiate.labels.agreedTotal", "Agreed Total")
+                  : t("payment.initiate.labels.agreedRate", "Agreed Rate")
+              }
               value={`${formatPrice(p.agreedRate, currency)}${!isJobPostBooking ? p.unitSuffix || "" : ""}`}
               c={c}
             />
             {isJobPostBooking && booking?.estimatedValue && (
               <BreakdownRow
-                label="Duration"
+                label={t("payment.initiate.labels.duration", "Duration")}
                 value={`${booking.estimatedValue} ${booking.estimatedUnit || "hours"}`}
                 c={c}
               />
@@ -1143,31 +1286,44 @@ export default function InitiatePaymentScreen() {
             {!isJobPostBooking && p.hasQty && (
               <>
                 <BreakdownRow
-                  label="Duration"
+                  label={t("payment.initiate.labels.duration", "Duration")}
                   value={`${p.qty} ${p.unitLabel}${p.qty !== 1 ? "s" : ""}`}
                   c={c}
                 />
                 <BreakdownRow
-                  label={`Job Value (${p.qty} × ${formatPrice(p.agreedRate, currency)})`}
+                  label={t("payment.initiate.labels.jobValue", {
+                    qty: p.qty,
+                    rate: formatPrice(p.agreedRate, currency),
+                    defaultValue: "Job Value ({{qty}} × {{rate}})",
+                  })}
                   value={formatPrice(p.subtotal, currency)}
                   c={c}
                 />
               </>
             )}
             <BreakdownRow
-              label={`Service Fee (${feePercentDisplay}%)`}
+              label={t("payment.initiate.labels.serviceFee", {
+                percent: feePercentDisplay,
+                defaultValue: "Service Fee ({{percent}}%)",
+              })}
               value={`+ ${formatPrice(p.hirerFee, currency)}`}
               c={c}
             />
             <BreakdownRow
-              label="Worker receives (no fee)"
+              label={t(
+                "payment.initiate.labels.workerReceives",
+                "Worker receives (no fee)",
+              )}
               value={formatPrice(p.workerPayout, currency)}
               valueColor={c.green}
               c={c}
             />
             {referralApplied && referralAmount > 0 && (
               <BreakdownRow
-                label="Referral bonus"
+                label={t(
+                  "payment.initiate.labels.referralBonus",
+                  "Referral bonus",
+                )}
                 value={`− ${formatPrice(referralAmount, currency)}`}
                 valueColor={c.green}
                 c={c}
@@ -1177,7 +1333,7 @@ export default function InitiatePaymentScreen() {
               style={[styles.breakdownDivider, { backgroundColor: c.border }]}
             />
             <BreakdownRow
-              label="You Pay"
+              label={t("payment.initiate.labels.youPay", "You Pay")}
               value={formatPrice(displayedTotal, currency)}
               total
               c={c}
@@ -1199,8 +1355,10 @@ export default function InitiatePaymentScreen() {
                 lineHeight: 16,
               }}
             >
-              Funds are held in escrow and only released to the worker after you
-              confirm the job is complete.
+              {t(
+                "payment.initiate.breakdown.escrowNote",
+                "Funds are held in escrow and only released to the worker after you confirm the job is complete.",
+              )}
             </AppText>
           </View>
         </View>
@@ -1211,7 +1369,9 @@ export default function InitiatePaymentScreen() {
             { backgroundColor: c.bgPanel, borderColor: c.border },
           ]}
         >
-          <AppText style={styles.breakdownTitle}>Payment Method</AppText>
+          <AppText style={styles.breakdownTitle}>
+            {t("payment.initiate.method.title", "Payment Method")}
+          </AppText>
           <View style={styles.methodGrid}>
             {METHODS.map((m) => (
               <Pressable
@@ -1247,7 +1407,7 @@ export default function InitiatePaymentScreen() {
                       color: method === m.id ? c.orange : c.text,
                     }}
                   >
-                    {m.id === "card" ? "Card / Mobile Money" : "Crypto"}
+                    {t(m.labelKey)}
                   </AppText>
                   <AppText
                     style={{
@@ -1257,9 +1417,7 @@ export default function InitiatePaymentScreen() {
                       fontFamily: "DMSans_400Regular",
                     }}
                   >
-                    {m.id === "card"
-                      ? "Redirected to Flutterwave or Paystack"
-                      : "USDC · USDT · BTC · ETH"}
+                    {t(m.descKey)}
                   </AppText>
                 </View>
               </Pressable>
@@ -1293,8 +1451,14 @@ export default function InitiatePaymentScreen() {
                 }}
               >
                 {booking?.currency === "NGN"
-                  ? "💚 You'll be redirected to Paystack to pay securely in NGN."
-                  : "🦋 You'll be redirected to Flutterwave to pay securely."}
+                  ? t(
+                      "payment.initiate.method.card.paystackNote",
+                      "💚 You'll be redirected to Paystack to pay securely in NGN.",
+                    )
+                  : t(
+                      "payment.initiate.method.card.flutterwaveNote",
+                      "🦋 You'll be redirected to Flutterwave to pay securely.",
+                    )}
               </AppText>
             </View>
           )}
@@ -1339,7 +1503,7 @@ export default function InitiatePaymentScreen() {
                   color: c.bg,
                 }}
               >
-                Processing…
+                {t("payment.initiate.actions.processing", "Processing…")}
               </AppText>
             </View>
           ) : method === "card" ? (
@@ -1350,11 +1514,14 @@ export default function InitiatePaymentScreen() {
               <AppText
                 style={{
                   fontFamily: "Syne_800ExtraBold",
-                  fontSize: 15,
+                  fontSize: 10,
                   color: c.bg,
                 }}
               >
-                Pay {formatPrice(displayedTotal, currency)} Securely
+                {t("payment.initiate.actions.payCard", {
+                  amount: formatPrice(displayedTotal, currency),
+                  defaultValue: "Pay {{amount}} Securely",
+                })}
               </AppText>
             </View>
           ) : (
@@ -1365,12 +1532,15 @@ export default function InitiatePaymentScreen() {
               <AppText
                 style={{
                   fontFamily: "Syne_800ExtraBold",
-                  fontSize: 15,
+                  fontSize: 10,
                   color: c.bg,
                 }}
               >
-                Get {selectedCryptoToken} Wallet —{" "}
-                {formatPrice(displayedTotal, currency)}
+                {t("payment.initiate.actions.payCrypto", {
+                  token: selectedCryptoToken,
+                  amount: formatPrice(displayedTotal, currency),
+                  defaultValue: "Get {{token}} Wallet — {{amount}}",
+                })}
               </AppText>
             </View>
           )}
@@ -1386,8 +1556,10 @@ export default function InitiatePaymentScreen() {
             fontFamily: "DMSans_400Regular",
           }}
         >
-          Powered by Flutterwave & Paystack · Escrow protected · Refund policy
-          applies
+          {t(
+            "payment.initiate.disclaimer",
+            "Powered by Flutterwave & Paystack · Escrow protected · Refund policy applies",
+          )}
         </AppText>
 
         <View style={styles.trustRow}>
@@ -1509,7 +1681,7 @@ const styles = StyleSheet.create({
   },
   summaryTitle: {
     fontFamily: "Syne_800ExtraBold",
-    fontSize: 15,
+    fontSize: 11,
     color: "#fff",
     lineHeight: 18,
     marginBottom: 3,
