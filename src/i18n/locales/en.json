@@ -442,6 +442,7 @@
       "inProgress": "In Progress",
       "completed": "Completed"
     },
+
     "section": {
       "reviews": "Reviews",
       "workerLocation": "Worker Location",
@@ -497,7 +498,25 @@
       "locationType": "Location Type"
     },
     "sidebar": {
-      "emergencyPhone": "Call"
+      "workerLabel": "WORKER",
+      "hirerLabel": "HIRER",
+      "sendMessage": "Send Message",
+      "unknownUser": "Unknown User",
+      "actions": "Actions",
+      "emergencyContact": "Worker's Emergency Contact",
+      "emergencyName": "Name",
+      "emergencyPhone": "Phone",
+      "emergencyRelation": "Relation",
+      "noActions": "No actions available.",
+      "acceptBooking": "Accept Booking",
+      "releasePayment": "Release Payment",
+      "raiseDispute": "Raise a Dispute",
+      "waitingPayment": "Waiting for hirer to complete payment before you can check in.",
+      "cancelBooking": "Cancel Booking",
+      "cancelReason": "Reason",
+      "cancelPlaceholder": "Please explain why you are cancelling…",
+      "confirmCancellation": "Confirm Cancellation",
+      "keepBooking": "Keep Booking"
     },
     "job": {
       "address": "Address"

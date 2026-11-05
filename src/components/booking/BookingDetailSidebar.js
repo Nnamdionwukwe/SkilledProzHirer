@@ -5,31 +5,23 @@
 // Structure:
 //   · Party card     — avatar + name + phone + Send Message
 //   · Actions card   — role-conditional action list
-//
-// Role branches preserved verbatim:
-//   · isWorker:
-//       EmergencyContact / SOSButton / AcceptBooking (PENDING) /
-//       GpsCheckIn (ACCEPTED + HELD) / waiting banner (ACCEPTED + no payment) /
-//       GpsCheckIn (IN_PROGRESS) / Cancel box
-//   · isHirer:
-//       EmergencyContact display / InsuranceAddon (ACCEPTED + not retained) /
-//       Release Payment (HELD) / Cancel box
-//   · Both: Video call + Raise Dispute
-//
-// Retained staff guard hides: Accept Booking, GPS check-in, Insurance.
-//
-// Note: EmergencyContact / SOSButton / GpsCheckIn / InsuranceAddon /
-// VideoCallButton are separate components. This file imports them; if
-// they don't exist yet, the sub-action row is silently omitted (guarded
-// with local light wrappers that render nothing when the child returns
-// null).
 
-import React from "react";
-import { Image, Linking, Pressable, StyleSheet, View } from "react-native";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Linking,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
 
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useAuthStore } from "../../store/authStore";
+import client from "../../api/client";
 import {
   FaPhone,
   FaCommentDots,
@@ -41,7 +33,6 @@ import {
 } from "../../icons/fa";
 
 // ── Optional heavy sub-components — guarded so missing files don't crash ──
-// When you build these, drop them in and remove the guarded imports below.
 let EmergencyContact = () => null;
 let SOSButton = () => null;
 let GpsCheckIn = () => null;
@@ -153,7 +144,7 @@ function CancelBox({
   if (!show) {
     return (
       <ActionBtn
-        label={t("booking.cancelBooking") || "Cancel Booking"}
+        label={t("booking.sidebar.cancelBooking", "Cancel Booking")}
         color="redOutline"
         onPress={onOpen}
       />
@@ -170,7 +161,8 @@ function CancelBox({
           marginBottom: 4,
         }}
       >
-        Reason <AppText style={{ color: c.red }}>*</AppText>
+        {t("booking.sidebar.cancelReason", "Reason")}{" "}
+        <AppText style={{ color: c.red }}>*</AppText>
       </AppText>
       <View
         style={[
@@ -181,21 +173,13 @@ function CancelBox({
           },
         ]}
       >
-        <AppText
-          style={{
-            fontSize: 13,
-            color: c.textMuted,
-            position: "absolute",
-            top: 10,
-            left: 12,
-          }}
-        >
-          {/* RN TextInput is added below; placeholder retained for compactness */}
-        </AppText>
         <CancelInput
           value={reason}
           onChange={onChangeReason}
-          placeholder="Please explain why you are cancelling…"
+          placeholder={t(
+            "booking.sidebar.cancelPlaceholder",
+            "Please explain why you are cancelling…",
+          )}
         />
       </View>
       {reasonError ? (
@@ -216,7 +200,12 @@ function CancelBox({
           ]}
         >
           <AppText style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
-            {acting ? "…" : "Confirm Cancellation"}
+            {acting
+              ? "…"
+              : t(
+                  "booking.sidebar.confirmCancellation",
+                  "Confirm Cancellation",
+                )}
           </AppText>
         </Pressable>
         <Pressable
@@ -232,7 +221,7 @@ function CancelBox({
           <AppText
             style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
           >
-            Keep Booking
+            {t("booking.sidebar.keepBooking", "Keep Booking")}
           </AppText>
         </Pressable>
       </View>
@@ -240,7 +229,6 @@ function CancelBox({
   );
 }
 
-// ── Cancel input — isolated so we can import TextInput cleanly ─────────
 function CancelInput({ value, onChange, placeholder }) {
   const { theme } = useTheme();
   const c = theme.colors;
@@ -287,22 +275,64 @@ export default function BookingDetailSidebar({
   refetch,
   updateStatus,
   onRelease,
-  onMessage,
-  onVideoCall,
 }) {
   const { t } = useTranslation();
+  const navigation = useNavigation();
   const { theme } = useTheme();
+  const { user: viewerUser } = useAuthStore();
   const c = theme.colors;
 
+  const [openingChat, setOpeningChat] = useState(false);
   const isRetainedStaff = booking?.source === "RETAINED_STAFF";
 
   const openProfile = () => {
     if (!other?.id) return;
-    // Navigation is managed by the parent screen; safe no-op here.
   };
 
   const callPhone = () => {
     if (other?.phone) Linking.openURL(`tel:${other.phone}`);
+  };
+
+  const handleMessage = async () => {
+    if (!other?.id || openingChat) return;
+    setOpeningChat(true);
+    try {
+      const res = await client.get("/messages/conversations", {
+        params: { page: 1, limit: 100, _t: Date.now() },
+      });
+      const convos = res.data?.data?.conversations || [];
+      const peerIdStr = String(other.id);
+      const myIdStr = String(viewerUser?.id || "");
+
+      const existing = convos.find((convo) => {
+        const usersArr = convo.users || [];
+        const otherUser = usersArr.find((u) => {
+          const uid = String(u.userId || u.user?.id || u.id);
+          return uid !== myIdStr;
+        });
+        const otherId = otherUser
+          ? String(otherUser.userId || otherUser.user?.id || otherUser.id)
+          : null;
+        if (otherId === peerIdStr) return true;
+        const last = convo.messages?.[0] ?? convo.lastMessage;
+        if (last?.senderId === peerIdStr || last?.receiverId === peerIdStr)
+          return true;
+        return false;
+      });
+
+      if (existing?.id) {
+        navigation.navigate("Chat", {
+          conversationId: existing.id,
+          withUserId: other.id,
+        });
+      } else {
+        navigation.navigate("Chat", { withUserId: other.id });
+      }
+    } catch {
+      navigation.navigate("Chat", { withUserId: other.id });
+    } finally {
+      setOpeningChat(false);
+    }
   };
 
   return (
@@ -323,7 +353,9 @@ export default function BookingDetailSidebar({
             color: c.orange,
           }}
         >
-          {isHirer ? "Worker" : "Hirer"}
+          {isHirer
+            ? t("booking.sidebar.workerLabel", "WORKER")
+            : t("booking.sidebar.hirerLabel", "HIRER")}
         </AppText>
 
         <Pressable onPress={openProfile}>
@@ -351,7 +383,8 @@ export default function BookingDetailSidebar({
 
         <Pressable onPress={openProfile}>
           <AppText style={{ fontSize: 15, fontWeight: "700", color: c.text }}>
-            {other?.firstName || "Unknown"} {other?.lastName || "User"}
+            {other?.firstName || t("booking.sidebar.unknownUser", "Unknown")}{" "}
+            {other?.lastName || t("booking.sidebar.unknownUser", "User")}
           </AppText>
         </Pressable>
 
@@ -368,17 +401,22 @@ export default function BookingDetailSidebar({
         ) : null}
 
         <Pressable
-          onPress={onMessage}
+          onPress={handleMessage}
+          disabled={openingChat}
           style={({ pressed }) => [
             styles.messageBtn,
             {
               backgroundColor: c.orangeDim,
               borderColor: c.orange,
-              opacity: pressed ? 0.85 : 1,
+              opacity: openingChat ? 0.5 : pressed ? 0.85 : 1,
             },
           ]}
         >
-          <FaCommentDots size={12} color={c.orange} />
+          {openingChat ? (
+            <ActivityIndicator size="small" color={c.orange} />
+          ) : (
+            <FaCommentDots size={12} color={c.orange} />
+          )}
           <AppText
             style={{
               fontSize: 13,
@@ -387,7 +425,7 @@ export default function BookingDetailSidebar({
               marginLeft: 6,
             }}
           >
-            Send Message
+            {t("booking.sidebar.sendMessage", "Send Message")}
           </AppText>
         </Pressable>
       </View>
@@ -409,7 +447,7 @@ export default function BookingDetailSidebar({
             marginBottom: 4,
           }}
         >
-          Actions
+          {t("booking.sidebar.actions", "Actions")}
         </AppText>
 
         {/* ── WORKER BRANCH ─────────────────────────────────────── */}
@@ -434,7 +472,7 @@ export default function BookingDetailSidebar({
 
             {!isRetainedStaff && booking.status === "PENDING" && (
               <ActionBtn
-                label="Accept Booking"
+                label={t("booking.sidebar.acceptBooking", "Accept Booking")}
                 color="green"
                 loading={acting}
                 onPress={() => updateStatus("ACCEPTED")}
@@ -483,8 +521,10 @@ export default function BookingDetailSidebar({
                       flex: 1,
                     }}
                   >
-                    Waiting for hirer to complete payment before you can check
-                    in.
+                    {t(
+                      "booking.sidebar.waitingPayment",
+                      "Waiting for hirer to complete payment before you can check in.",
+                    )}
                   </AppText>
                 </View>
               )}
@@ -541,18 +581,24 @@ export default function BookingDetailSidebar({
                     marginBottom: 8,
                   }}
                 >
-                  <FaExclamationTriangle size={11} color={c.red} /> Worker's
-                  Emergency Contact
+                  <FaExclamationTriangle size={11} color={c.red} />{" "}
+                  {t(
+                    "booking.sidebar.emergencyContact",
+                    "Worker's Emergency Contact",
+                  )}
                 </AppText>
-                <InfoRow label="Name" value={emergencyContact.name} />
                 <InfoRow
-                  label="Phone"
+                  label={t("booking.sidebar.emergencyName", "Name")}
+                  value={emergencyContact.name}
+                />
+                <InfoRow
+                  label={t("booking.sidebar.emergencyPhone", "Phone")}
                   value={emergencyContact.phone}
                   valueStyle={{ color: c.red }}
                 />
                 {emergencyContact.relationship ? (
                   <InfoRow
-                    label="Relation"
+                    label={t("booking.sidebar.emergencyRelation", "Relation")}
                     value={emergencyContact.relationship}
                   />
                 ) : null}
@@ -569,7 +615,7 @@ export default function BookingDetailSidebar({
 
             {payment?.status === "HELD" && (
               <ActionBtn
-                label="Release Payment"
+                label={t("booking.sidebar.releasePayment", "Release Payment")}
                 color="green"
                 onPress={onRelease}
               />
@@ -627,7 +673,7 @@ export default function BookingDetailSidebar({
                   marginLeft: 6,
                 }}
               >
-                Raise a Dispute
+                {t("booking.sidebar.raiseDispute", "Raise a Dispute")}
               </AppText>
             </Pressable>
           )}
@@ -641,7 +687,7 @@ export default function BookingDetailSidebar({
               paddingVertical: 8,
             }}
           >
-            No actions available.
+            {t("booking.sidebar.noActions", "No actions available.")}
           </AppText>
         )}
       </View>
@@ -683,7 +729,6 @@ function InfoRow({ label, value, valueStyle }) {
 
 // ── Styles (verbatim from CSS, mobile root 14) ─────────────────────────
 const styles = StyleSheet.create({
-  // Party card
   partyCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -713,7 +758,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // Actions card
   actionsCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -731,14 +775,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
 
-  // Emergency contact
   emergencyCard: {
     borderRadius: 12,
     borderWidth: 1,
     padding: 12,
   },
 
-  // Waiting payment
   waitingPayment: {
     flexDirection: "row",
     alignItems: "center",
@@ -747,7 +789,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
 
-  // Cancel box
   cancelBox: {
     paddingTop: 4,
     gap: 6,
