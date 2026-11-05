@@ -1927,6 +1927,19 @@
     "noMyPosts": "No posts yet",
     "noMyPostsSub": "Posts you create will appear here."
   },
+  "cryptoConverter": {
+    "title": "Live Crypto Rates",
+    "loading": "Loading live exchange rates…",
+    "error": "Could not load rates",
+    "retry": "Retry",
+    "updated": "Updated",
+    "youPay": "You pay",
+    "noRate": "No rate",
+    "needToSend": "You need to send",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "note": "Rates are live and may change. The exact amount may vary slightly when you complete the transfer."
+  },
   "payment": {
     "initiate": {
       "secureBadge": "Secure Payment",

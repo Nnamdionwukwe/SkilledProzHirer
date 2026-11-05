@@ -163,6 +163,9 @@ const MAP = {
   FaVolumeUp: "volume-high",
   FaVolumeMute: "volume-mute",
   FaBitcoin: "logo-bitcoin",
+  FaSync: "sync",
+  FaMoneyBill: "cash",
+  FaEthereum: "logo-ethereum",
 };
 
 const make = (ionName) =>
@@ -335,3 +338,6 @@ export const FaGripVertical = make(MAP.FaGripVertical);
 export const FaComments = make(MAP.FaComments);
 export const FaSend = make(MAP.FaSend);
 export const FaBitcoin = make(MAP.FaBitcoin);
+export const FaSync = make(MAP.FaSync);
+export const FaMoneyBill = make(MAP.FaMoneyBill);
+export const FaEthereum = make(MAP.FaEthereum);
