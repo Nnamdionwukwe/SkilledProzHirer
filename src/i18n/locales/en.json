@@ -387,7 +387,6 @@
     "period": "Period",
     "payDateLabel": "Pay Date",
     "type": "Type",
-    "currency": "Currency",
     "releaseAmountRequired": "Please enter a valid amount.",
     "releaseAmountExceeds": "Amount exceeds remaining ({{amount}}).",
     "releaseSuccess": "Funds released.",
@@ -423,9 +422,108 @@
     "cancelReasonPlaceholder": "Reason for cancellation…",
     "cancelling": "Cancelling…",
     "confirmCancelBtn": "Yes, Cancel Cycle",
-    "keepCycle": "Keep Cycle"
+    "keepCycle": "Keep Cycle",
+    "statusActive": "Active Payroll",
+    "detailsTitle": "Retained Staff Details"
   },
-
+  "booking": {
+    "status": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "inProgress": "In Progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "disputed": "Disputed"
+    },
+    "timeline": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "inProgress": "In Progress",
+      "completed": "Completed"
+    },
+    "section": {
+      "reviews": "Reviews",
+      "workerLocation": "Worker Location",
+      "cancelReason": "Cancellation Reason",
+      "description": "Description",
+      "jobDetails": "Job Details",
+      "reqResp": "Requirements & Responsibilities"
+    },
+    "jobPost": {
+      "fromJobPost": "From Job Post",
+      "requirements": "Requirements",
+      "responsibilities": "Responsibilities"
+    },
+    "role": {
+      "hirer": "Hirer",
+      "worker": "Worker"
+    },
+    "gpsLocation": "GPS recorded at check-in and check-out. Visible to both parties.",
+    "location": {
+      "checkIn": "Check-in Location",
+      "checkOut": "Check-out Location",
+      "viewOnMaps": "View map"
+    },
+    "review": {
+      "submitted": "Your review has been submitted.",
+      "waitingOther": "Waiting for the other party."
+    },
+    "button": {
+      "leaveReview": "Leave a Review",
+      "downloadInvoice": "Download Invoice",
+      "requestRefund": "Request Refund"
+    },
+    "pending": {
+      "waitingFor": "Waiting for {{name}} to respond",
+      "description": "Your booking request has been sent. {{name}} hasn't accepted yet — you'll be notified the moment they do. You can cancel for free until they accept."
+    },
+    "detail": {
+      "scheduled": "Scheduled",
+      "negotiatedRate": "Negotiated Rate",
+      "negotiatedOverride": "Negotiated Override",
+      "negotiationNote": "Negotiation Note",
+      "checkedIn": "Checked In",
+      "checkedOut": "Checked Out",
+      "actualDuration": "Actual Duration",
+      "insurance": "Insurance",
+      "total": "Total",
+      "totalPayment": "Total Payment",
+      "totalEarnings": "Total Earnings",
+      "yourPayout": "Your Payout",
+      "status": "Status",
+      "estDuration": "Est. Duration",
+      "jobType": "Job Type",
+      "locationType": "Location Type"
+    },
+    "sidebar": {
+      "emergencyPhone": "Call"
+    },
+    "job": {
+      "address": "Address"
+    }
+  },
+  "payment": {
+    "options": {
+      "labels": {
+        "agreedTotal": "Agreed Total",
+        "agreedRate": "Agreed Rate",
+        "platformFee": "Platform Fee ({{percent}}%)"
+      }
+    }
+  },
+  "postJob": {
+    "jobType": {
+      "FULL_TIME": "Full-time",
+      "PART_TIME": "Part-time",
+      "CONTRACT": "Contract",
+      "TEMPORARY": "Temporary"
+    },
+    "locationType": {
+      "REMOTE": "Remote",
+      "ON_SITE": "On-site",
+      "HYBRID": "Hybrid"
+    }
+  },
   "auth.agreeToTerms": "I agree to the",
   "auth.alreadyHaveAccount": "Already have an account?",
   "auth.and": "and",

@@ -1,12 +1,9 @@
 // src/components/booking/BookingDetailMain.js
-//
-// Verbatim port of components/booking/BookingDetail/BookingDetailMain.jsx.
-// This version is a complete rewrite to ensure NO booking details are omitted.
-// It preserves all three branches (Retained Staff, Job Post, Direct),
-// all DetailItem fields, GPS cards, timeline, reviews, and action buttons.
 
-import React, { useState } from "react";
-import { Linking, Pressable, StyleSheet, View } from "react-native";
+import React from "react";
+import { Linking, Pressable, StyleSheet, View, Platform } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -42,13 +39,13 @@ import {
 
 // ── Status meta ────────────────────────────────────────────────────────
 const STATUS_META = {
-  PENDING: { label: "Pending", color: "yellow" },
-  ACCEPTED: { label: "Accepted", color: "orange" },
-  IN_PROGRESS: { label: "In Progress", color: "indigo" },
-  COMPLETED: { label: "Completed", color: "green" },
-  PAID: { label: "Paid", color: "green" },
-  CANCELLED: { label: "Cancelled", color: "red" },
-  DISPUTED: { label: "Disputed", color: "rose" },
+  PENDING: { labelKey: "booking.status.pending", color: "yellow" },
+  ACCEPTED: { labelKey: "booking.status.accepted", color: "orange" },
+  IN_PROGRESS: { labelKey: "booking.status.inProgress", color: "indigo" },
+  COMPLETED: { labelKey: "booking.status.completed", color: "green" },
+  PAID: { labelKey: "booking.status.completed", color: "green" },
+  CANCELLED: { labelKey: "booking.status.cancelled", color: "red" },
+  DISPUTED: { labelKey: "booking.status.disputed", color: "rose" },
 };
 
 function badgePalette(key, c) {
@@ -70,18 +67,23 @@ function badgePalette(key, c) {
   }
 }
 
-const TIMELINE_STEPS = ["Pending", "Accepted", "In Progress", "Completed"];
+const TIMELINE_STEPS = [
+  "booking.timeline.pending",
+  "booking.timeline.accepted",
+  "booking.timeline.inProgress",
+  "booking.timeline.completed",
+];
 
 const JOB_TYPES = {
-  FULL_TIME: { Icon: FaBriefcase, label: "Full-time" },
-  PART_TIME: { Icon: FaClock, label: "Part-time" },
-  CONTRACT: { Icon: FaFileAlt, label: "Contract" },
-  TEMPORARY: { Icon: FaFlag, label: "Temporary" },
+  FULL_TIME: { Icon: FaBriefcase, labelKey: "postJob.jobType.FULL_TIME" },
+  PART_TIME: { Icon: FaClock, labelKey: "postJob.jobType.PART_TIME" },
+  CONTRACT: { Icon: FaFileAlt, labelKey: "postJob.jobType.CONTRACT" },
+  TEMPORARY: { Icon: FaFlag, labelKey: "postJob.jobType.TEMPORARY" },
 };
 const LOC_TYPES = {
-  REMOTE: { Icon: FaGlobe, label: "Remote" },
-  ON_SITE: { Icon: FaMapPin, label: "On-site" },
-  HYBRID: { Icon: FaRandom, label: "Hybrid" },
+  REMOTE: { Icon: FaGlobe, labelKey: "postJob.locationType.REMOTE" },
+  ON_SITE: { Icon: FaMapPin, labelKey: "postJob.locationType.ON_SITE" },
+  HYBRID: { Icon: FaRandom, labelKey: "postJob.locationType.HYBRID" },
 };
 
 // ── Inline helpers ────────────────────────────────────────────────────
@@ -105,11 +107,12 @@ function DetailItem({ icon, label, value, accent, c }) {
         <AppText
           style={{
             fontSize: 10,
-            fontWeight: "500",
+            fontWeight: "600",
             color: c.textMuted,
             textTransform: "uppercase",
             letterSpacing: 0.6,
             marginBottom: 3,
+            fontFamily: "DMSans_700Bold",
           }}
         >
           {label}
@@ -118,9 +121,10 @@ function DetailItem({ icon, label, value, accent, c }) {
           <AppText
             style={{
               fontSize: 13,
-              fontWeight: "600",
+              fontWeight: "700",
               color: accent ? c.orange : c.text,
               lineHeight: 18,
+              fontFamily: "DMSans_700Bold",
             }}
           >
             {String(value)}
@@ -175,12 +179,24 @@ function GpsCard({
           }}
         />
         <AppText
-          style={{ fontSize: 13, fontWeight: "700", color: "#1a1a1a", flex: 1 }}
+          style={{
+            fontSize: 13,
+            fontWeight: "700",
+            color: "#1a1a1a",
+            flex: 1,
+            fontFamily: "DMSans_700Bold",
+          }}
         >
           {title}
         </AppText>
         {timestamp ? (
-          <AppText style={{ fontSize: 11, color: "#888" }}>
+          <AppText
+            style={{
+              fontSize: 11,
+              color: "#888",
+              fontFamily: "DMSans_400Regular",
+            }}
+          >
             {new Date(timestamp).toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
@@ -200,8 +216,18 @@ function GpsCard({
           marginBottom: 8,
         }}
       >
-        <AppText style={{ fontSize: 12, color: "#888" }}>Coordinates</AppText>
-        <AppText style={{ fontSize: 12, color: "#333", fontFamily: "Courier" }}>
+        <AppText
+          style={{
+            fontSize: 12,
+            color: "#888",
+            fontFamily: "DMSans_400Regular",
+          }}
+        >
+          Coordinates
+        </AppText>
+        <AppText
+          style={{ fontSize: 12, color: "#333", fontFamily: "monospace" }}
+        >
           {lat.toFixed(5)}, {lng.toFixed(5)}
         </AppText>
       </View>
@@ -222,8 +248,9 @@ function GpsCard({
           <AppText
             style={{
               fontSize: 12,
-              fontWeight: "600",
+              fontWeight: "700",
               color: distKm > 1 ? "#92400e" : "#166534",
+              fontFamily: "DMSans_700Bold",
             }}
           >
             {distKm < 0.1
@@ -239,7 +266,14 @@ function GpsCard({
         style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
       >
         <FaMap size={11} color="#2563eb" />
-        <AppText style={{ fontSize: 11, fontWeight: "600", color: "#2563eb" }}>
+        <AppText
+          style={{
+            fontSize: 11,
+            fontWeight: "700",
+            color: "#2563eb",
+            fontFamily: "DMSans_700Bold",
+          }}
+        >
           View on Google Maps
         </AppText>
       </Pressable>
@@ -248,7 +282,7 @@ function GpsCard({
 }
 
 // ── Timeline ────────────────────────────────────────────────────────────
-function Timeline({ step, c }) {
+function Timeline({ step, c, t }) {
   return (
     <View
       style={{
@@ -267,11 +301,11 @@ function Timeline({ step, c }) {
           alignItems: "flex-start",
         }}
       >
-        {TIMELINE_STEPS.map((label, i) => {
+        {TIMELINE_STEPS.map((labelKey, i) => {
           const active = i <= step;
           const current = i === step;
           return (
-            <View key={label} style={{ flex: 1, alignItems: "center" }}>
+            <View key={labelKey} style={{ flex: 1, alignItems: "center" }}>
               <View
                 style={{
                   width: 26,
@@ -300,6 +334,7 @@ function Timeline({ step, c }) {
                       fontSize: 10,
                       fontWeight: "700",
                       color: current ? c.bg : c.textMuted,
+                      fontFamily: "DMSans_700Bold",
                     }}
                   >
                     {i + 1}
@@ -310,12 +345,13 @@ function Timeline({ step, c }) {
                 style={{
                   marginTop: 8,
                   fontSize: 9,
-                  fontWeight: "600",
+                  fontWeight: "700",
                   color: active ? c.textDim : c.textMuted,
                   textAlign: "center",
+                  fontFamily: "DMSans_700Bold",
                 }}
               >
-                {label}
+                {t(labelKey)}
               </AppText>
             </View>
           );
@@ -342,7 +378,7 @@ function Section({ title, children, c }) {
         style={{
           fontFamily: "Syne_700Bold",
           fontSize: 12,
-          fontWeight: "700",
+          fontWeight: "800",
           color: c.textDim,
           textTransform: "uppercase",
           letterSpacing: 1,
@@ -362,10 +398,11 @@ function ReviewsSection({
   hasReviewed,
   onLeaveReview,
   c,
+  t,
 }) {
   if (!reviews?.length && !reviewCheckDone) return null;
   return (
-    <Section title="Reviews" c={c}>
+    <Section title={t("booking.section.reviews")} c={c}>
       {reviews?.length > 0
         ? reviews.map((review) => (
             <View key={review.id} style={{ gap: 6, marginBottom: 8 }}>
@@ -388,7 +425,12 @@ function ReviewsSection({
                   }}
                 >
                   <AppText
-                    style={{ fontSize: 12, fontWeight: "700", color: c.orange }}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "800",
+                      color: c.orange,
+                      fontFamily: "Syne_800ExtraBold",
+                    }}
                   >
                     {review.giver?.firstName?.[0]}
                     {review.giver?.lastName?.[0]}
@@ -396,16 +438,35 @@ function ReviewsSection({
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <AppText
-                    style={{ fontSize: 13, fontWeight: "600", color: c.text }}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: c.text,
+                      fontFamily: "DMSans_700Bold",
+                    }}
                     numberOfLines={1}
                   >
                     {review.giver?.firstName} {review.giver?.lastName}
-                    <AppText style={{ color: c.textDim, fontWeight: "400" }}>
+                    <AppText
+                      style={{
+                        color: c.textDim,
+                        fontWeight: "400",
+                        fontFamily: "DMSans_400Regular",
+                      }}
+                    >
                       {" · "}
-                      {review.giver?.role === "HIRER" ? "Hirer" : "Worker"}
+                      {review.giver?.role === "HIRER"
+                        ? t("booking.role.hirer")
+                        : t("booking.role.worker")}
                     </AppText>
                   </AppText>
-                  <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                  <AppText
+                    style={{
+                      fontSize: 11,
+                      color: c.textMuted,
+                      fontFamily: "DMSans_400Regular",
+                    }}
+                  >
                     {new Date(review.createdAt).toLocaleDateString("en-GB", {
                       day: "numeric",
                       month: "short",
@@ -437,6 +498,7 @@ function ReviewsSection({
                       color: c.textDim,
                       fontStyle: "italic",
                       lineHeight: 20,
+                      fontFamily: "DMSans_400Regular",
                     }}
                   >
                     "{review.comment}"
@@ -465,9 +527,14 @@ function ReviewsSection({
         >
           <FaStar size={12} color={c.orange} />
           <AppText
-            style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
+            style={{
+              fontSize: 13,
+              fontWeight: "700",
+              color: c.textDim,
+              fontFamily: "DMSans_700Bold",
+            }}
           >
-            Leave a Review
+            {t("booking.button.leaveReview")}
           </AppText>
         </Pressable>
       ) : null}
@@ -486,9 +553,16 @@ function ReviewsSection({
           }}
         >
           <FaCheckCircle size={13} color={c.green} />
-          <AppText style={{ fontSize: 12, color: c.green, flex: 1 }}>
-            Your review has been submitted.{" "}
-            {(reviews?.length ?? 0) < 2 ? " Waiting for the other party." : ""}
+          <AppText
+            style={{
+              fontSize: 12,
+              color: c.green,
+              flex: 1,
+              fontFamily: "DMSans_400Regular",
+            }}
+          >
+            {t("booking.review.submitted")}{" "}
+            {(reviews?.length ?? 0) < 2 ? t("booking.review.waitingOther") : ""}
           </AppText>
         </View>
       ) : null}
@@ -504,16 +578,24 @@ function GpsSection({
   checkInDistKm,
   checkOutDistKm,
   c,
+  t,
 }) {
   return (
-    <Section title="Worker Location" c={c}>
-      <AppText style={{ fontSize: 13, color: c.textMuted, marginBottom: 6 }}>
-        GPS recorded at check-in and check-out. Visible to both parties.
+    <Section title={t("booking.section.workerLocation")} c={c}>
+      <AppText
+        style={{
+          fontSize: 13,
+          color: c.textMuted,
+          marginBottom: 6,
+          fontFamily: "DMSans_400Regular",
+        }}
+      >
+        {t("booking.gpsLocation")}
       </AppText>
       <View style={{ gap: 10 }}>
         {hasCheckInGps ? (
           <GpsCard
-            title="Check-in Location"
+            title={t("booking.location.checkIn")}
             dotColor="#16a34a"
             timestamp={booking.checkInAt}
             lat={booking.checkInLat}
@@ -525,7 +607,7 @@ function GpsSection({
         ) : null}
         {hasCheckOutGps ? (
           <GpsCard
-            title="Check-out Location"
+            title={t("booking.location.checkOut")}
             dotColor="#dc2626"
             timestamp={booking.checkOutAt}
             lat={booking.checkOutLat}
@@ -541,9 +623,9 @@ function GpsSection({
 }
 
 // ── Cancel reason ──────────────────────────────────────────────────────
-function CancelReason({ reason, c }) {
+function CancelReason({ reason, c, t }) {
   return (
-    <Section title="Cancellation Reason" c={c}>
+    <Section title={t("booking.section.cancelReason")} c={c}>
       <View
         style={{
           flexDirection: "row",
@@ -558,7 +640,13 @@ function CancelReason({ reason, c }) {
       >
         <FaExclamationTriangle size={14} color={c.red} />
         <AppText
-          style={{ flex: 1, fontSize: 13, color: c.textDim, lineHeight: 20 }}
+          style={{
+            flex: 1,
+            fontSize: 13,
+            color: c.textDim,
+            lineHeight: 20,
+            fontFamily: "DMSans_400Regular",
+          }}
         >
           {reason}
         </AppText>
@@ -576,6 +664,7 @@ function BottomActions({
   refundLoading,
   invoiceLoading,
   c,
+  t,
 }) {
   if (!isCompletedOrPaid) return null;
   return (
@@ -608,8 +697,15 @@ function BottomActions({
         ]}
       >
         <FaFileAlt size={12} color={c.textDim} />
-        <AppText style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}>
-          Download Invoice
+        <AppText
+          style={{
+            fontSize: 13,
+            fontWeight: "700",
+            color: c.textDim,
+            fontFamily: "DMSans_700Bold",
+          }}
+        >
+          {t("booking.button.downloadInvoice")}
         </AppText>
       </Pressable>
       {showRefundButton ? (
@@ -632,8 +728,15 @@ function BottomActions({
           ]}
         >
           <FaUndo size={12} color={c.red} />
-          <AppText style={{ fontSize: 13, fontWeight: "600", color: c.red }}>
-            Request Refund
+          <AppText
+            style={{
+              fontSize: 13,
+              fontWeight: "700",
+              color: c.red,
+              fontFamily: "DMSans_700Bold",
+            }}
+          >
+            {t("booking.button.requestRefund")}
           </AppText>
         </Pressable>
       ) : null}
@@ -667,10 +770,20 @@ export default function BookingDetailMain({
   hasActiveRefund,
   onShowRefundModal,
 }) {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
   const { theme } = useTheme();
   const c = theme.colors;
 
-  const meta = STATUS_META[booking.status] || {};
+  // Dynamic status based on booking.status
+  let meta = STATUS_META[booking.status] || {};
+  if (booking.source === "RETAINED_STAFF" && booking.status === "ACCEPTED") {
+    meta = { labelKey: "retainedStaff.statusPaid", color: "orange" }; // Active Payroll style
+  }
+  if (booking.source === "RETAINED_STAFF" && booking.status === "PAID") {
+    meta = { labelKey: "booking.status.completed", color: "green" };
+  }
+
   const badgeColor = badgePalette(meta.color, c);
   const isCompletedOrPaid = ["COMPLETED", "PAID"].includes(booking.status);
   const isJobPostBooking = booking.source === "JOB_POST";
@@ -686,12 +799,56 @@ export default function BookingDetailMain({
     !hasActiveRefund &&
     !isRetainedStaff;
 
+  const handleOpenMap = () => {
+    if (booking.latitude && booking.longitude) {
+      const scheme = Platform.select({
+        ios: "maps:0,0?q=",
+        android: "geo:0,0?q=",
+      });
+      const latLng = `${booking.latitude},${booking.longitude}`;
+      const label = booking.address || "Job Location";
+      const url = Platform.select({
+        ios: `${scheme}${label}@${latLng}`,
+        android: `${scheme}${latLng}(${label})`,
+      });
+      Linking.openURL(url);
+    } else if (booking.address) {
+      Linking.openURL(
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.address)}`,
+      );
+    }
+  };
+
+  const handleCallEmergency = () => {
+    if (booking.emergencyContact?.phone || booking.emergencyContact) {
+      const phone =
+        typeof booking.emergencyContact === "string"
+          ? booking.emergencyContact
+          : booking.emergencyContact.phone;
+      if (phone) {
+        Linking.openURL(`tel:${phone}`);
+      }
+    }
+  };
+
   const renderDuration = () => {
     if (!dur) {
       if (booking.estimatedHours || booking.estimatedValue) {
-        return <AppText style={{ color: c.textMuted }}>Loading…</AppText>;
+        return (
+          <AppText
+            style={{ color: c.textMuted, fontFamily: "DMSans_400Regular" }}
+          >
+            Loading…
+          </AppText>
+        );
       }
-      return <AppText style={{ color: c.textMuted }}>Not specified</AppText>;
+      return (
+        <AppText
+          style={{ color: c.textMuted, fontFamily: "DMSans_400Regular" }}
+        >
+          Not specified
+        </AppText>
+      );
     }
     const unitMap = {
       hours: "hours",
@@ -713,16 +870,35 @@ export default function BookingDetailMain({
           gap: 4,
         }}
       >
-        <AppText style={{ fontSize: 13, fontWeight: "600", color: c.text }}>
+        <AppText
+          style={{
+            fontSize: 13,
+            fontWeight: "700",
+            color: c.text,
+            fontFamily: "DMSans_700Bold",
+          }}
+        >
           {dur.main}
         </AppText>
         {dur.sub ? (
-          <AppText style={{ fontSize: 12, color: c.textMuted }}>
+          <AppText
+            style={{
+              fontSize: 12,
+              color: c.textMuted,
+              fontFamily: "DMSans_400Regular",
+            }}
+          >
             {dur.sub}
           </AppText>
         ) : null}
         {unitLabel ? (
-          <AppText style={{ fontSize: 11, color: c.textMuted }}>
+          <AppText
+            style={{
+              fontSize: 11,
+              color: c.textMuted,
+              fontFamily: "DMSans_400Regular",
+            }}
+          >
             ({unitLabel}
             {booking.isNegotiated && booking.negotiatedRate
               ? " · negotiated"
@@ -763,7 +939,7 @@ export default function BookingDetailMain({
               style={{
                 fontFamily: "Syne_700Bold",
                 fontSize: 20,
-                fontWeight: "700",
+                fontWeight: "800",
                 color: c.text,
                 flex: 1,
                 lineHeight: 26,
@@ -782,13 +958,16 @@ export default function BookingDetailMain({
               <AppText
                 style={{
                   fontSize: 10,
-                  fontWeight: "700",
+                  fontWeight: "800",
                   color: badgeColor.fg,
                   textTransform: "uppercase",
                   letterSpacing: 0.5,
+                  fontFamily: "DMSans_700Bold",
                 }}
               >
-                {meta.label}
+                {booking.status === "ACCEPTED"
+                  ? t("retainedStaff.statusActive", "Active Payroll")
+                  : t(meta.labelKey, meta.labelKey)}
               </AppText>
             </View>
           </View>
@@ -803,7 +982,12 @@ export default function BookingDetailMain({
               }}
             >
               <AppText
-                style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
+                style={{
+                  fontSize: 11,
+                  fontWeight: "800",
+                  color: c.orange,
+                  fontFamily: "DMSans_700Bold",
+                }}
               >
                 {booking.category.name}
               </AppText>
@@ -825,17 +1009,25 @@ export default function BookingDetailMain({
           >
             <FaBriefcase size={10} color="#818cf8" />
             <AppText
-              style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+              style={{
+                fontSize: 11,
+                fontWeight: "800",
+                color: "#818cf8",
+                fontFamily: "DMSans_700Bold",
+              }}
             >
-              Retained Staff Payroll
+              {t("retainedStaff.title", "Retained Staff Payroll")}
             </AppText>
           </View>
         </View>
 
-        <Section title="Retained Staff Details" c={c}>
+        <Section
+          title={t("retainedStaff.detailsTitle", "Retained Staff Details")}
+          c={c}
+        >
           <DetailItem
             icon={<FaCalendarAlt size={14} color={c.orange} />}
-            label="Pay Period"
+            label={t("retainedStaff.payDate")}
             value={new Date(booking.scheduledAt).toLocaleDateString("en-GB", {
               month: "short",
               year: "numeric",
@@ -844,14 +1036,14 @@ export default function BookingDetailMain({
           />
           <DetailItem
             icon={<FaMoneyBillWave size={14} color={c.orange} />}
-            label="Base Rate"
+            label={t("retainedStaff.payRate")}
             value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
             accent
             c={c}
           />
           <DetailItem
             icon={<FaFileAlt size={14} color={c.orange} />}
-            label="Role"
+            label={t("retainedStaff.roleDescription", "Role")}
             value={booking.description || "Standard Retained Role"}
             c={c}
           />
@@ -861,8 +1053,11 @@ export default function BookingDetailMain({
                 return (
                   <DetailItem
                     icon={<Icon size={14} color={c.orange} />}
-                    label="Job Type"
-                    value={JOB_TYPES[booking.jobType]?.label || booking.jobType}
+                    label={t("retainedStaff.jobTitle")}
+                    value={t(
+                      JOB_TYPES[booking.jobType]?.labelKey,
+                      booking.jobType,
+                    )}
                     c={c}
                   />
                 );
@@ -871,7 +1066,7 @@ export default function BookingDetailMain({
           {booking.employmentType ? (
             <DetailItem
               icon={<FaBriefcase size={14} color={c.orange} />}
-              label="Employment Type"
+              label={t("retainedStaff.employmentType")}
               value={String(booking.employmentType).replace(/_/g, " ")}
               c={c}
             />
@@ -879,7 +1074,7 @@ export default function BookingDetailMain({
           {booking.department ? (
             <DetailItem
               icon={<FaBuilding size={14} color={c.orange} />}
-              label="Department"
+              label={t("retainedStaff.department")}
               value={booking.department}
               c={c}
             />
@@ -887,25 +1082,70 @@ export default function BookingDetailMain({
           {booking.locationType ? (
             <DetailItem
               icon={<FaMapPin size={14} color={c.orange} />}
-              label="Location Type"
-              value={
-                LOC_TYPES[booking.locationType]?.label || booking.locationType
-              }
+              label={t("retainedStaff.locationType")}
+              value={t(
+                LOC_TYPES[booking.locationType]?.labelKey,
+                booking.locationType,
+              )}
               c={c}
             />
           ) : null}
           {booking.location && booking.locationType !== "REMOTE" ? (
-            <DetailItem
-              icon={<FaMapMarkerAlt size={14} color={c.orange} />}
-              label="Work Location"
-              value={booking.location}
-              c={c}
-            />
+            <Pressable onPress={handleOpenMap}>
+              <DetailItem
+                icon={<FaMapMarkerAlt size={14} color={c.orange} />}
+                label={t("retainedStaff.workLocation")}
+                value={
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <AppText
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "700",
+                        color: c.text,
+                        fontFamily: "DMSans_700Bold",
+                      }}
+                    >
+                      {booking.location}
+                    </AppText>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginLeft: 4,
+                      }}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: c.orange,
+                          fontFamily: "DMSans_700Bold",
+                        }}
+                      >
+                        {t("booking.location.viewOnMaps", "View map")}
+                      </AppText>
+                      <FaExternalLinkAlt
+                        size={10}
+                        color={c.orange}
+                        style={{ marginLeft: 4 }}
+                      />
+                    </View>
+                  </View>
+                }
+                c={c}
+              />
+            </Pressable>
           ) : null}
           {booking.workDays?.length > 0 ? (
             <DetailItem
               icon={<FaCalendarAlt size={14} color={c.orange} />}
-              label="Work Days"
+              label={t("retainedStaff.workDays")}
               value={booking.workDays.join(", ")}
               c={c}
             />
@@ -913,7 +1153,7 @@ export default function BookingDetailMain({
           {booking.workStart && booking.workEnd ? (
             <DetailItem
               icon={<FaClock size={14} color={c.orange} />}
-              label="Working Hours"
+              label={t("retainedStaff.workingSchedule")}
               value={`${booking.workStart} — ${booking.workEnd}${booking.timezone ? ` (${booking.timezone})` : ""}`}
               c={c}
             />
@@ -921,7 +1161,7 @@ export default function BookingDetailMain({
           {booking.employeeNumber ? (
             <DetailItem
               icon={<FaBriefcase size={14} color={c.orange} />}
-              label="Employee #"
+              label={t("retainedStaff.employeeNumber")}
               value={booking.employeeNumber}
               c={c}
             />
@@ -929,46 +1169,76 @@ export default function BookingDetailMain({
           {booking.managerName ? (
             <DetailItem
               icon={<FaUser size={14} color={c.orange} />}
-              label="Manager"
+              label={t("retainedStaff.manager")}
               value={booking.managerName}
               c={c}
             />
           ) : null}
           {booking.emergencyContact ? (
-            <DetailItem
-              icon={<FaExclamationTriangle size={14} color={c.orange} />}
-              label="Emergency Contact"
-              value={
-                typeof booking.emergencyContact === "string"
-                  ? booking.emergencyContact
-                  : booking.emergencyContact.name || ""
-              }
-              c={c}
-            />
+            <Pressable onPress={handleCallEmergency}>
+              <DetailItem
+                icon={<FaExclamationTriangle size={14} color={c.orange} />}
+                label={t("retainedStaff.emergencyContact")}
+                value={
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <AppText
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "700",
+                        color: c.text,
+                        fontFamily: "DMSans_700Bold",
+                      }}
+                    >
+                      {typeof booking.emergencyContact === "string"
+                        ? booking.emergencyContact
+                        : booking.emergencyContact.name || ""}
+                    </AppText>
+                    <AppText
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "700",
+                        color: c.orange,
+                        marginLeft: 4,
+                        fontFamily: "DMSans_700Bold",
+                      }}
+                    >
+                      {t("booking.sidebar.emergencyPhone", "Call")}
+                    </AppText>
+                  </View>
+                }
+                c={c}
+              />
+            </Pressable>
           ) : null}
           <DetailItem
             icon={<FaClock size={14} color={c.orange} />}
-            label="Status"
+            label={t("booking.detail.status")}
             value={
               booking.status === "PAID"
-                ? "Paid & Completed"
+                ? t("booking.status.completed")
                 : booking.status === "ACCEPTED"
-                  ? "Active Payroll"
-                  : booking.status
+                  ? t("retainedStaff.statusActive", "Active Payroll")
+                  : t(`booking.status.${booking.status.toLowerCase()}`)
             }
             accent={booking.status === "PAID"}
             c={c}
           />
           <DetailItem
             icon={<FaMoneyBillWave size={14} color={c.orange} />}
-            label="Base Amount"
+            label={t("retainedStaff.baseAmount")}
             value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
             c={c}
           />
           {booking.bonusAmount > 0 ? (
             <DetailItem
               icon={<FaPlusCircle size={14} color={c.green} />}
-              label="Bonus"
+              label={t("retainedStaff.bonusAmount")}
               value={`+ ${currency} ${Number(booking.bonusAmount).toLocaleString()}`}
               c={c}
             />
@@ -976,14 +1246,17 @@ export default function BookingDetailMain({
           {booking.deductionAmount > 0 ? (
             <DetailItem
               icon={<FaMinusCircle size={14} color="#f87171" />}
-              label="Deduction"
+              label={t("retainedStaff.deductionAmount")}
               value={`- ${currency} ${Number(booking.deductionAmount).toLocaleString()}`}
               c={c}
             />
           ) : null}
           <DetailItem
             icon={<FaMoneyBillWave size={14} color={c.orange} />}
-            label={`Platform Fee (${feePercent}%)`}
+            label={t("retainedStaff.platformFeeWithRate", {
+              rate: feePercent,
+              defaultValue: "Platform Fee ({{rate}}%)",
+            })}
             value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
             accent
             c={c}
@@ -991,7 +1264,7 @@ export default function BookingDetailMain({
           {isHirer ? (
             <DetailItem
               icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label="Total Payment"
+              label={t("retainedStaff.youPayHirer")}
               value={`${currency} ${Number(p.grossTotal).toLocaleString()}`}
               accent
               c={c}
@@ -999,7 +1272,7 @@ export default function BookingDetailMain({
           ) : (
             <DetailItem
               icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label="Your Payout"
+              label={t("retainedStaff.workerReceives")}
               value={`${currency} ${Number(p.workerPayout).toLocaleString()}`}
               accent
               c={c}
@@ -1007,9 +1280,17 @@ export default function BookingDetailMain({
           )}
         </Section>
 
-        <Section title="Description" c={c}>
-          <AppText style={{ fontSize: 13, color: c.textDim, lineHeight: 20 }}>
-            {booking.description || "No additional description provided."}
+        <Section title={t("booking.section.description")} c={c}>
+          <AppText
+            style={{
+              fontSize: 13,
+              color: c.textDim,
+              lineHeight: 20,
+              fontFamily: "DMSans_400Regular",
+            }}
+          >
+            {booking.description ||
+              t("booking.noDescription", "No additional description provided.")}
           </AppText>
           {booking.notes ? (
             <View
@@ -1029,7 +1310,14 @@ export default function BookingDetailMain({
                 color={c.textMuted}
                 style={{ marginTop: 2 }}
               />
-              <AppText style={{ fontSize: 13, color: c.textDim, flex: 1 }}>
+              <AppText
+                style={{
+                  fontSize: 13,
+                  color: c.textDim,
+                  flex: 1,
+                  fontFamily: "DMSans_400Regular",
+                }}
+              >
                 {booking.notes}
               </AppText>
             </View>
@@ -1043,6 +1331,7 @@ export default function BookingDetailMain({
             hasReviewed={hasReviewed}
             onLeaveReview={onLeaveReview}
             c={c}
+            t={t}
           />
         ) : null}
 
@@ -1052,6 +1341,7 @@ export default function BookingDetailMain({
           onDownloadInvoice={onDownloadInvoice}
           invoiceLoading={invoiceLoading}
           c={c}
+          t={t}
         />
       </View>
     );
@@ -1086,7 +1376,7 @@ export default function BookingDetailMain({
               style={{
                 fontFamily: "Syne_700Bold",
                 fontSize: 20,
-                fontWeight: "700",
+                fontWeight: "800",
                 color: c.text,
                 flex: 1,
                 lineHeight: 26,
@@ -1105,13 +1395,14 @@ export default function BookingDetailMain({
               <AppText
                 style={{
                   fontSize: 10,
-                  fontWeight: "700",
+                  fontWeight: "800",
                   color: badgeColor.fg,
                   textTransform: "uppercase",
                   letterSpacing: 0.5,
+                  fontFamily: "DMSans_700Bold",
                 }}
               >
-                {meta.label}
+                {t(meta.labelKey, meta.labelKey)}
               </AppText>
             </View>
           </View>
@@ -1126,7 +1417,12 @@ export default function BookingDetailMain({
               }}
             >
               <AppText
-                style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
+                style={{
+                  fontSize: 11,
+                  fontWeight: "800",
+                  color: c.orange,
+                  fontFamily: "DMSans_700Bold",
+                }}
               >
                 {booking.category.name}
               </AppText>
@@ -1149,9 +1445,14 @@ export default function BookingDetailMain({
             >
               <FaHandshake size={10} color="#818cf8" />
               <AppText
-                style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+                style={{
+                  fontSize: 11,
+                  fontWeight: "800",
+                  color: "#818cf8",
+                  fontFamily: "DMSans_700Bold",
+                }}
               >
-                Negotiated rate
+                {t("booking.detail.negotiatedRate", "Negotiated rate")}
               </AppText>
             </View>
           ) : null}
@@ -1171,14 +1472,19 @@ export default function BookingDetailMain({
           >
             <FaBriefcase size={10} color="#818cf8" />
             <AppText
-              style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+              style={{
+                fontSize: 11,
+                fontWeight: "800",
+                color: "#818cf8",
+                fontFamily: "DMSans_700Bold",
+              }}
             >
-              From Job Post
+              {t("booking.jobPost.fromJobPost")}
             </AppText>
           </View>
         </View>
 
-        {step >= 0 ? <Timeline step={step} c={c} /> : null}
+        {step >= 0 ? <Timeline step={step} c={c} t={t} /> : null}
 
         {booking.status === "PENDING" && isHirer ? (
           <View
@@ -1200,9 +1506,17 @@ export default function BookingDetailMain({
             />
             <View style={{ flex: 1 }}>
               <AppText
-                style={{ fontSize: 13, fontWeight: "700", color: "#fbbf24" }}
+                style={{
+                  fontSize: 13,
+                  fontWeight: "800",
+                  color: "#fbbf24",
+                  fontFamily: "DMSans_700Bold",
+                }}
               >
-                Waiting for {workerName || "the worker"} to respond
+                {t("booking.pending.waitingFor", {
+                  name: workerName || "the worker",
+                  defaultValue: "Waiting for {{name}} to respond",
+                })}
               </AppText>
               <AppText
                 style={{
@@ -1210,20 +1524,23 @@ export default function BookingDetailMain({
                   color: c.textDim,
                   marginTop: 4,
                   lineHeight: 18,
+                  fontFamily: "DMSans_400Regular",
                 }}
               >
-                Your booking request has been sent. {workerName || "The worker"}{" "}
-                hasn't accepted yet — you'll be notified the moment they do. You
-                can cancel for free until they accept.
+                {t("booking.pending.description", {
+                  name: workerName || "The worker",
+                  defaultValue:
+                    "Your booking request has been sent. {{name}} hasn't accepted yet — you'll be notified the moment they do. You can cancel for free until they accept.",
+                })}
               </AppText>
             </View>
           </View>
         ) : null}
 
-        <Section title="Booking Details" c={c}>
+        <Section title={t("booking.section.jobDetails")} c={c}>
           <DetailItem
             icon={<FaCalendarAlt size={14} color={c.orange} />}
-            label="Scheduled"
+            label={t("booking.detail.scheduled")}
             value={`${new Date(booking.scheduledAt).toLocaleDateString(
               "en-GB",
               {
@@ -1239,16 +1556,60 @@ export default function BookingDetailMain({
             c={c}
           />
           {booking.address && showMapLink ? (
-            <DetailItem
-              icon={<FaMapMarkerAlt size={14} color={c.orange} />}
-              label="Job Site Address"
-              value={booking.address}
-              c={c}
-            />
+            <Pressable onPress={handleOpenMap}>
+              <DetailItem
+                icon={<FaMapMarkerAlt size={14} color={c.orange} />}
+                label={t("booking.job.address")}
+                value={
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <AppText
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "700",
+                        color: c.text,
+                        fontFamily: "DMSans_700Bold",
+                      }}
+                    >
+                      {booking.address}
+                    </AppText>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginLeft: 4,
+                      }}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: c.orange,
+                          fontFamily: "DMSans_700Bold",
+                        }}
+                      >
+                        {t("booking.location.viewOnMaps")}
+                      </AppText>
+                      <FaExternalLinkAlt
+                        size={10}
+                        color={c.orange}
+                        style={{ marginLeft: 4 }}
+                      />
+                    </View>
+                  </View>
+                }
+                c={c}
+              />
+            </Pressable>
           ) : null}
           <DetailItem
             icon={<FaMoneyBillWave size={14} color={c.orange} />}
-            label="Agreed Total"
+            label={t("payment.options.labels.agreedTotal")}
             value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
             accent
             c={c}
@@ -1256,7 +1617,7 @@ export default function BookingDetailMain({
           {booking.isNegotiated && booking.negotiatedRate ? (
             <DetailItem
               icon={<FaHandshake size={14} color={c.orange} />}
-              label="Negotiated Override"
+              label={t("booking.detail.negotiatedOverride")}
               value={`${booking.currency} ${Number(booking.negotiatedRate).toLocaleString()}`}
               accent
               c={c}
@@ -1265,7 +1626,7 @@ export default function BookingDetailMain({
           {booking.isNegotiated && booking.negotiationNote ? (
             <DetailItem
               icon={<FaFileAlt size={14} color={c.orange} />}
-              label="Negotiation Note"
+              label={t("booking.detail.negotiationNote")}
               value={booking.negotiationNote}
               c={c}
             />
@@ -1273,7 +1634,7 @@ export default function BookingDetailMain({
           {booking.checkInAt ? (
             <DetailItem
               icon={<FaCheckCircle size={14} color={c.green} />}
-              label="Checked In"
+              label={t("booking.detail.checkedIn")}
               value={new Date(booking.checkInAt).toLocaleString("en-NG", {
                 dateStyle: "medium",
                 timeStyle: "short",
@@ -1284,7 +1645,7 @@ export default function BookingDetailMain({
           {booking.checkOutAt ? (
             <DetailItem
               icon={<FaFlag size={14} color={c.orange} />}
-              label="Checked Out"
+              label={t("booking.detail.checkedOut")}
               value={new Date(booking.checkOutAt).toLocaleString("en-NG", {
                 dateStyle: "medium",
                 timeStyle: "short",
@@ -1295,7 +1656,7 @@ export default function BookingDetailMain({
           {booking.checkInAt && booking.checkOutAt ? (
             <DetailItem
               icon={<FaClock size={14} color={c.orange} />}
-              label="Actual Duration"
+              label={t("booking.detail.actualDuration")}
               value={calcDuration(booking.checkInAt, booking.checkOutAt)}
               c={c}
             />
@@ -1303,7 +1664,7 @@ export default function BookingDetailMain({
           {booking.insuranceRef ? (
             <DetailItem
               icon={<FaShieldAlt size={14} color={c.orange} />}
-              label="Insurance"
+              label={t("booking.detail.insurance")}
               value={`${booking.insurancePlan || "Insured"} · Policy #${booking.insuranceRef}`}
               c={c}
             />
@@ -1312,20 +1673,23 @@ export default function BookingDetailMain({
             <>
               <DetailItem
                 icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                label="Subtotal"
+                label={t("booking.detail.total")}
                 value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
                 c={c}
               />
               <DetailItem
                 icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                label={`Platform Fee (${feePercent}%)`}
+                label={t("payment.options.labels.platformFee", {
+                  percent: feePercent,
+                  defaultValue: "Platform Fee ({{percent}}%)",
+                })}
                 value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
                 accent
                 c={c}
               />
               <DetailItem
                 icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                label="Total Payment"
+                label={t("booking.detail.totalPayment")}
                 value={`${currency} ${Number(p.grossTotal).toLocaleString()}`}
                 accent
                 c={c}
@@ -1335,20 +1699,23 @@ export default function BookingDetailMain({
             <>
               <DetailItem
                 icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                label="Total Earnings"
+                label={t("booking.detail.totalEarnings")}
                 value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
                 accent
                 c={c}
               />
               <DetailItem
                 icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                label={`Platform Fee (${feePercent}%)`}
+                label={t("payment.options.labels.platformFee", {
+                  percent: feePercent,
+                  defaultValue: "Platform Fee ({{percent}}%)",
+                })}
                 value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
                 c={c}
               />
               <DetailItem
                 icon={<FaMoneyBillWave size={14} color={c.orange} />}
-                label="Your Payout"
+                label={t("booking.detail.yourPayout")}
                 value={`${currency} ${Number(p.workerPayout).toLocaleString()}`}
                 accent
                 c={c}
@@ -1365,6 +1732,7 @@ export default function BookingDetailMain({
             checkInDistKm={checkInDistKm}
             checkOutDistKm={checkOutDistKm}
             c={c}
+            t={t}
           />
         ) : null}
 
@@ -1375,11 +1743,12 @@ export default function BookingDetailMain({
             hasReviewed={hasReviewed}
             onLeaveReview={onLeaveReview}
             c={c}
+            t={t}
           />
         ) : null}
 
         {booking.cancelReason ? (
-          <CancelReason reason={booking.cancelReason} c={c} />
+          <CancelReason reason={booking.cancelReason} c={c} t={t} />
         ) : null}
 
         <BottomActions
@@ -1390,6 +1759,7 @@ export default function BookingDetailMain({
           refundLoading={refundLoading}
           invoiceLoading={invoiceLoading}
           c={c}
+          t={t}
         />
       </View>
     );
@@ -1423,7 +1793,7 @@ export default function BookingDetailMain({
             style={{
               fontFamily: "Syne_700Bold",
               fontSize: 20,
-              fontWeight: "700",
+              fontWeight: "800",
               color: c.text,
               flex: 1,
               lineHeight: 26,
@@ -1442,13 +1812,14 @@ export default function BookingDetailMain({
             <AppText
               style={{
                 fontSize: 10,
-                fontWeight: "700",
+                fontWeight: "800",
                 color: badgeColor.fg,
                 textTransform: "uppercase",
                 letterSpacing: 0.5,
+                fontFamily: "DMSans_700Bold",
               }}
             >
-              {meta.label}
+              {t(meta.labelKey, meta.labelKey)}
             </AppText>
           </View>
         </View>
@@ -1463,7 +1834,12 @@ export default function BookingDetailMain({
             }}
           >
             <AppText
-              style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
+              style={{
+                fontSize: 11,
+                fontWeight: "800",
+                color: c.orange,
+                fontFamily: "DMSans_700Bold",
+              }}
             >
               {booking.category.name}
             </AppText>
@@ -1486,15 +1862,20 @@ export default function BookingDetailMain({
           >
             <FaHandshake size={10} color="#818cf8" />
             <AppText
-              style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+              style={{
+                fontSize: 11,
+                fontWeight: "800",
+                color: "#818cf8",
+                fontFamily: "DMSans_700Bold",
+              }}
             >
-              Negotiated rate
+              {t("booking.detail.negotiatedRate", "Negotiated rate")}
             </AppText>
           </View>
         ) : null}
       </View>
 
-      {step >= 0 ? <Timeline step={step} c={c} /> : null}
+      {step >= 0 ? <Timeline step={step} c={c} t={t} /> : null}
 
       {booking.status === "PENDING" && isHirer ? (
         <View
@@ -1512,9 +1893,17 @@ export default function BookingDetailMain({
           <FaHourglassHalf size={16} color="#fbbf24" style={{ marginTop: 2 }} />
           <View style={{ flex: 1 }}>
             <AppText
-              style={{ fontSize: 13, fontWeight: "700", color: "#fbbf24" }}
+              style={{
+                fontSize: 13,
+                fontWeight: "800",
+                color: "#fbbf24",
+                fontFamily: "DMSans_700Bold",
+              }}
             >
-              Waiting for {workerName || "the worker"} to respond
+              {t("booking.pending.waitingFor", {
+                name: workerName || "the worker",
+                defaultValue: "Waiting for {{name}} to respond",
+              })}
             </AppText>
             <AppText
               style={{
@@ -1522,18 +1911,28 @@ export default function BookingDetailMain({
                 color: c.textDim,
                 marginTop: 4,
                 lineHeight: 18,
+                fontFamily: "DMSans_400Regular",
               }}
             >
-              Your booking request has been sent. {workerName || "The worker"}{" "}
-              hasn't accepted yet — you'll be notified the moment they do. You
-              can cancel for free until they accept.
+              {t("booking.pending.description", {
+                name: workerName || "The worker",
+                defaultValue:
+                  "Your booking request has been sent. {{name}} hasn't accepted yet — you'll be notified the moment they do. You can cancel for free until they accept.",
+              })}
             </AppText>
           </View>
         </View>
       ) : null}
 
-      <Section title="Description" c={c}>
-        <AppText style={{ fontSize: 13, color: c.textDim, lineHeight: 20 }}>
+      <Section title={t("booking.section.description")} c={c}>
+        <AppText
+          style={{
+            fontSize: 13,
+            color: c.textDim,
+            lineHeight: 20,
+            fontFamily: "DMSans_400Regular",
+          }}
+        >
           {booking.description}
         </AppText>
         {booking.notes ? (
@@ -1550,7 +1949,14 @@ export default function BookingDetailMain({
             }}
           >
             <FaFileAlt size={12} color={c.textMuted} style={{ marginTop: 2 }} />
-            <AppText style={{ fontSize: 13, color: c.textDim, flex: 1 }}>
+            <AppText
+              style={{
+                fontSize: 13,
+                color: c.textDim,
+                flex: 1,
+                fontFamily: "DMSans_400Regular",
+              }}
+            >
               {booking.notes}
             </AppText>
           </View>
@@ -1558,7 +1964,7 @@ export default function BookingDetailMain({
       </Section>
 
       {booking.requirements || booking.responsibilities ? (
-        <Section title="Requirements & Responsibilities" c={c}>
+        <Section title={t("booking.section.reqResp")} c={c}>
           {booking.requirements ? (
             <View
               style={{
@@ -1582,14 +1988,21 @@ export default function BookingDetailMain({
                 <AppText
                   style={{
                     fontSize: 13,
-                    fontWeight: "600",
+                    fontWeight: "800",
                     color: c.text,
                     marginBottom: 2,
+                    fontFamily: "DMSans_700Bold",
                   }}
                 >
-                  Requirements
+                  {t("booking.jobPost.requirements")}
                 </AppText>
-                <AppText style={{ fontSize: 13, color: c.textDim }}>
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    color: c.textDim,
+                    fontFamily: "DMSans_400Regular",
+                  }}
+                >
                   {booking.requirements}
                 </AppText>
               </View>
@@ -1613,14 +2026,21 @@ export default function BookingDetailMain({
                 <AppText
                   style={{
                     fontSize: 13,
-                    fontWeight: "600",
+                    fontWeight: "800",
                     color: c.text,
                     marginBottom: 2,
+                    fontFamily: "DMSans_700Bold",
                   }}
                 >
-                  Responsibilities
+                  {t("booking.jobPost.responsibilities")}
                 </AppText>
-                <AppText style={{ fontSize: 13, color: c.textDim }}>
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    color: c.textDim,
+                    fontFamily: "DMSans_400Regular",
+                  }}
+                >
                   {booking.responsibilities}
                 </AppText>
               </View>
@@ -1629,10 +2049,10 @@ export default function BookingDetailMain({
         </Section>
       ) : null}
 
-      <Section title="Job Details" c={c}>
+      <Section title={t("booking.section.jobDetails")} c={c}>
         <DetailItem
           icon={<FaCalendarAlt size={14} color={c.orange} />}
-          label="Scheduled"
+          label={t("booking.detail.scheduled")}
           value={`${new Date(booking.scheduledAt).toLocaleDateString("en-GB", {
             weekday: "short",
             day: "numeric",
@@ -1645,16 +2065,62 @@ export default function BookingDetailMain({
           c={c}
         />
         {booking.address && booking.locationType !== "REMOTE" ? (
-          <DetailItem
-            icon={<FaMapMarkerAlt size={14} color={c.orange} />}
-            label="Job Site Address"
-            value={booking.address}
-            c={c}
-          />
+          <Pressable onPress={handleOpenMap}>
+            <DetailItem
+              icon={<FaMapMarkerAlt size={14} color={c.orange} />}
+              label={t("booking.job.address")}
+              value={
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: c.text,
+                      fontFamily: "DMSans_700Bold",
+                    }}
+                  >
+                    {booking.address}
+                  </AppText>
+                  {showMapLink && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginLeft: 4,
+                      }}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: c.orange,
+                          fontFamily: "DMSans_700Bold",
+                        }}
+                      >
+                        {t("booking.location.viewOnMaps")}
+                      </AppText>
+                      <FaExternalLinkAlt
+                        size={10}
+                        color={c.orange}
+                        style={{ marginLeft: 4 }}
+                      />
+                    </View>
+                  )}
+                </View>
+              }
+              c={c}
+            />
+          </Pressable>
         ) : null}
         <DetailItem
           icon={<FaMoneyBillWave size={14} color={c.orange} />}
-          label="Agreed Rate"
+          label={t("payment.options.labels.agreedRate")}
           value={`${booking.currency} ${Number(booking.agreedRate).toLocaleString()}`}
           accent
           c={c}
@@ -1662,7 +2128,7 @@ export default function BookingDetailMain({
         {booking.isNegotiated && booking.negotiatedRate ? (
           <DetailItem
             icon={<FaHandshake size={14} color={c.orange} />}
-            label="Negotiated Rate"
+            label={t("booking.detail.negotiatedRate")}
             value={`${booking.currency} ${Number(booking.negotiatedRate).toLocaleString()}`}
             accent
             c={c}
@@ -1671,7 +2137,7 @@ export default function BookingDetailMain({
         {booking.isNegotiated && booking.negotiationNote ? (
           <DetailItem
             icon={<FaFileAlt size={14} color={c.orange} />}
-            label="Negotiation Note"
+            label={t("booking.detail.negotiationNote")}
             value={booking.negotiationNote}
             c={c}
           />
@@ -1690,20 +2156,21 @@ export default function BookingDetailMain({
           <AppText
             style={{
               fontSize: 10,
-              fontWeight: "500",
+              fontWeight: "600",
               color: c.textMuted,
               textTransform: "uppercase",
               letterSpacing: 0.6,
+              fontFamily: "DMSans_700Bold",
             }}
           >
-            Est. Duration
+            {t("booking.detail.estDuration")}
           </AppText>
           {renderDuration()}
         </View>
         {booking.checkInAt ? (
           <DetailItem
             icon={<FaCheckCircle size={14} color={c.green} />}
-            label="Checked In"
+            label={t("booking.detail.checkedIn")}
             value={new Date(booking.checkInAt).toLocaleString("en-NG", {
               dateStyle: "medium",
               timeStyle: "short",
@@ -1714,7 +2181,7 @@ export default function BookingDetailMain({
         {booking.checkOutAt ? (
           <DetailItem
             icon={<FaFlag size={14} color={c.orange} />}
-            label="Checked Out"
+            label={t("booking.detail.checkedOut")}
             value={new Date(booking.checkOutAt).toLocaleString("en-NG", {
               dateStyle: "medium",
               timeStyle: "short",
@@ -1725,7 +2192,7 @@ export default function BookingDetailMain({
         {booking.checkInAt && booking.checkOutAt ? (
           <DetailItem
             icon={<FaClock size={14} color={c.orange} />}
-            label="Actual Duration"
+            label={t("booking.detail.actualDuration")}
             value={calcDuration(booking.checkInAt, booking.checkOutAt)}
             c={c}
           />
@@ -1733,7 +2200,7 @@ export default function BookingDetailMain({
         {booking.insuranceRef ? (
           <DetailItem
             icon={<FaShieldAlt size={14} color={c.orange} />}
-            label="Insurance"
+            label={t("booking.detail.insurance")}
             value={`${booking.insurancePlan || "Insured"} · Policy #${booking.insuranceRef}`}
             c={c}
           />
@@ -1741,18 +2208,19 @@ export default function BookingDetailMain({
         {booking.jobType ? (
           <DetailItem
             icon={<FaBriefcase size={14} color={c.orange} />}
-            label="Job Type"
-            value={JOB_TYPES[booking.jobType]?.label || booking.jobType}
+            label={t("booking.detail.jobType")}
+            value={t(JOB_TYPES[booking.jobType]?.labelKey, booking.jobType)}
             c={c}
           />
         ) : null}
         {booking.locationType ? (
           <DetailItem
             icon={<FaMapMarkerAlt size={14} color={c.orange} />}
-            label="Location Type"
-            value={
-              LOC_TYPES[booking.locationType]?.label || booking.locationType
-            }
+            label={t("booking.detail.locationType")}
+            value={t(
+              LOC_TYPES[booking.locationType]?.labelKey,
+              booking.locationType,
+            )}
             c={c}
           />
         ) : null}
@@ -1760,20 +2228,23 @@ export default function BookingDetailMain({
           <>
             <DetailItem
               icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label="Subtotal"
+              label={t("booking.detail.total")}
               value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
               c={c}
             />
             <DetailItem
               icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label={`Platform Fee (${feePercent}%)`}
+              label={t("payment.options.labels.platformFee", {
+                percent: feePercent,
+                defaultValue: "Platform Fee ({{percent}}%)",
+              })}
               value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
               accent
               c={c}
             />
             <DetailItem
               icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label="Total Payment"
+              label={t("booking.detail.totalPayment")}
               value={`${currency} ${Number(p.grossTotal).toLocaleString()}`}
               accent
               c={c}
@@ -1783,20 +2254,23 @@ export default function BookingDetailMain({
           <>
             <DetailItem
               icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label="Total Earnings"
+              label={t("booking.detail.totalEarnings")}
               value={`${currency} ${Number(p.subtotal).toLocaleString()}`}
               accent
               c={c}
             />
             <DetailItem
               icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label={`Platform Fee (${feePercent}%)`}
+              label={t("payment.options.labels.platformFee", {
+                percent: feePercent,
+                defaultValue: "Platform Fee ({{percent}}%)",
+              })}
               value={`${currency} ${Number(p.hirerFee).toLocaleString()}`}
               c={c}
             />
             <DetailItem
               icon={<FaMoneyBillWave size={14} color={c.orange} />}
-              label="Your Payout"
+              label={t("booking.detail.yourPayout")}
               value={`${currency} ${Number(p.workerPayout).toLocaleString()}`}
               accent
               c={c}
@@ -1813,6 +2287,7 @@ export default function BookingDetailMain({
           checkInDistKm={checkInDistKm}
           checkOutDistKm={checkOutDistKm}
           c={c}
+          t={t}
         />
       ) : null}
 
@@ -1823,11 +2298,12 @@ export default function BookingDetailMain({
           hasReviewed={hasReviewed}
           onLeaveReview={onLeaveReview}
           c={c}
+          t={t}
         />
       ) : null}
 
       {booking.cancelReason ? (
-        <CancelReason reason={booking.cancelReason} c={c} />
+        <CancelReason reason={booking.cancelReason} c={c} t={t} />
       ) : null}
 
       <BottomActions
@@ -1838,6 +2314,7 @@ export default function BookingDetailMain({
         refundLoading={refundLoading}
         invoiceLoading={invoiceLoading}
         c={c}
+        t={t}
       />
     </View>
   );
