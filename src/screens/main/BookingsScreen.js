@@ -259,7 +259,7 @@ function BookingCard({ booking }) {
           variant="title"
           weight="displayBlack"
           numberOfLines={2}
-          style={{ fontSize: 15, lineHeight: 20, marginTop: 2 }}
+          style={{ fontSize: 11, lineHeight: 18, marginTop: 2 }}
         >
           {booking.title}
         </AppText>
@@ -401,7 +401,7 @@ function BookingCard({ booking }) {
             <AppText
               variant="body"
               weight="displayBlack"
-              style={{ color: c.text, fontSize: 16 }}
+              style={{ color: c.text, fontSize: 11 }}
             >
               {booking.currency}{" "}
               {Number(booking.agreedRate || 0).toLocaleString()}
@@ -500,6 +500,7 @@ export default function BookingsScreen() {
               style={{
                 color: c.orange,
                 letterSpacing: 1.2,
+                fontSize: 9,
                 textTransform: "uppercase",
               }}
             >
@@ -516,7 +517,7 @@ export default function BookingsScreen() {
               <AppText
                 variant="title"
                 weight="displayBlack"
-                style={{ fontSize: 26 }}
+                style={{ fontSize: 15 }}
               >
                 {t("bookings.title", { defaultValue: "Bookings" })}
               </AppText>
@@ -542,9 +543,9 @@ export default function BookingsScreen() {
               <AppText
                 variant="small"
                 weight="bold"
-                style={{ color: c.bg, fontSize: 13 }}
+                style={{ color: c.bg, fontSize: 11 }}
               >
-                + {t("bookings.newBooking", { defaultValue: "New Booking" })}
+                {t("bookings.newBooking", { defaultValue: "New Booking" })}
               </AppText>
             </Pressable>
           )}
