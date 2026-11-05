@@ -41,7 +41,6 @@ import {
   FaGift,
   FaLock,
   FaShieldAlt,
-  FaTimes,
   FaCopy,
   FaCheck,
   FaPaperclip,
@@ -116,7 +115,7 @@ export default function InitiatePaymentScreen() {
       setCopied((prev) => ({ ...prev, [key]: true }));
       setTimeout(() => setCopied((prev) => ({ ...prev, [key]: false })), 2000);
     } catch {
-      toast.error(t("payment.initiate.errors.copyFailed", "Copy failed"));
+      toast.error("Copy failed");
     }
   };
 
@@ -129,15 +128,12 @@ export default function InitiatePaymentScreen() {
       setBookingStatus(b.status);
       return b;
     } catch (e) {
-      setError(
-        e?.response?.data?.message ||
-          t("payment.initiate.errors.loadBooking", "Could not load booking"),
-      );
+      setError(e?.response?.data?.message || "Could not load booking");
       return null;
     } finally {
       setLoading(false);
     }
-  }, [bookingId, t]);
+  }, [bookingId]);
 
   useEffect(() => {
     loadBooking();
@@ -172,17 +168,13 @@ export default function InitiatePaymentScreen() {
         awaitingBrowserReturnRef.current = false;
         if (!b) return;
         if (b.status === "ACCEPTED" && b.payment?.status === "HELD") {
-          toast.success(
-            t("payment.initiate.success.cardHeld", "Payment successful"),
-          );
+          toast.success("Payment successful");
           navigation.replace("BookingDetail", {
             bookingId,
             payment: "success",
           });
         } else if (b.payment?.status === "PENDING") {
-          toast.info(
-            t("payment.initiate.success.cardPending", "Payment pending"),
-          );
+          toast.info("Payment pending");
           navigation.replace("BookingDetail", {
             bookingId,
             payment: "pending",
@@ -202,22 +194,19 @@ export default function InitiatePaymentScreen() {
     [booking, referralApplied, referralAmount],
   );
 
-  // Fix the zero-total bug by explicitly falling back to booking.agreedRate
+  const isJobPostBooking = booking?.source === "JOB_POST";
+  const currency = p.currency || booking?.currency || "NGN";
+  const PLATFORM_FEE_RATE = getHirerFeeRate(currency);
+
   const displayedTotal = useMemo(() => {
     if (!booking) return 0;
-
-    // If p.totalCharged is already calculated properly, use it
     if (p.totalCharged > 0) return p.totalCharged;
-
-    // Fallback for Job Posts
     const baseAmount = isJobPostBooking
       ? Number(booking.agreedRate || 0)
       : Number(p.subtotal || booking.agreedRate || 0);
-
     const platformFee = isJobPostBooking
-      ? Math.round(baseAmount * getHirerFeeRate(currency) * 100) / 100
+      ? Math.round(baseAmount * PLATFORM_FEE_RATE * 100) / 100
       : Number(p.hirerFee || 0);
-
     const discount = referralApplied && referralAmount > 0 ? referralAmount : 0;
     return Math.max(0, baseAmount + platformFee - discount);
   }, [
@@ -226,13 +215,13 @@ export default function InitiatePaymentScreen() {
     p.subtotal,
     p.hirerFee,
     p.totalCharged,
-    currency,
+    PLATFORM_FEE_RATE,
     referralApplied,
     referralAmount,
   ]);
 
-  const isJobPostBooking = booking?.source === "JOB_POST";
-  const currency = p.currency || booking?.currency || "NGN";
+  const feePercentDisplay =
+    p.feePercent !== undefined ? p.feePercent : PLATFORM_FEE_RATE * 100;
 
   const handlePercentChange = (pct) => {
     const subtotal = p.subtotal || 0;
@@ -252,24 +241,15 @@ export default function InitiatePaymentScreen() {
   const pickReceipt = async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        toast.error(
-          t("payment.initiate.errors.mediaPermission", "Permission required"),
-        );
-        return;
-      }
+      if (!perm.granted) return toast.error("Permission required");
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
       });
       if (res.canceled) return;
       const asset = res.assets[0];
-      if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
-        toast.error(
-          t("payment.initiate.errors.fileTooLarge", "File too large (max 5MB)"),
-        );
-        return;
-      }
+      if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE)
+        return toast.error("File too large (max 5MB)");
       setCryptoReceiptFile({
         uri: asset.uri,
         name: asset.fileName || `receipt_${Date.now()}.jpg`,
@@ -277,9 +257,7 @@ export default function InitiatePaymentScreen() {
         size: asset.fileSize,
       });
     } catch {
-      toast.error(
-        t("payment.initiate.errors.imagePicker", "Could not open gallery"),
-      );
+      toast.error("Could not open gallery");
     }
   };
 
@@ -292,32 +270,13 @@ export default function InitiatePaymentScreen() {
         referralAmount: referralApplied ? referralAmount : 0,
       });
       const { paymentUrl } = res.data.data;
-      if (!paymentUrl) {
-        setError(
-          t("payment.initiate.errors.noPaymentUrl", "No payment URL received"),
-        );
-        return;
-      }
+      if (!paymentUrl) return setError("No payment URL received");
       const canOpen = await Linking.canOpenURL(paymentUrl);
-      if (!canOpen) {
-        setError(
-          t(
-            "payment.initiate.errors.cannotOpenUrl",
-            "Cannot open payment link",
-          ),
-        );
-        return;
-      }
+      if (!canOpen) return setError("Cannot open payment link");
       awaitingBrowserReturnRef.current = true;
       await Linking.openURL(paymentUrl);
     } catch (e) {
-      setError(
-        e?.response?.data?.message ||
-          t(
-            "payment.initiate.errors.cardInitiateFailed",
-            "Payment initiation failed",
-          ),
-      );
+      setError(e?.response?.data?.message || "Payment initiation failed");
     } finally {
       setPaying(false);
     }
@@ -337,28 +296,14 @@ export default function InitiatePaymentScreen() {
       setManualData(res.data.data);
       setConfirmStep("crypto");
     } catch (e) {
-      setError(
-        e?.response?.data?.message ||
-          t(
-            "payment.initiate.errors.cryptoInitiateFailed",
-            "Could not load crypto details",
-          ),
-      );
+      setError(e?.response?.data?.message || "Could not load crypto details");
     } finally {
       setPaying(false);
     }
   };
 
   const confirmCrypto = async () => {
-    if (!confirmForm.txHash) {
-      setError(
-        t(
-          "payment.initiate.errors.txHashRequired",
-          "Transaction hash is required",
-        ),
-      );
-      return;
-    }
+    if (!confirmForm.txHash) return setError("Transaction hash is required");
     setConfirming(true);
     setError("");
     try {
@@ -367,35 +312,21 @@ export default function InitiatePaymentScreen() {
       fd.append("cryptoCurrency", selectedCryptoToken);
       if (confirmForm.cryptoAmount)
         fd.append("cryptoAmount", confirmForm.cryptoAmount);
-      if (cryptoReceiptFile) {
+      if (cryptoReceiptFile)
         fd.append("proof", {
           uri: cryptoReceiptFile.uri,
           name: cryptoReceiptFile.name,
           type: cryptoReceiptFile.type,
         });
-      }
-      if (referralApplied && referralAmount > 0) {
+      if (referralApplied && referralAmount > 0)
         fd.append("referralAmount", String(referralAmount));
-      }
       await client.patch(`/payments/crypto/${bookingId}/confirm`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      toast.success(
-        t("payment.initiate.success.cryptoSubmitted", "Transfer confirmed"),
-      );
-      if (redirectTo) {
-        navigation.navigate("BookingDetail", { bookingId, payment: "success" });
-      } else {
-        navigation.replace("BookingDetail", { bookingId, payment: "success" });
-      }
+      toast.success("Transfer confirmed");
+      navigation.replace("BookingDetail", { bookingId, payment: "success" });
     } catch (e) {
-      setError(
-        e?.response?.data?.message ||
-          t(
-            "payment.initiate.errors.cryptoConfirmFailed",
-            "Confirmation failed",
-          ),
-      );
+      setError(e?.response?.data?.message || "Confirmation failed");
     } finally {
       setConfirming(false);
     }
@@ -414,9 +345,7 @@ export default function InitiatePaymentScreen() {
     setError("");
   };
 
-  const handleBack = () => {
-    navigation.navigate("BookingDetail", { bookingId });
-  };
+  const handleBack = () => navigation.navigate("BookingDetail", { bookingId });
 
   if (loading) {
     return (
@@ -435,7 +364,6 @@ export default function InitiatePaymentScreen() {
             style={{
               fontFamily: "Syne_800ExtraBold",
               fontSize: 18,
-              fontWeight: "800",
               color: c.text,
               textAlign: "center",
             }}
@@ -445,7 +373,7 @@ export default function InitiatePaymentScreen() {
           <Pressable onPress={handleBack} style={styles.backLink}>
             <FaArrowLeft size={12} color={c.textDim} />
             <AppText style={{ fontSize: 13, color: c.textDim, marginLeft: 4 }}>
-              {t("payment.initiate.actions.backToBookings", "Back to Bookings")}
+              Back to Bookings
             </AppText>
           </Pressable>
         </View>
@@ -473,7 +401,7 @@ export default function InitiatePaymentScreen() {
                   marginLeft: 4,
                 }}
               >
-                {t("payment.initiate.actions.changeMethod", "Change method")}
+                Change method
               </AppText>
             </Pressable>
             <View
@@ -559,7 +487,7 @@ export default function InitiatePaymentScreen() {
 
             {cd && (
               <View style={styles.summaryMeta}>
-                {cd.network ? (
+                {cd.network && (
                   <View style={styles.metaItem}>
                     <FaGlobe size={12} color={c.textDim} />
                     <View style={{ flex: 1 }}>
@@ -569,8 +497,8 @@ export default function InitiatePaymentScreen() {
                       </AppText>
                     </View>
                   </View>
-                ) : null}
-                {cd.wallet ? (
+                )}
+                {cd.wallet && (
                   <View style={styles.metaItem}>
                     <FaWallet size={12} color={c.textDim} />
                     <View style={{ flex: 1 }}>
@@ -597,8 +525,8 @@ export default function InitiatePaymentScreen() {
                       </View>
                     </View>
                   </View>
-                ) : null}
-                {cd.currency ? (
+                )}
+                {cd.currency && (
                   <View style={styles.metaItem}>
                     <FaBitcoin size={12} color={c.textDim} />
                     <View style={{ flex: 1 }}>
@@ -622,8 +550,8 @@ export default function InitiatePaymentScreen() {
                       </View>
                     </View>
                   </View>
-                ) : null}
-                {cd.note ? (
+                )}
+                {cd.note && (
                   <View style={styles.metaItem}>
                     <FaFileAlt size={12} color={c.textDim} />
                     <View style={{ flex: 1 }}>
@@ -650,7 +578,7 @@ export default function InitiatePaymentScreen() {
                       </View>
                     </View>
                   </View>
-                ) : null}
+                )}
               </View>
             )}
           </View>
@@ -664,7 +592,6 @@ export default function InitiatePaymentScreen() {
             <AppText style={styles.breakdownTitle}>
               CONFIRM YOUR TRANSFER
             </AppText>
-
             <View style={styles.manualFields}>
               <View style={styles.manualField}>
                 <AppText style={styles.manualLabel}>TRANSACTION HASH *</AppText>
@@ -792,7 +719,6 @@ export default function InitiatePaymentScreen() {
                   style={{
                     fontFamily: "Syne_800ExtraBold",
                     fontSize: 15,
-                    fontWeight: "800",
                     color: c.bg,
                   }}
                 >
@@ -808,7 +734,6 @@ export default function InitiatePaymentScreen() {
                   style={{
                     fontFamily: "Syne_800ExtraBold",
                     fontSize: 15,
-                    fontWeight: "800",
                     color: c.bg,
                   }}
                 >
@@ -845,7 +770,7 @@ export default function InitiatePaymentScreen() {
               <AppText
                 style={{ fontSize: 13, color: c.textDim, marginLeft: 4 }}
               >
-                {t("payment.initiate.actions.viewBooking", "View Booking")}
+                View Booking
               </AppText>
             </Pressable>
             <View
@@ -901,14 +826,14 @@ export default function InitiatePaymentScreen() {
                 value={`${formatPrice(p.agreedRate, currency)}${!isJobPostBooking ? p.unitSuffix || "" : ""}`}
                 c={c}
               />
-              {isJobPostBooking && booking?.estimatedValue ? (
+              {isJobPostBooking && booking?.estimatedValue && (
                 <BreakdownRow
                   label="Duration"
                   value={`${booking.estimatedValue} ${booking.estimatedUnit || "hours"}`}
                   c={c}
                 />
-              ) : null}
-              {!isJobPostBooking && p.hasQty ? (
+              )}
+              {!isJobPostBooking && p.hasQty && (
                 <>
                   <BreakdownRow
                     label="Duration"
@@ -921,9 +846,9 @@ export default function InitiatePaymentScreen() {
                     c={c}
                   />
                 </>
-              ) : null}
+              )}
               <BreakdownRow
-                label={`Service Fee (${p.feePercent}%)`}
+                label={`Service Fee (${feePercentDisplay}%)`}
                 value={`+ ${formatPrice(p.hirerFee, currency)}`}
                 c={c}
               />
@@ -933,14 +858,14 @@ export default function InitiatePaymentScreen() {
                 valueColor={c.green}
                 c={c}
               />
-              {referralApplied && referralAmount > 0 ? (
+              {referralApplied && referralAmount > 0 && (
                 <BreakdownRow
                   label="Referral bonus"
                   value={`− ${formatPrice(referralAmount, currency)}`}
                   valueColor={c.green}
                   c={c}
                 />
-              ) : null}
+              )}
               <View
                 style={[styles.breakdownDivider, { backgroundColor: c.border }]}
               />
@@ -980,7 +905,6 @@ export default function InitiatePaymentScreen() {
               style={{
                 fontFamily: "Syne_800ExtraBold",
                 fontSize: 15,
-                fontWeight: "800",
                 color: c.textDim,
               }}
             >
@@ -999,7 +923,7 @@ export default function InitiatePaymentScreen() {
           <Pressable onPress={handleBack} style={styles.backLink}>
             <FaArrowLeft size={11} color={c.textDim} />
             <AppText style={{ fontSize: 13, color: c.textDim, marginLeft: 4 }}>
-              {t("payment.initiate.actions.backToBooking", "Back to Booking")}
+              Back to Booking
             </AppText>
           </Pressable>
           <View
@@ -1145,7 +1069,6 @@ export default function InitiatePaymentScreen() {
                       style={{
                         fontFamily: "Syne_800ExtraBold",
                         fontSize: 14,
-                        fontWeight: "800",
                         color: c.orange,
                       }}
                     >
@@ -1232,7 +1155,7 @@ export default function InitiatePaymentScreen() {
               </>
             )}
             <BreakdownRow
-              label={`Service Fee (${p.feePercent}%)`}
+              label={`Service Fee (${feePercentDisplay}%)`}
               value={`+ ${formatPrice(p.hirerFee, currency)}`}
               c={c}
             />
@@ -1319,16 +1242,20 @@ export default function InitiatePaymentScreen() {
                 <View style={{ flex: 1 }}>
                   <AppText
                     style={{
-                      fontFamily: "DMSans_400Regular",
+                      fontFamily: "DMSans_700Bold",
                       fontSize: 13,
-                      fontWeight: "700",
                       color: method === m.id ? c.orange : c.text,
                     }}
                   >
                     {m.id === "card" ? "Card / Mobile Money" : "Crypto"}
                   </AppText>
                   <AppText
-                    style={{ fontSize: 11, color: c.textMuted, marginTop: 1 }}
+                    style={{
+                      fontSize: 11,
+                      color: c.textMuted,
+                      marginTop: 1,
+                      fontFamily: "DMSans_400Regular",
+                    }}
                   >
                     {m.id === "card"
                       ? "Redirected to Flutterwave or Paystack"
@@ -1358,7 +1285,13 @@ export default function InitiatePaymentScreen() {
                 { backgroundColor: c.bgCard, borderColor: c.border },
               ]}
             >
-              <AppText style={{ fontSize: 12, color: c.textDim }}>
+              <AppText
+                style={{
+                  fontSize: 12,
+                  color: c.textDim,
+                  fontFamily: "DMSans_400Regular",
+                }}
+              >
                 {booking?.currency === "NGN"
                   ? "💚 You'll be redirected to Paystack to pay securely in NGN."
                   : "🦋 You'll be redirected to Flutterwave to pay securely."}
@@ -1403,7 +1336,6 @@ export default function InitiatePaymentScreen() {
                 style={{
                   fontFamily: "Syne_800ExtraBold",
                   fontSize: 15,
-                  fontWeight: "800",
                   color: c.bg,
                 }}
               >
@@ -1419,7 +1351,6 @@ export default function InitiatePaymentScreen() {
                 style={{
                   fontFamily: "Syne_800ExtraBold",
                   fontSize: 15,
-                  fontWeight: "800",
                   color: c.bg,
                 }}
               >
@@ -1435,7 +1366,6 @@ export default function InitiatePaymentScreen() {
                 style={{
                   fontFamily: "Syne_800ExtraBold",
                   fontSize: 15,
-                  fontWeight: "800",
                   color: c.bg,
                 }}
               >
@@ -1453,6 +1383,7 @@ export default function InitiatePaymentScreen() {
             textAlign: "center",
             marginTop: 8,
             lineHeight: 16,
+            fontFamily: "DMSans_400Regular",
           }}
         >
           Powered by Flutterwave & Paystack · Escrow protected · Refund policy
@@ -1463,7 +1394,12 @@ export default function InitiatePaymentScreen() {
           <View style={styles.trustItem}>
             <FaLock size={9} color={c.textMuted} />
             <AppText
-              style={{ fontSize: 11, color: c.textMuted, marginLeft: 3 }}
+              style={{
+                fontSize: 11,
+                color: c.textMuted,
+                marginLeft: 3,
+                fontFamily: "DMSans_400Regular",
+              }}
             >
               256-bit SSL
             </AppText>
@@ -1471,7 +1407,12 @@ export default function InitiatePaymentScreen() {
           <View style={styles.trustItem}>
             <FaShieldAlt size={9} color={c.textMuted} />
             <AppText
-              style={{ fontSize: 11, color: c.textMuted, marginLeft: 3 }}
+              style={{
+                fontSize: 11,
+                color: c.textMuted,
+                marginLeft: 3,
+                fontFamily: "DMSans_400Regular",
+              }}
             >
               Escrow protected
             </AppText>
@@ -1492,7 +1433,6 @@ export default function InitiatePaymentScreen() {
   );
 }
 
-// ── Sub-components ──
 function BreakdownRow({ label, value, valueColor, total, c }) {
   return (
     <View style={styles.breakdownRow}>
@@ -1520,7 +1460,7 @@ function BreakdownRow({ label, value, valueColor, total, c }) {
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
-  payWrap: { padding: 16, paddingBottom: 40, gap: 16 },
+  payWrap: { padding: 12, paddingBottom: 40, gap: 12 },
   payHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -1532,207 +1472,234 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
   },
   payBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
     borderWidth: 1,
   },
-  summaryCard: { borderRadius: 16, borderWidth: 1, padding: 20 },
+  summaryCard: { borderRadius: 12, borderWidth: 1, padding: 14 },
   summaryTop: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 14,
-    marginBottom: 14,
+    gap: 12,
+    marginBottom: 12,
   },
   summaryIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   summaryLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.8,
     color: "#888",
     marginBottom: 4,
+    fontFamily: "DMSans_700Bold",
   },
   summaryTitle: {
     fontFamily: "Syne_800ExtraBold",
-    fontSize: 17,
-    fontWeight: "800",
+    fontSize: 15,
     color: "#fff",
-    lineHeight: 20,
+    lineHeight: 18,
     marginBottom: 3,
   },
-  summaryCategory: { fontSize: 13, fontWeight: "600", color: "#f97316" },
+  summaryCategory: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#f97316",
+    fontFamily: "DMSans_700Bold",
+  },
   summaryMeta: {
     gap: 8,
-    paddingTop: 14,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: "#333",
   },
   metaItem: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  metaText: { fontSize: 13, color: "#aaa", flex: 1 },
+  metaText: {
+    fontSize: 12,
+    color: "#aaa",
+    flex: 1,
+    fontFamily: "DMSans_400Regular",
+  },
   metaRowLabel: {
-    fontSize: 10,
+    fontSize: 9,
     textTransform: "uppercase",
     letterSpacing: 0.6,
     color: "#666",
+    fontFamily: "DMSans_700Bold",
   },
   metaRowValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: "#fff",
     flexWrap: "wrap",
+    fontFamily: "DMSans_700Bold",
   },
-  breakdownCard: { borderRadius: 16, borderWidth: 1, padding: 20 },
+  breakdownCard: { borderRadius: 12, borderWidth: 1, padding: 14 },
   breakdownTitle: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1,
     color: "#666",
-    marginBottom: 14,
+    marginBottom: 12,
+    fontFamily: "DMSans_700Bold",
   },
-  breakdownRows: { gap: 10 },
+  breakdownRows: { gap: 8 },
   breakdownRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  breakdownLabel: { fontSize: 13, flex: 1, marginRight: 8 },
-  breakdownVal: { fontSize: 13, fontWeight: "600", textAlign: "right" },
+  breakdownLabel: {
+    fontSize: 12,
+    flex: 1,
+    marginRight: 8,
+    fontFamily: "DMSans_400Regular",
+  },
+  breakdownVal: {
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "right",
+    fontFamily: "DMSans_700Bold",
+  },
   breakdownDivider: { height: 1, marginVertical: 4 },
   breakdownLabelTotal: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
     flex: 1,
     marginRight: 8,
+    fontFamily: "DMSans_700Bold",
   },
   breakdownValTotal: {
     fontFamily: "Syne_800ExtraBold",
-    fontSize: 17,
-    fontWeight: "800",
+    fontSize: 15,
     textAlign: "right",
   },
   escrowNote: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
-    borderRadius: 10,
+    gap: 8,
+    borderRadius: 8,
     borderWidth: 1,
-    padding: 14,
+    padding: 10,
     marginTop: 8,
   },
   jobPostNote: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
-    borderRadius: 10,
+    gap: 8,
+    borderRadius: 8,
     borderWidth: 1,
-    padding: 12,
-    marginTop: 12,
+    padding: 10,
+    marginTop: 10,
   },
-  referralSection: { borderRadius: 10, borderWidth: 1, padding: 14, gap: 10 },
-  referralHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  referralTitle: { fontSize: 13, fontWeight: "600", color: "#fff", flex: 1 },
-  referralSliderWrap: { gap: 8 },
-  presetRow: { flexDirection: "row", gap: 8 },
+  referralSection: { borderRadius: 8, borderWidth: 1, padding: 12, gap: 8 },
+  referralHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  referralTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#fff",
+    flex: 1,
+    fontFamily: "DMSans_700Bold",
+  },
+  referralSliderWrap: { gap: 6 },
+  presetRow: { flexDirection: "row", gap: 6 },
   presetPill: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
   },
-  referralRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  referralRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   referralPercent: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
     color: "#f97316",
-    minWidth: 40,
+    minWidth: 34,
+    fontFamily: "DMSans_700Bold",
   },
   referralAmount: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#fff",
     flex: 1,
     textAlign: "right",
+    fontFamily: "DMSans_700Bold",
   },
   referralToggleBtn: {
     borderWidth: 1,
     borderRadius: 6,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderColor: "#333",
   },
-  methodGrid: { gap: 8 },
+  methodGrid: { gap: 6 },
   methodCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     borderWidth: 1.5,
   },
-  providerNote: { marginTop: 10, borderRadius: 8, borderWidth: 1, padding: 10 },
-  manualFields: { gap: 12 },
-  manualField: { gap: 5 },
+  providerNote: { marginTop: 8, borderRadius: 6, borderWidth: 1, padding: 8 },
+  manualFields: { gap: 10 },
+  manualField: { gap: 4 },
   manualLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.7,
     color: "#aaa",
+    fontFamily: "DMSans_700Bold",
   },
   manualInput: {
     borderWidth: 1,
-    borderRadius: 9,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    fontSize: 14,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    fontFamily: "DMSans_400Regular",
   },
   fileUploadBtn: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
     borderWidth: 1.5,
     borderStyle: "dashed",
   },
-  copyFieldBtn: { padding: 6, marginLeft: 4 },
+  copyFieldBtn: { padding: 4, marginLeft: 4 },
   inlineError: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 10,
+    gap: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    padding: 12,
+    padding: 10,
   },
   payBtn: {
     width: "100%",
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-  },
-  payDisclaimer: {
-    textAlign: "center",
-    fontSize: 11,
-    color: "#888",
-    lineHeight: 16,
   },
   verifyWrap: {
     alignItems: "center",
@@ -1742,23 +1709,23 @@ const styles = StyleSheet.create({
   },
   verifyTitle: {
     fontFamily: "Syne_800ExtraBold",
-    fontSize: 20,
-    fontWeight: "800",
+    fontSize: 18,
     color: "#fff",
     textAlign: "center",
   },
   verifyText: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#aaa",
     textAlign: "center",
     lineHeight: 18,
+    fontFamily: "DMSans_400Regular",
   },
   trustRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     flexWrap: "wrap",
-    gap: 16,
+    gap: 12,
   },
   trustItem: { flexDirection: "row", alignItems: "center" },
   errorBox: {

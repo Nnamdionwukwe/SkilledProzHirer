@@ -26,7 +26,6 @@ const CRYPTO_TOKENS = [
 
 const COINGECKO_IDS = CRYPTO_TOKENS.map((t) => t.coingeckoId).join(",");
 
-// Helper to format numbers with commas
 function formatNumber(amount, decimals = 2) {
   return Number(amount).toLocaleString(undefined, {
     minimumFractionDigits: decimals,
@@ -133,10 +132,7 @@ export default function CryptoRateConverter({
               fontFamily: "DMSans_400Regular",
             }}
           >
-            {t(
-              "payment.cryptoConverter.loading",
-              "Loading live exchange rates…",
-            )}
+            Loading live exchange rates…
           </AppText>
         </View>
       </View>
@@ -161,8 +157,7 @@ export default function CryptoRateConverter({
               fontFamily: "DMSans_400Regular",
             }}
           >
-            {t("payment.cryptoConverter.error", "Could not load rates")}:{" "}
-            {error}
+            Could not load rates: {error}
           </AppText>
           <Pressable
             onPress={fetchRates}
@@ -176,7 +171,7 @@ export default function CryptoRateConverter({
                 fontFamily: "DMSans_700Bold",
               }}
             >
-              {t("payment.cryptoConverter.retry", "Retry")}
+              Retry
             </AppText>
           </Pressable>
         </View>
@@ -191,29 +186,26 @@ export default function CryptoRateConverter({
         { backgroundColor: c.bgPanel, borderColor: c.border },
       ]}
     >
-      {/* Header */}
       <View style={styles.header}>
         <AppText
           style={{
             fontWeight: "700",
-            fontSize: 14,
+            fontSize: 13,
             color: c.text,
             fontFamily: "Syne_700Bold",
           }}
         >
-          {t("payment.cryptoConverter.title", "Live Crypto Rates")}
+          Live Crypto Rates
         </AppText>
         <View style={styles.headerRight}>
           <AppText
             style={{
-              fontSize: 11,
+              fontSize: 10,
               color: c.textMuted,
               fontFamily: "DMSans_400Regular",
             }}
           >
-            {lastUpdated
-              ? `${t("payment.cryptoConverter.updated", "Updated")}: ${lastUpdated.toLocaleTimeString()}`
-              : "—"}
+            {lastUpdated ? `Updated: ${lastUpdated.toLocaleTimeString()}` : "—"}
           </AppText>
           <Pressable
             onPress={fetchRates}
@@ -224,13 +216,12 @@ export default function CryptoRateConverter({
             {loading ? (
               <ActivityIndicator size="small" color={c.orange} />
             ) : (
-              <FaSync size={14} color={c.textDim} />
+              <FaSync size={12} color={c.textDim} />
             )}
           </Pressable>
         </View>
       </View>
 
-      {/* You pay */}
       <View
         style={[
           styles.amountDisplay,
@@ -239,17 +230,17 @@ export default function CryptoRateConverter({
       >
         <AppText
           style={{
-            fontSize: 13,
+            fontSize: 12,
             color: c.textDim,
             fontFamily: "DMSans_400Regular",
           }}
         >
-          {t("payment.cryptoConverter.youPay", "You pay")}:
+          You pay:
         </AppText>
         <AppText
           style={{
             fontWeight: "800",
-            fontSize: 17,
+            fontSize: 16,
             color: c.orange,
             fontFamily: "Syne_800ExtraBold",
           }}
@@ -258,7 +249,6 @@ export default function CryptoRateConverter({
         </AppText>
       </View>
 
-      {/* Token Grid */}
       <View style={styles.tokenGrid}>
         {CRYPTO_TOKENS.map((token) => {
           const Icon = token.icon;
@@ -284,13 +274,13 @@ export default function CryptoRateConverter({
               ]}
             >
               <View style={styles.tokenIcon}>
-                <Icon size={22} color={isSelected ? c.orange : c.textDim} />
+                <Icon size={20} color={isSelected ? c.orange : c.textDim} />
               </View>
               <View style={styles.tokenInfo}>
                 <AppText
                   style={{
                     fontWeight: "700",
-                    fontSize: 13,
+                    fontSize: 12,
                     color: isSelected ? c.orange : c.text,
                     fontFamily: "DMSans_700Bold",
                   }}
@@ -299,7 +289,7 @@ export default function CryptoRateConverter({
                 </AppText>
                 <AppText
                   style={{
-                    fontSize: 10,
+                    fontSize: 9,
                     color: c.textMuted,
                     fontFamily: "DMSans_400Regular",
                     marginTop: 1,
@@ -307,11 +297,11 @@ export default function CryptoRateConverter({
                 >
                   {rate
                     ? `1 ${token.label} = ${fiatCurrency} ${formatNumber(rate, 2)}`
-                    : t("payment.cryptoConverter.noRate", "No rate")}
+                    : "No rate"}
                 </AppText>
                 <AppText
                   style={{
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: "700",
                     color: isSelected ? c.orange : c.textDim,
                     fontFamily: "DMSans_700Bold",
@@ -324,7 +314,7 @@ export default function CryptoRateConverter({
               {isSelected && (
                 <View style={styles.checkmark}>
                   <AppText
-                    style={{ color: c.green, fontWeight: "700", fontSize: 12 }}
+                    style={{ color: c.green, fontWeight: "700", fontSize: 11 }}
                   >
                     ✓
                   </AppText>
@@ -335,7 +325,6 @@ export default function CryptoRateConverter({
         })}
       </View>
 
-      {/* Result Box */}
       {selectedRate && cryptoAmount > 0 && (
         <View
           style={[
@@ -346,13 +335,13 @@ export default function CryptoRateConverter({
           <View style={styles.resultRow}>
             <AppText
               style={{
-                fontSize: 13,
+                fontSize: 12,
                 color: c.text,
                 flex: 1,
                 fontFamily: "DMSans_400Regular",
               }}
             >
-              {t("payment.cryptoConverter.needToSend", "You need to send")}{" "}
+              You need to send{" "}
               <AppText
                 style={{
                   fontWeight: "800",
@@ -372,35 +361,31 @@ export default function CryptoRateConverter({
                   : { backgroundColor: c.bgCard, borderColor: c.border },
               ]}
             >
-              <FaCopy size={11} color={copied ? c.green : c.textDim} />
+              <FaCopy size={10} color={copied ? c.green : c.textDim} />
               <AppText
                 style={{
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: "600",
-                  marginLeft: 6,
+                  marginLeft: 4,
                   color: copied ? c.green : c.textDim,
                   fontFamily: "DMSans_700Bold",
                 }}
               >
-                {copied
-                  ? t("payment.cryptoConverter.copied", "Copied!")
-                  : t("payment.cryptoConverter.copy", "Copy")}
+                {copied ? "Copied!" : "Copy"}
               </AppText>
             </Pressable>
           </View>
           <AppText
             style={{
-              fontSize: 11,
+              fontSize: 10,
               color: c.textMuted,
               marginTop: 6,
               fontStyle: "italic",
               fontFamily: "DMSans_400Regular",
             }}
           >
-            {t(
-              "payment.cryptoConverter.note",
-              "Rates are live and may change. The exact amount may vary slightly when you complete the transfer.",
-            )}
+            Rates are live and may change. The exact amount may vary slightly
+            when you complete the transfer.
           </AppText>
         </View>
       )}
@@ -410,28 +395,28 @@ export default function CryptoRateConverter({
 
 const styles = StyleSheet.create({
   converter: {
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 20,
-    marginTop: 16,
-    marginBottom: 16,
+    padding: 14,
+    marginTop: 12,
+    marginBottom: 12,
   },
-  loading: { alignItems: "center", paddingVertical: 32, gap: 12 },
-  error: { alignItems: "center", paddingVertical: 32, gap: 12 },
-  retryBtn: { borderRadius: 6, paddingHorizontal: 20, paddingVertical: 6 },
+  loading: { alignItems: "center", paddingVertical: 24, gap: 12 },
+  error: { alignItems: "center", paddingVertical: 24, gap: 12 },
+  retryBtn: { borderRadius: 6, paddingHorizontal: 16, paddingVertical: 6 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   refreshBtn: { padding: 4 },
   amountDisplay: {
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -441,40 +426,40 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   tokenCard: {
     width: "48%",
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     borderWidth: 1.5,
     position: "relative",
   },
-  tokenIcon: { width: 22, alignItems: "center", justifyContent: "center" },
+  tokenIcon: { width: 20, alignItems: "center", justifyContent: "center" },
   tokenInfo: { flex: 1, gap: 2 },
   checkmark: { position: "absolute", top: 6, right: 8 },
   resultBox: {
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderWidth: 1,
   },
   resultRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 8,
   },
   copyBtn: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
 });
