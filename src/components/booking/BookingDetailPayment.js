@@ -1,21 +1,7 @@
 // src/components/booking/BookingDetailPayment.js
-//
-// Verbatim port of components/booking/BookingDetail/BookingDetailPayment.jsx
-//
-// Two render paths:
-//   · payment PENDING or missing → renderFeeBreakdown()
-//       - Worker branch  OR  Hirer branch
-//       - Fixed-total view (job-post / negotiated) OR rate × qty view
-//       - Referral slider (hirer only, NGN only, wallet > 0)
-//       - Pay Now banner (hirer only, paymentRequired)
-//   · payment HELD / RELEASED / REFUNDED / FAILED → renderPaymentCard() receipt
-//
-// Currency-aware fees: getHirerFeeRate(currency) × 100 (never hardcoded).
-//
-// i18n: every visible string uses t() under `payment.detail.*`.
 
 import React from "react";
-import { Linking, Pressable, View } from "react-native";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 
@@ -37,41 +23,31 @@ function getFeePercent(currency = "NGN") {
 }
 
 function formatPrice(amount, currency = "NGN") {
-  const n = Number(amount) || 0;
-  return `${currency} ${n.toLocaleString(undefined, {
+  if (amount == null) return `${currency} 0.00`;
+  return `${currency} ${Number(amount).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────
+
 function PayRow({ label, value, muted, green, capitalize, mono, extra, c }) {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingVertical: 8,
-        gap: 8,
-      }}
-    >
-      <AppText style={{ fontSize: 12, color: c.textDim, flexShrink: 1 }}>
-        {label}
-      </AppText>
+    <View style={styles.paymentRow}>
+      <AppText style={[styles.payLabel, { color: c.textDim }]}>{label}</AppText>
       {extra ? (
         extra
       ) : (
         <AppText
-          style={{
-            fontSize: 13,
-            fontWeight: "700",
-            color: green ? c.green : muted ? c.textDim : c.text,
-            textTransform: capitalize ? "capitalize" : "none",
-            fontFamily: mono ? "Courier" : undefined,
-            textAlign: "right",
-            flexShrink: 1,
-          }}
+          style={[
+            styles.payValue,
+            { color: c.text },
+            muted && [styles.payMuted, { color: c.textDim }],
+            green && [styles.payGreen, { color: c.green }],
+            capitalize && { textTransform: "capitalize" },
+            mono && styles.payRef,
+          ]}
         >
           {value}
         </AppText>
@@ -82,24 +58,25 @@ function PayRow({ label, value, muted, green, capitalize, mono, extra, c }) {
 
 function FeeRow({ label, value, c }) {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-      }}
-    >
-      <AppText style={{ fontSize: 13, color: c.textDim, flexShrink: 1 }}>
+    <View style={styles.feeRow}>
+      <AppText
+        style={{
+          fontSize: 12,
+          color: c.textDim,
+          flexShrink: 1,
+          fontFamily: "DMSans_400Regular",
+        }}
+      >
         {label}
       </AppText>
       {typeof value === "string" ? (
         <AppText
           style={{
-            fontSize: 13,
+            fontSize: 12,
             color: c.text,
             textAlign: "right",
             flexShrink: 1,
+            fontFamily: "DMSans_700Bold",
           }}
         >
           {value}
@@ -113,26 +90,16 @@ function FeeRow({ label, value, c }) {
 
 function FeeTotal({ label, value, c }) {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-        paddingTop: 8,
-        borderTopColor: c.border,
-        borderTopWidth: 1,
-        marginTop: 2,
-      }}
-    >
-      <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
+    <View style={[styles.feeTotal, { borderTopColor: c.border }]}>
+      <AppText
+        style={{ fontSize: 13, fontFamily: "DMSans_700Bold", color: c.text }}
+      >
         {label}
       </AppText>
       <AppText
         style={{
           fontFamily: "Syne_800ExtraBold",
-          fontSize: 20,
-          fontWeight: "800",
+          fontSize: 12,
           color: c.orange,
         }}
       >
@@ -142,7 +109,6 @@ function FeeTotal({ label, value, c }) {
   );
 }
 
-// ── Referral slider — replaces HTML <input type="range"> with +/− steps ─
 function ReferralSlider({ value, onChange, disabled, c }) {
   const step = 5;
   return (
@@ -151,36 +117,27 @@ function ReferralSlider({ value, onChange, disabled, c }) {
         onPress={() => !disabled && onChange(Math.max(0, Number(value) - step))}
         disabled={disabled || Number(value) <= 0}
         hitSlop={6}
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: c.border,
-          alignItems: "center",
-          justifyContent: "center",
-          opacity: disabled || Number(value) <= 0 ? 0.4 : 1,
-        }}
+        style={[
+          styles.sliderBtn,
+          {
+            borderColor: c.border,
+            opacity: disabled || Number(value) <= 0 ? 0.4 : 1,
+          },
+        ]}
       >
-        <AppText style={{ fontSize: 18, color: c.text, lineHeight: 20 }}>
+        <AppText style={{ fontSize: 16, color: c.text, lineHeight: 18 }}>
           −
         </AppText>
       </Pressable>
-      <View
-        style={{
-          flex: 1,
-          height: 6,
-          borderRadius: 3,
-          backgroundColor: c.border,
-          overflow: "hidden",
-        }}
-      >
+      <View style={[styles.sliderTrack, { backgroundColor: c.border }]}>
         <View
-          style={{
-            height: "100%",
-            width: `${Math.min(100, Math.max(0, Number(value)))}%`,
-            backgroundColor: c.orange,
-          }}
+          style={[
+            styles.sliderFill,
+            {
+              backgroundColor: c.orange,
+              width: `${Math.min(100, Math.max(0, Number(value)))}%`,
+            },
+          ]}
         />
       </View>
       <Pressable
@@ -189,18 +146,15 @@ function ReferralSlider({ value, onChange, disabled, c }) {
         }
         disabled={disabled || Number(value) >= 100}
         hitSlop={6}
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: c.border,
-          alignItems: "center",
-          justifyContent: "center",
-          opacity: disabled || Number(value) >= 100 ? 0.4 : 1,
-        }}
+        style={[
+          styles.sliderBtn,
+          {
+            borderColor: c.border,
+            opacity: disabled || Number(value) >= 100 ? 0.4 : 1,
+          },
+        ]}
       >
-        <AppText style={{ fontSize: 18, color: c.text, lineHeight: 20 }}>
+        <AppText style={{ fontSize: 16, color: c.text, lineHeight: 18 }}>
           +
         </AppText>
       </Pressable>
@@ -208,7 +162,6 @@ function ReferralSlider({ value, onChange, disabled, c }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════
 export default function BookingDetailPayment({
   booking,
   payment,
@@ -233,7 +186,6 @@ export default function BookingDetailPayment({
   const c = theme.colors;
 
   const isJobPostBooking = booking?.source === "JOB_POST";
-
   const feeCurrency =
     (feeBreakdown && feeBreakdown.currency) || booking?.currency || "NGN";
   const feePercent = getFeePercent(feeCurrency);
@@ -267,22 +219,18 @@ export default function BookingDetailPayment({
         }`
       : null;
 
-  // ── Card pay → navigate to InitiatePayment screen ──────────────────
   const handleCardPay = () => {
     if (!booking?.id) return;
     navigation.navigate("InitiatePayment", { bookingId: booking.id });
   };
 
-  // ══════════════════════════════════════════════════════════════════════
-  // renderFeeBreakdown
-  // ══════════════════════════════════════════════════════════════════════
   const renderFeeBreakdown = () => {
     if (!feeBreakdown) return null;
 
     const isNegotiated = booking.isNegotiated && booking.negotiatedRate;
     const isFixedTotalView = isNegotiated || isJobPostBooking;
 
-    // ── Worker view ────────────────────────────────────────────
+    // ── Worker View ──
     if (isWorker) {
       const cur = feeBreakdown.currency || "NGN";
       const workerPayout = feeBreakdown.workerPayout || 0;
@@ -290,30 +238,23 @@ export default function BookingDetailPayment({
 
       return (
         <View
-          style={{
-            backgroundColor: c.bgCard,
-            borderColor: c.orange,
-            borderWidth: 1.5,
-            borderRadius: 12,
-            padding: 14,
-            gap: 8,
-          }}
+          style={[
+            styles.feeBreakdown,
+            { backgroundColor: c.bgCard, borderColor: c.orange },
+          ]}
         >
-          <AppText
-            style={{
-              fontSize: 11,
-              fontWeight: "700",
-              textTransform: "uppercase",
-              letterSpacing: 0.8,
-              color: c.textMuted,
-              marginBottom: 2,
-            }}
-          >
+          <AppText style={[styles.feeBreakdownLabel, { color: c.textMuted }]}>
             {isNegotiated
-              ? t("payment.detail.titles.agreedTotalNegotiated")
+              ? t(
+                  "payment.detail.titles.agreedTotalNegotiated",
+                  "Agreed Total (Negotiated)",
+                )
               : isJobPostBooking
-                ? t("payment.detail.titles.yourEarningsJobPost")
-                : t("payment.detail.titles.yourEarnings")}
+                ? t(
+                    "payment.detail.titles.yourEarningsJobPost",
+                    "Your Earnings (From Job Post)",
+                  )
+                : t("payment.detail.titles.yourEarnings", "Your Earnings")}
           </AppText>
 
           {isFixedTotalView ? (
@@ -321,40 +262,51 @@ export default function BookingDetailPayment({
               <FeeRow
                 label={
                   isNegotiated
-                    ? t("payment.detail.labels.agreedTotal")
-                    : t("payment.detail.labels.selectedAmount")
+                    ? t("payment.detail.labels.agreedTotal", "Agreed Total")
+                    : t(
+                        "payment.detail.labels.selectedAmount",
+                        "Selected Amount",
+                      )
                 }
                 value={formatPrice(agreedRate, cur)}
                 c={c}
               />
-              {isJobPostBooking && realDurationText ? (
+              {isJobPostBooking && realDurationText && (
                 <FeeRow
-                  label={t("payment.detail.labels.duration")}
+                  label={t("payment.detail.labels.duration", "Duration")}
                   value={
-                    <AppText style={{ fontSize: 13, color: c.text }}>
+                    <AppText
+                      style={{
+                        fontSize: 12,
+                        color: c.text,
+                        fontFamily: "DMSans_700Bold",
+                      }}
+                    >
                       {realDurationText}
-                      {booking.estimatedHours ? (
-                        <AppText style={{ color: c.textMuted, fontSize: 11 }}>
+                      {booking.estimatedHours && (
+                        <AppText style={{ color: c.textMuted, fontSize: 10 }}>
                           {" "}
                           {t("payment.detail.labels.approxHours", {
                             hours: booking.estimatedHours,
+                            defaultValue: "(≈ {{hours}}h)",
                           })}
                         </AppText>
-                      ) : null}
+                      )}
                     </AppText>
                   }
                   c={c}
                 />
-              ) : null}
+              )}
               <FeeRow
                 label={t("payment.detail.labels.platformFee", {
                   percent: feePercent,
+                  defaultValue: "Platform Fee ({{percent}}%)",
                 })}
                 value={`+ ${formatPrice(feeBreakdown.platformFee || 0, cur)}`}
                 c={c}
               />
               <FeeTotal
-                label={t("payment.detail.labels.youEarn")}
+                label={t("payment.detail.labels.youEarn", "You Earn")}
                 value={formatPrice(workerPayout, cur)}
                 c={c}
               />
@@ -362,47 +314,45 @@ export default function BookingDetailPayment({
           ) : (
             <>
               <FeeRow
-                label={t("payment.detail.labels.agreedRate")}
+                label={t("payment.detail.labels.agreedRate", "Agreed Rate")}
                 value={`${formatPrice(agreedRate, cur)}${
                   {
-                    hours: t("payment.detail.units.perHour"),
-                    days: t("payment.detail.units.perDay"),
-                    weeks: t("payment.detail.units.perWeek"),
-                    months: t("payment.detail.units.perMonth"),
+                    hours: t("payment.detail.units.perHour", "/hr"),
+                    days: t("payment.detail.units.perDay", "/day"),
+                    weeks: t("payment.detail.units.perWeek", "/wk"),
+                    months: t("payment.detail.units.perMonth", "/mo"),
                   }[feeBreakdown.estimatedUnit] || ""
                 }`}
                 c={c}
               />
-              {feeBreakdown.hasQty ? (
+              {feeBreakdown.hasQty && (
                 <FeeRow
-                  label={t("payment.detail.labels.duration")}
-                  value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${
-                    feeBreakdown.qty !== 1
-                      ? t("payment.detail.labels.pluralSuffix")
-                      : ""
-                  }`}
+                  label={t("payment.detail.labels.duration", "Duration")}
+                  value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${feeBreakdown.qty !== 1 ? t("payment.detail.labels.pluralSuffix", "s") : ""}`}
                   c={c}
                 />
-              ) : null}
-              {feeBreakdown.hasQty ? (
+              )}
+              {feeBreakdown.hasQty && (
                 <FeeRow
                   label={t("payment.detail.labels.subtotalLine", {
                     qty: feeBreakdown.qty,
                     rate: formatPrice(agreedRate, cur),
+                    defaultValue: "Subtotal ({{qty}} × {{rate}})",
                   })}
                   value={formatPrice(feeBreakdown.subtotal || 0, cur)}
                   c={c}
                 />
-              ) : null}
+              )}
               <FeeRow
                 label={t("payment.detail.labels.platformFee", {
                   percent: feePercent,
+                  defaultValue: "Platform Fee ({{percent}}%)",
                 })}
                 value={`+ ${formatPrice(feeBreakdown.platformFee || 0, cur)}`}
                 c={c}
               />
               <FeeTotal
-                label={t("payment.detail.labels.youEarn")}
+                label={t("payment.detail.labels.youEarn", "You Earn")}
                 value={formatPrice(workerPayout, cur)}
                 c={c}
               />
@@ -412,7 +362,7 @@ export default function BookingDetailPayment({
       );
     }
 
-    // ── Hirer view ─────────────────────────────────────────────
+    // ── Hirer View ──
     const cur = feeBreakdown.currency || "NGN";
     const agreedRate = feeBreakdown.agreedRate || 0;
     const subtotal = feeBreakdown.subtotal || 0;
@@ -423,7 +373,6 @@ export default function BookingDetailPayment({
     const discount =
       referralApplied && booking.currency === "NGN" ? referralAmount : 0;
     const finalTotal = Math.max(0, grossTotal - discount);
-
     const isCustom = feeBreakdown.estimatedUnit === "custom";
 
     const isPaymentPending = payment?.status === "PENDING";
@@ -431,30 +380,26 @@ export default function BookingDetailPayment({
 
     return (
       <View
-        style={{
-          backgroundColor: c.bgCard,
-          borderColor: c.orange,
-          borderWidth: 1.5,
-          borderRadius: 12,
-          padding: 14,
-          gap: 8,
-        }}
+        style={[
+          styles.feeBreakdown,
+          { backgroundColor: c.bgCard, borderColor: c.orange },
+        ]}
       >
-        <AppText
-          style={{
-            fontSize: 11,
-            fontWeight: "700",
-            textTransform: "uppercase",
-            letterSpacing: 0.8,
-            color: c.textMuted,
-            marginBottom: 2,
-          }}
-        >
+        <AppText style={[styles.feeBreakdownLabel, { color: c.textMuted }]}>
           {isNegotiated
-            ? t("payment.detail.titles.agreedTotalNegotiated")
+            ? t(
+                "payment.detail.titles.agreedTotalNegotiated",
+                "Agreed Total (Negotiated)",
+              )
             : isJobPostBooking
-              ? t("payment.detail.titles.paymentBreakdownJobPost")
-              : t("payment.detail.titles.paymentBreakdown")}
+              ? t(
+                  "payment.detail.titles.paymentBreakdownJobPost",
+                  "Payment Breakdown (From Job Post)",
+                )
+              : t(
+                  "payment.detail.titles.paymentBreakdown",
+                  "Payment Breakdown",
+                )}
         </AppText>
 
         {isFixedTotalView ? (
@@ -462,77 +407,82 @@ export default function BookingDetailPayment({
             <FeeRow
               label={
                 isNegotiated
-                  ? t("payment.detail.labels.agreedTotal")
-                  : t("payment.detail.labels.selectedAmount")
+                  ? t("payment.detail.labels.agreedTotal", "Agreed Total")
+                  : t("payment.detail.labels.selectedAmount", "Selected Amount")
               }
               value={formatPrice(agreedRate, cur)}
               c={c}
             />
-            {isJobPostBooking && realDurationText ? (
+            {isJobPostBooking && realDurationText && (
               <FeeRow
-                label={t("payment.detail.labels.duration")}
+                label={t("payment.detail.labels.duration", "Duration")}
                 value={
-                  <AppText style={{ fontSize: 13, color: c.text }}>
+                  <AppText
+                    style={{
+                      fontSize: 12,
+                      color: c.text,
+                      fontFamily: "DMSans_700Bold",
+                    }}
+                  >
                     {realDurationText}
-                    {booking.estimatedHours ? (
-                      <AppText style={{ color: c.textMuted, fontSize: 11 }}>
+                    {booking.estimatedHours && (
+                      <AppText style={{ color: c.textMuted, fontSize: 10 }}>
                         {" "}
                         {t("payment.detail.labels.approxHours", {
                           hours: booking.estimatedHours,
+                          defaultValue: "(≈ {{hours}}h)",
                         })}
                       </AppText>
-                    ) : null}
+                    )}
                   </AppText>
                 }
                 c={c}
               />
-            ) : null}
-            {isNegotiated && (feeBreakdown.hasQty || isCustom) ? (
+            )}
+            {isNegotiated && (feeBreakdown.hasQty || isCustom) && (
               <FeeRow
-                label={t("payment.detail.labels.duration")}
-                value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${
-                  feeBreakdown.qty !== 1
-                    ? t("payment.detail.labels.pluralSuffix")
-                    : ""
-                }`}
+                label={t("payment.detail.labels.duration", "Duration")}
+                value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${feeBreakdown.qty !== 1 ? t("payment.detail.labels.pluralSuffix", "s") : ""}`}
                 c={c}
               />
-            ) : null}
+            )}
             <FeeRow
               label={t("payment.detail.labels.platformFee", {
                 percent: feePercent,
+                defaultValue: "Platform Fee ({{percent}}%)",
               })}
               value={`+ ${formatPrice(platformFee, cur)}`}
               c={c}
             />
-            {referralApplied && discount > 0 && booking.currency === "NGN" ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingVertical: 4,
-                }}
-              >
+            {referralApplied && discount > 0 && booking.currency === "NGN" && (
+              <View style={[styles.feeRow, { color: c.green }]}>
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
                 >
-                  <FaGift size={11} color={c.green} />
+                  <FaGift size={10} color={c.green} />
                   <AppText
-                    style={{ fontSize: 12, color: c.green, fontWeight: "600" }}
+                    style={{
+                      fontSize: 12,
+                      color: c.green,
+                      fontFamily: "DMSans_400Regular",
+                    }}
                   >
-                    {t("payment.detail.labels.referralBonus")}
+                    {t("payment.detail.labels.referralBonus", "Referral bonus")}
                   </AppText>
                 </View>
                 <AppText
-                  style={{ fontSize: 12, color: c.green, fontWeight: "600" }}
+                  style={{
+                    fontSize: 12,
+                    color: c.green,
+                    fontFamily: "DMSans_700Bold",
+                  }}
                 >
                   − {formatPrice(discount, booking.currency)}
                 </AppText>
               </View>
-            ) : null}
+            )}
             <FeeTotal
-              label={t("payment.detail.labels.youPay")}
+              label={t("payment.detail.labels.youPay", "You Pay")}
               value={formatPrice(finalTotal, cur)}
               c={c}
             />
@@ -540,328 +490,290 @@ export default function BookingDetailPayment({
         ) : (
           <>
             <FeeRow
-              label={t("payment.detail.labels.agreedRate")}
+              label={t("payment.detail.labels.agreedRate", "Agreed Rate")}
               value={`${formatPrice(agreedRate, cur)}${
                 {
-                  hours: t("payment.detail.units.perHour"),
-                  days: t("payment.detail.units.perDay"),
-                  weeks: t("payment.detail.units.perWeek"),
-                  months: t("payment.detail.units.perMonth"),
+                  hours: t("payment.detail.units.perHour", "/hr"),
+                  days: t("payment.detail.units.perDay", "/day"),
+                  weeks: t("payment.detail.units.perWeek", "/wk"),
+                  months: t("payment.detail.units.perMonth", "/mo"),
                 }[feeBreakdown.estimatedUnit] || ""
               }`}
               c={c}
             />
-            {feeBreakdown.hasQty || isCustom ? (
+            {(feeBreakdown.hasQty || isCustom) && (
               <FeeRow
-                label={t("payment.detail.labels.duration")}
-                value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${
-                  feeBreakdown.qty !== 1
-                    ? t("payment.detail.labels.pluralSuffix")
-                    : ""
-                }`}
+                label={t("payment.detail.labels.duration", "Duration")}
+                value={`${feeBreakdown.qty} ${feeBreakdown.unitLabel}${feeBreakdown.qty !== 1 ? t("payment.detail.labels.pluralSuffix", "s") : ""}`}
                 c={c}
               />
-            ) : null}
-            {feeBreakdown.hasQty || isCustom ? (
+            )}
+            {(feeBreakdown.hasQty || isCustom) && (
               <FeeRow
                 label={t("payment.detail.labels.subtotalLine", {
                   qty: feeBreakdown.qty,
                   rate: formatPrice(agreedRate, cur),
+                  defaultValue: "Subtotal ({{qty}} × {{rate}})",
                 })}
                 value={formatPrice(subtotal, cur)}
                 c={c}
               />
-            ) : null}
+            )}
             <FeeRow
               label={t("payment.detail.labels.platformFee", {
                 percent: feePercent,
+                defaultValue: "Platform Fee ({{percent}}%)",
               })}
               value={`+ ${formatPrice(platformFee, cur)}`}
               c={c}
             />
-            {referralApplied && discount > 0 && booking.currency === "NGN" ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingVertical: 4,
-                }}
-              >
+            {referralApplied && discount > 0 && booking.currency === "NGN" && (
+              <View style={[styles.feeRow, { color: c.green }]}>
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
                 >
-                  <FaGift size={11} color={c.green} />
+                  <FaGift size={10} color={c.green} />
                   <AppText
-                    style={{ fontSize: 12, color: c.green, fontWeight: "600" }}
+                    style={{
+                      fontSize: 12,
+                      color: c.green,
+                      fontFamily: "DMSans_400Regular",
+                    }}
                   >
-                    {t("payment.detail.labels.referralBonus")}
+                    {t("payment.detail.labels.referralBonus", "Referral bonus")}
                   </AppText>
                 </View>
                 <AppText
-                  style={{ fontSize: 12, color: c.green, fontWeight: "600" }}
+                  style={{
+                    fontSize: 12,
+                    color: c.green,
+                    fontFamily: "DMSans_700Bold",
+                  }}
                 >
                   − {formatPrice(discount, booking.currency)}
                 </AppText>
               </View>
-            ) : null}
+            )}
             <FeeTotal
-              label={t("payment.detail.labels.youPay")}
+              label={t("payment.detail.labels.youPay", "You Pay")}
               value={formatPrice(finalTotal, cur)}
               c={c}
             />
           </>
         )}
 
-        {/* Referral slider — hirer, NGN only, wallet > 0 */}
+        {/* Referral slider */}
         {!feeBreakdown.isActual &&
-        isHirer &&
-        walletBalance > 0 &&
-        booking.currency === "NGN" ? (
-          <View
-            style={{
-              backgroundColor: c.bgCard,
-              borderColor: c.border,
-              borderWidth: 1,
-              borderRadius: 10,
-              padding: 12,
-              marginTop: 8,
-              gap: 8,
-            }}
-          >
+          isHirer &&
+          walletBalance > 0 &&
+          booking.currency === "NGN" && (
             <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              style={[
+                styles.referralSection,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
             >
-              <FaGift size={14} color={c.green} />
-              <AppText
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: c.text,
-                  flex: 1,
-                }}
-              >
-                {t("payment.detail.referral.balanceLabel", {
-                  amount: formatPrice(walletBalance, "NGN"),
-                })}
-              </AppText>
-            </View>
-            <ReferralSlider
-              value={referralPercent}
-              onChange={onPercentChange}
-              disabled={walletBalance <= 0}
-              c={c}
-            />
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
-              <AppText
-                style={{
-                  fontSize: 14,
-                  fontWeight: "700",
-                  color: c.orange,
-                  minWidth: 44,
-                }}
-              >
-                {referralPercent}%
-              </AppText>
-              <AppText
-                style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: c.text,
-                  flex: 1,
-                  textAlign: "right",
-                }}
-              >
-                {formatPrice(referralAmount, "NGN")}
-              </AppText>
-              <Pressable
-                onPress={onReferralToggle}
-                disabled={referralAmount === 0}
-                style={({ pressed }) => [
-                  {
-                    paddingHorizontal: 14,
-                    paddingVertical: 4,
-                    borderRadius: 6,
-                    borderWidth: 1,
-                    borderColor: referralApplied ? c.orange : c.border,
-                    backgroundColor: referralApplied ? c.orange : c.bgCard,
-                    opacity: referralAmount === 0 ? 0.4 : pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                <AppText
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: referralApplied ? "#fff" : c.textDim,
-                  }}
-                >
-                  {referralApplied
-                    ? t("payment.detail.referral.remove")
-                    : t("payment.detail.referral.apply")}
+              <View style={styles.referralHeader}>
+                <FaGift size={12} color={c.green} />
+                <AppText style={[styles.referralTitle, { color: c.text }]}>
+                  {t("payment.detail.referral.balanceLabel", {
+                    amount: formatPrice(walletBalance, "NGN"),
+                    defaultValue: "Referral Wallet Balance: {{amount}}",
+                  })}
                 </AppText>
-              </Pressable>
+              </View>
+              <ReferralSlider
+                value={referralPercent}
+                onChange={onPercentChange}
+                disabled={walletBalance <= 0}
+                c={c}
+              />
+              <View style={styles.referralRow}>
+                <AppText style={[styles.referralPercent, { color: c.orange }]}>
+                  {referralPercent}%
+                </AppText>
+                <AppText style={[styles.referralAmount, { color: c.text }]}>
+                  {formatPrice(referralAmount, "NGN")}
+                </AppText>
+                <Pressable
+                  onPress={onReferralToggle}
+                  disabled={referralAmount === 0}
+                  style={({ pressed }) => [
+                    styles.referralToggleBtn,
+                    {
+                      borderColor: referralApplied ? c.orange : c.border,
+                      backgroundColor: referralApplied ? c.orange : c.bgCard,
+                      opacity: referralAmount === 0 ? 0.4 : pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 11,
+                      fontFamily: "DMSans_700Bold",
+                      color: referralApplied ? "#fff" : c.textDim,
+                    }}
+                  >
+                    {referralApplied
+                      ? t("payment.detail.referral.remove", "Remove")
+                      : t("payment.detail.referral.apply", "Apply")}
+                  </AppText>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        ) : null}
+          )}
 
         {/* No-referral info */}
-        {!feeBreakdown.isActual && isHirer && walletBalance === 0 ? (
+        {!feeBreakdown.isActual && isHirer && walletBalance === 0 && (
           <View
-            style={{
-              backgroundColor: c.greenDim,
-              borderColor: c.green,
-              borderWidth: 1,
-              borderStyle: "dashed",
-              borderRadius: 8,
-              padding: 10,
-              flexDirection: "row",
-              alignItems: "flex-start",
-              gap: 6,
-              marginTop: 4,
-            }}
+            style={[
+              styles.referralPerk,
+              { backgroundColor: c.greenDim, borderColor: c.green },
+            ]}
           >
-            <FaInfoCircle size={12} color={c.green} style={{ marginTop: 1 }} />
+            <FaInfoCircle size={10} color={c.green} style={{ marginTop: 3 }} />
             <AppText
-              style={{ fontSize: 12, color: c.green, flex: 1, lineHeight: 18 }}
+              style={{
+                fontSize: 9,
+                color: c.green,
+                flex: 1,
+                lineHeight: 16,
+                fontFamily: "DMSans_400Regular",
+              }}
             >
-              {t("payment.detail.referral.noBonusYet")}
+              {t(
+                "payment.detail.referral.noBonusYet",
+                "You don't have any referral bonus yet. Invite friends to earn!",
+              )}
             </AppText>
           </View>
-        ) : null}
+        )}
 
-        {/* Pay Now banner */}
-        {isHirer && paymentRequired ? (
-          <View
-            style={{
-              marginTop: 12,
-              borderTopColor: c.border,
-              borderTopWidth: 1,
-              paddingTop: 12,
-              gap: 10,
-            }}
-          >
-            {isPaymentPending && isBookingAccepted ? (
+        {/* Pay Now Banner */}
+        {isHirer && paymentRequired && (
+          <View style={[styles.payNowBanner, { borderTopColor: c.border }]}>
+            {isPaymentPending && isBookingAccepted && (
               <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 6,
-                  backgroundColor: c.orangeDim,
-                  borderColor: c.orange,
-                  borderWidth: 1,
-                  borderRadius: 8,
-                  paddingHorizontal: 10,
-                  paddingVertical: 8,
-                }}
+                style={[
+                  styles.paymentBannerPerk,
+                  { backgroundColor: c.orangeDim, borderColor: c.orange },
+                ]}
               >
-                <FaClock size={12} color={c.orange} style={{ marginTop: 2 }} />
+                <FaClock size={10} color={c.orange} style={{ marginTop: 5 }} />
                 <AppText
                   style={{
-                    fontSize: 12,
+                    fontSize: 8,
                     color: c.text,
                     flex: 1,
-                    lineHeight: 18,
+                    lineHeight: 10,
+                    fontFamily: "DMSans_400Regular",
                   }}
                 >
-                  <AppText style={{ fontWeight: "700" }}>
-                    {t("payment.detail.payBanner.workerWaiting")}
+                  <AppText
+                    style={{ fontFamily: "DMSans_700Bold", fontSize: 10 }}
+                  >
+                    {t(
+                      "payment.detail.payBanner.workerWaiting",
+                      "Worker is waiting for you to complete payment.",
+                    )}
                   </AppText>
                 </AppText>
               </View>
-            ) : null}
+            )}
 
-            {walletBalance > 0 && booking.currency === "NGN" ? (
+            {walletBalance > 0 && booking.currency === "NGN" && (
               <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 6,
-                  backgroundColor: c.greenDim,
-                  borderColor: c.green,
-                  borderWidth: 1,
-                  borderStyle: "dashed",
-                  borderRadius: 8,
-                  paddingHorizontal: 10,
-                  paddingVertical: 8,
-                }}
+                style={[
+                  styles.paymentBannerPerk,
+                  { backgroundColor: c.greenDim, borderColor: c.green },
+                ]}
               >
                 {referralApplied ? (
                   <>
                     <FaCheckCircle
-                      size={12}
+                      size={10}
                       color={c.green}
                       style={{ marginTop: 2 }}
                     />
                     <AppText
                       style={{
-                        fontSize: 12,
+                        fontSize: 11,
                         color: c.green,
                         flex: 1,
-                        lineHeight: 18,
+                        lineHeight: 16,
+                        fontFamily: "DMSans_400Regular",
                       }}
                     >
                       {t("payment.detail.payBanner.referralApplied", {
                         amount: formatPrice(referralAmount, booking.currency),
+                        defaultValue:
+                          "Referral bonus of {{amount}} will be deducted at checkout",
                       })}
                     </AppText>
                   </>
                 ) : (
                   <>
                     <FaGift
-                      size={12}
+                      size={10}
                       color={c.green}
                       style={{ marginTop: 2 }}
                     />
                     <AppText
                       style={{
-                        fontSize: 12,
+                        fontSize: 11,
                         color: c.green,
                         flex: 1,
-                        lineHeight: 18,
+                        lineHeight: 16,
+                        fontFamily: "DMSans_400Regular",
                       }}
                     >
                       {t("payment.detail.payBanner.referralAvailable", {
                         amount: formatPrice(referralAmount, booking.currency),
+                        defaultValue:
+                          "Apply your {{amount}} referral bonus using the slider above",
                       })}
                     </AppText>
                   </>
                 )}
               </View>
-            ) : null}
+            )}
 
             <AppText
-              style={{ fontSize: 12, color: c.textMuted, lineHeight: 17 }}
+              style={{
+                fontSize: 10,
+                color: c.textMuted,
+                lineHeight: 11,
+                fontFamily: "DMSans_400Regular",
+              }}
             >
-              {t("payment.detail.payBanner.refundPrefix")}{" "}
+              {t(
+                "payment.detail.payBanner.refundPrefix",
+                "By proceeding, you agree to our",
+              )}{" "}
               <AppText
                 onPress={() =>
                   Linking.openURL("https://skilledproz.com/refund-policy")
                 }
                 style={{
                   color: c.orange,
+                  fontSize: 9,
                   textDecorationLine: "underline",
-                  fontWeight: "600",
+                  fontFamily: "DMSans_700Bold",
                 }}
               >
-                {t("payment.detail.payBanner.refundLink")}
+                {t("payment.detail.payBanner.refundLink", "Refund Policy")}
               </AppText>
-              {t("payment.detail.payBanner.refundSuffix")}
+              {t(
+                "payment.detail.payBanner.refundSuffix",
+                ". Platform fees are non-refundable.",
+              )}
             </AppText>
 
             <Pressable
               onPress={onTogglePayOptions}
               style={({ pressed }) => [
+                styles.payNowBtn,
                 {
-                  width: "100%",
-                  paddingVertical: 12,
-                  borderRadius: 9,
-                  alignItems: "center",
-                  flexDirection: "row",
-                  justifyContent: "center",
-                  gap: 6,
                   backgroundColor: showPayOptions ? c.bgCard : c.orange,
                   borderWidth: showPayOptions ? 1 : 0,
                   borderColor: c.border,
@@ -871,80 +783,85 @@ export default function BookingDetailPayment({
             >
               {showPayOptions ? (
                 <>
-                  <FaChevronUp size={12} color={c.textDim} />
+                  <FaChevronUp size={10} color={c.textDim} />
                   <AppText
                     style={{
-                      fontSize: 14,
-                      fontWeight: "700",
+                      fontSize: 12,
+                      fontFamily: "DMSans_700Bold",
                       color: c.textDim,
                     }}
                   >
-                    {t("payment.detail.payBanner.hideOptions")}
+                    {t(
+                      "payment.detail.payBanner.hideOptions",
+                      "Hide Payment Options",
+                    )}
                   </AppText>
                 </>
               ) : isPaymentPending ? (
                 <>
-                  <FaBolt size={12} color="#fff" />
+                  <FaBolt size={10} color="#fff" />
                   <AppText
-                    style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}
+                    style={{
+                      fontSize: 12,
+                      fontFamily: "DMSans_700Bold",
+                      color: "#fff",
+                    }}
                   >
-                    {t("payment.detail.payBanner.chooseMethod")}
+                    {t(
+                      "payment.detail.payBanner.chooseMethod",
+                      "Choose a Different Method",
+                    )}
                   </AppText>
                 </>
               ) : (
                 <>
-                  <FaCreditCard size={12} color="#fff" />
+                  <FaCreditCard size={10} color="#fff" />
                   <AppText
-                    style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}
+                    style={{
+                      fontSize: 12,
+                      fontFamily: "DMSans_700Bold",
+                      color: "#fff",
+                    }}
                   >
-                    {t("payment.detail.payBanner.payNow")}
+                    {t("payment.detail.payBanner.payNow", "Pay Now")}
                   </AppText>
                 </>
               )}
             </Pressable>
 
-            {showPayOptions ? (
+            {showPayOptions && (
               <View
-                style={{
-                  gap: 8,
-                  paddingTop: 4,
-                  borderTopColor: "rgba(249,115,22,0.2)",
-                  borderTopWidth: 1,
-                }}
+                style={[
+                  styles.paymentOptionsWrap,
+                  { borderTopColor: c.orangeGlow },
+                ]}
               >
                 <Pressable
                   onPress={handleCardPay}
                   style={({ pressed }) => [
-                    {
-                      height: 42,
-                      borderRadius: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexDirection: "row",
-                      gap: 6,
-                      backgroundColor: c.orange,
-                      opacity: pressed ? 0.85 : 1,
-                    },
+                    styles.cardBtn,
+                    { backgroundColor: c.orange, opacity: pressed ? 0.85 : 1 },
                   ]}
                 >
-                  <FaCreditCard size={12} color="#fff" />
+                  <FaCreditCard size={10} color="#fff" />
                   <AppText
-                    style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+                    style={{
+                      fontSize: 12,
+                      fontFamily: "DMSans_700Bold",
+                      color: "#fff",
+                    }}
                   >
-                    {t("payment.detail.payBanner.payByCard")}
+                    {t("payment.detail.payBanner.payByCard", "Pay by Card")}
                   </AppText>
                 </Pressable>
               </View>
-            ) : null}
+            )}
           </View>
-        ) : null}
+        )}
       </View>
     );
   };
 
-  // ══════════════════════════════════════════════════════════════════════
-  // renderPaymentCard — receipt view
-  // ══════════════════════════════════════════════════════════════════════
   const renderPaymentCard = () => {
     if (!payment) return null;
 
@@ -976,74 +893,58 @@ export default function BookingDetailPayment({
 
     return (
       <View
-        style={{
-          backgroundColor: c.bgPanel,
-          borderColor: c.border,
-          borderWidth: 1,
-          borderRadius: 14,
-          padding: 16,
-          gap: 4,
-        }}
+        style={[
+          styles.paymentCard,
+          { backgroundColor: c.bgPanel, borderColor: c.border },
+        ]}
       >
-        <AppText
-          style={{
-            fontSize: 12,
-            fontWeight: "700",
-            textTransform: "uppercase",
-            letterSpacing: 1,
-            color: c.textDim,
-            marginBottom: 10,
-          }}
-        >
-          {t("payment.detail.receipt.title")}
+        <AppText style={[styles.receiptTitle, { color: c.textDim }]}>
+          {t("payment.detail.receipt.title", "Payment")}
         </AppText>
         <PayRow
-          label={t("payment.detail.receipt.total")}
+          label={t("payment.detail.receipt.total", "Total")}
           value={formatPrice(total, cur)}
           c={c}
         />
         <PayRow
           label={t("payment.detail.labels.platformFee", {
             percent: cardFeePercent,
+            defaultValue: "Platform Fee ({{percent}}%)",
           })}
           value={formatPrice(platformFee, cur)}
           muted
           c={c}
         />
         <PayRow
-          label={t("payment.detail.receipt.workerPayout")}
+          label={t("payment.detail.receipt.workerPayout", "Worker Payout")}
           value={formatPrice(workerPayout, cur)}
           green
           c={c}
         />
-        <View
-          style={{ height: 1, backgroundColor: c.border, marginVertical: 4 }}
-        />
+        <View style={[styles.paymentDivider, { borderTopColor: c.border }]} />
         <PayRow
-          label={t("payment.detail.receipt.provider")}
+          label={t("payment.detail.receipt.provider", "Provider")}
           value={payment.provider}
           capitalize
           c={c}
         />
         <PayRow
-          label={t("payment.detail.receipt.status")}
+          label={t("payment.detail.receipt.status", "Status")}
           extra={
             <View
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 2,
-                borderRadius: 10,
-                backgroundColor: `${statusColor}22`,
-                borderColor: `${statusColor}55`,
-                borderWidth: 1,
-              }}
+              style={[
+                styles.payStatus,
+                {
+                  backgroundColor: `${statusColor}22`,
+                  borderColor: `${statusColor}55`,
+                },
+              ]}
             >
               <AppText
                 style={{
-                  fontSize: 10,
-                  fontWeight: "700",
+                  fontSize: 9,
+                  fontFamily: "DMSans_700Bold",
                   color: statusColor,
-                  letterSpacing: 0.4,
                   textTransform: "uppercase",
                 }}
               >
@@ -1056,14 +957,14 @@ export default function BookingDetailPayment({
           }
           c={c}
         />
-        {payment.providerRef ? (
+        {payment.providerRef && (
           <PayRow
-            label={t("payment.detail.receipt.ref")}
+            label={t("payment.detail.receipt.ref", "Ref")}
             value={payment.providerRef}
             mono
             c={c}
           />
-        ) : null}
+        )}
       </View>
     );
   };
@@ -1072,3 +973,187 @@ export default function BookingDetailPayment({
 
   return <View>{isPending ? renderFeeBreakdown() : renderPaymentCard()}</View>;
 }
+
+const styles = StyleSheet.create({
+  feeBreakdown: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+    gap: 6,
+  },
+  feeBreakdownLabel: {
+    fontSize: 10,
+    fontFamily: "DMSans_700Bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    marginBottom: 2,
+  },
+  feeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  feeTotal: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 6,
+    borderTopWidth: 1,
+    marginTop: 2,
+  },
+  referralSection: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 6,
+    gap: 6,
+  },
+  referralHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  referralTitle: {
+    fontSize: 12,
+    fontFamily: "DMSans_700Bold",
+    flex: 1,
+  },
+  sliderBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sliderTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  sliderFill: {
+    height: "100%",
+  },
+  referralRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  referralPercent: {
+    fontSize: 12,
+    fontFamily: "DMSans_700Bold",
+    minWidth: 36,
+  },
+  referralAmount: {
+    fontSize: 12,
+    fontFamily: "DMSans_700Bold",
+    flex: 1,
+    textAlign: "right",
+  },
+  referralToggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  referralPerk: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 8,
+    padding: 8,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginTop: 4,
+  },
+  payNowBanner: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    paddingTop: 10,
+    gap: 8,
+  },
+  paymentBannerPerk: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  payNowBtn: {
+    height: 36,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  paymentOptionsWrap: {
+    gap: 6,
+    paddingTop: 4,
+    borderTopWidth: 1,
+  },
+  cardBtn: {
+    height: 36,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  paymentCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    gap: 2,
+  },
+  receiptTitle: {
+    fontSize: 10,
+    fontFamily: "DMSans_700Bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  paymentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 6,
+    paddingVertical: 3,
+  },
+  payLabel: {
+    fontSize: 11,
+    fontFamily: "DMSans_400Regular",
+    flexShrink: 1,
+  },
+  payValue: {
+    fontSize: 12,
+    fontFamily: "DMSans_700Bold",
+    textAlign: "right",
+    flexShrink: 1,
+  },
+  payMuted: {
+    fontFamily: "DMSans_400Regular",
+  },
+  payGreen: {
+    fontFamily: "DMSans_700Bold",
+  },
+  payRef: {
+    fontFamily: "monospace",
+    fontSize: 10,
+  },
+  paymentDivider: {
+    borderTopWidth: 1,
+    marginVertical: 3,
+  },
+  payStatus: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+});

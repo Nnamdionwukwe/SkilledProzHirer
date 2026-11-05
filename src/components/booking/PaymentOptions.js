@@ -1,19 +1,4 @@
 // src/components/booking/PaymentOptions.js
-//
-// Real RN port of components/payment/PaymentOptions.jsx.
-//
-// Flow:
-//   1. Pricing summary — agreed total (or rate × qty), platform fee,
-//      referral deduction, "You Pay" total
-//   2. Card option → navigates to the InitiatePayment screen
-//   3. Crypto token picker — USDC / USDT / BTC / ETH
-//   4. "Pay with {token}" → POST /payments/crypto/:id (opens wallet step)
-//   5. Wallet details — asset, network, wallet, amount, memo
-//   6. Tx hash input + optional amount + optional receipt upload
-//   7. "Confirm Transaction" → PATCH /payments/crypto/:id/confirm
-//   8. On success → onSuccess callback fires; parent refetches booking
-//
-// i18n: every visible string uses t() under `payment.options.*`.
 
 import React, { useState } from "react";
 import {
@@ -31,6 +16,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
 import { calcPricing, getHirerFeeRate } from "../../utils/pricing";
+import CryptoRateConverter from "./CryptoRateConverter";
 import {
   FaCheckCircle,
   FaExclamationTriangle,
@@ -53,25 +39,18 @@ try {
 } catch {}
 
 // ── Helpers ────────────────────────────────────────────────────────────
-function fmtMoney(amount, currency = "NGN") {
-  const n = Number(amount) || 0;
-  return `${currency} ${n.toLocaleString(undefined, {
+function formatPrice(amount, currency = "NGN") {
+  if (amount == null) return `${currency} 0.00`;
+  return `${currency} ${Number(amount).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const CRYPTO_TOKENS = [
-  { id: "USDC", label: "USDC", networkKey: "ethereum", icon: "$" },
-  { id: "USDT", label: "USDT", networkKey: "tron", icon: "₮" },
-  { id: "BTC", label: "Bitcoin", networkKey: "bitcoin", icon: "₿" },
-  { id: "ETH", label: "Ethereum", networkKey: "ethereum", icon: "Ξ" },
-];
 
 export default function PaymentOptions({
   booking,
-  bookingId: bookingIdProp,
   onSuccess,
   referralAmount = 0,
   referralApplied = false,
@@ -92,35 +71,36 @@ export default function PaymentOptions({
   const [cryptoAmount, setCryptoAmount] = useState("");
   const [cryptoDetails, setCryptoDetails] = useState(null);
   const [cryptoReceiptFile, setCryptoReceiptFile] = useState(null);
+  const [convertedCryptoAmount, setConvertedCryptoAmount] = useState(null);
 
   // ── Pricing ─────────────────────────────────────────────────────────
-  const p = calcPricing(booking);
+  const p = calcPricing(booking, referralAmount, referralApplied);
   const isJobPost = booking?.source === "JOB_POST";
 
   const agreedTotal = isJobPost
-    ? Number(booking?.agreedRate) || 0
-    : Number(p.subtotal) || 0;
+    ? Number(booking?.agreedRate || 0)
+    : Number(p.subtotal || p.rate || 0);
   const currency = booking?.currency || p.currency || "NGN";
 
   const PLATFORM_FEE_RATE = getHirerFeeRate(currency);
   const PLATFORM_FEE_PCT = Math.round(PLATFORM_FEE_RATE * 100);
+
   const platformFee = isJobPost
     ? Math.round(agreedTotal * PLATFORM_FEE_RATE * 100) / 100
-    : Number(p.hirerFee) || 0;
+    : Number(p.hirerFee || 0);
 
   const referralDeduct =
     referralApplied && referralAmount > 0 ? Number(referralAmount) : 0;
 
   const finalTotal = isJobPost
     ? Math.max(0, agreedTotal + platformFee - referralDeduct)
-    : Math.max(0, p.grossTotal - referralDeduct);
+    : Number(p.totalCharged || 0);
 
   const durationText =
     isJobPost && booking?.estimatedValue
       ? `${booking.estimatedValue} ${booking.estimatedUnit || "hours"}`
       : null;
 
-  // ── File size guard ────────────────────────────────────────────────
   const validateFileSize = (file) => {
     if (!file) return true;
     if (file.size && file.size > MAX_FILE_SIZE) {
@@ -128,6 +108,7 @@ export default function PaymentOptions({
         t("payment.options.errors.fileTooLarge", {
           name: file.name,
           size: (file.size / (1024 * 1024)).toFixed(1),
+          defaultValue: "File is too large. Maximum size is 5MB.",
         }),
       );
       return false;
@@ -136,16 +117,22 @@ export default function PaymentOptions({
     return true;
   };
 
-  // ── Receipt picker ─────────────────────────────────────────────────
   const pickReceipt = async () => {
     if (!ImagePicker) {
-      toast.info(t("payment.options.errors.imagePickerUnavailable"));
+      toast.info(
+        t(
+          "payment.options.errors.imagePickerUnavailable",
+          "Image picker unavailable",
+        ),
+      );
       return;
     }
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        toast.error(t("payment.options.errors.mediaPermission"));
+        toast.error(
+          t("payment.options.errors.mediaPermission", "Permission required"),
+        );
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -161,47 +148,48 @@ export default function PaymentOptions({
         size: asset.fileSize,
       });
     } catch {
-      toast.error(t("payment.options.errors.imagePickerFailed"));
+      toast.error(
+        t("payment.options.errors.imagePickerFailed", "Could not open gallery"),
+      );
     }
   };
 
-  // ── Copy to clipboard ──────────────────────────────────────────────
   const copyToClipboard = async (text) => {
     if (!Clipboard) {
-      toast.info(t("payment.options.errors.clipboardUnavailable"));
+      toast.info(
+        t(
+          "payment.options.errors.clipboardUnavailable",
+          "Clipboard unavailable",
+        ),
+      );
       return;
     }
     try {
       await Clipboard.setStringAsync(String(text));
-      toast.success(t("payment.options.toast.copied"));
+      toast.success(t("payment.options.toast.copied", "Copied!"));
     } catch {
-      toast.error(t("payment.options.errors.copyFailed"));
+      toast.error(t("payment.options.errors.copyFailed", "Copy failed"));
     }
   };
 
-  // ── Pay by card → navigate to InitiatePayment ──────────────────────
   const handleCardPay = () => {
-    const resolvedBookingId =
-      booking?.id || booking?.bookingId || bookingIdProp;
-    console.log("💳 CARD TAP → resolvedBookingId:", resolvedBookingId);
-    console.log("💳 booking:", booking);
+    const resolvedBookingId = booking?.id || booking?.bookingId;
     if (!resolvedBookingId) {
-      console.log("💳 ABORT: no booking id available");
-      toast.error(t("payment.options.errors.missingBookingId"));
+      toast.error(
+        t("payment.options.errors.missingBookingId", "Booking ID missing"),
+      );
       return;
     }
     try {
-      navigation.navigate("InitiatePayment", {
-        bookingId: resolvedBookingId,
-      });
-      console.log("💳 navigate() returned OK for", resolvedBookingId);
+      navigation.navigate("InitiatePayment", { bookingId: resolvedBookingId });
     } catch (err) {
-      console.log("💳 navigate() threw:", err?.message);
-      toast.error(err?.message || t("payment.options.errors.navFailed"));
+      toast.error(
+        err?.message ||
+          t("payment.options.errors.navFailed", "Navigation failed"),
+      );
     }
   };
 
-  // ── Initiate crypto ────────────────────────────────────────────────
   async function handleCryptoInitiate() {
     setLoading(true);
     setError("");
@@ -209,27 +197,29 @@ export default function PaymentOptions({
       const res = await client.post(`/payments/crypto/${booking.id}`, {
         cryptoCurrency: cryptoAsset,
       });
-      const details =
-        res.data?.data?.cryptoDetails ||
-        res.data?.cryptoDetails ||
-        res.data?.data ||
-        null;
-      setCryptoDetails(details);
+      setCryptoDetails(res.data?.data?.cryptoDetails || res.data?.data);
       setStep("details");
     } catch (e) {
       setError(
         e?.response?.data?.message ||
-          t("payment.options.errors.cryptoInitiateFailed"),
+          t(
+            "payment.options.errors.cryptoInitiateFailed",
+            "Failed to initiate crypto payment",
+          ),
       );
     } finally {
       setLoading(false);
     }
   }
 
-  // ── Confirm crypto ─────────────────────────────────────────────────
   async function handleCryptoConfirm() {
     if (!cryptoTxHash.trim()) {
-      setError(t("payment.options.errors.txHashRequired"));
+      setError(
+        t(
+          "payment.options.errors.txHashRequired",
+          "Transaction hash is required",
+        ),
+      );
       return;
     }
     setLoading(true);
@@ -255,21 +245,21 @@ export default function PaymentOptions({
       });
 
       onSuccess?.();
-      toast.success(t("payment.options.toast.cryptoSubmitted"));
+      toast.success(
+        t("payment.options.toast.cryptoSubmitted", "Crypto payment submitted"),
+      );
     } catch (e) {
       setError(
-        e?.response?.data?.message || t("payment.options.errors.confirmFailed"),
+        e?.response?.data?.message ||
+          t("payment.options.errors.confirmFailed", "Confirmation failed"),
       );
     } finally {
       setLoading(false);
     }
   }
 
-  // ═════════════════════════════════════════════════════════════════
-  // RENDER
-  // ═════════════════════════════════════════════════════════════════
   return (
-    <View style={{ gap: 12 }}>
+    <View style={styles.wrap}>
       {/* ── PRICING BREAKDOWN ──────────────────────────────────────── */}
       <View
         style={[
@@ -288,16 +278,15 @@ export default function PaymentOptions({
           <FaMoneyBillWave size={13} color={c.text} />
           <AppText
             style={{
-              fontFamily: "Syne_700Bold",
+              fontFamily: "Syne_800ExtraBold",
               fontSize: 13,
-              fontWeight: "800",
               color: c.text,
               flex: 1,
             }}
           >
-            {t("payment.options.breakdown.title")}
+            {t("payment.options.breakdown.title", "Payment Breakdown")}
           </AppText>
-          {isJobPost ? (
+          {isJobPost && (
             <View
               style={{
                 paddingHorizontal: 6,
@@ -307,192 +296,167 @@ export default function PaymentOptions({
               }}
             >
               <AppText
-                style={{ fontSize: 9, fontWeight: "700", color: "#818cf8" }}
+                style={{
+                  fontSize: 9,
+                  fontWeight: "700",
+                  color: "#818cf8",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                }}
               >
-                {t("payment.options.breakdown.fromJobPost")}
+                {t("payment.options.breakdown.fromJobPost", "From Job Post")}
               </AppText>
             </View>
-          ) : null}
+          )}
         </View>
 
         <FeeLine
           label={
             isJobPost
-              ? t("payment.options.labels.agreedTotal")
-              : t("payment.options.labels.agreedRate")
+              ? t("payment.options.labels.agreedTotal", "Agreed Total")
+              : t("payment.options.labels.agreedRate", "Agreed Rate")
           }
-          value={`${fmtMoney(agreedTotal, currency)}${!isJobPost ? p.unitSuffix || "" : ""}`}
+          value={`${formatPrice(agreedTotal, currency)}${!isJobPost ? p.unitSuffix || "" : ""}`}
+          c={c}
         />
 
-        {isJobPost && durationText ? (
+        {isJobPost && durationText && (
           <FeeLine
-            label={t("payment.options.labels.duration")}
+            label={t("payment.options.labels.duration", "Duration")}
             value={
-              <AppText style={{ fontSize: 13, color: c.text }}>
+              <AppText
+                style={{
+                  fontSize: 12,
+                  color: c.text,
+                  fontFamily: "DMSans_700Bold",
+                }}
+              >
                 {durationText}
-                {booking.estimatedHours ? (
+                {booking.estimatedHours && (
                   <AppText style={{ color: c.textMuted, fontSize: 11 }}>
                     {" "}
                     {t("payment.options.labels.approxHours", {
                       hours: booking.estimatedHours,
+                      defaultValue: "(≈ {{hours}}h)",
                     })}
                   </AppText>
-                ) : null}
+                )}
               </AppText>
             }
+            c={c}
           />
-        ) : null}
-        {!isJobPost && p.hasQty ? (
-          <FeeLine
-            label={t("payment.options.labels.duration")}
-            value={`${p.qty} ${p.unitLabel}${p.qty !== 1 ? "s" : ""}`}
-          />
-        ) : null}
-        {!isJobPost && p.hasQty ? (
-          <FeeLine
-            label={t("payment.options.labels.subtotalLine", {
-              qty: p.qty,
-              rate: fmtMoney(p.agreedRate, currency),
-            })}
-            value={fmtMoney(p.subtotal, currency)}
-          />
-        ) : null}
+        )}
+
+        {!isJobPost && p.hasQty && (
+          <>
+            <FeeLine
+              label={t("payment.options.labels.duration", "Duration")}
+              value={`${p.qty} ${p.unitLabel}${p.qty !== 1 ? "s" : ""}`}
+              c={c}
+            />
+            <FeeLine
+              label={t("payment.options.labels.subtotalLine", {
+                qty: p.qty,
+                rate: formatPrice(p.rate, currency),
+                defaultValue: "Subtotal ({{qty}} × {{rate}})",
+              })}
+              value={formatPrice(p.subtotal, currency)}
+              c={c}
+            />
+          </>
+        )}
 
         <FeeLine
           label={t("payment.options.labels.platformFee", {
             percent: PLATFORM_FEE_PCT,
+            defaultValue: "Platform Fee ({{percent}}%)",
           })}
-          value={`+ ${fmtMoney(platformFee, currency)}`}
+          value={`+ ${formatPrice(platformFee, currency)}`}
           muted
+          c={c}
         />
 
-        {referralDeduct > 0 ? (
+        {referralDeduct > 0 && (
           <View style={styles.row}>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
             >
               <FaGift size={11} color={c.green} />
-              <AppText style={{ fontSize: 12, color: c.green }}>
-                {t("payment.options.labels.referralBonus")}
+              <AppText
+                style={{
+                  fontSize: 12,
+                  color: c.green,
+                  fontFamily: "DMSans_400Regular",
+                }}
+              >
+                {t("payment.options.labels.referralBonus", "Referral bonus")}
               </AppText>
             </View>
             <AppText
-              style={{ fontSize: 12, color: c.green, fontWeight: "600" }}
+              style={{
+                fontSize: 12,
+                color: c.green,
+                fontFamily: "DMSans_700Bold",
+              }}
             >
-              − {fmtMoney(referralDeduct, currency)}
+              − {formatPrice(referralDeduct, currency)}
             </AppText>
           </View>
-        ) : null}
+        )}
 
         <View
-          style={{ height: 1, backgroundColor: c.border, marginVertical: 6 }}
+          style={{ height: 1, backgroundColor: c.border, marginVertical: 4 }}
         />
+
         <View style={styles.row}>
-          <AppText style={{ fontSize: 14, fontWeight: "700", color: c.text }}>
-            {t("payment.options.labels.youPay")}
+          <AppText
+            style={{
+              fontSize: 13,
+              fontFamily: "DMSans_700Bold",
+              color: c.text,
+            }}
+          >
+            {t("payment.options.labels.youPay", "You Pay")}
           </AppText>
           <AppText
             style={{
               fontFamily: "Syne_800ExtraBold",
-              fontSize: 18,
-              fontWeight: "800",
+              fontSize: 17,
               color: c.orange,
             }}
           >
-            {fmtMoney(finalTotal, currency)}
+            {formatPrice(finalTotal, currency)}
           </AppText>
         </View>
       </View>
 
       {/* ── STEP 1: METHOD SELECTION ──────────────────────────────── */}
-      {step === "select" ? (
+      {step === "select" && (
         <View style={{ gap: 12 }}>
-          <AppText style={{ fontSize: 12, color: c.textDim, lineHeight: 18 }}>
-            {t("payment.options.select.intro")}
-          </AppText>
-
-          {/* Card option — opens the InitiatePayment screen */}
-          <Pressable
-            onPress={handleCardPay}
-            style={({ pressed }) => [
-              styles.cardBtn,
-              {
-                borderColor: c.border,
-                backgroundColor: c.bgCard,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <FaCreditCard size={20} color={c.orange} />
-            <View style={{ flex: 1 }}>
-              <AppText
-                style={{ fontSize: 13, fontWeight: "700", color: c.text }}
-              >
-                {t("payment.options.card.title")}
-              </AppText>
-              <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                {t("payment.options.card.desc")}
-              </AppText>
-            </View>
-          </Pressable>
-
-          {/* Crypto section header */}
           <AppText
             style={{
-              fontSize: 10,
-              fontWeight: "700",
-              color: c.textMuted,
-              textTransform: "uppercase",
-              letterSpacing: 0.7,
-              marginTop: 4,
+              fontSize: 12,
+              color: c.textDim,
+              fontFamily: "DMSans_400Regular",
+              lineHeight: 18,
             }}
           >
-            {t("payment.options.crypto.sectionTitle")}
+            {t(
+              "payment.options.select.intro",
+              "Pay with cryptocurrency. Send to our wallet and submit your transaction hash.",
+            )}
           </AppText>
 
-          {/* Token grid */}
-          <View style={styles.tokenGrid}>
-            {CRYPTO_TOKENS.map((tok) => {
-              const active = cryptoAsset === tok.id;
-              return (
-                <Pressable
-                  key={tok.id}
-                  onPress={() => setCryptoAsset(tok.id)}
-                  style={({ pressed }) => [
-                    styles.tokenCard,
-                    {
-                      borderColor: active ? c.orange : c.border,
-                      backgroundColor: active ? c.orangeDim : c.bgCard,
-                      opacity: pressed ? 0.85 : 1,
-                    },
-                  ]}
-                >
-                  <AppText
-                    style={{
-                      fontSize: 20,
-                      color: active ? c.orange : c.textMuted,
-                      fontWeight: "700",
-                    }}
-                  >
-                    {tok.icon}
-                  </AppText>
-                  <AppText
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: active ? c.orange : c.text,
-                      marginTop: 4,
-                    }}
-                  >
-                    {tok.label}
-                  </AppText>
-                  <AppText style={{ fontSize: 10, color: c.textMuted }}>
-                    {t(`payment.options.networks.${tok.networkKey}`)}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </View>
+          {/* CryptoRateConverter — same as web */}
+          <CryptoRateConverter
+            fiatAmount={finalTotal}
+            fiatCurrency={currency}
+            selectedToken={cryptoAsset}
+            onAmountChange={(data) => {
+              setCryptoAsset(data.token);
+              setConvertedCryptoAmount(data.amount);
+            }}
+          />
 
           <Pressable
             onPress={handleCryptoInitiate}
@@ -501,35 +465,55 @@ export default function PaymentOptions({
               styles.payBtn,
               {
                 backgroundColor: loading ? c.bgCard : c.orange,
-                opacity: loading ? 0.7 : pressed ? 0.9 : 1,
+                opacity: loading ? 0.5 : pressed ? 0.9 : 1,
               },
             ]}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <ActivityIndicator color="#fff" size="small" />
+                <AppText
+                  style={{
+                    fontSize: 14,
+                    fontFamily: "Syne_800ExtraBold",
+                    color: "#fff",
+                  }}
+                >
+                  {t("payment.options.actions.loading", "Loading wallet…")}
+                </AppText>
+              </View>
             ) : (
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
                 <FaBitcoin size={14} color="#fff" />
                 <AppText
-                  style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}
+                  style={{
+                    fontSize: 14,
+                    fontFamily: "Syne_800ExtraBold",
+                    color: "#fff",
+                  }}
                 >
                   {t("payment.options.actions.payWithToken", {
                     token: cryptoAsset,
+                    defaultValue: "Pay with {{token}}",
                   })}
                 </AppText>
               </View>
             )}
           </Pressable>
         </View>
-      ) : null}
+      )}
 
       {/* ── STEP 2: WALLET DETAILS + CONFIRM ──────────────────────── */}
-      {step === "details" && cryptoDetails ? (
-        <View style={{ gap: 10 }}>
-          <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
-            {t("payment.options.details.sendToWallet")}
+      {step === "details" && cryptoDetails && (
+        <View style={{ gap: 12 }}>
+          <AppText
+            style={{ fontSize: 13, fontFamily: "Syne_700Bold", color: c.text }}
+          >
+            {t("payment.options.details.sendToWallet", "Send to this wallet")}
           </AppText>
 
           <View
@@ -539,43 +523,49 @@ export default function PaymentOptions({
             ]}
           >
             <BankRow
-              label={t("payment.options.details.asset")}
+              label={t("payment.options.details.asset", "Asset")}
               value={cryptoDetails.currency || cryptoAsset}
+              c={c}
             />
             <BankRow
-              label={t("payment.options.details.network")}
+              label={t("payment.options.details.network", "Network")}
               value={cryptoDetails.network || "—"}
+              c={c}
             />
             <BankRow
-              label={t("payment.options.details.wallet")}
+              label={t("payment.options.details.wallet", "Wallet")}
               value={cryptoDetails.wallet || "—"}
               mono
               copyable
               onCopy={copyToClipboard}
+              c={c}
             />
             <BankRow
-              label={t("payment.options.details.amount")}
-              value={fmtMoney(finalTotal, currency)}
+              label={t("payment.options.details.amount", "Amount")}
+              value={
+                convertedCryptoAmount
+                  ? `${convertedCryptoAmount.toFixed(6)} ${cryptoAsset}`
+                  : formatPrice(finalTotal, currency)
+              }
               accent
+              c={c}
             />
-            {cryptoDetails.note ? (
+            {cryptoDetails.note && (
               <BankRow
-                label={t("payment.options.details.memo")}
+                label={t("payment.options.details.memo", "Memo")}
                 value={cryptoDetails.note}
                 mono
                 copyable
                 onCopy={copyToClipboard}
+                c={c}
               />
-            ) : null}
+            )}
           </View>
 
           <View
             style={[
-              styles.warnBox,
-              {
-                backgroundColor: c.redDim,
-                borderColor: "rgba(239,68,68,0.2)",
-              },
+              styles.bankWarn,
+              { backgroundColor: c.redDim, borderColor: "rgba(239,68,68,0.2)" },
             ]}
           >
             <FaExclamationTriangle
@@ -589,23 +579,58 @@ export default function PaymentOptions({
                 color: c.red,
                 flex: 1,
                 marginLeft: 6,
-                lineHeight: 18,
+                lineHeight: 17,
+                fontFamily: "DMSans_400Regular",
               }}
             >
               {t("payment.options.details.networkWarning", {
                 token: cryptoDetails.currency || cryptoAsset,
                 network: cryptoDetails.network || "—",
+                defaultValue:
+                  "Only send {{token}} on the {{network}} network. Wrong network may result in permanent loss of funds.",
               })}
             </AppText>
           </View>
 
-          <AppText style={[styles.label, { color: c.textDim }]}>
-            {t("payment.options.details.fields.txHash")}
+          <AppText style={styles.label}>
+            {t(
+              "payment.options.details.fields.txHash",
+              "Transaction Hash / TX ID *",
+            )}
           </AppText>
           <TextInput
             value={cryptoTxHash}
             onChangeText={setCryptoTxHash}
-            placeholder={t("payment.options.details.placeholders.txHash")}
+            placeholder={t(
+              "payment.options.details.placeholders.txHash",
+              "0x... or transaction ID",
+            )}
+            placeholderTextColor={c.textMuted}
+            style={[
+              styles.input,
+              {
+                color: c.text,
+                borderColor: c.border,
+                backgroundColor: c.bgInput,
+                fontFamily: "monospace",
+              },
+            ]}
+          />
+
+          <AppText style={styles.label}>
+            {t(
+              "payment.options.details.fields.amountOptional",
+              "Amount Sent (optional)",
+            )}
+          </AppText>
+          <TextInput
+            value={cryptoAmount}
+            onChangeText={(v) => setCryptoAmount(v.replace(/[^0-9.]/g, ""))}
+            keyboardType="decimal-pad"
+            placeholder={t("payment.options.details.placeholders.amount", {
+              token: cryptoAsset,
+              defaultValue: "Amount in {{token}}",
+            })}
             placeholderTextColor={c.textMuted}
             style={[
               styles.input,
@@ -618,29 +643,11 @@ export default function PaymentOptions({
             ]}
           />
 
-          <AppText style={[styles.label, { color: c.textDim }]}>
-            {t("payment.options.details.fields.amountOptional")}
-          </AppText>
-          <TextInput
-            value={cryptoAmount}
-            onChangeText={(v) => setCryptoAmount(v.replace(/[^0-9.]/g, ""))}
-            keyboardType="decimal-pad"
-            placeholder={t("payment.options.details.placeholders.amount", {
-              token: cryptoAsset,
-            })}
-            placeholderTextColor={c.textMuted}
-            style={[
-              styles.input,
-              {
-                color: c.text,
-                borderColor: c.border,
-                backgroundColor: c.bgInput,
-              },
-            ]}
-          />
-
-          <AppText style={[styles.label, { color: c.textDim }]}>
-            {t("payment.options.details.fields.receipt")}
+          <AppText style={styles.label}>
+            {t(
+              "payment.options.details.fields.receipt",
+              "Transaction Screenshot (optional)",
+            )}
           </AppText>
           <Pressable
             onPress={pickReceipt}
@@ -657,8 +664,8 @@ export default function PaymentOptions({
             <AppText
               style={{
                 fontSize: 12,
-                fontWeight: "600",
                 color: c.textDim,
+                fontFamily: "DMSans_700Bold",
                 marginLeft: 6,
                 flex: 1,
               }}
@@ -666,10 +673,13 @@ export default function PaymentOptions({
             >
               {cryptoReceiptFile
                 ? cryptoReceiptFile.name
-                : t("payment.options.details.placeholders.receipt")}
+                : t(
+                    "payment.options.details.placeholders.receipt",
+                    "Upload screenshot",
+                  )}
             </AppText>
           </Pressable>
-          {cryptoReceiptFile ? (
+          {cryptoReceiptFile && (
             <Pressable
               onPress={() => setCryptoReceiptFile(null)}
               style={{ alignSelf: "flex-start" }}
@@ -678,12 +688,18 @@ export default function PaymentOptions({
                 style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
               >
                 <FaTimes size={10} color={c.red} />
-                <AppText style={{ fontSize: 11, color: c.red }}>
-                  {t("payment.options.details.removeReceipt")}
+                <AppText
+                  style={{
+                    fontSize: 11,
+                    color: c.red,
+                    fontFamily: "DMSans_400Regular",
+                  }}
+                >
+                  {t("payment.options.details.removeReceipt", "Remove receipt")}
                 </AppText>
               </View>
             </Pressable>
-          ) : null}
+          )}
 
           <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
             <Pressable
@@ -693,14 +709,18 @@ export default function PaymentOptions({
                 styles.backBtn,
                 {
                   borderColor: c.border,
-                  opacity: loading ? 0.4 : pressed ? 0.85 : 1,
+                  opacity: loading ? 0.5 : pressed ? 0.85 : 1,
                 },
               ]}
             >
               <AppText
-                style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
+                style={{
+                  fontSize: 13,
+                  fontFamily: "DMSans_700Bold",
+                  color: c.textDim,
+                }}
               >
-                {t("payment.options.actions.back")}
+                {t("payment.options.actions.back", "← Back")}
               </AppText>
             </Pressable>
             <Pressable
@@ -711,30 +731,50 @@ export default function PaymentOptions({
                 {
                   flex: 1,
                   backgroundColor: loading ? c.bgCard : c.orange,
-                  opacity: loading ? 0.7 : pressed ? 0.9 : 1,
+                  opacity: loading ? 0.5 : pressed ? 0.9 : 1,
                 },
               ]}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <ActivityIndicator color="#fff" size="small" />
+                  <AppText
+                    style={{
+                      fontSize: 14,
+                      fontFamily: "Syne_800ExtraBold",
+                      color: "#fff",
+                    }}
+                  >
+                    {t("payment.options.actions.submitting", "Submitting…")}
+                  </AppText>
+                </View>
               ) : (
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
                 >
                   <FaCheckCircle size={12} color="#fff" />
                   <AppText
-                    style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+                    style={{
+                      fontSize: 14,
+                      fontFamily: "Syne_800ExtraBold",
+                      color: "#fff",
+                    }}
                   >
-                    {t("payment.options.actions.confirmTransaction")}
+                    {t(
+                      "payment.options.actions.confirmTransaction",
+                      "Confirm Transaction",
+                    )}
                   </AppText>
                 </View>
               )}
             </Pressable>
           </View>
         </View>
-      ) : null}
+      )}
 
-      {error ? (
+      {error && (
         <View
           style={[
             styles.errorBox,
@@ -743,38 +783,47 @@ export default function PaymentOptions({
         >
           <FaExclamationTriangle size={11} color={c.red} />
           <AppText
-            style={{ fontSize: 12, color: c.red, marginLeft: 6, flex: 1 }}
+            style={{
+              fontSize: 12,
+              color: c.red,
+              marginLeft: 6,
+              flex: 1,
+              fontFamily: "DMSans_400Regular",
+            }}
           >
             {error}
           </AppText>
         </View>
-      ) : null}
+      )}
 
       <AppText
         style={{
           fontSize: 11,
           color: c.textMuted,
           textAlign: "center",
+          fontFamily: "DMSans_400Regular",
           lineHeight: 15,
         }}
       >
-        {t("payment.options.disclaimer")}
+        {t(
+          "payment.options.disclaimer",
+          "All payments are held in escrow and only released after you confirm job completion.",
+        )}
       </AppText>
     </View>
   );
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────
-function FeeLine({ label, value, muted }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
+function FeeLine({ label, value, muted, c }) {
   return (
     <View style={styles.row}>
       <AppText
         style={{
-          fontSize: 13,
+          fontSize: 12,
           color: muted ? c.textMuted : c.textDim,
           flex: 1,
+          fontFamily: "DMSans_400Regular",
         }}
       >
         {label}
@@ -782,9 +831,10 @@ function FeeLine({ label, value, muted }) {
       {typeof value === "string" ? (
         <AppText
           style={{
-            fontSize: 13,
+            fontSize: 12,
             color: muted ? c.textMuted : c.text,
             textAlign: "right",
+            fontFamily: "DMSans_700Bold",
           }}
         >
           {value}
@@ -796,12 +846,17 @@ function FeeLine({ label, value, muted }) {
   );
 }
 
-function BankRow({ label, value, mono, copyable, accent, onCopy }) {
-  const { theme } = useTheme();
-  const c = theme.colors;
+function BankRow({ label, value, mono, copyable, accent, onCopy, c }) {
   return (
     <View style={[styles.bankRow, { borderBottomColor: c.border }]}>
-      <AppText style={{ fontSize: 11, color: c.textMuted, flexShrink: 0 }}>
+      <AppText
+        style={{
+          fontSize: 11,
+          color: c.textMuted,
+          flexShrink: 0,
+          fontFamily: "DMSans_400Regular",
+        }}
+      >
         {label}
       </AppText>
       <View
@@ -816,9 +871,8 @@ function BankRow({ label, value, mono, copyable, accent, onCopy }) {
         <AppText
           style={{
             fontSize: accent ? 14 : 13,
-            fontWeight: accent ? "700" : "600",
+            fontFamily: mono ? "monospace" : "DMSans_700Bold",
             color: accent ? c.orange : c.text,
-            fontFamily: mono ? "monospace" : undefined,
             textAlign: "right",
             flexShrink: 1,
           }}
@@ -827,8 +881,18 @@ function BankRow({ label, value, mono, copyable, accent, onCopy }) {
           {value}
         </AppText>
         {copyable ? (
-          <Pressable onPress={() => onCopy?.(value)} hitSlop={8}>
-            <AppText style={{ fontSize: 12, color: c.textDim }}>⎘</AppText>
+          <Pressable
+            onPress={() => onCopy?.(value)}
+            hitSlop={8}
+            style={{
+              padding: 4,
+              borderWidth: 1,
+              borderColor: c.border,
+              borderRadius: 4,
+              backgroundColor: c.bgPanel,
+            }}
+          >
+            <AppText style={{ fontSize: 11, color: c.textDim }}>⎘</AppText>
           </Pressable>
         ) : null}
       </View>
@@ -837,39 +901,55 @@ function BankRow({ label, value, mono, copyable, accent, onCopy }) {
 }
 
 const styles = StyleSheet.create({
-  summary: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    gap: 6,
-  },
+  wrap: { gap: 14 },
+  summary: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 8 },
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
-    paddingVertical: 2,
   },
-  tokenGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  tokenCard: {
-    width: "48%",
-    paddingVertical: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  cardBtn: {
+  bankCard: { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
+  bankRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 14,
+    justifyContent: "space-between",
+    gap: 10,
     paddingHorizontal: 14,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  bankWarn: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    gap: 4,
+  },
+  label: {
+    fontSize: 11,
+    fontFamily: "DMSans_700Bold",
+    color: "#aaa",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginTop: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    fontSize: 13,
+  },
+  uploadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    borderRadius: 8,
     borderWidth: 1.5,
+    borderStyle: "dashed",
   },
   payBtn: {
     paddingVertical: 12,
@@ -884,52 +964,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-  bankCard: {
-    borderRadius: 10,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  bankRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  warnBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    gap: 4,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.7,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-  },
-  uploadBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
   },
   errorBox: {
     flexDirection: "row",
