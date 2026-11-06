@@ -9,6 +9,7 @@ import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
 import { calcPricing, getHirerFeeRate } from "../../utils/pricing";
 import BookingReleaseDetails from "./BookingReleaseDetails";
+import JobPostBookingDetails from "./JobPostBookingDetails"; // <-- ADDED
 import {
   FaCalendarAlt,
   FaMapMarkerAlt,
@@ -1543,6 +1544,10 @@ export default function BookingDetailMain({
           </View>
         ) : null}
 
+        {/* ── The full job-post detail block ── */}
+        <JobPostBookingDetails booking={booking} />
+
+        {/* Booking-level details (dates, agreement, GPS times) */}
         <Section title={t("booking.section.jobDetails")} c={c}>
           <DetailItem
             icon={<FaCalendarAlt size={14} color={c.orange} />}
