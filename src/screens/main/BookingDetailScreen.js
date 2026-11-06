@@ -3,7 +3,7 @@
 // Verbatim port of pages/booking/BookingDetail/index.jsx.
 // Fixes:
 //  1. Invoice download (with Android "activity no longer available" retry)
-//  2. Payment routing (navigates to InitiatePayment for card, ReleaseEscrow for release)
+//  2. Payment routing (navigates to InitiatePayment for card, ReleasePayment for release)
 //  3. Uses the fully-ported BookingDetailMain
 //  4. Removed refund-status inline display (matches website — refunds shown only on refund detail page)
 
@@ -543,7 +543,7 @@ export default function BookingDetailScreen() {
   };
 
   const handleReleasePayment = () => {
-    navigation.navigate("ReleaseEscrow", { bookingId });
+    navigation.navigate("ReleasePayment", { bookingId });
   };
 
   const handlePayByCard = () => {
@@ -865,6 +865,7 @@ export default function BookingDetailScreen() {
           refundLoading={refundLoading}
           hasActiveRefund={false}
           onShowRefundModal={handleShowRefundModal}
+          onReleaseClick={handleReleasePayment}
         />
 
         {/* Worker preview — pending only */}

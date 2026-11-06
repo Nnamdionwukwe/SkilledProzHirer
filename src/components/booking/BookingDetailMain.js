@@ -662,6 +662,7 @@ function BottomActions({
   showRefundButton,
   onDownloadInvoice,
   onRefundClick,
+  onReleaseClick, // <-- ADDED
   refundLoading,
   invoiceLoading,
   c,
@@ -738,6 +739,37 @@ function BottomActions({
             }}
           >
             {t("booking.button.requestRefund")}
+          </AppText>
+        </Pressable>
+      ) : null}
+      {onReleaseClick ? (
+        <Pressable
+          onPress={onReleaseClick}
+          style={({ pressed }) => [
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              backgroundColor: c.orangeDim,
+              borderWidth: 1,
+              borderColor: c.orange,
+              borderRadius: 9,
+              opacity: pressed ? 0.75 : 1,
+            },
+          ]}
+        >
+          <FaMoneyBillWave size={12} color={c.orange} />
+          <AppText
+            style={{
+              fontSize: 13,
+              fontWeight: "700",
+              color: c.orange,
+              fontFamily: "DMSans_700Bold",
+            }}
+          >
+            Release Escrow
           </AppText>
         </Pressable>
       ) : null}
@@ -1767,6 +1799,9 @@ export default function BookingDetailMain({
           showRefundButton={showRefundButton}
           onDownloadInvoice={onDownloadInvoice}
           onRefundClick={onShowRefundModal}
+          onReleaseClick={() =>
+            navigation.navigate("ReleasePayment", { bookingId })
+          }
           refundLoading={refundLoading}
           invoiceLoading={invoiceLoading}
           c={c}

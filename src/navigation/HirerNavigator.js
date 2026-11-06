@@ -58,6 +58,7 @@ import PostDetailScreen from "../screens/main/PostDetailScreen";
 import SupportChatScreen from "../screens/main/SupportChatScreen";
 import SupportHubScreen from "../screens/main/SupportHubScreen";
 import SupportTicketThreadScreen from "../screens/main/SupportTicketThreadScreen";
+import ReleasePaymentScreen from "../screens/main/ReleasePaymentScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -232,6 +233,12 @@ export default function HirerNavigator() {
         </Drawer.Screen>
         <Drawer.Screen name="SupportTicketDetail">
           {() => <ScreenWithChrome Screen={SupportTicketThreadScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen
+          name="ReleasePayment"
+          options={{ drawerItemStyle: { display: "none" } }}
+        >
+          {() => <ScreenWithChrome Screen={ReleasePaymentScreen} />}
         </Drawer.Screen>
 
         <Drawer.Screen
