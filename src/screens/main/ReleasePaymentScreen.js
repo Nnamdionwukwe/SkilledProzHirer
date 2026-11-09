@@ -213,7 +213,9 @@ export default function ReleasePaymentScreen({ route, navigation }) {
         <ScrollView contentContainerStyle={styles.payWrap}>
           <View style={styles.payHeader}>
             <Pressable
-              onPress={() => navigation.goBack()}
+              onPress={() =>
+                navigation.navigate("BookingDetail", { id: bookingId })
+              }
               style={styles.backLink}
             >
               <FontAwesome5
