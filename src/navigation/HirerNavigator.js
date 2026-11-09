@@ -5,13 +5,7 @@ import {
   useNavigationState,
 } from "@react-navigation/native";
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  StyleSheet,
-  Dimensions,
-  Pressable,
-  Animated,
-} from "react-native";
+import { View, StyleSheet, Dimensions, Pressable } from "react-native";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,7 +15,6 @@ import DrawerContent from "../components/DrawerContent";
 import CallBannersOverlay from "./CallBannersOverlay";
 import { useTheme } from "../contexts/ThemeContext";
 import AppText from "../components/AppText";
-import { useAuthStore } from "../store/authStore";
 import { navigationRef } from "./navigationRef";
 
 // Screens (Primary)
@@ -31,6 +24,7 @@ import PostJobScreen from "../screens/main/PostJobScreen";
 import BrowseWorkersScreen from "../screens/main/BrowseWorkersScreen";
 import CommunityFeedScreen from "../screens/main/CommunityFeedScreen";
 import JobsManagementScreen from "../screens/main/JobsManagementScreen";
+import RetainedStaffScreen from "../screens/main/RetainedStaffScreen";
 
 // Screens (Hidden)
 import SettingsScreen from "../screens/main/SettingsScreen";
@@ -68,7 +62,6 @@ import MyDisputesScreen from "../screens/main/MyDisputesScreen";
 import EditProfileScreen from "../screens/main/EditProfileScreen";
 import HirerWalletScreen from "../screens/main/HirerWalletScreen";
 import WalletTransactionDetailScreen from "../screens/main/WalletTransactionDetailScreen";
-import RetainedStaffScreen from "../screens/main/RetainedStaffScreen";
 import RetainedStaffListScreen from "../screens/main/RetainedStaffListScreen";
 import RetainedStaffDetailScreen from "../screens/main/RetainedStaffDetailScreen";
 import RetainedStaffCycleDetailScreen from "../screens/main/RetainedStaffCycleDetailScreen";
@@ -81,11 +74,10 @@ import ReleasePaymentScreen from "../screens/main/ReleasePaymentScreen";
 const Drawer = createDrawerNavigator();
 
 // ── Floating Bar Component ──
-function FloatingTabBar({ isVisible }) {
+function FloatingTabBar() {
   const { theme } = useTheme();
   const c = theme.colors;
   const insets = useSafeAreaInsets();
-  const { unreadNotifications = 9 } = useAuthStore() || {};
   const [activeRoute, setActiveRoute] = useState("Dashboard");
 
   useEffect(() => {
@@ -111,36 +103,29 @@ function FloatingTabBar({ isVisible }) {
     return unsubscribe;
   }, []);
 
+  // Icons synced with hamburger menu:
+  // Dashboard -> Home
+  // Bookings -> Briefcase
+  // Browse Workers -> People
+  // Community Feed -> Newspaper
+  // Jobs Management -> Construct
+  // Retained Staff -> Briefcase (or Ribbon for consistency with sidebar)
   const tabs = [
-    { name: "Dashboard", label: "Home", icon: "home", activeIcon: "home" },
+    { name: "Dashboard", icon: "home-outline", activeIcon: "home" },
+    { name: "Bookings", icon: "briefcase-outline", activeIcon: "briefcase" },
+    { name: "BrowseWorkers", icon: "people-outline", activeIcon: "people" },
     {
-      name: "Bookings",
-      label: "Bookings",
-      icon: "briefcase-outline",
-      activeIcon: "briefcase",
-    },
-    {
-      name: "BrowseWorkers",
-      label: "Browse",
-      icon: "people-outline",
-      activeIcon: "people",
+      name: "CommunityFeed",
+      icon: "newspaper-outline",
+      activeIcon: "newspaper",
     },
     {
       name: "JobsManagement",
-      label: "Jobs",
-      icon: "storefront-outline",
-      activeIcon: "storefront",
+      icon: "construct-outline",
+      activeIcon: "construct",
     },
-    {
-      name: "Notifications",
-      label: "Alerts",
-      icon: "notifications-outline",
-      activeIcon: "notifications",
-    },
+    { name: "RetainedStaff", icon: "ribbon-outline", activeIcon: "ribbon" },
   ];
-
-  // If the drawer is open, hide the bar
-  if (!isVisible) return null;
 
   return (
     <View
@@ -182,7 +167,7 @@ function FloatingTabBar({ isVisible }) {
                 >
                   <Ionicons
                     name={tab.activeIcon}
-                    size={24}
+                    size={18}
                     color={c.blue || "#3b82f6"}
                   />
                 </View>
@@ -190,37 +175,12 @@ function FloatingTabBar({ isVisible }) {
                 <View
                   style={{ alignItems: "center", justifyContent: "center" }}
                 >
-                  <Ionicons name={tab.icon} size={24} color={c.text} />
-                  {tab.name === "Notifications" && unreadNotifications > 0 && (
-                    <View
-                      style={[
-                        styles.badge,
-                        { backgroundColor: c.red, borderColor: c.bgPanel },
-                      ]}
-                    >
-                      <AppText style={styles.badgeText}>
-                        {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                      </AppText>
-                    </View>
-                  )}
+                  <Ionicons name={tab.icon} size={18} color={c.text} />
                 </View>
               )}
             </Pressable>
           );
         })}
-        <Pressable
-          onPress={() => navigationRef.navigate("Profile")}
-          style={({ pressed }) => [styles.tabItem, pressed && { opacity: 0.7 }]}
-        >
-          <View
-            style={[
-              styles.avatarWrapper,
-              { borderColor: c.border, backgroundColor: c.bgCard },
-            ]}
-          >
-            <Ionicons name="person" size={18} color={c.textDim} />
-          </View>
-        </Pressable>
       </View>
     </View>
   );
@@ -230,9 +190,6 @@ function FloatingTabBar({ isVisible }) {
 export default function HirerNavigator() {
   const { theme } = useTheme();
   const screenWidth = Dimensions.get("window").width;
-
-  // Track drawer open/close state
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   return (
     <View style={{ flex: 1 }}>
@@ -252,11 +209,6 @@ export default function HirerNavigator() {
           overlayColor: "rgba(0,0,0,0.5)",
           swipeEdgeWidth: 60,
         }}
-        // Listen to drawer events to hide the floating bar
-        screenListeners={{
-          drawerOpen: () => setIsDrawerOpen(true),
-          drawerClose: () => setIsDrawerOpen(false),
-        }}
       >
         <Drawer.Screen name="Dashboard">
           {() => <ScreenWithChrome Screen={DashboardScreen} />}
@@ -275,6 +227,9 @@ export default function HirerNavigator() {
         </Drawer.Screen>
         <Drawer.Screen name="JobsManagement">
           {() => <ScreenWithChrome Screen={JobsManagementScreen} />}
+        </Drawer.Screen>
+        <Drawer.Screen name="RetainedStaff">
+          {() => <ScreenWithChrome Screen={RetainedStaffScreen} />}
         </Drawer.Screen>
 
         {/* Hidden Routes */}
@@ -483,12 +438,6 @@ export default function HirerNavigator() {
           {() => <ScreenWithChrome Screen={WalletTransactionDetailScreen} />}
         </Drawer.Screen>
         <Drawer.Screen
-          name="RetainedStaff"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={RetainedStaffScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
           name="RetainedStaffList"
           options={{ drawerItemStyle: { display: "none" } }}
         >
@@ -547,9 +496,6 @@ export default function HirerNavigator() {
         />
       </Drawer.Navigator>
 
-      {/* Floating Bar - only renders if drawer is closed */}
-      <FloatingTabBar isVisible={!isDrawerOpen} />
-
       <CallBannersOverlay />
     </View>
   );
@@ -565,6 +511,8 @@ function ScreenWithChrome({ Screen }) {
       <View style={styles.body}>
         <Screen navigation={navigation} route={route} />
       </View>
+      {/* Render the Floating Bar INSIDE the ScreenWithChrome so it gets covered by the drawer overlay */}
+      <FloatingTabBar />
     </View>
   );
 }
@@ -587,8 +535,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     width: "92%",
     maxWidth: 420,
-    height: 68,
-    borderRadius: 34,
+    height: 56, // Further reduced to be super sleek
+    borderRadius: 28, // Matches height / 2
     borderWidth: 1,
     paddingHorizontal: 16,
     marginBottom: 12,
@@ -604,37 +552,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activePill: {
-    width: 52,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-  },
-  badge: {
-    position: "absolute",
-    top: -4,
-    right: -8,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-    borderWidth: 1.5,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#fff",
-    lineHeight: 12,
-  },
-  avatarWrapper: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
   },
 });
