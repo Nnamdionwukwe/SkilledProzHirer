@@ -341,7 +341,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
               </AppText>
               <AppText
                 weight="displayBlack"
-                style={[styles.summaryTitle, { color: colors.text }]}
+                style={[
+                  styles.summaryTitle,
+                  { color: colors.text, fontSize: 12 },
+                ]}
               >
                 {booking?.worker?.firstName} {booking?.worker?.lastName}
               </AppText>
@@ -516,13 +519,19 @@ export default function ReleasePaymentScreen({ route, navigation }) {
             <View style={styles.breakdownRow}>
               <AppText
                 weight="bold"
-                style={[styles.breakdownLabelTotal, { color: colors.text }]}
+                style={[
+                  styles.breakdownLabelTotal,
+                  { color: colors.text, fontSize: 11 },
+                ]}
               >
                 Remaining in Escrow
               </AppText>
               <AppText
                 weight="displayBlack"
-                style={[styles.breakdownValTotal, { color: colors.green }]}
+                style={[
+                  styles.breakdownValTotal,
+                  { color: colors.green, fontSize: 12 },
+                ]}
               >
                 {formatMoney(remaining, currency)}
               </AppText>
@@ -749,7 +758,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
             <FontAwesome5 name="lock" size={14} color={colors.orange} />
             <AppText
               weight="displayBlack"
-              style={[styles.disclaimerTitle, { color: colors.text }]}
+              style={[
+                styles.disclaimerTitle,
+                { color: colors.text, fontSize: 12 },
+              ]}
             >
               Before you release any funds
             </AppText>
@@ -789,7 +801,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 >
                   <AppText
                     weight="displayBlack"
-                    style={{ color: colors.orange, fontSize: 9 }}
+                    style={{
+                      color: colors.orange,
+                      fontSize: 9,
+                    }}
                   >
                     {idx + 1}
                   </AppText>
@@ -871,7 +886,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
               <FontAwesome5 name="money-bill-wave" size={14} color="#000" />
               <AppText
                 weight="displayBlack"
-                style={{ color: "#000", fontSize: 14 }}
+                style={{ color: "#000", fontSize: 11 }}
               >
                 {resolvedAmount > 0
                   ? `Release ${formatMoney(resolvedAmount, currency)} to ${booking?.worker?.firstName || "worker"}`
@@ -1017,13 +1032,16 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 <AppText
                   style={{
                     color: colors.red,
-                    fontSize: 11,
+                    fontSize: 10,
                     flex: 1,
                     lineHeight: 16,
                   }}
                 >
                   Released funds are{" "}
-                  <AppText weight="bold" style={{ color: colors.red }}>
+                  <AppText
+                    weight="bold"
+                    style={{ color: colors.red, fontSize: 12 }}
+                  >
                     non-refundable
                   </AppText>
                   . If you dispute this booking later, only what is still in
@@ -1108,7 +1126,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                       />
                       <AppText
                         weight="displayBlack"
-                        style={{ color: "#000", fontSize: 12 }}
+                        style={{ color: "#000", fontSize: 9 }}
                       >
                         Release {formatMoney(resolvedAmount, currency)}
                       </AppText>
