@@ -4,13 +4,6 @@ import { View, StyleSheet } from "react-native";
 import AppText from "./AppText";
 import { useTheme } from "../contexts/ThemeContext";
 
-/**
- * SkilledProzWordmark — matches the "Skilled" white + "Proz" orange treatment
- * shown at the top of the drawer (and the marketing site). Use this anywhere
- * the brand wordmark needs to appear.
- *
- *   <SkilledProzWordmark size="lg" />
- */
 export default function SkilledProzWordmark({ size = "md", style }) {
   const { theme } = useTheme();
   const dims = SIZES[size] || SIZES.md;
@@ -18,6 +11,7 @@ export default function SkilledProzWordmark({ size = "md", style }) {
   return (
     <View style={[styles.row, style]}>
       <AppText
+        numberOfLines={1}
         weight="displayBlack"
         style={{
           fontSize: dims.fontSize,
@@ -29,6 +23,7 @@ export default function SkilledProzWordmark({ size = "md", style }) {
         Skilled
       </AppText>
       <AppText
+        numberOfLines={1}
         weight="displayBlack"
         style={{
           fontSize: dims.fontSize,
@@ -46,9 +41,14 @@ export default function SkilledProzWordmark({ size = "md", style }) {
 const SIZES = {
   sm: { fontSize: 18, lineHeight: 22 },
   md: { fontSize: 24, lineHeight: 28 },
-  lg: { fontSize: 32, lineHeight: 36 },
+  lg: { fontSize: 36, lineHeight: 42 }, // Made larger for the intro
 };
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "baseline" },
+  row: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    flexWrap: "nowrap", // Prevents breaking to the next line
+    alignSelf: "center", // Centers the whole block
+  },
 });

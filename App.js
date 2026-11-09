@@ -24,6 +24,7 @@ import { SubscriptionProvider } from "./src/contexts/SubscriptionContext";
 import { VoiceCallProvider } from "./src/contexts/VoiceCallContext";
 import VoiceCallProviderUI from "./src/components/video/VoiceCallProvider";
 import LoadingScreen from "./src/components/LoadingScreen";
+import FirstRunGate from "./src/screens/FirstRunGate"; // ← NEW
 
 import RootNavigator from "./src/navigation/RootNavigator";
 import { initI18n } from "./src/i18n";
@@ -84,7 +85,9 @@ export default function App() {
               <ToastProvider>
                 <SubscriptionProvider>
                   <VoiceCallProvider>
-                    <RootNavigator key={langKey} />
+                    <FirstRunGate>
+                      <RootNavigator key={langKey} />
+                    </FirstRunGate>
                     <VoiceCallProviderUI />
                   </VoiceCallProvider>
                 </SubscriptionProvider>
