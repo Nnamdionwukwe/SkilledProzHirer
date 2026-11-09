@@ -119,6 +119,13 @@ const APP_STATUS = {
 // Once a room exists, all three stay visible AND a "Room ready" pill
 // is shown beneath them.
 // ═════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
+// Inline InterviewCallButton — uses the WORKING video call pipeline
+//   · Finds/creates the conversation with the worker
+//   · POSTs /voice-calls/:conversationId/initiate
+//   · Navigates to the in-app VideoCall screen
+//   · Returns to JobApplications when the call ends
+// ═════════════════════════════════════════════════════════════════
 function InlineInterviewCallButton({
   jobPostId,
   workerId,
@@ -129,53 +136,65 @@ function InlineInterviewCallButton({
 }) {
   const { toast } = useToast();
   const [creating, setCreating] = useState(false);
-  const [room, setRoom] = useState(null); // { roomUrl, roomName, callId }
   const [error, setError] = useState("");
 
-  const inviteText = useMemo(() => {
-    if (!room) return "";
-    return (
-      `Hi ${workerName || "there"}, I'd like to interview you for "${jobTitle || "the role"}". ` +
-      `Join my video room here: ${room.roomUrl}`
-    );
-  }, [room, workerName, jobTitle]);
-
   async function handleStartInterview() {
-    // If room already exists → just reopen it
-    if (room?.roomUrl) {
-      Linking.openURL(room.roomUrl).catch(() =>
-        toast.error("Couldn't open the video room."),
-      );
+    if (!workerId) {
+      setError("Missing worker info");
       return;
     }
-    if (!workerId || !jobPostId) return;
     setCreating(true);
     setError("");
+
     try {
-      const res = await client.post("/interviews", {
-        jobPostId,
-        workerId,
-        title: jobTitle,
-      });
-      const data = res?.data?.data?.call || res?.data?.data;
-      const roomUrl =
-        data?.roomUrl ||
-        data?.meetingUrl ||
-        data?.jitsiUrl ||
-        (data?.roomName ? `https://meet.jit.si/${data.roomName}` : null);
-      if (!roomUrl) {
-        throw new Error("No room URL returned");
+      // 1. Find or create a conversation with this worker
+      let conversationId = null;
+      try {
+        const res = await client.get("/messages/conversations", {
+          params: { page: 1, limit: 100, _t: Date.now() },
+        });
+        const list = res.data?.data?.conversations || [];
+        const peerIdStr = String(workerId);
+        const found = list.find((convo) =>
+          (convo.users || []).some((u) => {
+            const uid = String(u.userId || u.user?.id || u.id);
+            return uid === peerIdStr;
+          }),
+        );
+        if (found?.id) conversationId = found.id;
+      } catch {}
+
+      if (!conversationId) {
+        const res = await client.post("/messages", {
+          receiverId: workerId,
+          content: `📞 Interview call for "${jobTitle || "the role"}"`,
+        });
+        conversationId = res.data?.data?.conversationId;
       }
-      setRoom({
-        roomUrl,
-        roomName: data?.roomName || roomUrl.split("/").pop(),
-        callId: data?.id,
+
+      if (!conversationId) throw new Error("Could not establish conversation");
+
+      // 2. Initiate the call
+      const callRes = await client.post(
+        `/voice-calls/${conversationId}/initiate`,
+        { callType: "video" },
+      );
+
+      if (!callRes?.data?.data?.call) {
+        throw new Error("Call could not be initiated");
+      }
+
+      // 3. Navigate to the in-app VideoCall screen with returnTo
+      navigation.navigate("VideoCall", {
+        conversationId,
+        returnTo: "JobApplications",
+        returnParams: { jobId: jobPostId },
       });
-      await Linking.openURL(roomUrl).catch(() => {});
     } catch (err) {
       setError(
-        err?.response?.data?.message ||
-          "Failed to start interview. Please try again.",
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to start interview",
       );
     } finally {
       setCreating(false);
@@ -183,32 +202,28 @@ function InlineInterviewCallButton({
   }
 
   async function handleMessageLink() {
-    if (!room?.roomUrl) {
-      // If no room yet → create first, then navigate to chat
-      await handleStartInterview();
-      // fallthrough: navigation should still happen after room is set
-    }
-    const text = room?.roomUrl
-      ? inviteText
-      : `Hi ${workerName || "there"}, I'd like to interview you for "${jobTitle || "the role"}". I'll send a video link shortly.`;
-    if (navigation) {
-      navigation.navigate("Chat", {
-        userId: workerId,
-        prefillMessage: text,
-      });
-    }
-  }
-
-  async function handleCopyLink() {
-    if (!room?.roomUrl) {
-      toast.info("Start the interview first to get a room link.");
-      return;
-    }
+    if (!workerId) return;
+    // Just navigate to the chat — no room link needed since it's in-app now
     try {
-      await Clipboard.setStringAsync(room.roomUrl);
-      toast.success("Room link copied to clipboard.");
+      const res = await client.get("/messages/conversations", {
+        params: { page: 1, limit: 100, _t: Date.now() },
+      });
+      const list = res.data?.data?.conversations || [];
+      const peerIdStr = String(workerId);
+      const found = list.find((convo) =>
+        (convo.users || []).some((u) => {
+          const uid = String(u.userId || u.user?.id || u.id);
+          return uid === peerIdStr;
+        }),
+      );
+
+      if (found?.id) {
+        navigation.navigate("Chat", { conversationId: found.id });
+      } else {
+        navigation.navigate("Chat", { withUserId: workerId });
+      }
     } catch {
-      toast.error("Failed to copy link.");
+      navigation.navigate("Chat", { withUserId: workerId });
     }
   }
 
@@ -232,13 +247,13 @@ function InlineInterviewCallButton({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
             <FaVideo size={12} color={c.bg} />
             <AppText style={{ fontSize: 11, fontWeight: "700", color: c.bg }}>
-              {room ? "Rejoin Interview" : "Start Interview"}
+              Start Interview
             </AppText>
           </View>
         )}
       </Pressable>
 
-      {/* Message Link — secondary */}
+      {/* Message — secondary */}
       <Pressable
         onPress={handleMessageLink}
         disabled={creating}
@@ -260,57 +275,9 @@ function InlineInterviewCallButton({
             marginLeft: 5,
           }}
         >
-          Message Link
+          Message
         </AppText>
       </Pressable>
-
-      {/* Copy Link — tertiary ghost */}
-      <Pressable
-        onPress={handleCopyLink}
-        disabled={creating || !room}
-        style={({ pressed }) => [
-          styles.interviewBtnTertiary,
-          {
-            borderColor: c.border,
-            opacity: !room ? 0.45 : pressed ? 0.85 : 1,
-          },
-        ]}
-      >
-        <FaCopy size={10} color={c.textDim} />
-        <AppText
-          style={{
-            fontSize: 11,
-            fontWeight: "600",
-            color: c.textDim,
-            marginLeft: 5,
-          }}
-        >
-          Copy Link
-        </AppText>
-      </Pressable>
-
-      {/* Room-ready indicator */}
-      {room ? (
-        <View
-          style={[
-            styles.roomReadyPill,
-            { backgroundColor: c.greenDim, borderColor: c.green },
-          ]}
-        >
-          <FaCheckCircle size={9} color={c.green} />
-          <AppText
-            style={{
-              fontSize: 10,
-              fontWeight: "600",
-              color: c.green,
-              marginLeft: 4,
-            }}
-            numberOfLines={1}
-          >
-            Room ready · {room.roomName}
-          </AppText>
-        </View>
-      ) : null}
 
       {/* Error */}
       {error ? (

@@ -644,6 +644,9 @@ export default function BookingDetailSidebar({
             userId={userId}
             hirerId={booking.hirerId}
             workerId={booking.workerId}
+            otherUserId={isHirer ? booking.workerId : booking.hirerId}
+            returnTo="BookingDetail"
+            returnParams={{ bookingId: booking.id }}
           />
         )}
 

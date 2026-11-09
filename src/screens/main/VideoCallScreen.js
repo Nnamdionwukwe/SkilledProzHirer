@@ -1,8 +1,5 @@
 // src/screens/main/VideoCallScreen.js
-//
-// Full-screen conversation-scoped video call.
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -13,19 +10,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { WebView } from "react-native-webview";
+import { Ionicons } from "@expo/vector-icons";
 import AppText from "../../components/AppText";
 import { useAuthStore } from "../../store/authStore";
 import client from "../../api/client";
-import {
-  FaPhoneSlash,
-  FaExclamationTriangle,
-  FaExpand,
-  FaCompress,
-  FaExternalLinkAlt,
-} from "../../icons/fa";
 
 const CALL_BASE_URL = "https://call.skilledproz.com";
 const POLL_MS = 1500;
+const INITIATE_RETRIES = 6;
+const INITIATE_DELAY_MS = 500;
 
 function buildConversationVideoUrl(conversationId, displayName) {
   if (!conversationId) return null;
@@ -40,22 +33,41 @@ function buildConversationVideoUrl(conversationId, displayName) {
   return `${CALL_BASE_URL}/${roomId}?${params.toString()}`;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 export default function VideoCallScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { user } = useAuthStore();
 
   const conversationId = route.params?.conversationId;
+  const returnTo = route.params?.returnTo;
+  const returnParams = route.params?.returnParams || {};
 
+  const [call, setCall] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [endedByRemote, setEndedByRemote] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const [webViewKey, setWebViewKey] = useState(0);
+
+  // Track whether the call was ACTIVE at any point this session.
+  // The "ended" modal MUST only show if this is true.
+  const wasActiveRef = useRef(false);
+  const endedRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const webViewRef = useRef(null);
   const pollRef = useRef(null);
   const inCallRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const displayName = (() => {
     if (!user) return "";
@@ -69,21 +81,31 @@ export default function VideoCallScreen() {
     ? buildConversationVideoUrl(conversationId, displayName)
     : null;
 
-  const goBackToChat = () => {
+  const goBack = useCallback(() => {
+    if (returnTo) {
+      try {
+        navigation.navigate(returnTo, returnParams);
+        return;
+      } catch (err) {
+        console.warn("[VideoCallScreen] returnTo failed:", err);
+      }
+    }
     if (conversationId) {
       navigation.navigate("Chat", { conversationId });
     } else {
       navigation.goBack();
     }
-  };
+  }, [returnTo, returnParams, conversationId, navigation]);
 
   const killWebView = () => {
     try {
       webViewRef.current?.injectJavaScript?.(
-        "window.location.replace('about:blank'); true;"
+        "window.location.replace('about:blank'); true;",
       );
     } catch {}
-    setTimeout(() => setWebViewKey((k) => k + 1), 0);
+    setTimeout(() => {
+      if (mountedRef.current) setWebViewKey((k) => k + 1);
+    }, 0);
   };
 
   const patchEnd = async () => {
@@ -92,114 +114,285 @@ export default function VideoCallScreen() {
       try {
         await client.patch(`/voice-calls/${conversationId}/end`);
         return;
-      } catch (err) {
-        if (attempt < 3) {
-          await new Promise((r) => setTimeout(r, 400));
-        }
+      } catch {
+        if (attempt < 3) await sleep(400);
       }
     }
   };
 
+  // ──────────────────────────────────────────────────────────────────────
+  // HARD RESET — clears EVERYTHING for a fresh start.
+  // Called before every initiate so there's zero chance of a stale "ended"
+  // modal leaking from the previous call.
+  // ──────────────────────────────────────────────────────────────────────
+  const hardReset = () => {
+    // Stop polling first — no stale reads
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    // Kill webview so it doesn't render the old room
+    killWebView();
+    // Reset all internal refs
+    wasActiveRef.current = false;
+    endedRef.current = false;
+    inCallRef.current = false;
+    // Reset all UI state
+    if (mountedRef.current) {
+      setEnded(false);
+      setEndedByRemote(false);
+      setError("");
+      setCall(null);
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────────────────
+  // initiateWithRetry — retries until backend returns PENDING or ACTIVE
+  // ──────────────────────────────────────────────────────────────────────
+  const initiateWithRetry = useCallback(
+    async ({
+      maxAttempts = INITIATE_RETRIES,
+      delayMs = INITIATE_DELAY_MS,
+    } = {}) => {
+      if (!conversationId) throw new Error("Missing conversation");
+
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const res = await client.post(
+            `/voice-calls/${conversationId}/initiate`,
+            { callType: "video" },
+          );
+          const newCall = res.data?.data?.call;
+
+          if (!newCall) {
+            lastError = new Error("Backend returned empty call");
+          } else if (
+            newCall.status === "PENDING" ||
+            newCall.status === "ACTIVE"
+          ) {
+            return newCall;
+          } else {
+            lastError = new Error(
+              `Backend returned ${newCall.status} on attempt ${attempt}`,
+            );
+          }
+        } catch (err) {
+          lastError = err;
+        }
+
+        if (attempt < maxAttempts) {
+          await sleep(delayMs * attempt);
+        }
+      }
+
+      throw lastError || new Error("Could not start call after retries");
+    },
+    [conversationId],
+  );
+
+  // ──────────────────────────────────────────────────────────────────────
+  // startPolling — only flags "ended" if wasActiveRef is TRUE
+  // ──────────────────────────────────────────────────────────────────────
+  const startPolling = useCallback(() => {
+    if (!conversationId) return;
+    if (pollRef.current) clearInterval(pollRef.current);
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await client.get(`/voice-calls/${conversationId}`);
+        const c0 = res.data.data?.call;
+        if (!c0) return;
+
+        if (c0.status === "ACTIVE") {
+          wasActiveRef.current = true;
+          return;
+        }
+
+        const isTerminal = c0.status === "ENDED" || c0.status === "DECLINED";
+
+        if (isTerminal && !endedRef.current) {
+          const isReceiverDecline =
+            c0.status === "DECLINED" && c0.receiverId === user?.id;
+
+          // ── HARD GUARD ──
+          // Only show "ended" if:
+          //   1. This call was ACTIVE during this session (wasActiveRef), OR
+          //   2. This user is the receiver and explicitly declined
+          //
+          // If the call never went ACTIVE and this isn't a decline, the
+          // ENDED status is from a stale/prior call — IGNORE IT.
+          if (!wasActiveRef.current && !isReceiverDecline) {
+            return;
+          }
+
+          endedRef.current = true;
+          killWebView();
+          if (mountedRef.current) {
+            setEndedByRemote(true);
+            setEnded(true);
+          }
+          inCallRef.current = false;
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      } catch {}
+    }, POLL_MS);
+  }, [conversationId, user?.id]);
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Initial load
+  // ══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!conversationId) {
       setError("Missing conversation");
       setLoading(false);
       return;
     }
+
     let cancelled = false;
+
     (async () => {
       try {
         const res = await client.get(`/voice-calls/${conversationId}`);
         const data = res.data.data;
-        const call = data?.call;
-        if (!call) {
-          if (!cancelled) {
-            setError("Call not found");
-            setTimeout(goBackToChat, 1200);
+        const c0 = data?.call;
+
+        // No call exists OR stale call exists → initiate a fresh one
+        const isTerminal =
+          !c0 || c0.status === "ENDED" || c0.status === "DECLINED";
+
+        if (isTerminal) {
+          try {
+            const fresh = await initiateWithRetry();
+            if (cancelled || !mountedRef.current) return;
+
+            setCall(fresh);
+            inCallRef.current = true;
+            wasActiveRef.current = fresh.status === "ACTIVE";
+            endedRef.current = false;
+            setEnded(false);
+            setEndedByRemote(false);
+            setWebViewKey((k) => k + 1);
+            startPolling();
+          } catch (err) {
+            if (!cancelled && mountedRef.current) {
+              setError(
+                err.response?.data?.message ||
+                  "Could not start the call. Please try again.",
+              );
+            }
           }
           return;
         }
+
+        // Live call (PENDING or ACTIVE) → render it
+        setCall(c0);
         inCallRef.current = true;
-        if (call.status === "ENDED" || call.status === "DECLINED") {
-          setEndedByRemote(true);
-          setTimeout(goBackToChat, 1500);
+        if (c0.status === "ACTIVE") {
+          wasActiveRef.current = true;
         }
+        endedRef.current = false;
+        setEnded(false);
+        setEndedByRemote(false);
+        startPolling();
       } catch (err) {
-        if (!cancelled)
+        if (!cancelled && mountedRef.current) {
           setError(err.response?.data?.message || "Failed to load call");
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && mountedRef.current) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
+      if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [conversationId]);
+  }, [conversationId, initiateWithRetry, startPolling, goBack]);
 
-  useEffect(() => {
-    if (!inCallRef.current || !conversationId) return;
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await client.get(`/voice-calls/${conversationId}`);
-        const call = res.data.data?.call;
-        if (!call) return;
-        if (call.status === "ENDED" || call.status === "DECLINED") {
-          try {
-            webViewRef.current?.injectJavaScript?.(
-              "window.location.replace('about:blank'); true;"
-            );
-          } catch {}
-          setWebViewKey((k) => k + 1);
-          setEndedByRemote(true);
-          clearInterval(pollRef.current);
-          setTimeout(goBackToChat, 1000);
-        }
-      } catch {}
-    }, POLL_MS);
-    return () => clearInterval(pollRef.current);
-  }, [conversationId]);
-
-  function handleEnd() {
+  // ── End call (user pressed End Call) ──────────────────────────────────
+  async function handleEnd() {
+    // Set wasActiveRef so the ended modal SHOWS for our own end
+    if (inCallRef.current) {
+      // If we were actually in the call screen, we consider it active
+      wasActiveRef.current = true;
+    }
     if (pollRef.current) clearInterval(pollRef.current);
     killWebView();
-    patchEnd();
+    await patchEnd();
     inCallRef.current = false;
-    setTimeout(goBackToChat, 80);
+    endedRef.current = true;
+    if (mountedRef.current) {
+      setEnded(true);
+      setEndedByRemote(false);
+    }
+  }
+
+  // ── Remake (Call Again button) ────────────────────────────────────────
+  async function handleRemake() {
+    if (restarting) return;
+    setRestarting(true);
+
+    // ── HARD RESET FIRST ──
+    // This guarantees the "ended" modal disappears before we initiate.
+    // No stale state can leak into the new call.
+    hardReset();
+
+    try {
+      const fresh = await initiateWithRetry();
+      if (!mountedRef.current) return;
+
+      // Now set the fresh call state
+      setCall(fresh);
+      setEnded(false);
+      setEndedByRemote(false);
+      inCallRef.current = true;
+      wasActiveRef.current = fresh.status === "ACTIVE";
+      endedRef.current = false;
+      setWebViewKey((k) => k + 1);
+      startPolling();
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(
+          err.response?.data?.message ||
+            err.message ||
+            "Could not restart the call. Please try again in a moment.",
+        );
+      }
+    } finally {
+      if (mountedRef.current) setRestarting(false);
+    }
   }
 
   function handleOpenExternal() {
     if (roomUrl) Linking.openURL(roomUrl).catch(() => {});
   }
 
+  // ── Loading ───────────────────────────────────────────────────────────
   if (loading) {
     return (
       <SafeAreaView style={[styles.page, { backgroundColor: "#0a0a0a" }]}>
         <View style={styles.center}>
           <ActivityIndicator color="#f97316" size="large" />
-          <AppText style={styles.centerText}>
-            Connecting your video call…
-          </AppText>
+          <AppText style={styles.centerText}>Connecting your call…</AppText>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (error || endedByRemote || !roomUrl) {
+  // ── Error ─────────────────────────────────────────────────────────────
+  if (error || !roomUrl) {
     return (
       <SafeAreaView style={[styles.page, { backgroundColor: "#0a0a0a" }]}>
         <View style={styles.center}>
-          <FaExclamationTriangle size={32} color="#ef4444" />
+          <Ionicons name="warning" size={32} color="#ef4444" />
           <AppText style={styles.centerText}>
-            {endedByRemote
-              ? "The other party ended the call"
-              : error || "Call unavailable"}
+            {error || "Call unavailable"}
           </AppText>
-          {endedByRemote ? (
-            <AppText style={styles.centerSub}>Returning to chat…</AppText>
-          ) : null}
-          <Pressable onPress={goBackToChat} style={styles.primaryBtn}>
+          <Pressable onPress={goBack} style={styles.primaryBtn}>
             <AppText style={{ fontSize: 13, fontWeight: "700", color: "#000" }}>
-              Back to Chat
+              Back
             </AppText>
           </Pressable>
         </View>
@@ -207,53 +400,166 @@ export default function VideoCallScreen() {
     );
   }
 
+  // ── Ended (HARD GUARD: only show if wasActiveRef OR explicit decline) ─
+  if (ended) {
+    return (
+      <SafeAreaView style={[styles.page, { backgroundColor: "#0a0a0a" }]}>
+        <View style={styles.center}>
+          <View
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: "rgba(239,68,68,0.12)",
+              borderWidth: 2,
+              borderColor: "rgba(239,68,68,0.3)",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 8,
+            }}
+          >
+            <Ionicons
+              name={endedByRemote ? "call-outline" : "call"}
+              size={36}
+              color="#ef4444"
+            />
+          </View>
+          <AppText
+            style={{
+              fontSize: 18,
+              fontWeight: "700",
+              color: "#fff",
+              marginTop: 8,
+            }}
+          >
+            {endedByRemote ? "Call ended by other party" : "Call ended"}
+          </AppText>
+          <AppText
+            style={{
+              fontSize: 13,
+              color: "rgba(255,255,255,0.55)",
+              marginTop: 6,
+              marginBottom: 24,
+              textAlign: "center",
+            }}
+          >
+            You can start a new call or go back
+          </AppText>
+
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+            <Pressable
+              onPress={handleRemake}
+              disabled={restarting}
+              style={({ pressed }) => [
+                {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 20,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  backgroundColor: "#16a34a",
+                  opacity: restarting ? 0.5 : pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              {restarting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="videocam" size={16} color="#fff" />
+                  <AppText
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "700",
+                      color: "#fff",
+                    }}
+                  >
+                    Call Again
+                  </AppText>
+                </>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={goBack}
+              style={({ pressed }) => [
+                {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 20,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.15)",
+                  backgroundColor: "rgba(255,255,255,0.05)",
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Ionicons name="arrow-back" size={16} color="#fff" />
+              <AppText
+                style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}
+              >
+                Back
+              </AppText>
+            </Pressable>
+          </View>
+
+          {error ? (
+            <AppText
+              style={{
+                fontSize: 12,
+                color: "#f87171",
+                marginTop: 16,
+                textAlign: "center",
+              }}
+            >
+              {error}
+            </AppText>
+          ) : null}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Active call ───────────────────────────────────────────────────────
   return (
     <SafeAreaView
       style={[styles.page, { backgroundColor: "#0a0a0a" }]}
-      edges={fullscreen ? [] : ["top", "bottom"]}
+      edges={["top", "bottom"]}
     >
-      {!fullscreen ? (
-        <View style={styles.topBar}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              flex: 1,
-              minWidth: 0,
-            }}
-          >
-            <AppText style={styles.topTitle}>SkilledProz Call</AppText>
-            {displayName ? (
-              <AppText style={styles.topUser} numberOfLines={1}>
-                {displayName}
-              </AppText>
-            ) : null}
-            <View style={styles.liveTag}>
-              <View style={styles.liveDot} />
-              <AppText style={styles.liveText}>LIVE</AppText>
-            </View>
-          </View>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Pressable
-              onPress={() => setFullscreen(true)}
-              style={styles.iconBtn}
-              hitSlop={6}
-            >
-              <FaExpand size={12} color="#fff" />
-            </Pressable>
-            <Pressable
-              onPress={handleOpenExternal}
-              style={styles.iconBtn}
-              hitSlop={6}
-            >
-              <FaExternalLinkAlt size={12} color="#fff" />
-            </Pressable>
+      <View style={styles.topBar}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <AppText style={styles.topTitle}>SkilledProz Call</AppText>
+          {displayName ? (
+            <AppText style={styles.topUser} numberOfLines={1}>
+              {displayName}
+            </AppText>
+          ) : null}
+          <View style={styles.liveTag}>
+            <View style={styles.liveDot} />
+            <AppText style={styles.liveText}>LIVE</AppText>
           </View>
         </View>
-      ) : null}
+        <Pressable
+          onPress={handleOpenExternal}
+          style={styles.iconBtn}
+          hitSlop={6}
+        >
+          <Ionicons name="open-outline" size={14} color="#fff" />
+        </Pressable>
+      </View>
 
-      <View style={{ flex: 1, backgroundColor: "#000", position: "relative" }}>
+      <View style={{ flex: 1, backgroundColor: "#000" }}>
         <WebView
           key={webViewKey}
           ref={webViewRef}
@@ -269,48 +575,18 @@ export default function VideoCallScreen() {
           cacheEnabled={false}
           incognito={true}
         />
-        {fullscreen ? (
-          <Pressable
-            onPress={() => setFullscreen(false)}
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <FaCompress size={16} color="#fff" />
-          </Pressable>
-        ) : null}
       </View>
 
-      {!fullscreen ? (
-        <View style={styles.controlBar}>
-          <View style={{ flex: 1 }}>
-            <AppText style={styles.controlBrand}>SkilledProz</AppText>
-          </View>
-          <Pressable onPress={handleEnd} style={styles.endBtn} hitSlop={6}>
-            <FaPhoneSlash size={16} color="#fff" />
-            <AppText style={styles.endText}>End Call</AppText>
-          </Pressable>
-          <View style={{ flex: 1 }} />
+      <View style={styles.controlBar}>
+        <View style={{ flex: 1 }}>
+          <AppText style={styles.controlBrand}>SkilledProz</AppText>
         </View>
-      ) : (
-        <Pressable
-          onPress={handleEnd}
-          style={styles.floatingEndBtn}
-          hitSlop={6}
-        >
-          <FaPhoneSlash size={18} color="#fff" />
+        <Pressable onPress={handleEnd} style={styles.endBtn} hitSlop={6}>
+          <Ionicons name="call" size={16} color="#fff" />
+          <AppText style={styles.endText}>End Call</AppText>
         </Pressable>
-      )}
+        <View style={{ flex: 1 }} />
+      </View>
     </SafeAreaView>
   );
 }
@@ -321,17 +597,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 16,
+    gap: 12,
     padding: 24,
   },
   centerText: {
     fontSize: 15,
     color: "rgba(255,255,255,0.85)",
-    textAlign: "center",
-  },
-  centerSub: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.5)",
     textAlign: "center",
   },
   primaryBtn: {
@@ -405,20 +676,4 @@ const styles = StyleSheet.create({
     backgroundColor: "#ef4444",
   },
   endText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  floatingEndBtn: {
-    position: "absolute",
-    bottom: 24,
-    alignSelf: "center",
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#ef4444",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 10,
-  },
 });
