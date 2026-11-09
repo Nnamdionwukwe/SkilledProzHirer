@@ -2119,7 +2119,7 @@ export default function JobDetailScreen() {
           </View>
           <Pressable
             onPress={() =>
-              navigation.navigate("Profile", { userId: job.hirer.id })
+              navigation.navigate("HirerDetail", { userId: job.hirer.id })
             }
             style={({ pressed }) => [
               styles.viewHirerBtn,

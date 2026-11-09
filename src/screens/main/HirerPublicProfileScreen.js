@@ -27,6 +27,7 @@ import {
   FaStar,
   FaCheckCircle,
   FaMapMarkerAlt,
+  FaCalendarAlt,
   FaClock,
   FaBuilding,
   FaUsers,
