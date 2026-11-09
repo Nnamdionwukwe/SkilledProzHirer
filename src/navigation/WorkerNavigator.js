@@ -1,9 +1,11 @@
 // src/navigation/WorkerNavigator.js
 //
-// Fixed: <Stack.Screen> elements were previously inside <Drawer.Navigator>,
-// which is invalid. Moved them to <Stack.Navigator>.
-// CallBannersOverlay is a sibling of the Stack.Navigator (wrapped in a View)
-// so incoming call banners render above every screen.
+// Rewritten to mirror src/components/layout/WorkerLayout.jsx 1:1:
+//   • Same 5 nav groups, same order, same items.
+//   • Same route names (Dashboard, WorkerBookings, WorkerJobs, …).
+//   • Same icons via Ionicons in WorkerDrawerContent.
+//   • Every screen WorkerLayout.jsx navigates to is registered.
+//   • Drawer = sidebar. Stack = detail screens opened from the drawer.
 
 import React from "react";
 import { View } from "react-native";
@@ -14,50 +16,66 @@ import { useTranslation } from "react-i18next";
 import WorkerDrawerContent from "../components/WorkerDrawerContent";
 import TopBar from "../components/TopBar";
 
+// ── Overview ──────────────────────────────────────────────────────────────
 import WorkerDashboardScreen from "../screens/main/worker/WorkerDashboardScreen";
 import WorkerJobsScreen from "../screens/main/worker/WorkerJobsScreen";
-import WorkerJobDetailScreen from "../screens/main/worker/WorkerJobDetailScreen";
 import WorkerApplicationsScreen from "../screens/main/worker/WorkerApplicationsScreen";
+import WorkerCategoriesScreen from "../screens/main/worker/WorkerCategoriesScreen";
 import WorkerBookingsScreen from "../screens/main/worker/WorkerBookingsScreen";
-import WorkerProfileScreen from "../screens/main/worker/WorkerProfileScreen";
+
+// ── Finances & History ────────────────────────────────────────────────────
 import WorkerEarningsScreen from "../screens/main/worker/WorkerEarningsScreen";
 import WorkerWithdrawalsScreen from "../screens/main/worker/WorkerWithdrawalsScreen";
-import WorkerReviewsScreen from "../screens/main/worker/WorkerReviewsScreen";
+import DisputesScreen from "../screens/main/DisputesScreen";
+import RefundHistoryScreen from "../screens/main/RefundHistoryScreen";
+
+// ── Profile ───────────────────────────────────────────────────────────────
+import WorkerProfileScreen from "../screens/main/worker/WorkerProfileScreen";
 import WorkerPortfolioScreen from "../screens/main/worker/WorkerPortfolioScreen";
 import WorkerCertificationsScreen from "../screens/main/worker/WorkerCertificationsScreen";
-import WorkerCategoriesScreen from "../screens/main/worker/WorkerCategoriesScreen";
 import WorkerAvailabilityScreen from "../screens/main/worker/WorkerAvailabilityScreen";
-
-import BookingDetailScreen from "../screens/main/BookingDetailScreen";
-import HirerPublicProfileScreen from "../screens/main/HirerPublicProfileScreen";
-import MessagesScreen from "../screens/main/MessagesScreen";
-import ChatScreen from "../screens/main/ChatScreen";
-import NotificationsScreen from "../screens/main/NotificationsScreen";
-import SettingsScreen from "../screens/main/SettingsScreen";
-import MyPostsScreen from "../screens/main/MyPostsScreen";
-import DisputesScreen from "../screens/main/DisputesScreen";
 import VerificationScreen from "../screens/main/VerificationScreen";
+
+// ── Community & Growth ────────────────────────────────────────────────────
+import MyPostsScreen from "../screens/main/MyPostsScreen";
+import CampaignDashboardScreen from "../screens/main/CampaignDashboardScreen";
+import ReferralDashboardScreen from "../screens/main/ReferralDashboardScreen";
+import MyReportsScreen from "../screens/main/MyReportsScreen";
+
+// ── Account & Support ─────────────────────────────────────────────────────
+import WorkerReviewsScreen from "../screens/main/worker/WorkerReviewsScreen";
+import MessagesScreen from "../screens/main/MessagesScreen";
+import NotificationsScreen from "../screens/main/NotificationsScreen";
 import SubscriptionsScreen from "../screens/main/SubscriptionsScreen";
 import FeaturedBoostScreen from "../screens/main/FeaturedBoostScreen";
-import ReferralDashboardScreen from "../screens/main/ReferralDashboardScreen";
-import CampaignDashboardScreen from "../screens/main/CampaignDashboardScreen";
-import MyReportsScreen from "../screens/main/MyReportsScreen";
-import RefundHistoryScreen from "../screens/main/RefundHistoryScreen";
+import SettingsScreen from "../screens/main/SettingsScreen";
+
+// ── Stack (detail screens — same set the web links out to) ───────────────
+import WorkerJobDetailScreen from "../screens/main/worker/WorkerJobDetailScreen";
+import BookingDetailScreen from "../screens/main/BookingDetailScreen";
+import HirerPublicProfileScreen from "../screens/main/HirerPublicProfileScreen";
+import ChatScreen from "../screens/main/ChatScreen";
+import PostDetailScreen from "../screens/main/PostDetailScreen";
 import RefundDetailScreen from "../screens/main/RefundDetailScreen";
 import MyDisputesScreen from "../screens/main/MyDisputesScreen";
-import VideoCallScreen from "../screens/main/VideoCallScreen";
 import EditProfileScreen from "../screens/main/EditProfileScreen";
-import PostDetailScreen from "../screens/main/PostDetailScreen";
+import VideoCallScreen from "../screens/main/VideoCallScreen";
 import SupportChatScreen from "../screens/main/SupportChatScreen";
 import SupportTicketThreadScreen from "../screens/main/SupportTicketThreadScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
 
+// ════════════════════════════════════════════════════════════════════════
+// Drawer — mirrors WorkerLayout.jsx's 5 NAV groups verbatim.
+// Header title/subtitle per screen taken from WorkerLayout.jsx PAGE_TITLES.
+// ════════════════════════════════════════════════════════════════════════
 function WorkerDrawer() {
   const { t } = useTranslation();
 
+  // Names + i18n keys match WorkerLayout.jsx one-to-one.
   const DRAWER_META = {
+    // Overview
     Dashboard: {
       title: t("nav.dashboard"),
       subtitle: t("screenSub.dashboard"),
@@ -65,10 +83,6 @@ function WorkerDrawer() {
     WorkerBookings: {
       title: t("nav.myBookings"),
       subtitle: t("screenSub.myBookings"),
-    },
-    WorkerCategories: {
-      title: t("nav.categories"),
-      subtitle: t("screenSub.categories"),
     },
     WorkerJobs: {
       title: t("nav.browseJobs"),
@@ -78,11 +92,12 @@ function WorkerDrawer() {
       title: t("nav.myApplications"),
       subtitle: t("screenSub.applications"),
     },
-    MyPosts: { title: t("nav.myPosts"), subtitle: t("screenSub.community") },
-    WorkerDisputes: {
-      title: t("nav.disputes"),
-      subtitle: t("screenSub.disputes"),
+    WorkerCategories: {
+      title: t("nav.categories"),
+      subtitle: t("screenSub.categories"),
     },
+
+    // Finances & History
     WorkerEarnings: {
       title: t("nav.earnings"),
       subtitle: t("screenSub.earnings"),
@@ -91,6 +106,16 @@ function WorkerDrawer() {
       title: t("nav.wallet"),
       subtitle: t("screenSub.wallet"),
     },
+    WorkerDisputes: {
+      title: t("nav.disputes"),
+      subtitle: t("screenSub.disputes"),
+    },
+    RefundHistory: {
+      title: t("nav.refunds"),
+      subtitle: t("screenSub.refunds"),
+    },
+
+    // Profile
     WorkerProfile: {
       title: t("profile.myProfile"),
       subtitle: t("screenSub.myProfile"),
@@ -111,15 +136,29 @@ function WorkerDrawer() {
       title: t("nav.verification"),
       subtitle: t("screenSub.verification"),
     },
+
+    // Community & Growth
+    MyPosts: { title: t("nav.myPosts"), subtitle: t("screenSub.community") },
+    Campaign: { title: t("nav.campaign"), subtitle: t("screenSub.campaign") },
+    ReferralDashboard: {
+      title: t("nav.referralDashboard"),
+      subtitle: t("screenSub.referralDashboard"),
+    },
+    MyReports: {
+      title: t("nav.myreports"),
+      subtitle: t("screenSub.myreports"),
+    },
+
+    // Account & Support
     WorkerReviews: {
       title: t("workerReviews.title"),
       subtitle: t("screenSub.reviews"),
     },
+    Messages: { title: t("nav.messages"), subtitle: t("screenSub.messages") },
     Notifications: {
       title: t("nav.notifications"),
       subtitle: t("screenSub.notifications"),
     },
-    Messages: { title: t("nav.messages"), subtitle: t("screenSub.messages") },
     WorkerSubscriptions: {
       title: t("nav.subscriptions"),
       subtitle: t("screenSub.subscriptions"),
@@ -129,18 +168,6 @@ function WorkerDrawer() {
       subtitle: t("screenSub.boostListing"),
     },
     Settings: { title: t("nav.settings"), subtitle: t("screenSub.settings") },
-    ReferralDashboard: {
-      title: t("nav.referralDashboard"),
-      subtitle: t("screenSub.referralDashboard"),
-    },
-    Campaign: {
-      title: t("nav.campaign"),
-      subtitle: t("screenSub.campaign"),
-    },
-    MyReports: {
-      title: t("nav.myreports"),
-      subtitle: t("screenSub.myreports"),
-    },
   };
 
   const drawerMeta = (name) =>
@@ -158,61 +185,73 @@ function WorkerDrawer() {
           headerShown: true,
           header: () => <TopBar title={m.title} subtitle={m.subtitle} />,
           drawerType: "front",
-          overlayColor: "rgba(0,0,0,0.5)",
-          drawerStyle: { width: "80%" },
+          overlayColor: "rgba(0,0,0,0.7)",
+          drawerStyle: { width: "80%", backgroundColor: "transparent" },
         };
       }}
     >
+      {/* ── Overview ─────────────────────────────────────────────── */}
       <Drawer.Screen name="Dashboard" component={WorkerDashboardScreen} />
       <Drawer.Screen name="WorkerBookings" component={WorkerBookingsScreen} />
       <Drawer.Screen name="WorkerJobs" component={WorkerJobsScreen} />
-      <Drawer.Screen name="WorkerProfile" component={WorkerProfileScreen} />
+      <Drawer.Screen
+        name="WorkerApplications"
+        component={WorkerApplicationsScreen}
+      />
+      <Drawer.Screen
+        name="WorkerCategories"
+        component={WorkerCategoriesScreen}
+      />
+
+      {/* ── Finances & History ───────────────────────────────────── */}
       <Drawer.Screen name="WorkerEarnings" component={WorkerEarningsScreen} />
       <Drawer.Screen
         name="WorkerWithdrawals"
         component={WorkerWithdrawalsScreen}
       />
-      <Drawer.Screen
-        name="WorkerApplications"
-        component={WorkerApplicationsScreen}
-      />
-      <Drawer.Screen name="WorkerReviews" component={WorkerReviewsScreen} />
+      <Drawer.Screen name="WorkerDisputes" component={DisputesScreen} />
+      <Drawer.Screen name="RefundHistory" component={RefundHistoryScreen} />
+
+      {/* ── Profile ──────────────────────────────────────────────── */}
+      <Drawer.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <Drawer.Screen name="WorkerPortfolio" component={WorkerPortfolioScreen} />
       <Drawer.Screen
         name="WorkerCertifications"
         component={WorkerCertificationsScreen}
       />
       <Drawer.Screen
-        name="WorkerCategories"
-        component={WorkerCategoriesScreen}
-      />
-      <Drawer.Screen
         name="WorkerAvailability"
         component={WorkerAvailabilityScreen}
       />
-      <Drawer.Screen name="MyPosts" component={MyPostsScreen} />
-      <Drawer.Screen name="WorkerDisputes" component={DisputesScreen} />
       <Drawer.Screen name="WorkerVerification" component={VerificationScreen} />
+
+      {/* ── Community & Growth ───────────────────────────────────── */}
+      <Drawer.Screen name="MyPosts" component={MyPostsScreen} />
+      <Drawer.Screen name="Campaign" component={CampaignDashboardScreen} />
+      <Drawer.Screen
+        name="ReferralDashboard"
+        component={ReferralDashboardScreen}
+      />
+      <Drawer.Screen name="MyReports" component={MyReportsScreen} />
+
+      {/* ── Account & Support ────────────────────────────────────── */}
+      <Drawer.Screen name="WorkerReviews" component={WorkerReviewsScreen} />
+      <Drawer.Screen name="Messages" component={MessagesScreen} />
+      <Drawer.Screen name="Notifications" component={NotificationsScreen} />
       <Drawer.Screen
         name="WorkerSubscriptions"
         component={SubscriptionsScreen}
       />
       <Drawer.Screen name="WorkerBoost" component={FeaturedBoostScreen} />
       <Drawer.Screen name="Settings" component={SettingsScreen} />
-      <Drawer.Screen name="Notifications" component={NotificationsScreen} />
-      <Drawer.Screen name="Messages" component={MessagesScreen} />
-      <Drawer.Screen
-        name="ReferralDashboard"
-        component={ReferralDashboardScreen}
-      />
-      <Drawer.Screen name="PostDetail" component={PostDetailScreen} />
-
-      <Drawer.Screen name="Campaign" component={CampaignDashboardScreen} />
-      <Drawer.Screen name="MyReports" component={MyReportsScreen} />
     </Drawer.Navigator>
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// Stack — detail screens the web navigates to (not in the sidebar).
+// Same set the audit lists under SCREEN:HIRER + SCREEN:WORKER.
+// ════════════════════════════════════════════════════════════════════════
 function WorkerStack() {
   const { t } = useTranslation();
 
@@ -230,6 +269,21 @@ function WorkerStack() {
       subtitle: t("screenSub.jobDetails"),
     },
     Chat: { title: t("nav.messages"), subtitle: t("screenSub.directMessage") },
+    PostDetail: { title: t("nav.myPosts"), subtitle: t("screenSub.community") },
+    RefundDetail: { title: t("nav.refunds"), subtitle: t("screenSub.refunds") },
+    MyDisputes: { title: t("nav.disputes"), subtitle: t("screenSub.disputes") },
+    EditProfile: {
+      title: t("profile.editProfile"),
+      subtitle: t("screenSub.myProfile"),
+    },
+    SupportChat: {
+      title: t("nav.liveSupport"),
+      subtitle: t("screenSub.supportChat"),
+    },
+    SupportTicketThread: {
+      title: t("nav.supportTicket"),
+      subtitle: t("screenSub.supportTicket"),
+    },
   };
 
   const stackMeta = (name) =>
@@ -242,12 +296,9 @@ function WorkerStack() {
     <View style={{ flex: 1 }}>
       <Stack.Navigator
         screenOptions={({ route }) => {
-          if (route.name === "WorkerHome") {
-            return { headerShown: false };
-          }
-          if (route.name === "VideoCall") {
+          if (route.name === "WorkerHome") return { headerShown: false };
+          if (route.name === "VideoCall")
             return { headerShown: false, presentation: "fullScreenModal" };
-          }
           const m = stackMeta(route.name);
           return {
             headerShown: true,
@@ -258,6 +309,7 @@ function WorkerStack() {
         }}
       >
         <Stack.Screen name="WorkerHome" component={WorkerDrawer} />
+
         <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
         <Stack.Screen
           name="HirerPublicProfile"
@@ -268,7 +320,7 @@ function WorkerStack() {
           component={WorkerJobDetailScreen}
         />
         <Stack.Screen name="Chat" component={ChatScreen} />
-        <Stack.Screen name="RefundHistory" component={RefundHistoryScreen} />
+        <Stack.Screen name="PostDetail" component={PostDetailScreen} />
         <Stack.Screen name="RefundDetail" component={RefundDetailScreen} />
         <Stack.Screen name="MyDisputes" component={MyDisputesScreen} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />

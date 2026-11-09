@@ -112,10 +112,8 @@ export default function PayCycleModal({ isOpen, onClose, cycle, member }) {
         setPaidCycleId(returnedCycleId);
         setShowSuccess(true);
       } else {
-        onClose?.();
-        navigation.navigate("PaymentScreen", {
-          bookingId,
-          method: provider,
+        navigation.navigate("InitiatePayment", {
+          bookingId: cycle.bookingId, // or cycle.booking?.id
         });
       }
     } catch (err) {

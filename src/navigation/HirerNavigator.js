@@ -11,6 +11,7 @@ import {
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
 
 import TopBar from "../components/TopBar";
 import DrawerContent from "../components/DrawerContent";
@@ -76,9 +77,9 @@ const Drawer = createDrawerNavigator();
 // ── Scroll Context (to share scrollY between screen and floating bar) ──
 const ScrollContext = React.createContext(null);
 
-// ── Floating Bar ──
+// ── Floating Bar (iOS-style liquid glass) ──
 function FloatingTabBar() {
-  const { theme } = useTheme();
+  const { theme, effectiveMode } = useTheme();
   const c = theme.colors;
   const insets = useSafeAreaInsets();
   const [activeRoute, setActiveRoute] = useState("Dashboard");
@@ -189,6 +190,8 @@ function FloatingTabBar() {
     { name: "RetainedStaff", icon: ICON.retainedStaff },
   ];
 
+  const isDark = effectiveMode !== "light";
+
   return (
     <Animated.View
       style={[
@@ -200,47 +203,75 @@ function FloatingTabBar() {
       ]}
       pointerEvents="box-none"
     >
-      <View
+      <BlurView
+        intensity={isDark ? 30 : 45}
+        tint={isDark ? "dark" : "light"}
+        experimentalBlurMethod="dimezisBlurView"
         style={[
-          styles.tabBar,
+          styles.glassBar,
           {
-            backgroundColor: c.bgPanel,
-            borderColor: c.border,
-            shadowColor: "#000",
+            backgroundColor: isDark
+              ? "rgba(20,20,30,0.35)"
+              : "rgba(255,255,255,0.35)",
+            borderColor: isDark
+              ? "rgba(255,255,255,0.18)"
+              : "rgba(255,255,255,0.6)",
           },
         ]}
       >
-        {tabs.map((tab) => {
-          const isFocused = activeRoute === tab.name;
-          const activeIcon = tab.icon.replace("-outline", "");
-          return (
-            <Pressable
-              key={tab.name}
-              onPress={() => navigationRef.navigate(tab.name)}
-              style={({ pressed }) => [
-                styles.tabItem,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              {isFocused ? (
-                <View
-                  style={[
-                    styles.activePill,
-                    {
-                      backgroundColor:
-                        c.orangeDim || "rgba(249, 115, 22, 0.15)",
-                    },
-                  ]}
-                >
-                  <Ionicons name={activeIcon} size={18} color={c.orange} />
-                </View>
-              ) : (
-                <Ionicons name={tab.icon} size={18} color={c.text} />
-              )}
-            </Pressable>
-          );
-        })}
-      </View>
+        {/* Top highlight — the glass "edge" line */}
+        <View
+          pointerEvents="none"
+          style={[
+            styles.glassHighlight,
+            {
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.15)"
+                : "rgba(255,255,255,0.75)",
+            },
+          ]}
+        />
+
+        <View style={styles.tabRow}>
+          {tabs.map((tab) => {
+            const isFocused = activeRoute === tab.name;
+            const activeIcon = tab.icon.replace("-outline", "");
+            return (
+              <Pressable
+                key={tab.name}
+                onPress={() => navigationRef.navigate(tab.name)}
+                style={({ pressed }) => [
+                  styles.tabItem,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                {isFocused ? (
+                  <View
+                    style={[
+                      styles.activePill,
+                      {
+                        backgroundColor:
+                          c.orangeDim || "rgba(249, 115, 22, 0.25)",
+                        borderColor: "rgba(249, 115, 22, 0.5)",
+                      },
+                    ]}
+                  >
+                    <Ionicons name={activeIcon} size={18} color={c.orange} />
+                  </View>
+                ) : (
+                  <Ionicons
+                    name={tab.icon}
+                    size={18}
+                    color={
+                      isDark ? "rgba(255,255,255,0.85)" : "rgba(20,20,30,0.75)"
+                    }
+                  />
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BlurView>
     </Animated.View>
   );
 }
@@ -600,21 +631,35 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     pointerEvents: "box-none",
   },
-  tabBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  glassBar: {
     width: "92%",
     maxWidth: 420,
     height: 56,
     borderRadius: 28,
     borderWidth: 1,
-    paddingHorizontal: 16,
     marginBottom: 12,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  glassHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+  },
+  tabRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flex: 1,
+    paddingHorizontal: 16,
   },
   tabItem: {
     alignItems: "center",
@@ -626,6 +671,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 28,
     borderRadius: 14,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
