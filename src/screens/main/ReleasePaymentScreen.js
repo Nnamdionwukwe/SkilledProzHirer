@@ -14,6 +14,7 @@ import {
   Image,
 } from "react-native";
 import { FontAwesome5 } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import AppText from "../../components/AppText";
 import { useTheme } from "../../contexts/ThemeContext";
 import api from "../../api/client";
@@ -29,6 +30,7 @@ function formatMoney(amount, currency = "NGN") {
 }
 
 export default function ReleasePaymentScreen({ route, navigation }) {
+  const { t } = useTranslation();
   const bookingId = route.params?.bookingId || route.params?.id;
   const { theme } = useTheme();
   const colors = theme.colors;
@@ -62,9 +64,16 @@ export default function ReleasePaymentScreen({ route, navigation }) {
         setBooking(bookingRes.data.data.booking);
         setPayment(paymentRes.data.data);
       })
-      .catch(() => setError("Could not load booking or payment details."))
+      .catch(() =>
+        setError(
+          t(
+            "payment.errors.loadFailed",
+            "Could not load booking or payment details.",
+          ),
+        ),
+      )
       .finally(() => setLoading(false));
-  }, [bookingId]);
+  }, [bookingId, t]);
 
   const pay = payment || booking?.payment;
 
@@ -135,11 +144,13 @@ export default function ReleasePaymentScreen({ route, navigation }) {
       });
       setShowConfirmModal(false);
       setTimeout(() => {
-        // This replaces the old navigation.navigate call
         navigation.navigate("BookingDetail", { id: bookingId });
       }, 2600);
     } catch (e) {
-      setError(e.response?.data?.message || "Failed to release payment.");
+      setError(
+        e.response?.data?.message ||
+          t("payment.errors.releaseFailed", "Failed to release payment."),
+      );
     } finally {
       setReleasing(false);
     }
@@ -190,17 +201,21 @@ export default function ReleasePaymentScreen({ route, navigation }) {
             style={[styles.successTitle, { color: colors.text }]}
           >
             {confirmed.isFinal
-              ? "Payment Fully Released!"
-              : "Partial Payment Released!"}
+              ? t("booking.release.title", "Payment Fully Released!")
+              : t("booking.release.titlePartial", "Partial Payment Released!")}
           </AppText>
           <AppText style={[styles.successText, { color: colors.textDim }]}>
-            {formatMoney(confirmed.amount, currency)} has been released to{" "}
+            {formatMoney(confirmed.amount, currency)}{" "}
+            {t("booking.release.releasedTo", "has been released to")}{" "}
             {booking?.worker?.firstName}.
             {!confirmed.isFinal &&
-              " The remaining balance is still safely held in escrow."}
+              ` ${t(
+                "booking.release.remainingHeld",
+                "The remaining balance is still safely held in escrow.",
+              )}`}
           </AppText>
           <AppText style={[styles.successSub, { color: colors.textMuted }]}>
-            Redirecting you back...
+            {t("payment.actions.redirecting", "Redirecting you back...")}
           </AppText>
         </View>
       </View>
@@ -226,7 +241,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 style={{ marginRight: 6 }}
               />
               <AppText style={{ color: colors.textDim, fontSize: 12 }}>
-                Back to Booking
+                {t("payment.actions.backToBooking", "Back to Booking")}
               </AppText>
             </Pressable>
           </View>
@@ -240,12 +255,15 @@ export default function ReleasePaymentScreen({ route, navigation }) {
               weight="bold"
               style={[styles.breakdownTitle, { color: colors.textMuted }]}
             >
-              Nothing to Release
+              {t("booking.release.nothingToRelease", "Nothing to Release")}
             </AppText>
             <AppText
               style={{ color: colors.textDim, marginTop: 6, fontSize: 12 }}
             >
-              This payment has already been fully released to the worker.
+              {t(
+                "booking.release.alreadyReleased",
+                "This payment has already been fully released to the worker.",
+              )}
             </AppText>
           </View>
         </ScrollView>
@@ -275,7 +293,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
               style={{ marginRight: 6 }}
             />
             <AppText style={{ color: colors.textDim, fontSize: 12 }}>
-              Back to Booking
+              {t("payment.actions.backToBooking", "Back to Booking")}
             </AppText>
           </Pressable>
           <View
@@ -295,7 +313,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 letterSpacing: 0.08 * 10,
               }}
             >
-              Release Escrow
+              {t("payment.initiate.releaseEscrow", "Release Escrow")}
             </AppText>
           </View>
         </View>
@@ -337,7 +355,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 weight="semibold"
                 style={[styles.summaryLabel, { color: colors.textMuted }]}
               >
-                Releasing payment to
+                {t(
+                  "payment.initiate.releasingPaymentTo",
+                  "Releasing payment to",
+                )}
               </AppText>
               <AppText
                 weight="displayBlack"
@@ -386,7 +407,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                   { color: colors.textMuted, marginBottom: 0 },
                 ]}
               >
-                Release History
+                {t("booking.release.history", "Release History")}
               </AppText>
             </View>
             <View style={styles.breakdownRows}>
@@ -425,7 +446,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 <AppText
                   style={[styles.breakdownLabel, { color: colors.textDim }]}
                 >
-                  Already released
+                  {t("booking.release.alreadyReleased", "Already released")}
                 </AppText>
                 <AppText
                   weight="semibold"
@@ -449,14 +470,14 @@ export default function ReleasePaymentScreen({ route, navigation }) {
             weight="bold"
             style={[styles.breakdownTitle, { color: colors.textMuted }]}
           >
-            Escrow Summary
+            {t("booking.payment.escrowSummary", "Escrow Summary")}
           </AppText>
           <View style={styles.breakdownRows}>
             <View style={styles.breakdownRow}>
               <AppText
                 style={[styles.breakdownLabel, { color: colors.textDim }]}
               >
-                Total Paid
+                {t("payment.initiate.labels.totalPaid", "Total Paid")}
               </AppText>
               <AppText
                 weight="semibold"
@@ -469,7 +490,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
               <AppText
                 style={[styles.breakdownLabel, { color: colors.textDim }]}
               >
-                Platform Fee
+                {t("payment.initiate.labels.platformFee", "Platform Fee")}
               </AppText>
               <AppText
                 weight="semibold"
@@ -484,7 +505,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                   weight="semibold"
                   style={[styles.breakdownLabel, { color: colors.green }]}
                 >
-                  Referral Discount
+                  {t(
+                    "payment.initiate.labels.referralDiscount",
+                    "Referral Discount",
+                  )}
                 </AppText>
                 <AppText
                   weight="semibold"
@@ -500,7 +524,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                   weight="semibold"
                   style={[styles.breakdownLabel, { color: colors.orange }]}
                 >
-                  Already released
+                  {t("booking.release.alreadyReleased", "Already released")}
                 </AppText>
                 <AppText
                   weight="semibold"
@@ -524,7 +548,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                   { color: colors.text, fontSize: 11 },
                 ]}
               >
-                Remaining in Escrow
+                {t("booking.release.remainingInEscrow", "Remaining in Escrow")}
               </AppText>
               <AppText
                 weight="displayBlack"
@@ -550,7 +574,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
             weight="bold"
             style={[styles.breakdownTitle, { color: colors.textMuted }]}
           >
-            Choose Release Amount
+            {t("booking.release.chooseReleaseAmount", "Choose Release Amount")}
           </AppText>
 
           {/* Preset Pills */}
@@ -600,7 +624,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
               weight="bold"
               style={[styles.customDivider, { color: colors.textMuted }]}
             >
-              or enter a custom amount
+              {t(
+                "booking.release.orEnterCustomAmount",
+                "or enter a custom amount",
+              )}
             </AppText>
             <View
               style={[
@@ -614,7 +641,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
             >
               <TextInput
                 keyboardType="decimal-pad"
-                placeholder="e.g. 5000"
+                placeholder={t(
+                  "booking.release.customAmountPlaceholder",
+                  "e.g. 5000",
+                )}
                 placeholderTextColor={colors.textMuted}
                 value={customAmount}
                 onChangeText={(val) => {
@@ -636,8 +666,11 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 weight="semibold"
                 style={[styles.customHint, { color: colors.red }]}
               >
-                Amount exceeds the remaining escrow (
-                {formatMoney(remaining, currency)}).
+                {t(
+                  "booking.release.exceedsRemaining",
+                  "Amount exceeds the remaining escrow ({{amount}}).",
+                  { amount: formatMoney(remaining, currency) },
+                )}
               </AppText>
             )}
             {customInvalid && (
@@ -645,12 +678,18 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 weight="semibold"
                 style={[styles.customHint, { color: colors.red }]}
               >
-                Enter a positive amount.
+                {t("booking.release.enterPositive", "Enter a positive amount.")}
               </AppText>
             )}
             {!customExceeds && !customInvalid && mode === "custom" && (
               <AppText style={[styles.customHint, { color: colors.textMuted }]}>
-                Must not exceed {formatMoney(remaining, currency)}.
+                {t(
+                  "booking.release.mustNotExceed",
+                  "Must not exceed {{amount}}.",
+                  {
+                    amount: formatMoney(remaining, currency),
+                  },
+                )}
               </AppText>
             )}
           </View>
@@ -663,7 +702,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
               <AppText
                 style={[styles.releasePreviewLabel, { color: colors.textDim }]}
               >
-                Releasing now
+                {t("booking.release.releasingNow", "Releasing now")}
               </AppText>
               <AppText
                 weight="displayBlack"
@@ -678,7 +717,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
               <AppText
                 style={[styles.releasePreviewLabel, { color: colors.textDim }]}
               >
-                Remaining after this release
+                {t(
+                  "booking.release.remainingAfter",
+                  "Remaining after this release",
+                )}
               </AppText>
               <AppText
                 weight="displayBlack"
@@ -707,7 +749,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                   weight="semibold"
                   style={{ color: colors.green, fontSize: 11 }}
                 >
-                  This will complete the payment in full.
+                  {t(
+                    "booking.release.completesPayment",
+                    "This will complete the payment in full.",
+                  )}
                 </AppText>
               </View>
             )}
@@ -725,11 +770,14 @@ export default function ReleasePaymentScreen({ route, navigation }) {
             weight="bold"
             style={[styles.breakdownTitle, { color: colors.textMuted }]}
           >
-            Note (optional)
+            {t("booking.release.noteOptional", "Note (optional)")}
           </AppText>
           <TextInput
             maxLength={200}
-            placeholder="e.g. Emergency medical"
+            placeholder={t(
+              "booking.release.notePlaceholder",
+              "e.g. Emergency medical",
+            )}
             placeholderTextColor={colors.textMuted}
             value={note}
             onChangeText={setNote}
@@ -763,30 +811,66 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 { color: colors.text, fontSize: 12 },
               ]}
             >
-              Before you release any funds
+              {t(
+                "booking.release.disclaimerTitle",
+                "Before you release any funds",
+              )}
             </AppText>
           </View>
           <View style={styles.disclaimerBody}>
             {[
               {
-                title: "Released money is final.",
-                text: `Once a release is made, that amount goes to ${booking?.worker?.firstName} ${booking?.worker?.lastName} immediately. It cannot be reversed, clawed back, or refunded — not by you, not by support, not by dispute.`,
+                title: t(
+                  "booking.release.disc1Title",
+                  "Released money is final.",
+                ),
+                text: t(
+                  "booking.release.disc1Text",
+                  "Once a release is made, that amount goes to {{workerName}} immediately. It cannot be reversed, clawed back, or refunded — not by you, not by support, not by dispute.",
+                  {
+                    workerName: `${booking?.worker?.firstName} ${booking?.worker?.lastName}`,
+                  },
+                ),
               },
               {
-                title: "Refunds only cover what is still in escrow.",
-                text: "If you open a dispute later, you can only be refunded from the portion still held. Any amount you have already released is permanently out of escrow and cannot be refunded.",
+                title: t(
+                  "booking.release.disc2Title",
+                  "Refunds only cover what is still in escrow.",
+                ),
+                text: t(
+                  "booking.release.disc2Text",
+                  "If you open a dispute later, you can only be refunded from the portion still held. Any amount you have already released is permanently out of escrow and cannot be refunded.",
+                ),
               },
               {
-                title: "Partial releases are allowed — use them.",
-                text: "If you're unsure the work is complete, release only a portion now. You can release the rest later once you're satisfied.",
+                title: t(
+                  "booking.release.disc3Title",
+                  "Partial releases are allowed — use them.",
+                ),
+                text: t(
+                  "booking.release.disc3Text",
+                  "If you're unsure the work is complete, release only a portion now. You can release the rest later once you're satisfied.",
+                ),
               },
               {
-                title: "Only release for work you have received.",
-                text: "Releasing is you confirming you've seen the work or agreed to the arrangement. SkilledProz does not arbitrate already-released funds.",
+                title: t(
+                  "booking.release.disc4Title",
+                  "Only release for work you have received.",
+                ),
+                text: t(
+                  "booking.release.disc4Text",
+                  "Releasing is you confirming you've seen the work or agreed to the arrangement. SkilledProz does not arbitrate already-released funds.",
+                ),
               },
               {
-                title: "Final release closes the booking.",
-                text: "When the remaining balance reaches zero, the payment is marked complete and review prompts are sent to both parties.",
+                title: t(
+                  "booking.release.disc5Title",
+                  "Final release closes the booking.",
+                ),
+                text: t(
+                  "booking.release.disc5Text",
+                  "When the remaining balance reaches zero, the payment is marked complete and review prompts are sent to both parties.",
+                ),
               },
             ].map((item, idx) => (
               <View key={idx} style={styles.disclaimerItem}>
@@ -876,7 +960,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 weight="displayBlack"
                 style={{ color: "#000", fontSize: 14 }}
               >
-                Releasing...
+                {t("booking.release.releasing", "Releasing...")}
               </AppText>
             </View>
           ) : (
@@ -889,8 +973,14 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 style={{ color: "#000", fontSize: 11 }}
               >
                 {resolvedAmount > 0
-                  ? `Release ${formatMoney(resolvedAmount, currency)} to ${booking?.worker?.firstName || "worker"}`
-                  : "Release Payment to Worker"}
+                  ? t(
+                      "booking.release.releaseToWorker",
+                      `Release ${formatMoney(resolvedAmount, currency)} to ${booking?.worker?.firstName || "worker"}`,
+                    )
+                  : t(
+                      "booking.release.releasePaymentToWorker",
+                      "Release Payment to Worker",
+                    )}
               </AppText>
             </View>
           )}
@@ -898,8 +988,14 @@ export default function ReleasePaymentScreen({ route, navigation }) {
 
         <AppText style={[styles.payDisclaimer, { color: colors.textMuted }]}>
           {willBeFinal
-            ? "This is the final release — the worker receives the full remaining escrow."
-            : "Partial releases let you send an advance while keeping the rest in escrow."}
+            ? t(
+                "booking.release.finalReleaseNote",
+                "This is the final release — the worker receives the full remaining escrow.",
+              )
+            : t(
+                "booking.release.partialReleaseNote",
+                "Partial releases let you send an advance while keeping the rest in escrow.",
+              )}
         </AppText>
         <View style={{ height: 30 }} />
       </ScrollView>
@@ -947,8 +1043,14 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 style={[styles.confirmTitle, { color: colors.text }]}
               >
                 {willBeFinal
-                  ? "Release the full remaining balance?"
-                  : "Release this amount?"}
+                  ? t(
+                      "booking.release.confirmFullTitle",
+                      "Release the full remaining balance?",
+                    )
+                  : t(
+                      "booking.release.confirmAmountTitle",
+                      "Release this amount?",
+                    )}
               </AppText>
 
               <View
@@ -967,7 +1069,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                     { color: colors.textMuted },
                   ]}
                 >
-                  You are releasing
+                  {t("booking.release.youAreReleasing", "You are releasing")}
                 </AppText>
                 <AppText
                   weight="displayBlack"
@@ -978,7 +1080,8 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                 <AppText
                   style={[styles.confirmAmountSub, { color: colors.textDim }]}
                 >
-                  to {booking?.worker?.firstName} {booking?.worker?.lastName}
+                  {t("booking.release.toWorker", "to")}{" "}
+                  {booking?.worker?.firstName} {booking?.worker?.lastName}
                 </AppText>
                 {note.trim() && (
                   <AppText
@@ -987,7 +1090,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                       { color: colors.textMuted },
                     ]}
                   >
-                    Note: “{note.trim()}”
+                    {t("booking.release.confirmNote", "Note:")} “{note.trim()}”
                   </AppText>
                 )}
               </View>
@@ -1000,7 +1103,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
               >
                 <View style={styles.confirmAfterRow}>
                   <AppText style={{ color: colors.textDim, fontSize: 11 }}>
-                    Remaining in escrow after this release
+                    {t(
+                      "booking.release.remainingAfterRelease",
+                      "Remaining in escrow after this release",
+                    )}
                   </AppText>
                   <AppText
                     weight="bold"
@@ -1037,15 +1143,20 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                     lineHeight: 16,
                   }}
                 >
-                  Released funds are{" "}
+                  {t(
+                    "booking.release.nonRefundableWarning",
+                    "Released funds are",
+                  )}{" "}
                   <AppText
                     weight="bold"
                     style={{ color: colors.red, fontSize: 12 }}
                   >
-                    non-refundable
+                    {t("booking.release.nonRefundable", "non-refundable")}
                   </AppText>
-                  . If you dispute this booking later, only what is still in
-                  escrow can be recovered.
+                  {t(
+                    "booking.release.nonRefundableSuffix",
+                    ". If you dispute this booking later, only what is still in escrow can be recovered.",
+                  )}
                 </AppText>
               </View>
 
@@ -1084,7 +1195,10 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                     lineHeight: 16,
                   }}
                 >
-                  I understand this release is final and non-refundable.
+                  {t(
+                    "booking.release.acknowledge",
+                    "I understand this release is final and non-refundable.",
+                  )}
                 </AppText>
               </Pressable>
 
@@ -1101,7 +1215,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                     weight="bold"
                     style={{ color: colors.textDim, fontSize: 12 }}
                   >
-                    Cancel
+                    {t("common.cancel", "Cancel")}
                   </AppText>
                 </Pressable>
                 <Pressable
@@ -1128,7 +1242,8 @@ export default function ReleasePaymentScreen({ route, navigation }) {
                         weight="displayBlack"
                         style={{ color: "#000", fontSize: 9 }}
                       >
-                        Release {formatMoney(resolvedAmount, currency)}
+                        {t("booking.release.releaseAction", "Release")}{" "}
+                        {formatMoney(resolvedAmount, currency)}
                       </AppText>
                     </>
                   )}
@@ -1144,7 +1259,6 @@ export default function ReleasePaymentScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
-  // Moved content closer to edges (reduced padding from 24 to 16, top from 40 to 24)
   payWrap: {
     padding: 16,
     paddingTop: 24,
@@ -1166,8 +1280,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
   },
-
-  // Reduced card padding from 24 to 16
   summaryCard: {
     borderRadius: 12,
     padding: 16,
@@ -1193,8 +1305,6 @@ const styles = StyleSheet.create({
   },
   summaryTitle: { fontSize: 15, marginBottom: 2 },
   summaryCategory: { fontSize: 11 },
-
-  // Reduced card padding from 24 to 16
   breakdownCard: { borderRadius: 12, padding: 16, borderWidth: 1 },
   breakdownTitle: {
     fontSize: 10,
@@ -1213,7 +1323,6 @@ const styles = StyleSheet.create({
   breakdownDivider: { height: 1, marginVertical: 2 },
   breakdownLabelTotal: { fontSize: 13, fontWeight: "700" },
   breakdownValTotal: { fontSize: 15 },
-
   presetRow: { flexDirection: "row", gap: 6, marginBottom: 12 },
   presetPill: {
     flex: 1,
@@ -1225,7 +1334,6 @@ const styles = StyleSheet.create({
   },
   presetPct: { fontSize: 13 },
   presetAmt: { fontSize: 10 },
-
   customRow: { marginBottom: 12 },
   customDivider: { fontSize: 10, letterSpacing: 0.08, marginBottom: 6 },
   customInputWrap: {
@@ -1239,7 +1347,6 @@ const styles = StyleSheet.create({
   customInput: { flex: 1, fontSize: 14, fontWeight: "700", paddingVertical: 6 },
   customCurrency: { fontSize: 12, letterSpacing: 0.04 },
   customHint: { fontSize: 10, marginTop: 4 },
-
   releasePreview: {
     borderTopWidth: 1,
     borderStyle: "dashed",
@@ -1262,7 +1369,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
   },
-
   manualInput: {
     borderWidth: 1,
     borderRadius: 8,
@@ -1270,7 +1376,6 @@ const styles = StyleSheet.create({
     padding: 10,
     width: "100%",
   },
-
   disclaimerCard: { borderRadius: 12, padding: 14, borderWidth: 1 },
   disclaimerHeader: {
     flexDirection: "row",
@@ -1291,7 +1396,6 @@ const styles = StyleSheet.create({
   },
   disclaimerItemTitle: { fontSize: 11, marginBottom: 2 },
   disclaimerItemText: { fontSize: 10.5, lineHeight: 15 },
-
   inlineError: {
     flexDirection: "row",
     alignItems: "center",
@@ -1299,7 +1403,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-
   payBtn: {
     paddingVertical: 12,
     borderRadius: 10,
@@ -1319,7 +1422,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     opacity: 0.5,
   },
-
   successWrap: {
     alignItems: "center",
     textAlign: "center",
@@ -1339,8 +1441,6 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: 18 },
   successText: { fontSize: 12, lineHeight: 18, textAlign: "center" },
   successSub: { fontSize: 11, textAlign: "center" },
-
-  // Modal Styles
   confirmOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.72)",
@@ -1417,8 +1517,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
-  // Buttons fixed side-by-side and text sizes reduced
   confirmActions: { flexDirection: "row", gap: 8, width: "100%" },
   confirmCancelBtn: {
     flex: 1,
