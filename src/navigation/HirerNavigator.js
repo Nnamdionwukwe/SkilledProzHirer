@@ -16,7 +16,7 @@ import TopBar from "../components/TopBar";
 import DrawerContent from "../components/DrawerContent";
 import { useTheme } from "../contexts/ThemeContext";
 import { navigationRef } from "./navigationRef";
-import { ICON } from "../constants/icons"; // Shared icons
+import { ICON } from "../constants/icons";
 
 // Screens
 import DashboardScreen from "../screens/main/DashboardScreen";
@@ -86,7 +86,6 @@ function FloatingTabBar() {
 
   const translateY = useRef(new Animated.Value(0)).current;
 
-  // Track state across scroll events
   const scrollState = useRef({
     lastOffset: 0,
     lastTime: Date.now(),
@@ -102,24 +101,17 @@ function FloatingTabBar() {
       const timeDelta = now - scrollState.current.lastTime;
       const scrollDelta = value - scrollState.current.lastOffset;
 
-      // Skip if no movement
       if (scrollDelta === 0) return;
-
-      // Ignore events that are too close together (jitter from momentum)
       if (timeDelta < 8) {
         scrollState.current.lastOffset = value;
         return;
       }
 
-      // Compute velocity in px/ms
-      const velocity = scrollDelta / timeDelta; // positive = down, negative = up
+      const velocity = scrollDelta / timeDelta;
       const isScrollingDown = scrollDelta > 0;
       const isScrollingUp = scrollDelta < 0;
       const absVelocity = Math.abs(velocity);
 
-      // ─────────────────────────────────────────────────────
-      // 1. ALWAYS SHOW at the very top of the page
-      // ─────────────────────────────────────────────────────
       if (value <= 15) {
         if (scrollState.current.isHidden) {
           Animated.timing(translateY, {
@@ -134,10 +126,6 @@ function FloatingTabBar() {
         return;
       }
 
-      // ─────────────────────────────────────────────────────
-      // 2. SCROLLING DOWN (finger moves up) → HIDE immediately
-      //    Regardless of speed, any downward scroll hides the bar.
-      // ─────────────────────────────────────────────────────
       if (isScrollingDown && value > 20) {
         if (!scrollState.current.isHidden) {
           Animated.timing(translateY, {
@@ -147,20 +135,8 @@ function FloatingTabBar() {
           }).start();
           scrollState.current.isHidden = true;
         }
-      }
-
-      // ─────────────────────────────────────────────────────
-      // 3. SCROLLING UP (finger moves down)
-      //    Only SHOW if the flick is FAST (Facebook behavior).
-      //    Slow scrolls keep the bar hidden.
-      // ─────────────────────────────────────────────────────
-      else if (isScrollingUp && scrollState.current.isHidden) {
-        // FAST threshold: 1.2 px/ms ≈ 1200 px/sec.
-        // This means you have to flick/throw the list up strongly.
-        // If you want it more sensitive, lower this to 0.8.
-        // If you want it more strict, raise to 1.5.
+      } else if (isScrollingUp && scrollState.current.isHidden) {
         const FAST_THRESHOLD = 1.2;
-
         if (absVelocity >= FAST_THRESHOLD) {
           Animated.timing(translateY, {
             toValue: 0,
@@ -171,7 +147,6 @@ function FloatingTabBar() {
         }
       }
 
-      // Update state for next frame
       scrollState.current.lastOffset = value;
       scrollState.current.lastTime = now;
     });
@@ -197,7 +172,6 @@ function FloatingTabBar() {
       const current = findActiveRoute(state);
       if (current) {
         setActiveRoute(current);
-        // Reset bar to visible on route change
         scrollState.current.isHidden = false;
         scrollState.current.lastOffset = 0;
         translateY.setValue(0);
@@ -597,7 +571,7 @@ function ScreenWithChrome({ Screen }) {
 
         <Animated.ScrollView
           style={styles.body}
-          contentContainerStyle={{ paddingBottom: 120 }} // Ensure content isn't hidden behind bar
+          contentContainerStyle={{ paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
           onScroll={Animated.event(
@@ -625,7 +599,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     pointerEvents: "box-none",
-    // Removed backgroundColor to ensure it's truly floating/transparent
   },
   tabBar: {
     flexDirection: "row",
