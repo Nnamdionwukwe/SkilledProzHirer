@@ -1,9 +1,5 @@
 // src/components/TopBar.js
-//
-// Verbatim port of the website's HirerLayout.jsx header block.
-// Rounded icon buttons + avatars match .headerIconBtn / .headerAvatar from CSS.
-
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useNavigationState } from "@react-navigation/native";
@@ -13,8 +9,6 @@ import AppText from "./AppText";
 import Avatar from "./Avatar";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuthStore } from "../store/authStore";
-import { hirerApi } from "../api/hirer";
-import client from "../api/client";
 import { FaCommentDots } from "../icons/fa";
 import { rem } from "../constants/theme";
 import {
@@ -100,13 +94,13 @@ export default function TopBar({
   title: titleProp,
   subtitle: subtitleProp,
   showBack,
+  unreadCount = 0, // ← Pull from WorkerNavigator
+  unreadMessages = 0, // ← Pull from WorkerNavigator
 }) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user } = useAuthStore();
-  const [unread, setUnread] = useState(0);
-  const [unreadMessages, setUnreadMessages] = useState(0);
 
   const routeName = useNavigationState(
     (state) => state?.routes?.[state.index]?.name,
@@ -114,67 +108,6 @@ export default function TopBar({
   const fallback = SCREEN_FALLBACK[routeName] ?? {};
   const title = titleProp ?? fallback.title ?? prettyTitle(routeName);
   const resolvedSub = subtitleProp ?? fallback.subtitle ?? null;
-
-  // ── Notification unread count ────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    let timer;
-    const fetchUnread = async () => {
-      try {
-        let count = 0;
-        if (user?.role === "WORKER") {
-          const res = await client.get("/workers/dashboard/notifications", {
-            params: { limit: 1, page: 1 },
-          });
-          count =
-            res.data?.data?.unreadCount ??
-            res.data?.unreadCount ??
-            res.data?.data?.unread ??
-            0;
-        } else {
-          const res = await client.get("/hirers/me/notifications", {
-            params: { limit: 1 },
-          });
-          count =
-            res.data?.data?.unreadCount ??
-            res.data?.unreadCount ??
-            res.data?.data?.unread ??
-            res.data?.unread ??
-            0;
-        }
-        console.log("🔔 unread count:", count, "from /notifications");
-        if (!cancelled) setUnread(count);
-      } catch (err) {
-        console.log("⚠️ notification fetch failed:", err?.message);
-      }
-    };
-    fetchUnread();
-    timer = setInterval(fetchUnread, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [user?.role]);
-
-  // ── Messages unread count ───────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    let timer;
-    const fetchMessages = async () => {
-      try {
-        const { data } = await client.get("/messages/conversations");
-        const convos = data?.data?.conversations ?? data?.conversations ?? [];
-        const total = convos.reduce((s, c) => s + (c.unreadCount || 0), 0);
-        if (!cancelled) setUnreadMessages(total);
-      } catch {}
-    };
-    fetchMessages();
-    timer = setInterval(fetchMessages, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, []);
 
   const handleLeft = () => {
     if (showBack) {
@@ -280,18 +213,28 @@ export default function TopBar({
               size={18}
               color={theme.colors.textDim}
             />
-            {unread > 0 && (
+            {unreadCount > 0 && (
               <View
                 style={[
                   styles.bellBadge,
                   {
                     backgroundColor: theme.colors.orange,
-                    borderColor: theme.colors.bg,
+                    borderColor: theme.colors.bgPanel,
                   },
                 ]}
               >
-                <AppText style={[styles.bellBadgeText, { color: "#000" }]}>
-                  {unread > 9 ? "9+" : String(unread)}
+                <AppText
+                  style={{
+                    fontFamily: "DMSans_700Bold",
+                    fontSize: 10,
+                    fontWeight: "800",
+                    color: "#000",
+                    lineHeight: 11,
+                    includeFontPadding: false,
+                    textAlign: "center",
+                  }}
+                >
+                  {unreadCount > 99 ? "99+" : String(unreadCount)}
                 </AppText>
               </View>
             )}
@@ -366,10 +309,10 @@ function prettyTitle(route) {
 const styles = StyleSheet.create({
   wrap: { borderBottomWidth: StyleSheet.hairlineWidth },
   row: {
-    height: rem(60 / 14), // 60px / 14
+    height: rem(60 / 14),
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: rem(20 / 14), // 20px / 14
+    paddingHorizontal: rem(20 / 14),
     gap: rem(0.75),
   },
   title: {
@@ -382,16 +325,10 @@ const styles = StyleSheet.create({
     fontSize: rem(0.6875),
     lineHeight: rem(0.6875) * 1.3,
   },
-  // ⬇⬇  Changed: borderRadius from RADII.base (8) → 14 for rounder look
-  //      Website's 8px border-radius on a 34px button = 23.5% roundness
-  //      We want the same visual proportion: 34 × 0.24 ≈ 8, but at raw px
-  //      For a truly "rounded" look, 14px on 34px looks closer to the web
-  //      After matching the web at 14px root: border-radius 8px = 8 × (14/16) = 7
-  //      To feel rounder, use 14 (nearly half-height, becomes circle-ish)
   iconBtn: {
     width: rem(34 / 14),
     height: rem(34 / 14),
-    borderRadius: 14, // ← was RADII.base (8), now 14 (rounder)
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -403,12 +340,12 @@ const styles = StyleSheet.create({
   },
   bellBadge: {
     position: "absolute",
-    top: rem(-4 / 14),
-    right: rem(-4 / 14),
-    minWidth: rem(16 / 14),
-    height: rem(16 / 14),
-    paddingHorizontal: rem(4 / 14),
-    borderRadius: 999,
+    top: rem(-6 / 14),
+    right: rem(-6 / 14),
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
@@ -418,15 +355,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: rem(0.625) * 1.1,
   },
-  // ⬇⬇ Avatar keeps full circle + explicit 1.5px border, non-scaled
   avatarWrap: {
     width: rem(28 / 14),
     height: rem(28 / 14),
-    borderRadius: 999, // perfect circle
-    borderWidth: 1.5, // stays visible at all DPIs
+    borderRadius: 999,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    // No `padding` — border hugs the image directly
   },
 });

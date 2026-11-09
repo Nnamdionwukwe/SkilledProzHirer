@@ -1,9 +1,11 @@
 // src/components/WorkerDrawerContent.js
-// All strings via t() — no hardcoded English.
+// Verbatim port of WorkerLayout.module.css sidebar + ConfirmationModal.
+// Receives unreadNotifications + unreadMessages from WorkerNavigator.
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import {
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,43 +14,57 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AppText from "./AppText";
 import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
 import { useAuthStore } from "../store/authStore";
 import client from "../api/client";
+import { rem, FONTS } from "../constants/theme";
 
-// ─── Menu item ────────────────────────────────────────────────────────────────
+// ── Menu item ────────────────────────────────────────────────────────────
 function MenuItem({ icon, label, active, badge, c, onPress }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        s.menuItem,
-        active && {
-          backgroundColor: c.orangeDim,
-          borderLeftColor: c.orange,
-          borderLeftWidth: 3,
-        },
+      style={({ pressed }) => [
+        s.navItem,
+        active && { backgroundColor: c.orangeDim },
+        pressed && !active && { backgroundColor: "rgba(255,255,255,0.04)" },
       ]}
     >
+      {active && <View style={[s.activeBar, { backgroundColor: c.orange }]} />}
       <Ionicons
         name={icon}
-        size={20}
-        color={active ? c.orange : c.textMuted}
-        style={{ width: 24 }}
+        size={rem(0.9375)}
+        color={active ? c.orange : c.textDim}
+        style={{ width: 18, textAlign: "center" }}
       />
       <AppText
-        variant="body"
-        weight={active ? "semibold" : "regular"}
-        style={[s.menuLabel, { color: active ? c.orange : c.text }]}
+        style={{
+          fontFamily: active ? FONTS.bodySemiBold : FONTS.bodyMedium,
+          fontSize: rem(0.875),
+          color: active ? c.orange : c.textDim,
+          marginLeft: rem(0.75),
+          flex: 1,
+        }}
       >
         {label}
       </AppText>
       {badge > 0 && (
-        <View style={[s.badge, { backgroundColor: c.orange }]}>
-          <AppText style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+        <View style={[s.navBadge, { backgroundColor: c.orange }]}>
+          <AppText
+            style={{
+              fontFamily: FONTS.body,
+              fontSize: 10, // fixed size matching TopBar
+              fontWeight: "800",
+              color: "#000", // matches var(--bg)
+              lineHeight: 11, // centers text vertically
+              includeFontPadding: false,
+              textAlign: "center",
+            }}
+          >
             {badge > 99 ? "99+" : badge}
           </AppText>
         </View>
@@ -57,29 +73,170 @@ function MenuItem({ icon, label, active, badge, c, onPress }) {
   );
 }
 
-// ─── Section header ───────────────────────────────────────────────────────────
+// ── Group label ──────────────────────────────────────────────────────────
 function SectionLabel({ label, c }) {
   return (
     <AppText
-      variant="small"
-      weight="semibold"
-      style={[s.sectionLabel, { color: c.textMuted }]}
+      style={{
+        fontFamily: FONTS.bodyBold,
+        fontSize: rem(0.5625),
+        letterSpacing: rem(0.5625) * 0.18,
+        textTransform: "uppercase",
+        color: c.textMuted,
+        paddingHorizontal: rem(0.75),
+        paddingTop: rem(0.5),
+        paddingBottom: rem(0.375),
+        marginBottom: rem(0.375),
+      }}
     >
       {label}
     </AppText>
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ── ConfirmationModal — .modal* from WorkerLayout.module.css ─────────────
+function ConfirmationModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  c,
+}) {
+  if (!isOpen) return null;
+  return (
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: rem(1),
+        }}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation?.()}
+          style={{
+            backgroundColor: c.bgPanel,
+            borderColor: c.border,
+            borderWidth: 1,
+            borderRadius: rem(20 / 14),
+            width: "100%",
+            maxWidth: 420,
+            padding: rem(1.8),
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 16 },
+            shadowOpacity: 0.3,
+            shadowRadius: 32,
+            elevation: 24,
+          }}
+        >
+          <AppText
+            style={{
+              fontFamily: FONTS.displayBlack,
+              fontSize: rem(1.25),
+              fontWeight: "800",
+              color: c.text,
+              marginBottom: rem(0.5),
+            }}
+          >
+            {title}
+          </AppText>
+
+          <AppText
+            style={{
+              fontFamily: FONTS.body,
+              fontSize: rem(0.95),
+              color: c.textDim,
+              lineHeight: rem(0.95) * 1.6,
+              marginBottom: rem(1.5),
+            }}
+          >
+            {message}
+          </AppText>
+
+          <View style={{ flexDirection: "row", gap: rem(0.75) }}>
+            <Pressable
+              onPress={onClose}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: rem(0.7),
+                paddingHorizontal: rem(1),
+                borderRadius: rem(10 / 14),
+                borderWidth: 1,
+                borderColor: c.border,
+                backgroundColor: pressed ? c.bgCard : "transparent",
+                alignItems: "center",
+                justifyContent: "center",
+              })}
+            >
+              <AppText
+                style={{
+                  fontFamily: FONTS.body,
+                  fontSize: rem(0.9),
+                  fontWeight: "700",
+                  color: c.textDim,
+                }}
+              >
+                {cancelLabel}
+              </AppText>
+            </Pressable>
+
+            <Pressable
+              onPress={onConfirm}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: rem(0.7),
+                paddingHorizontal: rem(1),
+                borderRadius: rem(10 / 14),
+                backgroundColor: pressed ? (c.redHover ?? "#dc2626") : c.red,
+                alignItems: "center",
+                justifyContent: "center",
+              })}
+            >
+              <AppText
+                style={{
+                  fontFamily: FONTS.body,
+                  fontSize: rem(0.9),
+                  fontWeight: "700",
+                  color: "#fff",
+                }}
+              >
+                {confirmLabel}
+              </AppText>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ── Main ────────────────────────────────────────────────────────────────
 export default function WorkerDrawerContent(props) {
   const { theme } = useTheme();
   const { toast } = useToast();
   const { user, logout } = useAuthStore();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const c = theme.colors;
+
+  // Accept counts from WorkerNavigator; fall back to 0.
+  const unreadNotifications = props.unreadNotifications ?? 0;
+  const unreadMessages = props.unreadMessages ?? 0;
 
   const [isAvailable, setIsAvailable] = useState(true);
   const [togglingAvail, setTogglingAvail] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const activeRoute =
     props.state?.routes?.[props.state.index]?.name ?? "Dashboard";
@@ -102,7 +259,8 @@ export default function WorkerDrawerContent(props) {
     }
   };
 
-  const handleLogout = async () => {
+  const handleConfirmLogout = async () => {
+    setShowLogoutModal(false);
     try {
       await logout();
     } catch {
@@ -110,87 +268,124 @@ export default function WorkerDrawerContent(props) {
     }
   };
 
-  const notifCount = props.unreadNotifications ?? 0;
-
   return (
     <View style={[s.root, { backgroundColor: c.bgPanel }]}>
-      {/* ── HEADER ────────────────────────────────────────────────────────── */}
-      <View style={[s.header, { borderBottomColor: c.border }]}>
-        <View style={s.logoRow}>
-          <AppText weight="displayBlack" style={s.logoSkilled}>
+      {/* ── .sidebarLogo — padding 1.5rem 1.5rem 1.125rem
+             + safe-area top so "SkilledProz" isn't flush against the notch */}
+      <View
+        style={[
+          s.logoWrap,
+          {
+            borderBottomColor: c.border,
+            paddingTop: insets.top + rem(1.5), // ← margin-top for SkilledProz
+          },
+        ]}
+      >
+        <View style={{ flexDirection: "row" }}>
+          <AppText
+            style={{
+              fontFamily: FONTS.displayBlack,
+              fontSize: rem(1.375),
+              fontWeight: "800",
+              letterSpacing: rem(1.375) * -0.04,
+              color: c.text,
+            }}
+          >
             Skilled
           </AppText>
           <AppText
-            weight="displayBlack"
-            style={[s.logoProz, { color: c.orange }]}
+            style={{
+              fontFamily: FONTS.displayBlack,
+              fontSize: rem(1.375),
+              fontWeight: "800",
+              letterSpacing: rem(1.375) * -0.04,
+              color: c.orange,
+            }}
           >
             Proz
           </AppText>
         </View>
         <AppText
-          variant="small"
-          weight="semibold"
-          style={[s.portalLabel, { color: c.textMuted }]}
+          style={{
+            fontFamily: FONTS.bodyBold,
+            fontSize: rem(0.5625),
+            fontWeight: "700",
+            letterSpacing: rem(0.5625) * 0.16,
+            textTransform: "uppercase",
+            color: c.textMuted,
+            marginTop: 3,
+          }}
         >
           {t("nav.workerPortal")}
         </AppText>
+      </View>
 
-        <View style={s.userCard}>
-          <Pressable onPress={() => goTo("WorkerProfile")}>
-            <View
-              style={[
-                s.avatar,
-                { backgroundColor: c.bgCard, borderColor: c.orange },
-              ]}
+      {/* ── .sidebarUser ─────────────────────────────────────────────── */}
+      <View style={[s.userWrap, { borderBottomColor: c.border }]}>
+        <Pressable
+          onPress={() => goTo("WorkerProfile")}
+          style={[
+            s.avatar,
+            { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+          ]}
+        >
+          {user?.avatar ? (
+            <Image
+              source={{ uri: user.avatar }}
+              style={{ width: "100%", height: "100%" }}
+            />
+          ) : (
+            <AppText
+              style={{
+                fontFamily: FONTS.displayBlack,
+                fontSize: rem(0.8125),
+                fontWeight: "700",
+                color: c.orange,
+              }}
             >
-              {user?.avatar ? (
-                <Image source={{ uri: user.avatar }} style={s.avatarImg} />
-              ) : (
-                <AppText
-                  variant="title"
-                  weight="semibold"
-                  style={{ color: c.orange }}
-                >
-                  {user?.firstName?.[0]}
-                  {user?.lastName?.[0]}
-                </AppText>
-              )}
-            </View>
-          </Pressable>
-          <View style={{ marginLeft: 12 }}>
-            <AppText variant="body" weight="semibold" style={{ color: c.text }}>
-              {user?.firstName} {user?.lastName}
+              {user?.firstName?.[0]?.toUpperCase()}
+              {user?.lastName?.[0]?.toUpperCase()}
             </AppText>
-            <View
-              style={[
-                s.activeBadge,
-                {
-                  backgroundColor: "rgba(34,197,94,0.15)",
-                  borderColor: "#22c55e",
-                },
-              ]}
+          )}
+        </Pressable>
+        <View style={{ marginLeft: rem(0.75), flex: 1 }}>
+          <AppText
+            numberOfLines={1}
+            style={{
+              fontFamily: FONTS.bodySemiBold,
+              fontSize: rem(0.875),
+              fontWeight: "600",
+              color: c.text,
+              marginBottom: 3,
+            }}
+          >
+            {user?.firstName} {user?.lastName}
+          </AppText>
+          <View style={[s.userBadge, { backgroundColor: c.greenDim }]}>
+            <AppText
+              style={{
+                fontFamily: FONTS.bodyBold,
+                fontSize: rem(0.5625),
+                fontWeight: "700",
+                letterSpacing: rem(0.5625) * 0.06,
+                color: c.green,
+              }}
             >
-              <View style={s.activeDot} />
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: "#22c55e" }}
-              >
-                {t("nav.activeWorker")}
-              </AppText>
-            </View>
+              {t("nav.activeWorker")}
+            </AppText>
           </View>
         </View>
       </View>
 
-      {/* ── MENU ──────────────────────────────────────────────────────────── */}
+      {/* ── .sidebarNav ──────────────────────────────────────────────── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.menu}
+        contentContainerStyle={s.navScroll}
       >
+        {/* 1. OVERVIEW */}
         <SectionLabel label={t("nav.overview")} c={c} />
         <MenuItem
-          icon="diamond-outline"
+          icon="home-outline"
           label={t("nav.dashboard")}
           active={activeRoute === "Dashboard"}
           c={c}
@@ -204,18 +399,18 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("WorkerBookings")}
         />
         <MenuItem
-          icon="construct-outline"
-          label={t("nav.categories")}
-          active={activeRoute === "WorkerCategories"}
-          c={c}
-          onPress={() => goTo("WorkerCategories")}
-        />
-        <MenuItem
           icon="search-outline"
           label={t("nav.browseJobs")}
           active={activeRoute === "WorkerJobs"}
           c={c}
           onPress={() => goTo("WorkerJobs")}
+        />
+        <MenuItem
+          icon="bookmark-outline"
+          label={t("nav.savedJobs", { defaultValue: "Saved Jobs" })}
+          active={activeRoute === "WorkerSavedJobs"}
+          c={c}
+          onPress={() => goTo("WorkerSavedJobs")}
         />
         <MenuItem
           icon="document-text-outline"
@@ -225,57 +420,75 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("WorkerApplications")}
         />
         <MenuItem
-          icon="newspaper-outline"
-          label={t("nav.myPosts")}
-          active={activeRoute === "MyPosts"}
+          icon="grid-outline"
+          label={t("nav.categories")}
+          active={activeRoute === "WorkerCategories"}
           c={c}
-          onPress={() => goTo("MyPosts")}
-        />
-        <MenuItem
-          icon="scale-outline"
-          label={t("nav.disputes")}
-          active={activeRoute === "WorkerDisputes"}
-          c={c}
-          onPress={() => goTo("WorkerDisputes")}
+          onPress={() => goTo("WorkerCategories")}
         />
 
+        {/* 2. FINANCES & HISTORY */}
         <SectionLabel label={t("nav.payouts")} c={c} />
         <MenuItem
-          icon="card-outline"
+          icon="cash-outline"
           label={t("nav.earnings")}
           active={activeRoute === "WorkerEarnings"}
           c={c}
           onPress={() => goTo("WorkerEarnings")}
         />
         <MenuItem
-          icon="arrow-up-outline"
+          icon="wallet-outline"
           label={t("nav.wallet")}
           active={activeRoute === "WorkerWithdrawals"}
           c={c}
           onPress={() => goTo("WorkerWithdrawals")}
         />
         <MenuItem
-          icon="people-outline"
-          label={t("nav.referralDashboard")}
-          active={activeRoute === "ReferralDashboard"}
+          icon="refresh-outline"
+          label={t("nav.refunds", { defaultValue: "Refunds" })}
+          active={activeRoute === "RefundHistory"}
           c={c}
-          onPress={() => goTo("ReferralDashboard")}
+          onPress={() => goTo("RefundHistory")}
         />
         <MenuItem
           icon="ribbon-outline"
-          label={t("nav.campaign")}
-          active={activeRoute === "Campaign"}
+          label={t("nav.completedJobs", { defaultValue: "Completed Jobs" })}
+          active={activeRoute === "WorkerCompletedJobs"}
           c={c}
-          onPress={() => goTo("Campaign")}
+          onPress={() => goTo("WorkerCompletedJobs")}
         />
         <MenuItem
-          icon="document-text-outline"
-          label={t("nav.myreports")}
-          active={activeRoute === "MyReports"}
+          icon="briefcase-outline"
+          label={t("nav.myEmployers", { defaultValue: "My Employers" })}
+          active={activeRoute === "WorkerEmployers"}
           c={c}
-          onPress={() => goTo("MyReports")}
+          onPress={() => goTo("WorkerEmployers")}
+        />
+        <MenuItem
+          icon="cash-outline"
+          label={t("nav.retainedEarnings", {
+            defaultValue: "Retained Earnings",
+          })}
+          active={activeRoute === "WorkerRetainedEarnings"}
+          c={c}
+          onPress={() => goTo("WorkerRetainedEarnings")}
+        />
+        <MenuItem
+          icon="time-outline"
+          label={t("nav.retainedCycles", { defaultValue: "Retained Cycles" })}
+          active={activeRoute === "WorkerRetainedCycles"}
+          c={c}
+          onPress={() => goTo("WorkerRetainedCycles")}
+        />
+        <MenuItem
+          icon="alert-circle-outline"
+          label={t("nav.disputes")}
+          active={activeRoute === "WorkerDisputes"}
+          c={c}
+          onPress={() => goTo("WorkerDisputes")}
         />
 
+        {/* 3. PROFILE */}
         <SectionLabel label={t("nav.profileSection")} c={c} />
         <MenuItem
           icon="person-outline"
@@ -313,6 +526,45 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("WorkerVerification")}
         />
 
+        {/* 4. COMMUNITY & GROWTH */}
+        <SectionLabel label={t("nav.community")} c={c} />
+        <MenuItem
+          icon="newspaper-outline"
+          label={t("nav.communityFeed", { defaultValue: "Community Feed" })}
+          active={activeRoute === "WorkerCommunityFeed"}
+          c={c}
+          onPress={() => goTo("WorkerCommunityFeed")}
+        />
+        <MenuItem
+          icon="create-outline"
+          label={t("nav.myPosts")}
+          active={activeRoute === "MyPosts"}
+          c={c}
+          onPress={() => goTo("MyPosts")}
+        />
+        <MenuItem
+          icon="speaker-outline"
+          label={t("nav.campaign")}
+          active={activeRoute === "Campaign"}
+          c={c}
+          onPress={() => goTo("Campaign")}
+        />
+        <MenuItem
+          icon="people-outline"
+          label={t("nav.referralDashboard")}
+          active={activeRoute === "ReferralDashboard"}
+          c={c}
+          onPress={() => goTo("ReferralDashboard")}
+        />
+        <MenuItem
+          icon="flag-outline"
+          label={t("nav.myreports")}
+          active={activeRoute === "MyReports"}
+          c={c}
+          onPress={() => goTo("MyReports")}
+        />
+
+        {/* 5. ACCOUNT & SUPPORT */}
         <SectionLabel label={t("nav.inbox")} c={c} />
         <MenuItem
           icon="star-outline"
@@ -322,24 +574,39 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("WorkerReviews")}
         />
         <MenuItem
+          icon="mail-outline"
+          label={t("nav.messages")}
+          active={activeRoute === "Messages"}
+          c={c}
+          badge={unreadMessages}
+          onPress={() => goTo("Messages")}
+        />
+        <MenuItem
+          icon="chatbubble-ellipses-outline"
+          label={t("nav.liveSupportChat", {
+            defaultValue: "Live Support Chat",
+          })}
+          active={activeRoute === "WorkerSupportChat"}
+          c={c}
+          onPress={() => goTo("WorkerSupportChat")}
+        />
+        <MenuItem
+          icon="help-buoy-outline"
+          label={t("nav.supportHub", { defaultValue: "Support Hub" })}
+          active={activeRoute === "WorkerSupportHub"}
+          c={c}
+          onPress={() => goTo("WorkerSupportHub")}
+        />
+        <MenuItem
           icon="notifications-outline"
           label={t("nav.notifications")}
           active={activeRoute === "Notifications"}
           c={c}
-          badge={notifCount}
+          badge={unreadNotifications}
           onPress={() => goTo("Notifications")}
         />
         <MenuItem
-          icon="chatbubble-outline"
-          label={t("nav.messages")}
-          active={activeRoute === "Messages"}
-          c={c}
-          onPress={() => goTo("Messages")}
-        />
-
-        <SectionLabel label={t("nav.subscriptionsFeatures")} c={c} />
-        <MenuItem
-          icon="diamond-outline"
+          icon="package-outline"
           label={t("nav.subscriptions")}
           active={activeRoute === "WorkerSubscriptions"}
           c={c}
@@ -360,148 +627,168 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("Settings")}
         />
 
-        <View style={{ height: 20 }} />
+        <View style={{ height: rem(1) }} />
       </ScrollView>
 
-      {/* ── BOTTOM ────────────────────────────────────────────────────────── */}
-      <View style={[s.bottom, { borderTopColor: c.border }]}>
+      {/* ── .sidebarFooter ───────────────────────────────────────────── */}
+      <View
+        style={[
+          s.footer,
+          {
+            borderTopColor: c.border,
+            backgroundColor: c.bgPanel,
+            paddingBottom: insets.bottom + rem(0.875),
+          },
+        ]}
+      >
         <View
           style={[
             s.availRow,
             { backgroundColor: c.bgCard, borderColor: c.border },
           ]}
         >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View
-              style={[
-                s.availDot,
-                { backgroundColor: isAvailable ? "#22c55e" : "#ef4444" },
-              ]}
-            />
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: c.text, marginLeft: 8 }}
-            >
-              {t("nav.available")}
-            </AppText>
-          </View>
+          <AppText
+            style={{
+              fontFamily: FONTS.bodySemiBold,
+              fontSize: rem(0.8125),
+              fontWeight: "600",
+              color: c.textDim,
+            }}
+          >
+            {isAvailable ? t("nav.available") : t("nav.offline")}
+          </AppText>
           <Switch
             value={isAvailable}
             onValueChange={handleToggleAvailability}
             disabled={togglingAvail}
-            trackColor={{ false: "#3a3a3a", true: "#22c55e" }}
-            thumbColor="#fff"
-            ios_backgroundColor="#3a3a3a"
+            trackColor={{ false: "rgba(255,255,255,0.1)", true: c.green }}
+            thumbColor={c.text}
+            ios_backgroundColor="rgba(255,255,255,0.1)"
+            style={{ transform: [{ scale: 0.7 }] }}
           />
         </View>
 
-        <Pressable onPress={handleLogout} style={s.logoutRow}>
-          <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+        <Pressable onPress={() => setShowLogoutModal(true)} style={s.logoutBtn}>
+          <Ionicons
+            name="log-out-outline"
+            size={rem(0.9375)}
+            color={c.textMuted}
+            style={{ width: 18, textAlign: "center" }}
+          />
           <AppText
-            variant="body"
-            weight="semibold"
-            style={{ color: "#ef4444", marginLeft: 12 }}
+            style={{
+              fontFamily: FONTS.bodyMedium,
+              fontSize: rem(0.875),
+              fontWeight: "500",
+              color: c.textMuted,
+              marginLeft: rem(0.75),
+            }}
           >
             {t("nav.logout")}
           </AppText>
         </Pressable>
       </View>
+
+      {/* ── Logout confirmation modal ────────────────────────────────── */}
+      <ConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleConfirmLogout}
+        title={t("settings.logoutTitle", {
+          defaultValue: "Log out of SkilledProz?",
+        })}
+        message={t("settings.logoutMessage", {
+          defaultValue:
+            "You will need to sign in again to access your account.",
+        })}
+        confirmLabel={t("nav.logout")}
+        cancelLabel={t("common.cancel", { defaultValue: "Cancel" })}
+        c={c}
+      />
     </View>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 20,
+  logoWrap: {
+    paddingBottom: rem(1.125),
+    paddingHorizontal: rem(1.5),
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  logoRow: { flexDirection: "row", alignItems: "center" },
-  logoSkilled: {
-    fontSize: 26,
-    lineHeight: 30,
-    fontWeight: "900",
-    color: "#fff",
+  userWrap: {
+    paddingVertical: rem(1),
+    paddingHorizontal: rem(1.5),
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  logoProz: { fontSize: 26, lineHeight: 30, fontWeight: "900" },
-  portalLabel: { letterSpacing: 1.5, marginTop: 2, marginBottom: 16 },
-  userCard: { flexDirection: "row", alignItems: "center" },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 2,
+    width: rem(40 / 14),
+    height: rem(40 / 14),
+    borderRadius: 9999,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
-  avatarImg: { width: "100%", height: "100%" },
-  activeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginTop: 4,
+  userBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 9999,
     alignSelf: "flex-start",
   },
-  activeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "#22c55e",
-    marginRight: 5,
+  navScroll: {
+    paddingVertical: rem(1),
+    paddingHorizontal: rem(0.75),
   },
-  menu: { paddingVertical: 12, paddingHorizontal: 12 },
-  sectionLabel: {
-    letterSpacing: 1.4,
-    fontSize: 10,
-    marginTop: 20,
-    marginBottom: 4,
-    marginLeft: 8,
-  },
-  menuItem: {
+  navItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginVertical: 1,
+    paddingVertical: rem(0.5625),
+    paddingHorizontal: rem(0.75),
+    borderRadius: 8,
+    position: "relative",
   },
-  menuLabel: { flex: 1, marginLeft: 12 },
-  badge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
+  activeBar: {
+    position: "absolute",
+    left: 0,
+    top: "20%",
+    height: "60%",
+    width: 2.5,
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
+  },
+  navBadge: {
+    marginLeft: "auto",
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9, // half of height for a perfect pill
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 6,
+    paddingHorizontal: 4, // gives "99+" room to breathe without stretching too far
   },
-  bottom: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+  footer: {
+    paddingTop: rem(0.875),
+    paddingHorizontal: rem(0.75),
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 10,
+    gap: rem(0.25),
   },
   availRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: rem(0.5),
+    paddingHorizontal: rem(0.75),
+    borderRadius: 8,
     borderWidth: 1,
+    marginBottom: rem(0.25),
   },
-  availDot: { width: 10, height: 10, borderRadius: 5 },
-  logoutRow: {
+  logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: rem(0.5625),
+    paddingHorizontal: rem(0.75),
+    borderRadius: 8,
   },
 });
