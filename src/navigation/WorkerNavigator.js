@@ -13,7 +13,6 @@ import { useTranslation } from "react-i18next";
 
 import WorkerDrawerContent from "../components/WorkerDrawerContent";
 import TopBar from "../components/TopBar";
-import CallBannersOverlay from "./CallBannersOverlay";
 
 import WorkerDashboardScreen from "../screens/main/worker/WorkerDashboardScreen";
 import WorkerJobsScreen from "../screens/main/worker/WorkerJobsScreen";
@@ -279,7 +278,6 @@ function WorkerStack() {
           component={SupportTicketThreadScreen}
         />
       </Stack.Navigator>
-      <CallBannersOverlay />
     </View>
   );
 }

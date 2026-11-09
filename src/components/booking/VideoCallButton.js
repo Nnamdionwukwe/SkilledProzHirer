@@ -74,7 +74,11 @@ export default function VideoCallButton({
       // 2. Initiate call
       const callRes = await client.post(
         `/voice-calls/${conversationId}/initiate`,
-        { callType: "video" },
+        {
+          callType: "video",
+          returnTo: returnTo || "BookingDetail",
+          returnParams: returnParams || { bookingId },
+        },
       );
 
       if (!callRes?.data?.data?.call) {

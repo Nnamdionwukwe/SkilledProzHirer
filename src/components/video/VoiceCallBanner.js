@@ -1,6 +1,6 @@
 // src/components/video/VoiceCallBanner.js
 //
-// Incoming banner for CONVERSATION voice calls.
+// Incoming banner for conversation- and booking-scoped voice/video calls.
 // Rings via InCallManager.startRingtone (respects silent/vibrate mode)
 // and vibrates repeatedly via React Native Vibration API for a native
 // phone-ring feel.
@@ -19,7 +19,7 @@ import client from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { useVoiceCall } from "../../contexts/VoiceCallContext";
 import { navigationRef } from "../../navigation/navigationRef";
-import { FaPhone, FaPhoneSlash, FaSpinner } from "../../icons/fa";
+import { FaPhone, FaPhoneSlash, FaSpinner, FaVideo } from "../../icons/fa";
 
 const DEBUG = true;
 function dlog(...args) {
@@ -30,10 +30,6 @@ function dlog(...args) {
 
 const POLL_MS = 5000;
 
-// Repeating ring vibration: wait 0ms, vibrate 1s, pause 1s, repeat.
-// On iOS, the vibration duration is fixed ~400ms — the pattern numbers
-// control the pauses instead. On Android, they map to actual vibrate/pause
-// durations. Either way, this feels like a phone ring.
 const RING_VIBRATE_PATTERN = [0, 1000, 1000];
 
 const SUPPRESSED_ROUTES = [
@@ -44,6 +40,7 @@ const SUPPRESSED_ROUTES = [
   "ResetPassword",
   "VerifyEmail",
   "VideoCall",
+  "VoiceCall", // ✅ CHANGED: also suppress on voice-call full screen
 ];
 
 function isSuppressedRoute() {
@@ -77,6 +74,36 @@ function goToMessages(conversationId, role) {
   }
 }
 
+// ✅ CHANGED: unified navigation helper for video calls. Reads the
+// backend-provided `returnTo` / `returnParams` if present, otherwise
+// falls back to opening the chat.
+function goToVideoCall(call) {
+  if (!navigationRef.isReady()) {
+    dlog("goToVideoCall: navigationRef not ready");
+    return;
+  }
+  try {
+    const conversationId = call?.conversationId;
+    if (!conversationId) {
+      dlog("goToVideoCall: missing conversationId");
+      return;
+    }
+    // If the backend includes returnTo/returnParams on the call row, use them.
+    const returnTo = call?.returnTo || "Chat";
+    const returnParams = call?.returnParams || { conversationId };
+
+    dlog("goToVideoCall", { conversationId, returnTo, returnParams });
+    navigationRef.navigate("VideoCall", {
+      conversationId,
+      returnTo,
+      returnParams,
+      sessionId: Date.now(),
+    });
+  } catch (err) {
+    dlog("goToVideoCall failed:", err.message);
+  }
+}
+
 function stopRing() {
   try {
     InCallManager.stopRingtone();
@@ -105,9 +132,6 @@ export default function VoiceCallBanner() {
   });
 
   // ── Ring + vibrate while incoming is set ─────────────────────────────
-  // Ringtone goes through InCallManager so it respects the device's
-  // ringer mode (silent/vibrate/loud) automatically. Vibration runs
-  // separately with repeat: true so it continues while the call rings.
   useEffect(() => {
     if (!incoming) {
       stopRing();
@@ -116,15 +140,12 @@ export default function VoiceCallBanner() {
 
     dlog("START ring + vibrate", { conversationId: incoming.conversationId });
 
-    // Ringtone — system default. On silent mode, InCallManager will
-    // not play audio, but our Vibration loop below still fires.
     try {
       InCallManager.startRingtone("_DEFAULT_", [0, 500, 500], "playback", 30);
     } catch (err) {
       dlog("startRingtone failed:", err.message);
     }
 
-    // Repeating vibration — fires even on silent mode.
     try {
       Vibration.vibrate(RING_VIBRATE_PATTERN, true);
     } catch (err) {
@@ -153,38 +174,80 @@ export default function VoiceCallBanner() {
 
     async function poll() {
       if (cancelled) return;
+
+      dlog("─── POLL TICK ───", {
+        activeCall: activeCall?.id ?? null,
+        suppressedRoute: isSuppressedRoute(),
+        inFlight: inFlightRef.current,
+        currentRoute: navigationRef.isReady()
+          ? navigationRef.getCurrentRoute()?.name
+          : "not-ready",
+        myId: user?.id,
+        myRole: user?.role,
+      });
+
       if (activeCall) {
+        dlog("SKIP: activeCall present", activeCall.id);
         setIncoming(null);
         return;
       }
       if (isSuppressedRoute()) {
+        dlog("SKIP: suppressed route");
         setIncoming(null);
         return;
       }
-      if (inFlightRef.current) return;
+      if (inFlightRef.current) {
+        dlog("SKIP: poll already in flight");
+        return;
+      }
+
       inFlightRef.current = true;
-      dlog("polling /voice-calls/incoming");
       try {
         const res = await client.get("/voice-calls/incoming");
-        const data = res.data.data || {};
+        dlog("RAW RESPONSE STATUS:", res.status);
+        dlog("RAW RESPONSE BODY:", JSON.stringify(res.data, null, 2));
+
+        const data = res.data?.data || {};
         const call = data.call;
-        dlog("incoming response", {
-          callId: call?.id,
-          callType: call?.callType,
-          receiverId: call?.receiverId,
-          status: call?.status,
-        });
+
+        dlog(
+          "PARSED call:",
+          call
+            ? {
+                id: call.id,
+                status: call.status,
+                callType: call.callType,
+                receiverId: call.receiverId,
+                initiatorId: call.initiatorId,
+                conversationId: call.conversationId,
+                returnTo: call.returnTo,
+              }
+            : null,
+        );
+
         if (cancelled) return;
 
-        if (call && call.callType === "voice") {
-          dlog("setting incoming voice call", { callId: call.id });
+        if (
+          call &&
+          call.status === "PENDING" &&
+          call.receiverId === user.id &&
+          (call.callType === "voice" || call.callType === "video")
+        ) {
+          dlog("✅ WILL SHOW BANNER:", call.id, call.callType);
           setIncoming((prev) => (prev?.id === call.id ? prev : call));
         } else {
+          dlog("❌ WILL NOT SHOW:", {
+            hasCall: !!call,
+            status: call?.status,
+            receiverMatch: call?.receiverId === user.id,
+            callType: call?.callType,
+          });
           setIncoming(null);
         }
       } catch (err) {
-        dlog("poll error", {
+        dlog("POLL ERROR:", {
           status: err?.response?.status,
+          data: err?.response?.data,
           msg: err?.message,
         });
       } finally {
@@ -202,8 +265,11 @@ export default function VoiceCallBanner() {
 
   async function handleAccept() {
     if (!incoming) return;
-    dlog("ACCEPT tapped", { conversationId: incoming.conversationId });
-    stopRing(); // stop immediately so ringtone doesn't overlap call audio
+    dlog("ACCEPT tapped", {
+      conversationId: incoming.conversationId,
+      callType: incoming.callType,
+    });
+    stopRing();
     setLoading(true);
     try {
       const res = await client.patch(
@@ -211,9 +277,22 @@ export default function VoiceCallBanner() {
       );
       const updatedCall = res.data?.data?.call;
       dlog("accept OK", { callStatus: updatedCall?.status });
-      openCall(updatedCall || { ...incoming, status: "ACTIVE" });
-      setIncoming(null);
-      goToMessages(incoming.conversationId, user?.role);
+
+      // ✅ CHANGED: branch on callType. Voice → open full-screen voice UI
+      // via the context; video → navigate to the VideoCall screen so the
+      // receiver lands inside the WebView room.
+      if (incoming.callType === "video") {
+        setIncoming(null);
+        // Give the accept PATCH a beat to propagate on the backend before
+        // the VideoCall screen fetches the call row.
+        setTimeout(() => {
+          goToVideoCall(updatedCall || incoming);
+        }, 150);
+      } else {
+        openCall(updatedCall || { ...incoming, status: "ACTIVE" });
+        setIncoming(null);
+        goToMessages(incoming.conversationId, user?.role);
+      }
     } catch (err) {
       dlog("accept FAILED", {
         status: err?.response?.status,
@@ -228,7 +307,7 @@ export default function VoiceCallBanner() {
   async function handleDecline() {
     if (!incoming) return;
     dlog("DECLINE tapped", { conversationId: incoming.conversationId });
-    stopRing(); // stop immediately
+    stopRing();
     setLoading(true);
     try {
       await client.patch(`/voice-calls/${incoming.conversationId}/decline`);
@@ -256,18 +335,24 @@ export default function VoiceCallBanner() {
 
   const subtitle = callerName
     ? `${callerName} is calling you`
-    : "SkilledProz voice call";
+    : "SkilledProz call";
+
+  // ✅ CHANGED: icon swaps based on callType so the user knows whether
+  // it's a voice or a video call before they even answer.
+  const CallIcon = incoming.callType === "video" ? FaVideo : FaPhone;
 
   return (
     <SafeAreaView style={styles.overlay} pointerEvents="box-none">
       <View style={styles.card}>
         <View style={styles.iconWrap}>
-          <FaPhone size={22} color="#fff" />
+          <CallIcon size={22} color="#fff" />
         </View>
 
         <View style={styles.body}>
           <AppText style={styles.title} numberOfLines={1}>
-            Incoming Voice Call
+            {incoming.callType === "video"
+              ? "Incoming Video Call"
+              : "Incoming Voice Call"}
           </AppText>
           <AppText style={styles.subtitle} numberOfLines={1}>
             {subtitle}
@@ -281,7 +366,7 @@ export default function VoiceCallBanner() {
             style={styles.declineBtn}
             hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel="Decline voice call"
+            accessibilityLabel="Decline call"
           >
             {loading ? (
               <FaSpinner size={18} color="#fff" />
@@ -295,12 +380,12 @@ export default function VoiceCallBanner() {
             style={styles.acceptBtn}
             hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel="Accept voice call"
+            accessibilityLabel="Accept call"
           >
             {loading ? (
               <FaSpinner size={18} color="#fff" />
             ) : (
-              <FaPhone size={18} color="#fff" />
+              <CallIcon size={18} color="#fff" />
             )}
           </Pressable>
         </View>

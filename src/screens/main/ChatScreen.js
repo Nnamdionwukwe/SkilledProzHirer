@@ -26,6 +26,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -319,7 +320,7 @@ function TranslateButton({ text }) {
             >
               {t("messages.selectLanguage", "Select language")}
             </AppText>
-            <KeyboardAwareScrollView>
+            <ScrollView>
               {LANGUAGES.map((l) => (
                 <Pressable
                   key={l.code}
@@ -336,7 +337,7 @@ function TranslateButton({ text }) {
                   </AppText>
                 </Pressable>
               ))}
-            </KeyboardAwareScrollView>
+            </ScrollView>
           </View>
         </Pressable>
       </Modal>
@@ -732,6 +733,11 @@ export default function ChatScreen() {
   // ✅ FIXED: For video calls, do NOT initiate here. VideoCallScreen owns
   // the entire video call lifecycle. Double-initiating creates two PENDING
   // calls, and the second one never gets ended — causing "redial by itself".
+  //
+  // Also: `navigation.replace()` throws on Drawer navigators — replace is
+  // only supported on Stack. ChatScreen lives inside HirerNavigator's Drawer,
+  // so we use `navigate()` with a unique sessionId. VideoCallScreen detects
+  // the new sessionId and resets its internal state for a fresh mount.
   const confirmStartCall = async () => {
     const callType = pendingCallType;
     setPendingCallType(null);
@@ -749,10 +755,8 @@ export default function ChatScreen() {
         );
         startCall(res.data.data.call);
       } else {
-        // ✅ Force a FRESH VideoCallScreen instance every time.
-        // Use replace instead of navigate so the old instance is unmounted
-        // and any stale polling or ended state cannot leak into the new call.
-        navigation.replace("VideoCall", {
+        // ✅ navigate (not replace) + fresh sessionId
+        navigation.navigate("VideoCall", {
           conversationId: activeConvoId,
           returnTo: "Chat",
           returnParams: { conversationId: activeConvoId },
@@ -760,7 +764,11 @@ export default function ChatScreen() {
         });
       }
     } catch (err) {
-      // ✅ FIX: Use platform toast instead of Alert.alert
+      console.log("[confirmStartCall] FAILED:", {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      });
       toast.error(
         err?.response?.data?.message ||
           t("messages.callFailedBody", "Could not start call."),
@@ -1119,16 +1127,16 @@ export default function ChatScreen() {
             </AppText>
           </View>
         ) : (
-          <KeyboardAwareScrollView
+          <ScrollView
             ref={scrollRef}
             style={{ flex: 1 }}
             contentContainerStyle={{
               padding: 16,
-              paddingBottom: 16 + keyboardHeight,
+              paddingBottom: 16,
               flexGrow: 1,
             }}
             keyboardShouldPersistTaps="handled"
-            bottomOffset={0}
+            keyboardDismissMode="interactive"
             onScroll={handleScroll}
             scrollEventThrottle={100}
             onContentSizeChange={() => {
@@ -1142,7 +1150,7 @@ export default function ChatScreen() {
             {grouped.map((item) => (
               <View key={item.key}>{renderItem({ item })}</View>
             ))}
-          </KeyboardAwareScrollView>
+          </ScrollView>
         )}
 
         {showJump && (
@@ -1175,8 +1183,7 @@ export default function ChatScreen() {
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: c.border,
           backgroundColor: c.bgPanel,
-          marginBottom: keyboardHeight,
-          paddingBottom: keyboardHeight > 0 ? 0 : Math.max(insets.bottom, 8),
+          paddingBottom: Math.max(insets.bottom, 8),
           paddingHorizontal: 12,
           paddingTop: 8,
         }}

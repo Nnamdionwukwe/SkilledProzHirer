@@ -177,7 +177,11 @@ function InlineInterviewCallButton({
       // 2. Initiate the call
       const callRes = await client.post(
         `/voice-calls/${conversationId}/initiate`,
-        { callType: "video" },
+        {
+          callType: "video",
+          returnTo: "JobApplications",
+          returnParams: { jobId: jobPostId },
+        },
       );
 
       if (!callRes?.data?.data?.call) {

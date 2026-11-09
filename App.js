@@ -23,8 +23,9 @@ import { ToastProvider } from "./src/contexts/ToastContext";
 import { SubscriptionProvider } from "./src/contexts/SubscriptionContext";
 import { VoiceCallProvider } from "./src/contexts/VoiceCallContext";
 import VoiceCallProviderUI from "./src/components/video/VoiceCallProvider";
+import VoiceCallBanner from "./src/components/video/VoiceCallBanner";
 import LoadingScreen from "./src/components/LoadingScreen";
-import FirstRunGate from "./src/screens/FirstRunGate"; // ← NEW
+import FirstRunGate from "./src/screens/FirstRunGate";
 
 import RootNavigator from "./src/navigation/RootNavigator";
 import { initI18n } from "./src/i18n";
@@ -50,24 +51,20 @@ export default function App() {
   });
 
   useEffect(() => {
-    console.log("🚀 initI18n starting...");
     initI18n()
       .then(() => {
-        console.log("✅ initI18n resolved");
         setI18nReady(true);
         setLangKey(i18n.language || "en");
         i18n.on("languageChanged", (lng) => setLangKey(lng));
       })
       .catch((err) => {
         console.log("❌ initI18n REJECTED:", err?.message || err);
-        setI18nReady(true); // Force boot so we can see other errors
+        setI18nReady(true);
       });
   }, []);
 
   useEffect(() => {
-    console.log("⏸️ Loading status:", { fontsLoaded, i18nReady, fontError });
     if (fontsLoaded && i18nReady) {
-      console.log("🎉 Hiding splash screen");
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, i18nReady, fontError]);
@@ -89,6 +86,8 @@ export default function App() {
                       <RootNavigator key={langKey} />
                     </FirstRunGate>
                     <VoiceCallProviderUI />
+                    {/* ✅ Root-level incoming-call banner */}
+                    <VoiceCallBanner />
                   </VoiceCallProvider>
                 </SubscriptionProvider>
               </ToastProvider>

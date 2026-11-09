@@ -10,13 +10,11 @@
 
 import { StyleSheet, View } from "react-native";
 import VoiceCallBanner from "../components/video/VoiceCallBanner";
-import ConversationVideoCallBanner from "../components/video/ConversationVideoCallBanner";
 
 export default function CallBannersOverlay() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <VoiceCallBanner />
-      <ConversationVideoCallBanner />
     </View>
   );
 }

@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import TopBar from "../components/TopBar";
 import DrawerContent from "../components/DrawerContent";
-import CallBannersOverlay from "./CallBannersOverlay";
 import { useTheme } from "../contexts/ThemeContext";
 import { navigationRef } from "./navigationRef";
 import { ICON } from "../constants/icons"; // Shared icons
@@ -580,8 +579,6 @@ export default function HirerNavigator() {
           }}
         />
       </Drawer.Navigator>
-
-      <CallBannersOverlay />
     </View>
   );
 }

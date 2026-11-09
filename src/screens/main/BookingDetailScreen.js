@@ -675,6 +675,68 @@ export default function BookingDetailScreen() {
   const handleLeaveReview = () => {
     navigation.navigate("LeaveReview", { bookingId });
   };
+
+  // ── Start video call from BookingDetail ──────────────────────
+  // Mirrors ChatScreen: find/create the conversation, then POST
+  // /voice-calls/:conversationId/initiate so the receiver's
+  // VoiceCallBanner picks up the PENDING call and rings.
+  const [startingVideoCall, setStartingVideoCall] = useState(false);
+
+  const handleStartVideoCall = async () => {
+    if (startingVideoCall) return;
+    const otherUserId = isHirer ? booking?.workerId : booking?.hirerId;
+    if (!otherUserId) {
+      toast.error(t("booking.videoCall.noRecipient", "Missing call recipient"));
+      return;
+    }
+
+    setStartingVideoCall(true);
+    try {
+      // 1. Find or create conversation
+      let conversationId = null;
+      try {
+        const res = await client.get("/messages/conversations", {
+          params: { page: 1, limit: 100, _t: Date.now() },
+        });
+        const list = res.data?.data?.conversations || [];
+        const peerIdStr = String(otherUserId);
+        const found = list.find((convo) =>
+          (convo.users || []).some((u) => {
+            const uid = String(u.userId || u.user?.id || u.id);
+            return uid === peerIdStr;
+          }),
+        );
+        if (found?.id) conversationId = found.id;
+      } catch {}
+
+      if (!conversationId) {
+        const res = await client.post("/messages", {
+          receiverId: otherUserId,
+          content: "📞 Starting video call…",
+        });
+        conversationId = res.data?.data?.conversationId;
+      }
+
+      if (!conversationId) throw new Error("Could not establish conversation");
+
+      // 2. ✅ NO initiate here. Let VideoCallScreen do it — exactly like ChatScreen.
+      navigation.navigate("VideoCall", {
+        conversationId,
+        returnTo: "BookingDetail",
+        returnParams: { bookingId: booking.id },
+        sessionId: Date.now(),
+      });
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          t("booking.videoCall.failed", "Failed to start video call"),
+      );
+    } finally {
+      setStartingVideoCall(false);
+    }
+  };
+
   const handleShowRefundModal = () => setShowRefundModal(true);
 
   // Back to Bookings list
@@ -929,9 +991,7 @@ export default function BookingDetailScreen() {
           onMessage={() =>
             navigation.navigate("Chat", { withUserId: other?.id })
           }
-          onVideoCall={() =>
-            navigation.navigate("VideoCall", { bookingId: booking.id })
-          }
+          onVideoCall={handleStartVideoCall}
         />
       </ScrollView>
 

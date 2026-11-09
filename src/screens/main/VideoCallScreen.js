@@ -162,8 +162,22 @@ export default function VideoCallScreen() {
         try {
           const res = await client.post(
             `/voice-calls/${conversationId}/initiate`,
-            { callType: "video" },
+            {
+              callType: "video",
+              returnTo,
+              returnParams,
+            },
           );
+
+          // ✅ DEBUG: log what the backend returned
+          console.log("[VCS INITIATE] attempt", attempt, {
+            status: res.status,
+            body: JSON.stringify(res.data, null, 2),
+            newCallStatus: res.data?.data?.call?.status,
+            newCallReceiverId: res.data?.data?.call?.receiverId,
+            newCallCallType: res.data?.data?.call?.callType,
+          });
+
           const newCall = res.data?.data?.call;
 
           if (!newCall) {
@@ -189,7 +203,7 @@ export default function VideoCallScreen() {
 
       throw lastError || new Error("Could not start call after retries");
     },
-    [conversationId],
+    [conversationId, returnTo, returnParams],
   );
 
   // ──────────────────────────────────────────────────────────────────────
