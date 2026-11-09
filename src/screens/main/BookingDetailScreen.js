@@ -302,7 +302,7 @@ export default function BookingDetailScreen() {
   const { user } = useAuthStore();
   const c = theme.colors;
 
-  const bookingId = route.params?.bookingId;
+  const bookingId = route.params?.bookingId || route.params?.id;
   const userId = user?.id;
 
   // Data
