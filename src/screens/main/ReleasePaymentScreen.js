@@ -29,7 +29,7 @@ function formatMoney(amount, currency = "NGN") {
 }
 
 export default function ReleasePaymentScreen({ route, navigation }) {
-  const { bookingId } = route.params;
+  const bookingId = route.params?.bookingId || route.params?.id;
   const { theme } = useTheme();
   const colors = theme.colors;
   const { width } = useWindowDimensions();
@@ -135,6 +135,7 @@ export default function ReleasePaymentScreen({ route, navigation }) {
       });
       setShowConfirmModal(false);
       setTimeout(() => {
+        // This replaces the old navigation.navigate call
         navigation.navigate("BookingDetail", { id: bookingId });
       }, 2600);
     } catch (e) {
@@ -262,7 +263,9 @@ export default function ReleasePaymentScreen({ route, navigation }) {
         {/* Header */}
         <View style={styles.payHeader}>
           <Pressable
-            onPress={() => navigation.goBack()}
+            onPress={() =>
+              navigation.navigate("BookingDetail", { id: bookingId })
+            }
             style={styles.backLink}
           >
             <FontAwesome5
