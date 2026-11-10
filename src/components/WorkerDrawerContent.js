@@ -2,7 +2,7 @@
 // Verbatim port of WorkerLayout.module.css sidebar + ConfirmationModal.
 // Receives unreadNotifications + unreadMessages from WorkerNavigator.
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Image,
   Modal,
@@ -57,10 +57,10 @@ function MenuItem({ icon, label, active, badge, c, onPress }) {
           <AppText
             style={{
               fontFamily: FONTS.body,
-              fontSize: 10, // fixed size matching TopBar
+              fontSize: 10,
               fontWeight: "800",
-              color: "#000", // matches var(--bg)
-              lineHeight: 11, // centers text vertically
+              color: "#000",
+              lineHeight: 11,
               includeFontPadding: false,
               textAlign: "center",
             }}
@@ -94,7 +94,7 @@ function SectionLabel({ label, c }) {
   );
 }
 
-// ── ConfirmationModal — .modal* from WorkerLayout.module.css ─────────────
+// ── ConfirmationModal ────────────────────────────────────────────────────
 function ConfirmationModal({
   isOpen,
   onClose,
@@ -225,16 +225,14 @@ function ConfirmationModal({
 export default function WorkerDrawerContent(props) {
   const { theme } = useTheme();
   const { toast } = useToast();
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateUser } = useAuthStore();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const c = theme.colors;
 
-  // Accept counts from WorkerNavigator; fall back to 0.
   const unreadNotifications = props.unreadNotifications ?? 0;
   const unreadMessages = props.unreadMessages ?? 0;
 
-  const [isAvailable, setIsAvailable] = useState(true);
   const [togglingAvail, setTogglingAvail] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -247,12 +245,15 @@ export default function WorkerDrawerContent(props) {
   };
 
   const handleToggleAvailability = async (value) => {
-    setIsAvailable(value);
+    // Instantly update the global store so both Drawer and Dashboard sync
+    if (updateUser) updateUser({ isAvailable: value });
+
     setTogglingAvail(true);
     try {
       await client.put("/workers/profile", { isAvailable: value });
     } catch {
-      setIsAvailable(!value);
+      // Revert on failure
+      if (updateUser) updateUser({ isAvailable: !value });
       toast.error(t("nav.failedAvailability"));
     } finally {
       setTogglingAvail(false);
@@ -270,14 +271,13 @@ export default function WorkerDrawerContent(props) {
 
   return (
     <View style={[s.root, { backgroundColor: c.bgPanel }]}>
-      {/* ── .sidebarLogo — padding 1.5rem 1.5rem 1.125rem
-             + safe-area top so "SkilledProz" isn't flush against the notch */}
+      {/* ── .sidebarLogo ── */}
       <View
         style={[
           s.logoWrap,
           {
             borderBottomColor: c.border,
-            paddingTop: insets.top + rem(1.5), // ← margin-top for SkilledProz
+            paddingTop: insets.top + rem(1.5),
           },
         ]}
       >
@@ -320,7 +320,7 @@ export default function WorkerDrawerContent(props) {
         </AppText>
       </View>
 
-      {/* ── .sidebarUser ─────────────────────────────────────────────── */}
+      {/* ── .sidebarUser ── */}
       <View style={[s.userWrap, { borderBottomColor: c.border }]}>
         <Pressable
           onPress={() => goTo("WorkerProfile")}
@@ -377,12 +377,11 @@ export default function WorkerDrawerContent(props) {
         </View>
       </View>
 
-      {/* ── .sidebarNav ──────────────────────────────────────────────── */}
+      {/* ── .sidebarNav ── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.navScroll}
       >
-        {/* 1. OVERVIEW */}
         <SectionLabel label={t("nav.overview")} c={c} />
         <MenuItem
           icon="home-outline"
@@ -427,7 +426,6 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("WorkerCategories")}
         />
 
-        {/* 2. FINANCES & HISTORY */}
         <SectionLabel label={t("nav.payouts")} c={c} />
         <MenuItem
           icon="cash-outline"
@@ -488,7 +486,6 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("WorkerDisputes")}
         />
 
-        {/* 3. PROFILE */}
         <SectionLabel label={t("nav.profileSection")} c={c} />
         <MenuItem
           icon="person-outline"
@@ -526,7 +523,6 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("WorkerVerification")}
         />
 
-        {/* 4. COMMUNITY & GROWTH */}
         <SectionLabel label={t("nav.community")} c={c} />
         <MenuItem
           icon="newspaper-outline"
@@ -543,7 +539,7 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("MyPosts")}
         />
         <MenuItem
-          icon="speaker-outline"
+          icon="megaphone-outline"
           label={t("nav.campaign")}
           active={activeRoute === "Campaign"}
           c={c}
@@ -564,7 +560,6 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("MyReports")}
         />
 
-        {/* 5. ACCOUNT & SUPPORT */}
         <SectionLabel label={t("nav.inbox")} c={c} />
         <MenuItem
           icon="star-outline"
@@ -606,7 +601,7 @@ export default function WorkerDrawerContent(props) {
           onPress={() => goTo("Notifications")}
         />
         <MenuItem
-          icon="package-outline"
+          icon="cube-outline"
           label={t("nav.subscriptions")}
           active={activeRoute === "WorkerSubscriptions"}
           c={c}
@@ -630,7 +625,7 @@ export default function WorkerDrawerContent(props) {
         <View style={{ height: rem(1) }} />
       </ScrollView>
 
-      {/* ── .sidebarFooter ───────────────────────────────────────────── */}
+      {/* ── .sidebarFooter ── */}
       <View
         style={[
           s.footer,
@@ -655,10 +650,12 @@ export default function WorkerDrawerContent(props) {
               color: c.textDim,
             }}
           >
-            {isAvailable ? t("nav.available") : t("nav.offline")}
+            {(user?.isAvailable ?? true)
+              ? t("nav.available")
+              : t("nav.offline")}
           </AppText>
           <Switch
-            value={isAvailable}
+            value={user?.isAvailable ?? true}
             onValueChange={handleToggleAvailability}
             disabled={togglingAvail}
             trackColor={{ false: "rgba(255,255,255,0.1)", true: c.green }}
@@ -689,7 +686,7 @@ export default function WorkerDrawerContent(props) {
         </Pressable>
       </View>
 
-      {/* ── Logout confirmation modal ────────────────────────────────── */}
+      {/* ── Logout confirmation modal ── */}
       <ConfirmationModal
         isOpen={showLogoutModal}
         onClose={() => setShowLogoutModal(false)}
@@ -763,10 +760,10 @@ const s = StyleSheet.create({
     marginLeft: "auto",
     minWidth: 18,
     height: 18,
-    borderRadius: 9, // half of height for a perfect pill
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4, // gives "99+" room to breathe without stretching too far
+    paddingHorizontal: 4,
   },
   footer: {
     paddingTop: rem(0.875),

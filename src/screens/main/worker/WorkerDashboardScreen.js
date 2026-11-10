@@ -1,868 +1,1125 @@
 // src/screens/main/worker/WorkerDashboardScreen.js
-// Mirrors the website's worker dashboard — earnings hero, stats grid,
-// bar chart, profile completion, upcoming jobs, recent bookings, recent reviews.
-// API: GET /workers/dashboard
-// All strings via t("workerDash.*") — fully i18n.
-
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
   View,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+  Image,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 
-import AppScreen from "../../../components/AppScreen";
 import AppText from "../../../components/AppText";
-import Card from "../../../components/Card";
+import Skeleton from "../../../components/Skeleton";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { useToast } from "../../../contexts/ToastContext";
+import { useCurrency } from "../../../contexts/CurrencyContext";
 import { useAuthStore } from "../../../store/authStore";
+import { rem, FONTS } from "../../../constants/theme";
+import { getWorkerDashboard } from "../../../api/workerAuth";
+import { CURRENCIES } from "../../../constants/currencies";
 import client from "../../../api/client";
 
-// ─── Status meta ──────────────────────────────────────────────────────────────
-// labelKey maps to workerDash.status* — resolved at render time via t()
-const STATUS_META = {
-  PENDING: {
-    color: "#f97316",
-    bg: "rgba(249,115,22,0.18)",
-    labelKey: "statusPending",
-  },
-  ACCEPTED: {
-    color: "#a78bfa",
-    bg: "rgba(167,139,250,0.18)",
-    labelKey: "statusAccepted",
-  },
-  IN_PROGRESS: {
-    color: "#6366f1",
-    bg: "rgba(99,102,241,0.18)",
-    labelKey: "statusInProgress",
-  },
-  COMPLETED: {
-    color: "#22c55e",
-    bg: "rgba(34,197,94,0.15)",
-    labelKey: "statusCompleted",
-  },
-  CANCELLED: {
-    color: "#ef4444",
-    bg: "rgba(239,68,68,0.15)",
-    labelKey: "statusCancelled",
-  },
-  DISPUTED: {
-    color: "#f43f5e",
-    bg: "rgba(244,63,94,0.18)",
-    labelKey: "statusDisputed",
-  },
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function fmt(amount, currency = "USD") {
-  if (!amount && amount !== 0) return "—";
-  return `${currency} ${Number(amount).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+function formatCurrency(amount, currency = "NGN") {
+  try {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount || 0);
+  } catch {
+    return `${currency} ${(amount || 0).toFixed(2)}`;
+  }
 }
 
-function initials(first, last) {
-  return `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase() || "?";
+function initials(u) {
+  if (!u) return "?";
+  return `${u.firstName?.[0] || ""}${u.lastName?.[0] || ""}`.toUpperCase();
 }
 
-// ─── Stars ────────────────────────────────────────────────────────────────────
-function StarRow({ rating, size = 14 }) {
+function StatusBadge({ status, c }) {
+  const map = {
+    PENDING: { bg: "rgba(234,179,8,0.12)", color: "#eab308" },
+    IN_PROGRESS: { bg: "rgba(59,130,246,0.12)", color: "#60a5fa" },
+    COMPLETED: { bg: c.greenDim, color: c.green },
+    CANCELLED: { bg: "rgba(255,255,255,0.05)", color: c.textMuted },
+    DISPUTED: { bg: c.redDim, color: c.red },
+    ACCEPTED: { bg: "rgba(168,85,247,0.12)", color: "#c084fc" },
+    RELEASED: { bg: c.greenDim, color: c.green },
+  };
+  const style = map[status] || map.PENDING;
   return (
-    <View style={{ flexDirection: "row", gap: 2 }}>
-      {[1, 2, 3, 4, 5].map((s) => (
-        <Ionicons
-          key={s}
-          name={s <= Math.round(rating) ? "star" : "star-outline"}
-          size={size}
-          color="#f97316"
-        />
-      ))}
+    <View style={[s.badge, { backgroundColor: style.bg }]}>
+      <AppText style={[s.badgeText, { color: style.color }]}>{status}</AppText>
     </View>
   );
 }
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
-function StatusBadge({ status, t }) {
-  const meta = STATUS_META[status] ?? STATUS_META.PENDING;
-  return (
-    <View style={[bk.badge, { backgroundColor: meta.bg }]}>
-      <AppText
-        variant="small"
-        weight="semibold"
-        style={{ color: meta.color, fontSize: 10 }}
-      >
-        {t(`workerDash.${meta.labelKey}`)}
-      </AppText>
-    </View>
-  );
-}
-
-// ─── Earnings Hero ────────────────────────────────────────────────────────────
-function EarningsHero({ earnings, c, t }) {
-  const {
-    currency = "USD",
-    thisMonth = 0,
-    lastMonth = 0,
-    pendingPayout = 0,
-  } = earnings ?? {};
-  return (
-    <View style={[hero.card, { backgroundColor: "#1a0e00" }]}>
-      <View style={hero.glow} />
-
-      <AppText
-        variant="small"
-        weight="semibold"
-        style={{ color: c.textMuted, letterSpacing: 1.2, fontSize: 11 }}
-      >
-        {t("workerDash.thisMonth")}
-      </AppText>
-      <AppText style={hero.amount}>{fmt(thisMonth, currency)}</AppText>
-      <AppText variant="small" tone="dim" style={{ marginTop: 4 }}>
-        {t("workerDash.lastMonth", { value: fmt(lastMonth, currency) })}
-      </AppText>
-
-      {pendingPayout > 0 && (
-        <View style={[hero.escrow, { borderColor: c.orange }]}>
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange, letterSpacing: 1, fontSize: 11 }}
-          >
-            {t("workerDash.inEscrow")}
-          </AppText>
-          <AppText style={[hero.escrowAmt, { color: c.orange }]}>
-            {fmt(pendingPayout, currency)}
-          </AppText>
-          <AppText variant="small" tone="dim">
-            {t("workerDash.awaitingRelease")}
-          </AppText>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, c }) {
-  return (
-    <View
-      style={[sc.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
-    >
-      <AppText
-        variant="small"
-        weight="semibold"
-        style={{ color: c.textMuted, letterSpacing: 1.2, fontSize: 10 }}
-      >
-        {label.toUpperCase()}
-      </AppText>
-      <AppText style={[sc.value, { color: c.text }]}>{value ?? "—"}</AppText>
-      {sub ? (
-        <AppText variant="small" tone="dim" style={{ marginTop: 4 }}>
-          {sub}
-        </AppText>
-      ) : null}
-    </View>
-  );
-}
-
-// ─── Earnings Bar Chart ───────────────────────────────────────────────────────
-function EarningsChart({ monthlyTrend, c, t, onPress }) {
-  if (!monthlyTrend?.length) return null;
-  const max = Math.max(...monthlyTrend.map((m) => m.earnings), 1);
-  const BAR_HEIGHT = 80;
-  return (
-    <Card padded style={{ marginBottom: 12 }}>
-      <View style={ch.header}>
-        <AppText variant="title" weight="semibold">
-          {t("workerDash.earningsTrend")}
-        </AppText>
-        <Pressable onPress={onPress} hitSlop={8}>
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange }}
-          >
-            {t("workerDash.fullReport")} →
-          </AppText>
-        </Pressable>
-      </View>
-      <View style={ch.chartRow}>
-        {monthlyTrend.map((item, i) => {
-          const barH = Math.max((item.earnings / max) * BAR_HEIGHT, 4);
-          const isMax = item.earnings === max && item.earnings > 0;
-          return (
-            <View key={i} style={ch.barWrap}>
-              <View style={[ch.barTrack, { height: BAR_HEIGHT }]}>
-                <View
-                  style={[
-                    ch.bar,
-                    {
-                      height: barH,
-                      backgroundColor: isMax ? c.orange : c.orangeDim,
-                    },
-                  ]}
-                />
-              </View>
-              <AppText
-                variant="small"
-                tone="dim"
-                style={{ fontSize: 10, marginTop: 6, textAlign: "center" }}
-              >
-                {item.month?.split(" ")[0]?.toUpperCase() ?? ""}
-              </AppText>
-            </View>
-          );
-        })}
-      </View>
-    </Card>
-  );
-}
-
-// ─── Profile Completion ───────────────────────────────────────────────────────
-function ProfileCompletion({ pct, c, t, onPress }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[pc.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
-    >
-      <View style={pc.row}>
-        <AppText variant="body" weight="semibold">
-          {t("workerDash.profileCompletion")}
-        </AppText>
-        <AppText
-          variant="body"
-          weight="semibold"
-          style={{ color: c.orange, fontSize: 18 }}
-        >
-          {pct}%
-        </AppText>
-      </View>
-      <View style={[pc.track, { backgroundColor: c.bgInput }]}>
-        <View
-          style={[
-            pc.fill,
-            { backgroundColor: c.orange, width: `${Math.min(pct, 100)}%` },
-          ]}
-        />
-      </View>
-    </Pressable>
-  );
-}
-
-// ─── Section Header ───────────────────────────────────────────────────────────
-function SectionHeader({ title, linkLabel, onLink, c }) {
-  return (
-    <View style={s.sectionHeader}>
-      <AppText variant="title" weight="semibold">
-        {title}
-      </AppText>
-      {onLink && (
-        <Pressable onPress={onLink} hitSlop={8}>
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange }}
-          >
-            {linkLabel} →
-          </AppText>
-        </Pressable>
-      )}
-    </View>
-  );
-}
-
-// ─── Upcoming Job Row ─────────────────────────────────────────────────────────
-function UpcomingJobRow({ booking, c, t, onPress }) {
-  const hirer = booking.hirer ?? {};
-  const cat = booking.category ?? {};
-  const date = new Date(booking.scheduledAt);
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[bk.row, { borderBottomColor: c.border }]}
-    >
-      <View style={[bk.avatar, { backgroundColor: c.bgInput }]}>
-        {hirer.avatar ? (
-          <Image source={{ uri: hirer.avatar }} style={bk.avatarImg} />
-        ) : (
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange, fontSize: 11 }}
-          >
-            {initials(hirer.firstName, hirer.lastName)}
-          </AppText>
-        )}
-      </View>
-      <View style={{ flex: 1, marginLeft: 12 }}>
-        <AppText variant="body" weight="semibold" numberOfLines={1}>
-          {booking.title}
-        </AppText>
-        <AppText variant="small" tone="dim">
-          {date.toLocaleDateString("en-GB", {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-          })}
-          {cat.name ? ` · ${cat.name}` : ""}
-        </AppText>
-      </View>
-      <StatusBadge status={booking.status} t={t} />
-    </Pressable>
-  );
-}
-
-// ─── Recent Booking Row ───────────────────────────────────────────────────────
-function BookingRow({ booking, c, t, onPress }) {
-  const hirer = booking.hirer ?? {};
-  const cat = booking.category ?? {};
-  const currency = booking.currency ?? "USD";
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[bk.row, { borderBottomColor: c.border }]}
-    >
-      <View style={[bk.avatar, { backgroundColor: c.bgInput }]}>
-        {hirer.avatar ? (
-          <Image source={{ uri: hirer.avatar }} style={bk.avatarImg} />
-        ) : (
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange, fontSize: 11 }}
-          >
-            {initials(hirer.firstName, hirer.lastName)}
-          </AppText>
-        )}
-      </View>
-      <View style={{ flex: 1, marginLeft: 12 }}>
-        <AppText variant="body" weight="semibold" numberOfLines={1}>
-          {booking.title}
-        </AppText>
-        <AppText variant="small" tone="dim">
-          {[hirer.firstName, hirer.lastName].filter(Boolean).join(" ")}
-          {cat.name ? ` · ${cat.name}` : ""}
-        </AppText>
-        {booking.agreedRate > 0 && (
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: "#22c55e", marginTop: 2 }}
-          >
-            {currency} {Number(booking.agreedRate).toLocaleString()}
-          </AppText>
-        )}
-      </View>
-      <StatusBadge status={booking.status} t={t} />
-    </Pressable>
-  );
-}
-
-// ─── Recent Review Row ────────────────────────────────────────────────────────
-function ReviewRow({ review, c }) {
-  const giver = review.giver ?? {};
-  return (
-    <View style={[rv.row, { borderBottomColor: c.border }]}>
-      <View style={rv.left}>
-        <AppText variant="body" weight="semibold">
-          {[giver.firstName, giver.lastName].filter(Boolean).join(" ") ||
-            "Anonymous"}
-        </AppText>
-        {review.comment ? (
-          <AppText
-            variant="small"
-            tone="dim"
-            numberOfLines={2}
-            style={{ marginTop: 2 }}
-          >
-            {review.comment}
-          </AppText>
-        ) : null}
-      </View>
-      <StarRow rating={review.rating ?? 0} />
-    </View>
-  );
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function WorkerDashboardScreen() {
-  const { t } = useTranslation();
-  const navigation = useNavigation();
+function CurrencySwitch() {
+  const { dashboardCurrency, changeDashboardCurrency } = useCurrency();
+  const [showModal, setShowModal] = useState(false);
   const { theme } = useTheme();
-  const { toast } = useToast();
-  const { user } = useAuthStore();
   const c = theme.colors;
+
+  const activeCurrency = CURRENCIES.find((x) => x.code === dashboardCurrency);
+
+  return (
+    <>
+      <Pressable style={s.currWrap} onPress={() => setShowModal(true)}>
+        <AppText style={s.currLabel}>Viewing in</AppText>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <AppText style={s.currSelect}>
+            {activeCurrency?.symbol} {dashboardCurrency}
+          </AppText>
+          <Ionicons name="chevron-down" size={12} color={c.textMuted} />
+        </View>
+      </Pressable>
+
+      <Modal visible={showModal} transparent animationType="fade">
+        <Pressable style={s.modalOverlay} onPress={() => setShowModal(false)}>
+          <View style={[s.modalBox, { backgroundColor: c.bgPanel }]}>
+            <AppText
+              style={{
+                fontFamily: FONTS.display,
+                fontSize: 18,
+                fontWeight: "800",
+                color: c.text,
+                marginBottom: 16,
+              }}
+            >
+              Select Currency
+            </AppText>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {CURRENCIES.map((cur) => (
+                <Pressable
+                  key={cur.code}
+                  style={s.currRow}
+                  onPress={() => {
+                    changeDashboardCurrency(cur.code);
+                    setShowModal(false);
+                  }}
+                >
+                  <AppText
+                    style={{
+                      color: cur.code === dashboardCurrency ? c.orange : c.text,
+                    }}
+                  >
+                    {cur.symbol} {cur.code}
+                  </AppText>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <View style={s.page}>
+      <Skeleton width="100%" height={140} radius={12} />
+      <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} width="47%" height={100} radius={12} />
+        ))}
+      </View>
+      <Skeleton width="100%" height={220} radius={12} />
+    </View>
+  );
+}
+
+export default function WorkerDashboardScreen() {
+  const { toast } = useToast();
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const navigation = useNavigation();
+  const { width } = useWindowDimensions();
+  const { dashboardCurrency } = useCurrency();
+  const { user, updateUser } = useAuthStore();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  const [greeting, setGreeting] = useState("Good morning");
+  const [isTogglingAvail, setIsTogglingAvail] = useState(false);
 
-  const load = useCallback(async () => {
+  const isMobile = width <= 640;
+  const isTablet = width <= 1100;
+
+  const pagePad = rem(1.25);
+  const gap = 16;
+
+  const containerWidth = width - pagePad * 2;
+  const mobileCardWidth = (containerWidth - gap) / 2;
+  const tabletCardWidth = (containerWidth - gap * 3) / 4;
+  const desktopHalfWidth = (containerWidth - gap) / 2;
+
+  const fetchDashboardSilently = useCallback(async () => {
     try {
-      const res = await client.get("/workers/dashboard");
-      setData(res.data.data);
-    } catch {
-      toast.error(t("toast.networkError"));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      const freshData = await getWorkerDashboard();
+      setData(freshData);
+      if (
+        freshData?.profile?.isAvailable !== undefined &&
+        freshData.profile.isAvailable !== user?.isAvailable
+      ) {
+        if (updateUser)
+          updateUser({ isAvailable: freshData.profile.isAvailable });
+      }
+    } catch (err) {
+      console.error("Silent fetch failed:", err);
     }
-  }, []);
+  }, [updateUser, user?.isAvailable]);
 
   useEffect(() => {
-    load();
-  }, []);
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting("Good morning");
+    else if (hour < 18) setGreeting("Good afternoon");
+    else setGreeting("Good evening");
 
-  if (loading) {
+    let isMounted = true;
+    getWorkerDashboard()
+      .then((resData) => {
+        if (isMounted) {
+          setData(resData);
+          if (
+            resData?.profile?.isAvailable !== undefined &&
+            resData.profile.isAvailable !== user?.isAvailable
+          ) {
+            if (updateUser)
+              updateUser({ isAvailable: resData.profile.isAvailable });
+          }
+        }
+      })
+      .catch((err) => {
+        setError(err.response?.data?.message || "Failed to load dashboard");
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []); // eslint-disable-line
+
+  const handleToggleAvailability = async () => {
+    const newValue = !(user?.isAvailable ?? true);
+
+    // Instantly update the global store so the drawer syncs
+    if (updateUser) updateUser({ isAvailable: newValue });
+    setIsTogglingAvail(true);
+
+    try {
+      await client.put("/workers/profile", { isAvailable: newValue });
+      // Silently pull updated stats (no skeleton flash)
+      await fetchDashboardSilently();
+    } catch (err) {
+      // Revert on failure
+      if (updateUser) updateUser({ isAvailable: !newValue });
+      toast.error("Failed to update availability");
+    } finally {
+      setIsTogglingAvail(false);
+    }
+  };
+
+  if (loading) return <DashboardSkeleton />;
+
+  if (error || !data) {
     return (
-      <View style={[s.center, { backgroundColor: c.bg }]}>
-        <ActivityIndicator size="large" color={c.orange} />
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: c.bg,
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
+        }}
+      >
+        <Ionicons name="warning-outline" size={48} color={c.orange} />
+        <AppText
+          style={{
+            color: "#fff",
+            marginTop: 12,
+            fontSize: 16,
+            fontWeight: "700",
+          }}
+        >
+          Failed to load
+        </AppText>
+        <AppText
+          style={{ color: c.textDim, marginTop: 8, textAlign: "center" }}
+        >
+          {error || "No data returned"}
+        </AppText>
       </View>
     );
   }
 
-  // ── Data extraction ──────────────────────────────────────────────────────────
-  const profile = data?.profile ?? {};
-  const stats = data?.stats ?? {};
-  const earnings = stats.earnings ?? {};
-  const bookingStats = stats.bookings ?? {};
-  const engagement = stats.engagement ?? {};
-  const upcomingJobs = data?.upcomingBookings ?? [];
-  const recentBookings = data?.recentBookings ?? [];
-  const recentReviews = data?.recentReviews ?? [];
-  const monthlyTrend = data?.monthlyTrend ?? [];
-  const profilePct = profile.profileCompletion ?? 0;
-  const workerUser = profile.user ?? user ?? {};
+  const stats = data.stats || {};
+  const earnings = stats.earnings ||
+    data.earnings || {
+      thisMonth: 0,
+      lastMonth: 0,
+      pendingPayout: 0,
+      thisYear: 0,
+      allTime: 0,
+    };
+  const bookings = stats.bookings ||
+    data.bookings || {
+      active: 0,
+      pending: 0,
+      total: 0,
+      completed: 0,
+      cancelled: 0,
+    };
+  const engagement = stats.engagement ||
+    data.engagement || {
+      avgRating: null,
+      totalReviews: 0,
+      completedJobs: 0,
+      responseRate: 0,
+      unreadMessages: 0,
+    };
+  const profile = data.profile || {};
 
-  // Quick actions (labels translated here — in main component where t() is valid)
-  const QUICK_ACTIONS = [
-    {
-      icon: "briefcase-outline",
-      label: t("nav.browseJobs"),
-      screen: "WorkerJobs",
-    },
-    {
-      icon: "person-outline",
-      label: t("workerDash.qaProfile"),
-      screen: "WorkerProfile",
-    },
-    {
-      icon: "card-outline",
-      label: t("workerDash.qaEarnings"),
-      screen: "WorkerEarnings",
-    },
-    {
-      icon: "document-text-outline",
-      label: t("workerDash.qaApplications"),
-      screen: "WorkerApplications",
-    },
-  ];
+  const safeTrend = Array.isArray(data.monthlyTrend) ? data.monthlyTrend : [];
+  const safeBookings = Array.isArray(data.recentBookings)
+    ? data.recentBookings
+    : [];
+  const safeUpcoming = Array.isArray(data.upcomingBookings)
+    ? data.upcomingBookings
+    : [];
+  const safeReviews = Array.isArray(data.recentReviews)
+    ? data.recentReviews
+    : [];
+
+  const maxEarning = Math.max(...safeTrend.map((m) => m?.earnings || 0), 1);
+  const completion = profile?.profileCompletion || 0;
+  const isAvailable = user?.isAvailable ?? true;
 
   return (
-    <AppScreen
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            load();
-          }}
-          tintColor={c.orange}
-        />
-      }
-      contentContainerStyle={{ paddingBottom: 40 }}
+    <ScrollView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      contentContainerStyle={s.page}
+      showsVerticalScrollIndicator={false}
     >
-      {/* ── GREETING ──────────────────────────────────────────────────────── */}
-      <View style={s.greeting}>
-        <View>
-          <AppText variant="small" tone="dim">
-            {t("workerDash.welcomeBack")}
+      <View style={s.greetingContainer}>
+        <View style={{ flex: 1, paddingRight: 16 }}>
+          <AppText style={s.greetingText}>{greeting},</AppText>
+          <AppText style={s.greetingName}>
+            {user?.firstName || "Worker"}
           </AppText>
-          <AppText
-            variant="display"
-            weight="displayBlack"
-            style={{ marginTop: 2 }}
+
+          <Pressable
+            onPress={handleToggleAvailability}
+            disabled={isTogglingAvail}
+            style={[
+              s.statusPill,
+              {
+                borderColor: isAvailable ? "rgba(34,197,94,0.3)" : c.border,
+                backgroundColor: isAvailable ? c.greenDim : c.bgCard,
+              },
+            ]}
           >
-            {workerUser.firstName}
-          </AppText>
+            {isTogglingAvail ? (
+              <ActivityIndicator
+                size="small"
+                color={isAvailable ? c.green : c.textDim}
+                style={{ marginRight: 6, transform: [{ scale: 0.7 }] }}
+              />
+            ) : (
+              <View
+                style={[
+                  s.availabilityDot,
+                  { backgroundColor: isAvailable ? c.green : c.textMuted },
+                ]}
+              />
+            )}
+            <AppText
+              style={[
+                s.availabilityText,
+                { color: isAvailable ? c.green : c.textDim },
+              ]}
+            >
+              {isAvailable ? "Available" : "Not available · Profile hidden"}
+            </AppText>
+          </Pressable>
         </View>
+
+        <View style={{ marginTop: 4 }}>
+          <CurrencySwitch />
+        </View>
+      </View>
+
+      <View style={[s.gridRow, { gap }]}>
         <View
           style={[
-            s.availPill,
+            s.card,
+            { backgroundColor: c.bgCard, borderColor: c.border },
+            s.earningsCard,
             {
-              backgroundColor: profile.isAvailable
-                ? "rgba(34,197,94,0.15)"
-                : "rgba(239,68,68,0.12)",
-              borderColor: profile.isAvailable ? "#22c55e" : "#ef4444",
+              width: "100%",
+              flexDirection: "column",
+              gap: 16,
+              paddingVertical: 20,
             },
           ]}
         >
-          <View
-            style={[
-              s.availDot,
-              { backgroundColor: profile.isAvailable ? "#22c55e" : "#ef4444" },
-            ]}
-          />
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{
-              color: profile.isAvailable ? "#22c55e" : "#ef4444",
-              marginLeft: 6,
-            }}
-          >
-            {profile.isAvailable
-              ? t("workerDash.available")
-              : t("workerDash.unavailable")}
+          <View style={s.earningsBlob} />
+          <View style={{ zIndex: 1, width: "100%" }}>
+            <AppText style={s.earningsLabel}>This Month</AppText>
+            <AppText
+              style={s.earningsValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {formatCurrency(earnings.thisMonth || 0, dashboardCurrency)}
+            </AppText>
+            <AppText style={s.earningsMeta}>
+              Last month:{" "}
+              {formatCurrency(earnings.lastMonth || 0, dashboardCurrency)}
+            </AppText>
+          </View>
+
+          <View style={[s.pendingBox, { width: "100%", minWidth: 0 }]}>
+            <AppText style={s.pendingLabel}>In Escrow</AppText>
+            <AppText
+              style={s.pendingValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {formatCurrency(earnings.pendingPayout || 0, dashboardCurrency)}
+            </AppText>
+            <AppText style={s.pendingSub}>Awaiting release</AppText>
+          </View>
+        </View>
+
+        <View
+          style={[
+            s.card,
+            {
+              width: isMobile ? mobileCardWidth : tabletCardWidth,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
+        >
+          <AppText style={s.statLabel}>Active Jobs</AppText>
+          <AppText style={s.statValue}>{bookings.active || 0}</AppText>
+          <AppText style={s.statSub}>
+            {bookings.pending || 0} pending requests
           </AppText>
         </View>
-      </View>
 
-      {/* ── EARNINGS HERO ─────────────────────────────────────────────────── */}
-      <EarningsHero earnings={earnings} c={c} t={t} />
-
-      {/* ── STATS GRID ────────────────────────────────────────────────────── */}
-      <View style={s.statsGrid}>
-        <StatCard
-          label={t("workerDash.activeJobs")}
-          value={bookingStats.active ?? 0}
-          sub={t("workerDash.pendingRequests", {
-            count: bookingStats.pending ?? 0,
-          })}
-          c={c}
-        />
-        <StatCard
-          label={t("workerDash.rating")}
-          value={
-            engagement.avgRating > 0
-              ? Number(engagement.avgRating).toFixed(1)
-              : t("workerDash.newWorker")
-          }
-          sub={t("workerDash.fromReviews", {
-            count: engagement.totalReviews ?? 0,
-          })}
-          c={c}
-        />
-        <StatCard
-          label={t("workerDash.jobsDone")}
-          value={engagement.completedJobs ?? 0}
-          sub={t("workerDash.responseRate", {
-            rate: engagement.responseRate ?? 0,
-          })}
-          c={c}
-        />
-        <StatCard
-          label={t("workerDash.unreadMessages")}
-          value={engagement.unreadMessages ?? 0}
-          sub={t("workerDash.unreadConversations")}
-          c={c}
-        />
-      </View>
-
-      {/* ── EARNINGS CHART ────────────────────────────────────────────────── */}
-      <EarningsChart
-        monthlyTrend={monthlyTrend}
-        c={c}
-        t={t}
-        onPress={() => navigation.navigate("WorkerEarnings")}
-      />
-
-      {/* ── PROFILE COMPLETION ────────────────────────────────────────────── */}
-      {profilePct < 100 && (
-        <ProfileCompletion
-          pct={profilePct}
-          c={c}
-          t={t}
-          onPress={() => navigation.navigate("WorkerProfile")}
-        />
-      )}
-
-      {/* ── UPCOMING JOBS ─────────────────────────────────────────────────── */}
-      <Card padded style={{ marginBottom: 12 }}>
-        <SectionHeader
-          title={t("workerDash.upcomingJobs")}
-          linkLabel={t("workerDash.seeAll")}
-          onLink={() => navigation.navigate("WorkerBookings")}
-          c={c}
-        />
-        {upcomingJobs.length === 0 ? (
-          <View style={s.emptyWrap}>
-            <AppText variant="small" tone="dim">
-              {t("workerDash.noUpcomingJobs")}
-            </AppText>
-          </View>
-        ) : (
-          upcomingJobs.map((b) => (
-            <UpcomingJobRow
-              key={b.id}
-              booking={b}
-              c={c}
-              t={t}
-              onPress={() =>
-                navigation.navigate("BookingDetail", { bookingId: b.id })
-              }
-            />
-          ))
-        )}
-      </Card>
-
-      {/* ── RECENT BOOKINGS ───────────────────────────────────────────────── */}
-      <Card padded style={{ marginBottom: 12 }}>
-        <SectionHeader
-          title={t("workerDash.recentBookings")}
-          linkLabel={t("workerDash.viewAll")}
-          onLink={() => navigation.navigate("WorkerBookings")}
-          c={c}
-        />
-        {recentBookings.length === 0 ? (
-          <View style={s.emptyWrap}>
-            <AppText variant="small" tone="dim">
-              {t("workerDash.noBookings")}
-            </AppText>
-          </View>
-        ) : (
-          recentBookings
-            .slice(0, 6)
-            .map((b) => (
-              <BookingRow
-                key={b.id}
-                booking={b}
-                c={c}
-                t={t}
-                onPress={() =>
-                  navigation.navigate("BookingDetail", { bookingId: b.id })
-                }
-              />
-            ))
-        )}
-      </Card>
-
-      {/* ── RECENT REVIEWS ────────────────────────────────────────────────── */}
-      <Card padded style={{ marginBottom: 12 }}>
-        <SectionHeader
-          title={t("workerDash.recentReviews")}
-          linkLabel={t("workerDash.seeAll")}
-          onLink={() => navigation.navigate("WorkerReviews")}
-          c={c}
-        />
-        {recentReviews.length === 0 ? (
-          <View style={s.emptyWrap}>
-            <AppText variant="small" tone="dim">
-              {t("workerDash.noReviews")}
-            </AppText>
-          </View>
-        ) : (
-          recentReviews.map((r) => <ReviewRow key={r.id} review={r} c={c} />)
-        )}
-      </Card>
-
-      {/* ── QUICK ACTIONS ─────────────────────────────────────────────────── */}
-      <Card padded style={{ marginBottom: 0 }}>
-        <AppText
-          variant="small"
-          weight="semibold"
-          tone="dim"
-          style={{ letterSpacing: 0.8, marginBottom: 14 }}
+        <View
+          style={[
+            s.card,
+            {
+              width: isMobile ? mobileCardWidth : tabletCardWidth,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
         >
-          {t("workerDash.quickActions")}
-        </AppText>
-        <View style={s.quickGrid}>
-          {QUICK_ACTIONS.map((item) => (
-            <Pressable
-              key={item.screen}
-              onPress={() => navigation.navigate(item.screen)}
-              style={[
-                s.quickBtn,
-                { backgroundColor: c.bgCard, borderColor: c.border },
-              ]}
-            >
-              <View style={[s.quickIcon, { backgroundColor: c.orangeDim }]}>
-                <Ionicons name={item.icon} size={20} color={c.orange} />
-              </View>
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ marginTop: 8, textAlign: "center", color: c.text }}
-              >
-                {item.label}
-              </AppText>
-            </Pressable>
-          ))}
+          <AppText style={s.statLabel}>Rating</AppText>
+          <AppText style={s.statValue}>
+            {engagement?.avgRating
+              ? Number(engagement.avgRating).toFixed(1)
+              : "—"}
+          </AppText>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Ionicons
+              name="star"
+              size={12}
+              color={c.orange}
+              style={{ marginRight: 4 }}
+            />
+            <AppText style={s.statSub}>
+              from {engagement?.totalReviews || 0} reviews
+            </AppText>
+          </View>
         </View>
-      </Card>
-    </AppScreen>
+
+        <View
+          style={[
+            s.card,
+            {
+              width: isMobile ? mobileCardWidth : tabletCardWidth,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
+        >
+          <AppText style={s.statLabel}>Jobs Done</AppText>
+          <AppText style={s.statValue}>
+            {engagement?.completedJobs || 0}
+          </AppText>
+          <AppText style={s.statSub}>
+            {engagement?.responseRate || 0}% response rate
+          </AppText>
+        </View>
+
+        <View
+          style={[
+            s.card,
+            {
+              width: isMobile ? mobileCardWidth : tabletCardWidth,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
+        >
+          <AppText style={s.statLabel}>Total Bookings</AppText>
+          <AppText style={s.statValue}>{bookings?.total || 0}</AppText>
+          <AppText style={s.statSub}>
+            {bookings?.completed || 0} completed · {bookings?.cancelled || 0}{" "}
+            cancelled
+          </AppText>
+        </View>
+
+        <View
+          style={[
+            s.card,
+            {
+              width: isMobile ? mobileCardWidth : tabletCardWidth,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
+        >
+          <AppText style={s.statLabel}>Messages</AppText>
+          <AppText style={s.statValue}>
+            {engagement?.unreadMessages || 0}
+          </AppText>
+          <AppText style={s.statSub}>Unread conversations</AppText>
+        </View>
+      </View>
+
+      <View style={[s.gridRow, { gap: 20 }]}>
+        <View
+          style={[
+            s.card,
+            {
+              width: isMobile ? "100%" : desktopHalfWidth,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
+        >
+          <View style={s.cardHeader}>
+            <AppText style={s.cardTitle}>Earnings trend</AppText>
+            <Pressable onPress={() => navigation.navigate("WorkerEarnings")}>
+              <AppText style={s.cardLink}>Full report →</AppText>
+            </Pressable>
+          </View>
+          <View style={s.barChart}>
+            {safeTrend.map((m, i) => (
+              <View key={m?.month || i} style={s.barWrap}>
+                <View
+                  style={[
+                    s.bar,
+                    {
+                      height: `${Math.max(4, ((m?.earnings || 0) / maxEarning) * 100)}%`,
+                    },
+                  ]}
+                />
+                <AppText style={s.barLabel}>
+                  {(m?.month || "").split(" ")[0]}
+                </AppText>
+              </View>
+            ))}
+          </View>
+          <View
+            style={[
+              s.earningsMeta,
+              { marginTop: 12, flexDirection: "row", gap: 12 },
+            ]}
+          >
+            <AppText style={s.earningsMeta}>
+              This year:{" "}
+              {formatCurrency(earnings.thisYear || 0, dashboardCurrency)}
+            </AppText>
+            <AppText style={s.earningsMeta}>
+              All time:{" "}
+              {formatCurrency(earnings.allTime || 0, dashboardCurrency)}
+            </AppText>
+          </View>
+        </View>
+
+        <View style={{ width: isMobile ? "100%" : desktopHalfWidth, gap: 16 }}>
+          <View
+            style={[
+              s.card,
+              { backgroundColor: c.bgCard, borderColor: c.border },
+            ]}
+          >
+            <View style={s.completionHeader}>
+              <AppText style={s.completionLabel}>Profile Completion</AppText>
+              <AppText style={s.completionPct}>{completion}%</AppText>
+            </View>
+            <View style={s.progressTrack}>
+              <View style={[s.progressFill, { width: `${completion}%` }]} />
+            </View>
+            {completion < 100 && (
+              <AppText style={s.completionHint}>
+                Complete your profile to attract more clients.{" "}
+                <AppText
+                  style={{ color: c.orange, fontWeight: "600" }}
+                  onPress={() => navigation.navigate("WorkerProfile")}
+                >
+                  Update now →
+                </AppText>
+              </AppText>
+            )}
+          </View>
+
+          <View
+            style={[
+              s.card,
+              { backgroundColor: c.bgCard, borderColor: c.border },
+            ]}
+          >
+            <View style={s.cardHeader}>
+              <AppText style={s.cardTitle}>Upcoming jobs</AppText>
+              <Pressable onPress={() => navigation.navigate("WorkerBookings")}>
+                <AppText style={s.cardLink}>See all →</AppText>
+              </Pressable>
+            </View>
+            {safeUpcoming.length === 0 ? (
+              <AppText
+                style={[
+                  s.statSub,
+                  { textAlign: "center", paddingVertical: 12 },
+                ]}
+              >
+                No upcoming jobs scheduled
+              </AppText>
+            ) : (
+              safeUpcoming.map((b, i) => {
+                const d = b?.scheduledAt ? new Date(b.scheduledAt) : null;
+                return (
+                  <Pressable
+                    key={b?.id || i}
+                    style={s.listItem}
+                    onPress={() =>
+                      navigation.navigate("BookingDetail", { bookingId: b?.id })
+                    }
+                  >
+                    {d && (
+                      <View style={s.dateBox}>
+                        <AppText style={s.dateDay}>{d.getDate()}</AppText>
+                        <AppText style={s.dateMonth}>
+                          {d.toLocaleString("default", { month: "short" })}
+                        </AppText>
+                      </View>
+                    )}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <AppText style={s.listTitle} numberOfLines={1}>
+                        {b?.title || "Untitled"}
+                      </AppText>
+                      <AppText style={s.listMeta} numberOfLines={1}>
+                        {b?.hirer?.firstName} {b?.hirer?.lastName} ·{" "}
+                        {b?.category?.name}
+                      </AppText>
+                    </View>
+                    <StatusBadge status={b?.status || "PENDING"} c={c} />
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
+        </View>
+      </View>
+
+      <View style={[s.gridRow, { gap: 20 }]}>
+        <View
+          style={[
+            s.card,
+            {
+              width: isMobile ? "100%" : desktopHalfWidth,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
+        >
+          <View style={s.cardHeader}>
+            <AppText style={s.cardTitle}>Recent bookings</AppText>
+            <Pressable onPress={() => navigation.navigate("WorkerBookings")}>
+              <AppText style={s.cardLink}>View all →</AppText>
+            </Pressable>
+          </View>
+          {safeBookings.length === 0 ? (
+            <AppText
+              style={[s.statSub, { textAlign: "center", paddingVertical: 12 }]}
+            >
+              No bookings yet
+            </AppText>
+          ) : (
+            safeBookings.slice(0, 6).map((b, i) => (
+              <Pressable
+                key={b?.id || i}
+                style={s.listItem}
+                onPress={() =>
+                  navigation.navigate("BookingDetail", { bookingId: b?.id })
+                }
+              >
+                <View style={s.avatar}>
+                  {b?.hirer?.avatar ? (
+                    <Image
+                      source={{ uri: b.hirer.avatar }}
+                      style={{ width: "100%", height: "100%" }}
+                    />
+                  ) : (
+                    <AppText
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: c.textDim,
+                      }}
+                    >
+                      {initials(b?.hirer)}
+                    </AppText>
+                  )}
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <AppText style={s.listTitle} numberOfLines={1}>
+                    {b?.title || "Untitled"}
+                  </AppText>
+                  <AppText style={s.listMeta} numberOfLines={1}>
+                    {b?.hirer?.firstName} {b?.hirer?.lastName} ·{" "}
+                    {b?.category?.name}
+                  </AppText>
+                </View>
+                <View style={{ alignItems: "flex-end", gap: 4 }}>
+                  <StatusBadge status={b?.status || "PENDING"} c={c} />
+                  {Number(b?.payments?.[0]?.releasedAmount) > 0 && (
+                    <AppText
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: c.green,
+                      }}
+                    >
+                      {formatCurrency(
+                        b.payments[0].releasedAmount,
+                        b.payments[0].currency,
+                      )}
+                    </AppText>
+                  )}
+                </View>
+              </Pressable>
+            ))
+          )}
+        </View>
+
+        <View
+          style={[
+            s.card,
+            {
+              width: isMobile ? "100%" : desktopHalfWidth,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+            },
+          ]}
+        >
+          <View style={s.cardHeader}>
+            <AppText style={s.cardTitle}>Recent reviews</AppText>
+            <Pressable onPress={() => navigation.navigate("WorkerReviews")}>
+              <AppText style={s.cardLink}>See all →</AppText>
+            </Pressable>
+          </View>
+          {safeReviews.length === 0 ? (
+            <AppText
+              style={[s.statSub, { textAlign: "center", paddingVertical: 12 }]}
+            >
+              No reviews yet
+            </AppText>
+          ) : (
+            safeReviews.map((r, i) => (
+              <View
+                key={r?.id || i}
+                style={{
+                  paddingVertical: 12,
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderBottomColor: c.border,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    <View
+                      style={[
+                        s.avatar,
+                        { width: 34, height: 34, borderRadius: 17 },
+                      ]}
+                    >
+                      {r?.giver?.avatar ? (
+                        <Image
+                          source={{ uri: r.giver.avatar }}
+                          style={{ width: "100%", height: "100%" }}
+                        />
+                      ) : (
+                        <AppText
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: c.textDim,
+                          }}
+                        >
+                          {initials(r?.giver)}
+                        </AppText>
+                      )}
+                    </View>
+                    <AppText style={s.listTitle} numberOfLines={1}>
+                      {r?.giver?.firstName} {r?.giver?.lastName}
+                    </AppText>
+                  </View>
+                  <View style={{ flexDirection: "row" }}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Ionicons
+                        key={star}
+                        name={
+                          star <= (r?.rating || 0) ? "star" : "star-outline"
+                        }
+                        size={12}
+                        color={c.orange}
+                      />
+                    ))}
+                  </View>
+                </View>
+                <AppText
+                  style={{ fontSize: 13, color: c.textDim, lineHeight: 18 }}
+                >
+                  {r?.comment}
+                </AppText>
+              </View>
+            ))
+          )}
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
-// ─── StyleSheets ──────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  page: {
+    padding: rem(1.25),
+    paddingBottom: rem(6),
+    gap: rem(1.25),
+    maxWidth: 1200,
+    alignSelf: "center",
+    width: "100%",
+  },
+  gridRow: { flexDirection: "row", flexWrap: "wrap", width: "100%" },
 
-const hero = StyleSheet.create({
-  card: {
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 14,
-    position: "relative",
-    backgroundColor: "#1a0e00",
+  greetingContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
   },
-  glow: {
-    position: "absolute",
-    top: -40,
-    right: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: "rgba(249,115,22,0.12)",
+  greetingText: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: "rgba(255,255,255,0.55)",
+    fontWeight: "500",
+    marginBottom: 2,
   },
-  amount: {
-    fontSize: 36,
-    fontWeight: "900",
+  greetingName: {
+    fontFamily: FONTS.display,
+    fontSize: 32,
+    fontWeight: "800",
     color: "#fff",
-    marginTop: 6,
-    letterSpacing: -0.5,
+    letterSpacing: -1,
+    lineHeight: 38,
+    marginBottom: 8,
   },
-  escrow: {
-    marginTop: 16,
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 20,
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    backgroundColor: "rgba(249,115,22,0.08)",
   },
-  escrowAmt: {
-    fontSize: 28,
-    fontWeight: "900",
-    marginTop: 4,
-    letterSpacing: -0.5,
+  availabilityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
-});
+  availabilityText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
 
-const sc = StyleSheet.create({
-  card: {
-    width: "48%",
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 10,
-  },
-  value: { fontSize: 32, fontWeight: "900", marginTop: 6, letterSpacing: -0.5 },
-});
-
-const ch = StyleSheet.create({
-  header: {
+  card: { borderWidth: 1, borderRadius: 12, padding: 24, minWidth: 0 },
+  cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
   },
-  chartRow: {
+  cardTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  cardLink: { fontSize: 13, fontWeight: "600", color: "#f97316" },
+
+  earningsCard: {
+    justifyContent: "space-between",
+    overflow: "hidden",
+    position: "relative",
+  },
+  earningsBlob: {
+    position: "absolute",
+    top: -40,
+    right: -40,
+    width: 160,
+    height: 160,
+    backgroundColor: "rgba(249,115,22,0.12)",
+    borderRadius: 80,
+  },
+  earningsLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: "rgba(255,255,255,0.28)",
+    marginBottom: 6,
+  },
+  earningsValue: {
+    fontFamily: FONTS.display,
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: -1.5,
+    color: "#fff",
+    marginBottom: 8,
+  },
+  earningsMeta: { fontSize: 12, color: "rgba(255,255,255,0.28)" },
+  pendingBox: {
+    backgroundColor: "rgba(249,115,22,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(249,115,22,0.25)",
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    minWidth: 140,
+    zIndex: 1,
+  },
+  pendingLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    color: "rgba(249,115,22,0.65)",
+    marginBottom: 4,
+  },
+  pendingValue: {
+    fontFamily: FONTS.display,
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    color: "#f97316",
+  },
+  pendingSub: { fontSize: 11, color: "rgba(249,115,22,0.55)", marginTop: 4 },
+
+  statLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+    color: "rgba(255,255,255,0.28)",
+  },
+  statValue: {
+    fontFamily: FONTS.display,
+    fontSize: 30,
+    fontWeight: "800",
+    letterSpacing: -1.2,
+    color: "#fff",
+    lineHeight: 36,
+  },
+  statSub: { fontSize: 12, color: "rgba(255,255,255,0.55)" },
+
+  listItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+    minHeight: 52,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  listTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#fff",
+    marginBottom: 2,
+  },
+  listMeta: { fontSize: 12, color: "rgba(255,255,255,0.28)" },
+
+  dateBox: {
+    backgroundColor: "rgba(249,115,22,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(249,115,22,0.25)",
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    minWidth: 48,
+  },
+  dateDay: {
+    fontFamily: FONTS.display,
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#f97316",
+  },
+  dateMonth: {
+    fontSize: 9,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    color: "rgba(249,115,22,0.6)",
+  },
+  barChart: {
     flexDirection: "row",
     alignItems: "flex-end",
-    justifyContent: "space-between",
     gap: 6,
+    height: 100,
+    marginTop: 12,
   },
-  barWrap: { flex: 1, alignItems: "center" },
-  barTrack: { width: "100%", justifyContent: "flex-end" },
-  bar: { borderRadius: 6, width: "100%" },
-});
+  barWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    height: "100%",
+  },
+  bar: {
+    width: "100%",
+    backgroundColor: "rgba(249,115,22,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(249,115,22,0.25)",
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+    minHeight: 4,
+  },
+  barLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.28)",
+    textTransform: "uppercase",
+    marginTop: 6,
+  },
 
-const pc = StyleSheet.create({
-  card: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 12 },
-  row: {
+  completionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
   },
-  track: { height: 6, borderRadius: 3, overflow: "hidden" },
-  fill: { height: "100%", borderRadius: 3 },
-});
-
-const bk = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  completionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.55)",
   },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
+  completionPct: {
+    fontFamily: FONTS.display,
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#f97316",
+    letterSpacing: -0.5,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 999,
     overflow: "hidden",
   },
-  avatarImg: { width: "100%", height: "100%", borderRadius: 19 },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    marginLeft: 8,
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#f97316",
+    borderRadius: 999,
   },
-});
+  completionHint: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.28)",
+    marginTop: 10,
+  },
+  badge: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: 999 },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
 
-const rv = StyleSheet.create({
-  row: {
+  currWrap: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-  },
-  left: { flex: 1 },
-});
-
-const s = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  greeting: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  availPill: {
-    flexDirection: "row",
-    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 8,
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
   },
-  availDot: { width: 8, height: 8, borderRadius: 4 },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 4,
+  currLabel: {
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.55)",
+    fontWeight: "600",
   },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  emptyWrap: { paddingVertical: 24, alignItems: "center" },
-  quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  quickBtn: {
-    width: "47%",
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    alignItems: "center",
-  },
-  quickIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
+  currSelect: { fontSize: 12.8, fontWeight: "700", color: "#f97316" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBox: {
+    width: "80%",
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  currRow: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
   },
 });
