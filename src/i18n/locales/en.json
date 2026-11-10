@@ -3231,6 +3231,29 @@
     "failedToLoad": "Failed to load",
     "noData": "No data returned"
   },
+  "workerSavedJobs": {
+    "eyebrow": "Bookmarks",
+    "title": "Saved Jobs",
+    "open": "Open",
+    "closed": "Closed",
+    "remote": "Remote",
+    "savedAt": "Saved",
+    "applied": "Applied",
+    "applyNow": "Apply Now",
+    "unsave": "Unsave",
+    "removeTitle": "Remove saved job?",
+    "removeMessage": "Are you sure you want to remove \"{{title}}\" from your saved list?",
+    "remove": "Remove",
+    "emptyTitle": "No saved jobs",
+    "emptyText": "Browse the job board and save jobs you're interested in – they'll appear here.",
+    "browseJobs": "Browse Jobs",
+    "prev": "Prev",
+    "next": "Next",
+    "of": "of",
+    "time": {
+      "justNow": "just now"
+    }
+  },
   "workerDash.*": "Worker Dash *",
   "workerDash.activeJobs": "Active Jobs",
   "workerDash.available": "Available",
