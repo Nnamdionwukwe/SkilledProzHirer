@@ -1,857 +1,645 @@
 // src/screens/main/worker/WorkerCategoriesScreen.js
-// Mirrors: website /worker/categories
-// APIs:
-//   GET  /workers/:id                           → worker.categories
-//   POST /workers/categories { categoryId, isPrimary }
-//   DELETE /workers/categories/:categoryId
-//   GET  /categories?q=&limit=                  → search/popular list
-//   POST /categories/suggest { name }           → suggest custom category
+// Verbatim port of Categories.jsx + Categories.module.css
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
+  Modal,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../../components/AppText";
+import Skeleton from "../../../components/Skeleton";
+import CategorySuggest from "../../../components/CategorySuggest";
 import { useTheme } from "../../../contexts/ThemeContext";
-import { useToast } from "../../../contexts/ToastContext";
 import { useAuthStore } from "../../../store/authStore";
-import { categoriesApi } from "../../../api/categories";
-import { useTranslation } from "react-i18next";
+import { rem, FONTS } from "../../../constants/theme";
 import client from "../../../api/client";
 
-const POPULAR_LIMIT = 12;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function debounce(fn, delay) {
-  let timer;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
-}
-
-// ─── Category pill (selected categories shown above search results) ───────────
-function Pill({ cat, c }) {
-  return (
-    <View
-      style={[
-        pl.pill,
-        {
-          backgroundColor: "rgba(249,115,22,0.18)",
-          borderColor: "rgba(249,115,22,0.5)",
-        },
-      ]}
-    >
-      <AppText style={{ fontSize: 12, marginRight: 4 }}>
-        {cat.icon ?? "🔧"}
-      </AppText>
-      <AppText
-        variant="small"
-        weight="semibold"
-        style={{ color: c.orange }}
-        numberOfLines={1}
-      >
-        {cat.name}
-      </AppText>
-    </View>
-  );
-}
-const pl = StyleSheet.create({
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginRight: 8,
-  },
-});
-
-// ─── Search result row ────────────────────────────────────────────────────────
-function ResultRow({ cat, isAdded, onPress, c }) {
-  const { t } = useTranslation();
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        rr.row,
-        {
-          borderBottomColor: c.border,
-          backgroundColor: isAdded ? "rgba(249,115,22,0.06)" : "transparent",
-        },
-      ]}
-    >
-      <AppText style={{ fontSize: 22, marginRight: 12, width: 30 }}>
-        {cat.icon ?? "🔧"}
-      </AppText>
-      <View style={{ flex: 1 }}>
-        <AppText variant="body" weight="semibold" style={{ color: c.text }}>
-          {cat.name}
-        </AppText>
-        {cat._count?.workers != null && (
-          <AppText variant="small" tone="dim">
-            {t("workerCategory.workerCount", { count: cat._count.workers })}
-          </AppText>
-        )}
-      </View>
-      {isAdded && <Ionicons name="checkmark" size={18} color="#22c55e" />}
-    </Pressable>
-  );
-}
-const rr = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-});
-
-// ─── Category list row ────────────────────────────────────────────────────────
-function CatRow({ wc, onSetPrimary, onRemove, removing, settingPrimary, c }) {
-  const { t } = useTranslation();
-  const cat = wc.category ?? wc;
-  const catId = wc.categoryId ?? cat.id;
-  const isPrim = wc.isPrimary;
-
-  return (
-    <View
-      style={[
-        cr.row,
-        {
-          borderColor: isPrim ? "rgba(249,115,22,0.4)" : c.border,
-          backgroundColor: isPrim ? "rgba(249,115,22,0.08)" : c.bgCard,
-        },
-      ]}
-    >
-      <View style={cr.left}>
-        <AppText style={{ fontSize: 28, marginRight: 12, width: 36 }}>
-          {cat.icon ?? "🔧"}
-        </AppText>
-        <View style={{ flex: 1 }}>
-          <AppText
-            variant="body"
-            weight="semibold"
-            style={{ color: c.text }}
-            numberOfLines={1}
-          >
-            {cat.name}
-          </AppText>
-          <AppText variant="small" tone="dim" numberOfLines={1}>
-            {cat.slug}
-          </AppText>
-        </View>
-      </View>
-
-      <View style={cr.right}>
-        {isPrim ? (
-          <View style={[cr.primaryBadge, { backgroundColor: c.orange }]}>
-            <AppText style={{ fontSize: 11 }}>⭐</AppText>
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: "#fff", marginLeft: 4 }}
-            >
-              {t("workerCategory.primary")}
-            </AppText>
-          </View>
-        ) : (
-          <Pressable
-            onPress={() => onSetPrimary(catId)}
-            disabled={settingPrimary === catId}
-            style={[cr.setPrimBtn, { borderColor: c.border }]}
-          >
-            {settingPrimary === catId ? (
-              <ActivityIndicator size="small" color={c.orange} />
-            ) : (
-              <AppText variant="small" style={{ color: c.text }}>
-                {t("workerCategory.setPrimary")}
-              </AppText>
-            )}
-          </Pressable>
-        )}
-
-        <Pressable
-          onPress={() => onRemove(catId, cat.name)}
-          disabled={removing === catId}
-          style={[cr.removeBtn, { borderColor: c.border }]}
-        >
-          {removing === catId ? (
-            <ActivityIndicator size="small" color="#ef4444" />
-          ) : (
-            <AppText style={{ color: c.textMuted, fontSize: 14 }}>✕</AppText>
-          )}
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-const cr = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
-    marginBottom: 10,
-  },
-  left: { flexDirection: "row", alignItems: "center", flex: 1 },
-  right: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
-  primaryBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-  setPrimBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  removeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WorkerCategoriesScreen() {
-  const { theme: th } = useTheme();
-  const { toast } = useToast();
   const { t } = useTranslation();
   const { user } = useAuthStore();
-  const c = th.colors;
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const { width } = useWindowDimensions();
+  const isTiny = width <= 400;
 
-  // ── Worker categories ───────────────────────────────────────────────────────
-  const [myCategories, setMyCategories] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const [saving, setSaving] = useState(null);
   const [removing, setRemoving] = useState(null);
-  const [settingPrim, setSettingPrim] = useState(null);
-  const [adding, setAdding] = useState(null);
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
 
-  // ── Search / dropdown ───────────────────────────────────────────────────────
-  const [searchText, setSearchText] = useState("");
-  const [results, setResults] = useState([]);
-  const [totalCats, setTotalCats] = useState(0);
-  const [searching, setSearching] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const inputRef = useRef(null);
+  // Confirm modal
+  const [confirmState, setConfirmState] = useState(null);
 
-  // ── Custom add ──────────────────────────────────────────────────────────────
-  const [showCustom, setShowCustom] = useState(false);
-  const [customName, setCustomName] = useState("");
-  const [addingCustom, setAddingCustom] = useState(false);
-
-  // ── Load worker categories ──────────────────────────────────────────────────
-  const loadMyCategories = useCallback(async () => {
+  const load = useCallback(async () => {
     if (!user?.id) return;
     try {
       const res = await client.get(`/workers/${user.id}`);
-      const worker = res.data.data?.worker ?? res.data.data ?? {};
-      setMyCategories(worker.categories ?? []);
-    } catch {
-      toast.error(t("workerCategory.error.loadFailed"));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      const wcs = res.data?.data?.worker?.categories || [];
+      setCategories(wcs);
+      setSelected(wcs.map((wc) => wc.category).filter(Boolean));
+    } catch {}
+    setLoading(false);
   }, [user?.id]);
 
   useEffect(() => {
-    loadMyCategories();
-  }, [loadMyCategories]);
+    load();
+  }, [load]);
 
-  // ── Load popular categories ─────────────────────────────────────────────────
-  const loadPopular = useCallback(async () => {
-    setSearching(true);
-    try {
-      const res = await client.get("/categories", {
-        params: { limit: POPULAR_LIMIT },
-      });
-      const d = res.data.data ?? res.data;
-      setResults(d.categories ?? d.data ?? (Array.isArray(d) ? d : []));
-      setTotalCats(d.total ?? d.count ?? 0);
-    } catch {
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
-  }, []);
-
-  // ── Debounced search ────────────────────────────────────────────────────────
-  const doSearch = useCallback(
-    debounce(async (q) => {
-      if (!q.trim()) {
-        loadPopular();
-        return;
-      }
-      setSearching(true);
-      try {
-        const res = await client.get("/categories", {
-          params: { q: q.trim(), limit: 20 },
-        });
-        const d = res.data.data ?? res.data;
-        setResults(d.categories ?? d.data ?? (Array.isArray(d) ? d : []));
-        setTotalCats(d.total ?? 0);
-      } catch {
-        setResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 350),
-    [loadPopular],
-  );
-
-  useEffect(() => {
-    if (dropdownOpen) doSearch(searchText);
-  }, [searchText]);
-
-  const openDropdown = () => {
-    setDropdownOpen(true);
-    loadPopular();
-  };
-
-  const closeDropdown = () => {
-    setDropdownOpen(false);
-    setSearchText("");
-    setShowCustom(false);
-  };
-
-  // ── Add existing category ───────────────────────────────────────────────────
-  const handleAdd = async (cat) => {
-    const alreadyAdded = myCategories.find(
-      (wc) => (wc.category?.id ?? wc.categoryId) === cat.id,
-    );
-    if (alreadyAdded) {
-      toast.info(t("workerCategory.alreadyAdded", { name: cat.name }));
+  const handleSelect = async (cat) => {
+    if (
+      categories.find(
+        (wc) => wc.category?.id === cat.id || wc.categoryId === cat.id,
+      )
+    ) {
+      setError(`${cat.name} is already in your list.`);
+      setTimeout(() => setError(""), 3000);
       return;
     }
-    setAdding(cat.id);
+
+    setSaving(cat.id);
+    setError("");
+    setSuccess("");
     try {
       await client.post("/workers/categories", {
         categoryId: cat.id,
-        isPrimary: myCategories.length === 0,
+        isPrimary: categories.length === 0,
       });
-      await loadMyCategories();
-      toast.success(t("workerCategory.addSuccess", { name: cat.name }));
+      await load();
+      setSuccess(`${cat.name} added successfully!`);
+      setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
-      toast.error(
-        err?.response?.data?.message ?? t("workerCategory.error.addFailed"),
-      );
+      setError(err.response?.data?.message || "Failed to add category.");
     } finally {
-      setAdding(null);
+      setSaving(null);
     }
   };
 
-  // ── Add as new (suggest) ────────────────────────────────────────────────────
-  const handleAddNew = async (name) => {
-    if (!name.trim()) return;
-    setAddingCustom(true);
+  const requestRemove = (linkId, name) => setConfirmState({ linkId, name });
+  const cancelRemove = () => setConfirmState(null);
+
+  const confirmRemove = async () => {
+    if (!confirmState) return;
+    const { linkId, name } = confirmState;
+    setRemoving(linkId);
+    setError("");
+    setSuccess("");
+    setConfirmState(null);
     try {
-      const cat = await categoriesApi.suggest(name.trim());
-      await client.post("/workers/categories", {
-        categoryId: cat.id,
-        isPrimary: myCategories.length === 0,
-      });
-      await loadMyCategories();
-      toast.success(t("workerCategory.addNewSuccess", { name: cat.name }));
-      setCustomName("");
-      setShowCustom(false);
-      closeDropdown();
+      await client.delete(`/workers/categories/${linkId}`);
+      await load();
+      setSuccess(`${name} removed.`);
+      setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
-      toast.error(
-        err?.response?.data?.message ?? t("workerCategory.error.addNewFailed"),
-      );
+      setError(err.response?.data?.message || "Failed to remove category.");
     } finally {
-      setAddingCustom(false);
+      setRemoving(null);
     }
   };
 
-  // ── Remove ──────────────────────────────────────────────────────────────────
-  const handleRemove = (catId, name) => {
-    Alert.alert(
-      t("workerCategory.removeConfirmTitle"),
-      t("workerCategory.removeConfirm", { name }),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("common.remove"),
-          style: "destructive",
-          onPress: async () => {
-            setRemoving(catId);
-            try {
-              await client.delete(`/workers/categories/${catId}`);
-              await loadMyCategories();
-              toast.success(t("workerCategory.removeSuccess", { name }));
-            } catch {
-              toast.error(t("workerCategory.error.removeFailed"));
-            } finally {
-              setRemoving(null);
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  // ── Set primary ─────────────────────────────────────────────────────────────
-  const handleSetPrimary = async (catId) => {
-    setSettingPrim(catId);
+  const handleSetPrimary = async (categoryId) => {
     try {
       await client.post("/workers/categories", {
-        categoryId: catId,
+        categoryId,
         isPrimary: true,
       });
-      await loadMyCategories();
-    } catch {
-      toast.error(t("workerCategory.error.primaryFailed"));
-    } finally {
-      setSettingPrim(null);
-    }
+      await load();
+    } catch {}
   };
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
-  const myIds = new Set(
-    myCategories.map((wc) => wc.category?.id ?? wc.categoryId),
-  );
-  const myCats = myCategories.map((wc) => wc.category ?? wc); // for pills
-  const noResults = !searching && searchText.trim() && results.length === 0;
-
-  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            loadMyCategories();
-          }}
-          tintColor={c.orange}
-        />
-      }
+      contentContainerStyle={s.page}
+      showsVerticalScrollIndicator={false}
     >
-      {/* ── Page header ── */}
-      <AppText weight="displayBlack" style={[s.pageTitle, { color: c.text }]}>
-        {t("workerCategory.title")}
-      </AppText>
-      <AppText
-        variant="body"
-        tone="dim"
-        style={{ marginBottom: 20, lineHeight: 22 }}
-      >
-        {t("workerCategory.subtitle")}
-      </AppText>
+      {/* Header */}
+      <View>
+        <AppText
+          variant="title"
+          weight="displayBlack"
+          style={[s.title, { color: c.text }]}
+        >
+          {t("workerCat.title", "My Trade Categories")}
+        </AppText>
+        <AppText style={[s.sub, { color: c.textDim }]}>
+          {t(
+            "workerCat.subtitle",
+            "Add the trades and professions you offer. Search from 1200+ categories or add your own.",
+          )}
+        </AppText>
+      </View>
 
-      {/* ═══ ADD CATEGORY CARD ═══ */}
+      {/* Alerts */}
+      {error ? (
+        <View
+          style={[s.alert, { backgroundColor: c.redDim, borderColor: c.red }]}
+        >
+          <Ionicons name="warning-outline" size={14} color={c.red} />
+          <AppText
+            style={{ fontSize: 12, color: c.red, flex: 1, marginLeft: 6 }}
+          >
+            {error}
+          </AppText>
+        </View>
+      ) : null}
+      {success ? (
+        <View
+          style={[
+            s.alert,
+            { backgroundColor: c.greenDim, borderColor: c.green },
+          ]}
+        >
+          <Ionicons name="checkmark-circle-outline" size={14} color={c.green} />
+          <AppText
+            style={{ fontSize: 12, color: c.green, flex: 1, marginLeft: 6 }}
+          >
+            {success}
+          </AppText>
+        </View>
+      ) : null}
+
+      {/* Picker card */}
       <View
-        style={[s.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
+        style={[s.card, { backgroundColor: c.bgPanel, borderColor: c.border }]}
       >
         <AppText
           variant="title"
-          weight="semibold"
-          style={{ color: c.text, marginBottom: 4 }}
+          weight="displayBlack"
+          style={[s.cardTitle, { color: c.text }]}
         >
-          {t("workerCategory.addTitle")}
+          {t("workerCat.addTitle", "Add a Category")}
         </AppText>
-        <AppText variant="small" tone="dim" style={{ marginBottom: 14 }}>
-          {t("workerCategory.addSub")}
+        <AppText style={[s.cardSub, { color: c.textDim }]}>
+          {t(
+            "workerCat.addSub",
+            "Search for your trade — it's already in our database, or add a custom one if you can't find it.",
+          )}
         </AppText>
 
-        {/* Search input */}
-        <View
-          style={[
-            s.searchBox,
-            {
-              backgroundColor: c.bgInput,
-              borderColor: dropdownOpen ? c.orange : c.border,
-              borderWidth: dropdownOpen ? 1.5 : 1,
-            },
-          ]}
-        >
-          <Ionicons
-            name="search"
-            size={16}
-            color={c.textMuted}
-            style={{ marginRight: 8 }}
-          />
-          <TextInput
-            ref={inputRef}
-            value={searchText}
-            onChangeText={setSearchText}
-            onFocus={openDropdown}
-            placeholder={t("workerCategory.searchPlaceholder")}
-            placeholderTextColor={c.textMuted}
-            style={{ flex: 1, color: c.text, fontSize: 15 }}
-            returnKeyType="search"
-          />
-          {searching ? (
-            <ActivityIndicator
-              size="small"
-              color={c.orange}
-              style={{ marginLeft: 8 }}
-            />
-          ) : dropdownOpen ? (
-            <Pressable
-              onPress={closeDropdown}
-              hitSlop={8}
-              style={{ marginLeft: 8 }}
-            >
-              <Ionicons name="close" size={18} color={c.textMuted} />
-            </Pressable>
-          ) : null}
-        </View>
+        <CategorySuggest
+          onSelect={handleSelect}
+          selected={selected}
+          placeholder={t(
+            "workerCat.searchPlaceholder",
+            "Search plumber, electrician, developer...",
+          )}
+        />
 
-        {/* Selected pills (always visible above dropdown) */}
-        {myCats.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginTop: 12 }}
-            contentContainerStyle={{ paddingBottom: 2 }}
-          >
-            {myCats.map((cat) => (
-              <Pill key={cat?.id ?? cat?.name} cat={cat} c={c} />
-            ))}
-          </ScrollView>
-        )}
-
-        {/* Dropdown: search results or popular */}
-        {dropdownOpen && (
+        {saving ? (
           <View
-            style={[
-              s.dropdown,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              marginTop: 8,
+            }}
           >
-            {/* Header */}
-            {!searchText.trim() && !searching && (
-              <View style={[s.dropHeader, { borderBottomColor: c.border }]}>
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{
-                    color: c.textMuted,
-                    letterSpacing: 0.8,
-                    fontSize: 11,
-                  }}
-                >
-                  {t("workerCategory.popularLabel")}
-                </AppText>
-                {totalCats > 0 && (
-                  <AppText
-                    variant="small"
-                    weight="semibold"
-                    style={{ color: c.orange }}
-                  >
-                    {totalCats.toLocaleString()} {t("workerCategory.total")}
-                  </AppText>
-                )}
-              </View>
-            )}
-
-            {/* Loading */}
-            {searching && (
-              <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <ActivityIndicator color={c.orange} />
-              </View>
-            )}
-
-            {/* No results */}
-            {noResults && (
-              <View style={{ padding: 16 }}>
-                <AppText variant="body" tone="dim" style={{ marginBottom: 12 }}>
-                  {t("workerCategory.noResults", { query: searchText })}
-                </AppText>
-                <Pressable
-                  onPress={() => handleAddNew(searchText)}
-                  disabled={!!addingCustom}
-                  style={[s.addNewBtn, { backgroundColor: c.orange }]}
-                >
-                  {addingCustom ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <AppText
-                      variant="body"
-                      weight="semibold"
-                      style={{ color: "#fff" }}
-                    >
-                      {t("workerCategory.addNew", { name: searchText })}
-                    </AppText>
-                  )}
-                </Pressable>
-              </View>
-            )}
-
-            {/* Results list */}
-            {!searching &&
-              results.length > 0 &&
-              results.map((cat) => (
-                <ResultRow
-                  key={cat.id}
-                  cat={cat}
-                  isAdded={myIds.has(cat.id)}
-                  onPress={() => handleAdd(cat)}
-                  c={c}
-                />
-              ))}
-
-            {/* Custom add link */}
-            <Pressable
-              onPress={() => {
-                setShowCustom(true);
-                setDropdownOpen(false);
-                setSearchText("");
-              }}
-              style={{ padding: 14 }}
-            >
-              <AppText variant="small" style={{ color: c.textMuted }}>
-                {t("workerCategory.cantFind")}
-              </AppText>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Custom add form */}
-        {showCustom && (
-          <View
-            style={[
-              s.customForm,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
-          >
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: c.textMuted, marginBottom: 10 }}
-            >
-              {t("workerCategory.customPrompt")}
+            <Ionicons name="sync" size={13} color={c.textMuted} />
+            <AppText style={{ fontSize: 12, color: c.textMuted }}>
+              Adding category...
             </AppText>
-            <View
-              style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
-            >
-              <TextInput
-                value={customName}
-                onChangeText={setCustomName}
-                placeholder={t("workerCategory.customPlaceholder")}
-                placeholderTextColor={c.textMuted}
-                style={[
-                  s.customInput,
-                  {
-                    color: c.text,
-                    borderColor: c.orange,
-                    backgroundColor: c.bgInput,
-                    flex: 1,
-                  },
-                ]}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={() => handleAddNew(customName)}
-              />
-              <Pressable
-                onPress={() => handleAddNew(customName)}
-                disabled={!customName.trim() || !!addingCustom}
-                style={[
-                  s.addCustomBtn,
-                  {
-                    backgroundColor: customName.trim() ? c.orange : c.bgPanel,
-                    opacity: customName.trim() ? 1 : 0.6,
-                  },
-                ]}
-              >
-                {addingCustom ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <AppText
-                    variant="small"
-                    weight="semibold"
-                    style={{ color: "#fff" }}
-                  >
-                    + {t("workerCategory.add")}
-                  </AppText>
-                )}
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setShowCustom(false);
-                  setCustomName("");
-                }}
-                style={[s.closeCustomBtn, { borderColor: c.border }]}
-              >
-                <AppText style={{ color: c.textMuted }}>✕</AppText>
-              </Pressable>
-            </View>
           </View>
-        )}
+        ) : null}
       </View>
 
-      {/* ═══ MY CATEGORIES LIST ═══ */}
+      {/* Current categories */}
       <View
-        style={[
-          s.card,
-          { backgroundColor: c.bgCard, borderColor: c.border, marginTop: 16 },
-        ]}
+        style={[s.card, { backgroundColor: c.bgPanel, borderColor: c.border }]}
       >
         <View style={s.listHeader}>
-          <AppText variant="title" weight="semibold" style={{ color: c.text }}>
-            {t("workerCategory.myCategories")}
+          <AppText
+            variant="title"
+            weight="displayBlack"
+            style={[s.cardTitle, { color: c.text }]}
+          >
+            {t("workerCat.myCategories", "My Categories")}
           </AppText>
-          <View style={[s.countBadge, { backgroundColor: c.orange }]}>
+          <View
+            style={[
+              s.countBadge,
+              { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+            ]}
+          >
             <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: "#fff" }}
+              style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
             >
-              {myCategories.length}
+              {categories.length}
             </AppText>
           </View>
         </View>
 
         {loading ? (
-          <View style={{ gap: 10, marginTop: 8 }}>
+          <View style={{ gap: 8 }}>
             {[1, 2, 3].map((i) => (
-              <View
-                key={i}
-                style={[s.skeleton, { backgroundColor: c.bgPanel }]}
-              />
+              <Skeleton key={i} width="100%" height={62} radius={10} />
             ))}
           </View>
-        ) : myCategories.length === 0 ? (
+        ) : categories.length === 0 ? (
           <View style={s.empty}>
-            <AppText style={{ fontSize: 48, marginBottom: 12 }}>🔧</AppText>
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: c.text, marginBottom: 6 }}
-            >
-              {t("workerCategory.noCategoriesTitle")}
+            <Ionicons
+              name="construct-outline"
+              size={32}
+              color={c.textMuted}
+              style={{ marginBottom: 4 }}
+            />
+            <AppText style={{ fontSize: 15, fontWeight: "600", color: c.text }}>
+              {t("workerCat.noCategoriesTitle", "No categories yet")}
             </AppText>
-            <AppText variant="small" tone="dim" style={{ textAlign: "center" }}>
-              {t("workerCategory.noCategoriesSub")}
+            <AppText
+              style={{
+                fontSize: 13,
+                color: c.textDim,
+                textAlign: "center",
+                maxWidth: 320,
+              }}
+            >
+              {t(
+                "workerCat.noCategoriesSub",
+                "Search and add your trade above to appear in search results",
+              )}
             </AppText>
           </View>
         ) : (
-          myCategories.map((wc) => (
-            <CatRow
-              key={wc.id ?? wc.categoryId}
-              wc={wc}
-              onSetPrimary={handleSetPrimary}
-              onRemove={handleRemove}
-              removing={removing}
-              settingPrimary={settingPrim}
-              c={c}
-            />
-          ))
+          <View style={{ gap: 8 }}>
+            {categories.map((wc) => {
+              const cat = wc.category || wc;
+              const catId = wc.categoryId || cat.id;
+              const linkId = wc.id;
+              const isPrimary = wc.isPrimary;
+
+              return (
+                <View
+                  key={linkId || catId}
+                  style={[
+                    s.catRow,
+                    {
+                      backgroundColor: isPrimary ? c.orangeDim : c.bgCard,
+                      borderColor: isPrimary ? c.orangeGlow : c.border,
+                    },
+                  ]}
+                >
+                  <View style={s.catLeft}>
+                    <Ionicons
+                      name="construct"
+                      size={18}
+                      color={isPrimary ? c.orange : c.textDim}
+                    />
+                    <View style={{ marginLeft: 12, minWidth: 0 }}>
+                      <AppText
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "600",
+                          color: c.text,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {cat?.name}
+                      </AppText>
+                      <AppText
+                        style={{ fontSize: 11, color: c.textMuted }}
+                        numberOfLines={1}
+                      >
+                        {cat?.slug}
+                      </AppText>
+                    </View>
+                  </View>
+
+                  <View style={s.catRight}>
+                    {isPrimary ? (
+                      <View
+                        style={[
+                          s.primaryBadge,
+                          {
+                            backgroundColor: c.orangeDim,
+                            borderColor: c.orangeGlow,
+                          },
+                        ]}
+                      >
+                        <Ionicons name="star" size={11} color={c.orange} />
+                        <AppText
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: c.orange,
+                          }}
+                        >
+                          {t("workerCat.primary", "Primary")}
+                        </AppText>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => handleSetPrimary(catId)}
+                        style={({ pressed }) => [
+                          s.setPrimaryBtn,
+                          {
+                            borderColor: c.border,
+                            opacity: pressed ? 0.85 : 1,
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name="star-outline"
+                          size={12}
+                          color={c.textMuted}
+                        />
+                        <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                          {t("workerCat.setPrimary", "Set Primary")}
+                        </AppText>
+                      </Pressable>
+                    )}
+
+                    <Pressable
+                      disabled={removing === linkId}
+                      onPress={() => requestRemove(linkId, cat?.name)}
+                      style={({ pressed }) => [
+                        s.removeBtn,
+                        {
+                          borderColor: pressed ? c.red : c.border,
+                          backgroundColor: pressed ? c.redDim : "transparent",
+                        },
+                      ]}
+                    >
+                      {removing === linkId ? (
+                        <Ionicons name="sync" size={14} color={c.textMuted} />
+                      ) : (
+                        <Ionicons name="close" size={14} color={c.textMuted} />
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         )}
       </View>
+
+      {/* Confirm-remove modal */}
+      <Modal
+        visible={!!confirmState}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelRemove}
+      >
+        <Pressable style={s.modalOverlay} onPress={cancelRemove}>
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            style={[
+              s.modalBox,
+              {
+                backgroundColor: c.bgPanel,
+                borderColor: c.border,
+                paddingHorizontal: isTiny ? 20 : 24,
+                paddingTop: isTiny ? 24 : 28,
+                paddingBottom: isTiny ? 20 : 24,
+              },
+            ]}
+          >
+            <View
+              style={[
+                s.modalIconWrap,
+                {
+                  backgroundColor: c.redDim,
+                  borderColor: "rgba(239,68,68,0.3)",
+                },
+              ]}
+            >
+              <Ionicons name="warning-outline" size={24} color={c.red} />
+            </View>
+
+            <AppText
+              variant="title"
+              weight="displayBlack"
+              style={[s.modalTitle, { color: c.text }]}
+            >
+              {t("workerCat.removeConfirmTitle", "Remove category?")}
+            </AppText>
+
+            <AppText style={[s.modalText, { color: c.textDim }]}>
+              <AppText style={{ fontWeight: "700", color: c.text }}>
+                {confirmState?.name}
+              </AppText>{" "}
+              {t(
+                "workerCat.removeConfirm",
+                "will be removed from your trade list. You can always add it back later.",
+              )}
+            </AppText>
+
+            <View
+              style={[
+                s.modalActions,
+                isTiny && { flexDirection: "column-reverse", gap: 8 },
+              ]}
+            >
+              <Pressable
+                onPress={cancelRemove}
+                style={({ pressed }) => [
+                  s.modalCancelBtn,
+                  {
+                    borderColor: c.borderHover,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: c.textDim,
+                  }}
+                >
+                  Keep it
+                </AppText>
+              </Pressable>
+
+              <Pressable
+                onPress={confirmRemove}
+                style={({ pressed }) => [
+                  s.modalConfirmBtn,
+                  { backgroundColor: c.red, opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <AppText
+                  style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+                >
+                  Yes, remove
+                </AppText>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  pageTitle: { fontSize: 36, lineHeight: 42, marginBottom: 6 },
-  card: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
+  page: {
+    padding: rem(1.25),
+    paddingBottom: rem(6),
+    gap: 24,
+    maxWidth: 1200,
+    alignSelf: "center",
+    width: "100%",
   },
-
-  searchBox: {
+  title: {
+    fontSize: 28,
+    letterSpacing: -0.8,
+    lineHeight: 32,
+    marginBottom: 4,
+  },
+  sub: {
+    fontSize: 13,
+  },
+  alert: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 52,
-  },
-
-  dropdown: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 12,
-    overflow: "hidden",
-  },
-  dropHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-
-  addNewBtn: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  customForm: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    marginTop: 12,
-  },
-  customInput: {
+    borderRadius: 8,
     borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    height: 44,
-    fontSize: 14,
   },
-  addCustomBtn: {
-    paddingHorizontal: 16,
-    height: 44,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeCustomBtn: {
-    width: 36,
-    height: 44,
-    borderRadius: 10,
+  card: {
+    borderRadius: 14,
     borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    padding: 24,
   },
-
+  cardTitle: {
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  cardSub: {
+    fontSize: 13,
+    marginBottom: 16,
+  },
   listHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 16,
   },
   countBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  empty: {
+    alignItems: "center",
+    paddingVertical: 40,
+    gap: 6,
+  },
+  catRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 12,
+  },
+  catLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    minWidth: 0,
+  },
+  catRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
+  primaryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  setPrimaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  removeBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  skeleton: { height: 64, borderRadius: 14, opacity: 0.4 },
-  empty: { alignItems: "center", paddingVertical: 40 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  modalBox: {
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  modalIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    lineHeight: 22,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
+  },
+  modalCancelBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
