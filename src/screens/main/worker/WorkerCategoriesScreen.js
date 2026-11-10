@@ -37,7 +37,7 @@ export default function WorkerCategoriesScreen() {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
-  // Confirm modal
+  // Confirm modal — stores the full category object so the name always resolves
   const [confirmState, setConfirmState] = useState(null);
 
   const load = useCallback(async () => {
@@ -84,7 +84,13 @@ export default function WorkerCategoriesScreen() {
     }
   };
 
-  const requestRemove = (linkId, name) => setConfirmState({ linkId, name });
+  // Resolve the display name from whichever shape the link came in as,
+  // and keep the whole object so the modal can show it reliably.
+  const requestRemove = (linkId, cat) =>
+    setConfirmState({
+      linkId,
+      name: cat?.name ?? cat?.category?.name ?? cat?.slug ?? "this category",
+    });
   const cancelRemove = () => setConfirmState(null);
 
   const confirmRemove = async () => {
@@ -121,6 +127,7 @@ export default function WorkerCategoriesScreen() {
       style={{ flex: 1, backgroundColor: c.bg }}
       contentContainerStyle={s.page}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       {/* Header */}
       <View>
@@ -360,7 +367,7 @@ export default function WorkerCategoriesScreen() {
 
                     <Pressable
                       disabled={removing === linkId}
-                      onPress={() => requestRemove(linkId, cat?.name)}
+                      onPress={() => requestRemove(linkId, cat)}
                       style={({ pressed }) => [
                         s.removeBtn,
                         {
@@ -383,7 +390,8 @@ export default function WorkerCategoriesScreen() {
         )}
       </View>
 
-      {/* Confirm-remove modal */}
+      {/* Confirm-remove modal — mirrors the website .modalBox:
+          column layout, icon on top, centered title + text, button row. */}
       <Modal
         visible={!!confirmState}
         transparent
@@ -411,20 +419,35 @@ export default function WorkerCategoriesScreen() {
                   backgroundColor: c.redDim,
                   borderColor: "rgba(239,68,68,0.3)",
                 },
+                isTiny && { width: 46, height: 46, marginBottom: 12 },
               ]}
             >
-              <Ionicons name="warning-outline" size={24} color={c.red} />
+              <Ionicons
+                name="warning-outline"
+                size={isTiny ? 20 : 24}
+                color={c.red}
+              />
             </View>
 
             <AppText
               variant="title"
               weight="displayBlack"
-              style={[s.modalTitle, { color: c.text }]}
+              style={[
+                s.modalTitle,
+                { color: c.text },
+                isTiny && { fontSize: 17 },
+              ]}
             >
               {t("workerCat.removeConfirmTitle", "Remove category?")}
             </AppText>
 
-            <AppText style={[s.modalText, { color: c.textDim }]}>
+            <AppText
+              style={[
+                s.modalText,
+                { color: c.textDim },
+                isTiny && { fontSize: 13, marginBottom: 20 },
+              ]}
+            >
               <AppText style={{ fontWeight: "700", color: c.text }}>
                 {confirmState?.name}
               </AppText>{" "}
@@ -586,6 +609,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
+  // ── Confirm modal (mirrors the website .modalBox stack) ────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.72)",
@@ -598,6 +623,8 @@ const s = StyleSheet.create({
     maxWidth: 380,
     borderRadius: 16,
     borderWidth: 1,
+    // Column stack: icon → title → text → actions.
+    flexDirection: "column",
     alignItems: "center",
   },
   modalIconWrap: {
@@ -611,14 +638,13 @@ const s = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "700",
     lineHeight: 22,
     textAlign: "center",
     marginBottom: 8,
   },
   modalText: {
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 22,
     textAlign: "center",
     marginBottom: 24,
   },

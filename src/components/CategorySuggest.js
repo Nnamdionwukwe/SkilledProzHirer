@@ -3,14 +3,25 @@
 //
 // Loads ALL categories via /categories?all=true (bypasses the 200 cap so
 // all ~1200 + user-submitted categories are browsable).
+//
+// Layout note: the website renders the dropdown as an absolutely-positioned
+// panel directly under the input (top: calc(100% + 4px), z-index: 50) with
+// NO overlay, so the input stays visible and the user keeps typing while the
+// list is open.
+//
+// RN port: the panel is rendered in a transparent <Modal> that is positioned
+// directly under the input (measured via measureInWindow). The search input
+// itself stays in the page — outside the Modal — so it remains visible and
+// focusable while the user types. Using a Modal gives the inner FlatList its
+// own gesture surface, so it scrolls independently of the page ScrollView.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -41,6 +52,10 @@ const POPULAR = [
   "Graphic Designer",
 ];
 
+// Panel max height (matches website .resultsList max-height: 260px,
+// plus header + footer ≈ 360px total).
+const PANEL_MAX_HEIGHT = 360;
+
 export default function CategorySuggest({
   onSelect,
   selected = [],
@@ -58,6 +73,19 @@ export default function CategorySuggest({
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState("");
   const [showCustom, setShowCustom] = useState(false);
+
+  // Measured position of the search input on screen, so the Modal panel
+  // can sit directly beneath it (matches website top: calc(100% + 4px)).
+  const searchWrapRef = useRef(null);
+  const [anchor, setAnchor] = useState(null); // { x, y, width, height }
+
+  const measureAnchor = () => {
+    const node = searchWrapRef.current;
+    if (!node || typeof node.measureInWindow !== "function") return;
+    node.measureInWindow((x, y, width, height) => {
+      setAnchor({ x, y, width, height });
+    });
+  };
 
   // Load ALL categories
   useEffect(() => {
@@ -153,176 +181,210 @@ export default function CategorySuggest({
     }
   };
 
+  const openDropdown = () => {
+    measureAnchor();
+    setShowDropdown(true);
+  };
+
+  // Compute panel position from the measured anchor. If anchor is
+  // unavailable (first render before layout), fall back to a reasonable
+  // top-of-screen position so the panel is still usable.
+  const win = Dimensions.get("window");
+  const panelTop = anchor ? anchor.y + anchor.height + 4 : 120;
+  const panelLeft = anchor ? anchor.x : 16;
+  const panelWidth = anchor ? anchor.width : win.width - 32;
+
+  // If the panel would run past the bottom of the screen, shrink its
+  // max height so it fits (the FlatList then scrolls inside it).
+  const spaceBelow = win.height - panelTop - 16;
+  const panelMaxHeight = Math.max(160, Math.min(PANEL_MAX_HEIGHT, spaceBelow));
+
   return (
     <View style={{ gap: 8 }}>
-      {/* Search input */}
-      <Pressable onPress={() => setShowDropdown(true)}>
-        <View style={s.searchWrap}>
-          <Ionicons
-            name="search"
-            size={14}
-            color={c.textMuted}
-            style={s.searchIcon}
+      {/* Search input — stays in the page (outside the Modal) so the user
+          can keep typing while the dropdown is open. */}
+      <View ref={searchWrapRef} style={s.searchWrap} collapsable={false}>
+        <Ionicons
+          name="search"
+          size={14}
+          color={c.textMuted}
+          style={s.searchIcon}
+        />
+        <TextInput
+          value={query}
+          onChangeText={(v) => {
+            setQuery(v);
+            if (!showDropdown) openDropdown();
+          }}
+          onFocus={openDropdown}
+          placeholder={
+            placeholder ||
+            t("workerCat.searchPlaceholder", "Search trades, professions...")
+          }
+          placeholderTextColor={c.textMuted}
+          style={[
+            s.searchInput,
+            {
+              backgroundColor: c.bgInput,
+              borderColor: c.border,
+              color: c.text,
+            },
+          ]}
+        />
+        {loading ? (
+          <ActivityIndicator
+            size="small"
+            color={c.orange}
+            style={s.searchSpinner}
           />
-          <TextInput
-            value={query}
-            onChangeText={(v) => {
-              setQuery(v);
-              setShowDropdown(true);
-            }}
-            onFocus={() => setShowDropdown(true)}
-            placeholder={
-              placeholder ||
-              t("workerCat.searchPlaceholder", "Search trades, professions...")
-            }
-            placeholderTextColor={c.textMuted}
-            style={[
-              s.searchInput,
-              {
-                backgroundColor: c.bgInput,
-                borderColor: c.border,
-                color: c.text,
-              },
-            ]}
-          />
-          {loading ? (
-            <ActivityIndicator
-              size="small"
-              color={c.orange}
-              style={s.searchSpinner}
-            />
-          ) : null}
-        </View>
-      </Pressable>
+        ) : null}
+      </View>
 
-      {/* Dropdown Modal */}
+      {/* Dropdown panel — rendered in a transparent Modal, anchored under
+          the input. This gives the FlatList its own gesture surface so it
+          scrolls independently of the page ScrollView, and the search
+          input above remains visible + focusable the whole time. */}
       <Modal
         visible={showDropdown}
         transparent
         animationType="fade"
         onRequestClose={() => setShowDropdown(false)}
       >
+        {/* Backdrop: fills the screen, catches outside taps to dismiss.
+            pointerEvents="box-none" would let taps pass through to the
+            input, but the input is behind the Modal — so instead we
+            close on backdrop tap and the user re-focuses the input. */}
         <Pressable
-          style={s.modalOverlay}
+          style={StyleSheet.absoluteFill}
           onPress={() => setShowDropdown(false)}
+        />
+
+        <View
+          style={[
+            s.dropdown,
+            {
+              backgroundColor: c.bgPanel,
+              borderColor: c.border,
+              position: "absolute",
+              top: panelTop,
+              left: panelLeft,
+              width: panelWidth,
+              maxHeight: panelMaxHeight,
+            },
+          ]}
         >
-          <Pressable
-            onPress={(e) => e.stopPropagation?.()}
-            style={[
-              s.modalBox,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
-          >
-            {/* Header */}
-            <View style={[s.dropdownHeader, { borderBottomColor: c.border }]}>
-              <AppText style={s.dropdownHeaderText}>
-                {isSearchMode
-                  ? `${totalMatches} result${totalMatches === 1 ? "" : "s"} for "${query.trim()}"`
-                  : t("workerCat.popularLabel", "Browse all categories")}
+          {/* Header */}
+          <View style={[s.dropdownHeader, { borderBottomColor: c.border }]}>
+            <AppText style={s.dropdownHeaderText}>
+              {isSearchMode
+                ? `${totalMatches} result${totalMatches === 1 ? "" : "s"} for "${query.trim()}"`
+                : t("workerCat.popularLabel", "Browse all categories")}
+            </AppText>
+            {isSearchMode && totalMatches > 100 ? (
+              <AppText style={[s.dropdownHeaderText, { color: c.orange }]}>
+                showing first 100
               </AppText>
-              {isSearchMode && totalMatches > 100 ? (
-                <AppText style={[s.dropdownHeaderText, { color: c.orange }]}>
-                  showing first 100
-                </AppText>
-              ) : !isSearchMode ? (
-                <AppText style={[s.dropdownHeaderText, { color: c.orange }]}>
-                  {allCategories.length} total
-                </AppText>
-              ) : null}
-            </View>
+            ) : !isSearchMode ? (
+              <AppText style={[s.dropdownHeaderText, { color: c.orange }]}>
+                {allCategories.length} total
+              </AppText>
+            ) : null}
+          </View>
 
-            {/* Empty state when searching with no matches */}
-            {isSearchMode && displayList.length === 0 && !loading ? (
-              <View style={s.noResults}>
-                <AppText style={{ fontSize: 13, color: c.textDim }}>
-                  No results for "{query.trim()}"
-                </AppText>
-                <Pressable
-                  onPress={() => {
-                    setCustomName(query.trim());
-                    setShowCustom(true);
-                    setShowDropdown(false);
-                  }}
-                  style={[
-                    s.addCustomInline,
-                    { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
-                  ]}
-                >
-                  <AppText
-                    style={{ fontSize: 12, fontWeight: "600", color: c.orange }}
-                  >
-                    + Add "{query.trim()}" as new category
-                  </AppText>
-                </Pressable>
-              </View>
-            ) : (
-              <FlatList
-                data={displayList}
-                keyExtractor={(item) => item.id}
-                style={{ maxHeight: 360 }}
-                keyboardShouldPersistTaps="handled"
-                renderItem={({ item: cat }) => {
-                  const sel = isSelected(cat);
-                  return (
-                    <Pressable
-                      onPress={() => handleSelect(cat)}
-                      style={({ pressed }) => [
-                        s.resultItem,
-                        { borderBottomColor: c.border },
-                        sel && { backgroundColor: c.orangeDim },
-                        pressed && !sel && { backgroundColor: c.bgCard },
-                      ]}
-                    >
-                      <AppText style={{ fontSize: 16 }}>
-                        {cat.icon || "🔧"}
-                      </AppText>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <AppText
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "600",
-                            color: c.text,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {cat.name}
-                        </AppText>
-                        {cat._count?.workers > 0 && (
-                          <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                            {cat._count.workers} workers
-                          </AppText>
-                        )}
-                      </View>
-                      {sel ? (
-                        <Ionicons name="checkmark" size={14} color={c.green} />
-                      ) : null}
-                    </Pressable>
-                  );
-                }}
-              />
-            )}
-
-            {/* Footer */}
-            <View style={[s.dropdownFooter, { borderTopColor: c.border }]}>
+          {/* Empty state when searching with no matches */}
+          {isSearchMode && displayList.length === 0 && !loading ? (
+            <View style={s.noResults}>
+              <AppText style={{ fontSize: 13, color: c.textDim }}>
+                No results for "{query.trim()}"
+              </AppText>
               <Pressable
                 onPress={() => {
-                  setShowCustom(!showCustom);
+                  setCustomName(query.trim());
+                  setShowCustom(true);
                   setShowDropdown(false);
                 }}
+                style={[
+                  s.addCustomInline,
+                  { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+                ]}
               >
                 <AppText
-                  style={{
-                    fontSize: 12,
-                    color: c.textMuted,
-                    textDecorationLine: "underline",
-                  }}
+                  style={{ fontSize: 12, fontWeight: "600", color: c.orange }}
                 >
-                  + Can't find your profession? Add it
+                  + Add "{query.trim()}" as new category
                 </AppText>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          ) : (
+            <FlatList
+              data={displayList}
+              keyExtractor={(item) => item.id}
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={{ paddingBottom: 4 }}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              renderItem={({ item: cat }) => {
+                const sel = isSelected(cat);
+                return (
+                  <Pressable
+                    onPress={() => handleSelect(cat)}
+                    style={({ pressed }) => [
+                      s.resultItem,
+                      { borderBottomColor: c.border },
+                      sel && { backgroundColor: c.orangeDim },
+                      pressed && !sel && { backgroundColor: c.bgCard },
+                    ]}
+                  >
+                    <AppText style={{ fontSize: 16 }}>
+                      {cat.icon || "🔧"}
+                    </AppText>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <AppText
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "600",
+                          color: c.text,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {cat.name}
+                      </AppText>
+                      {cat._count?.workers > 0 && (
+                        <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                          {cat._count.workers} workers
+                        </AppText>
+                      )}
+                    </View>
+                    {sel ? (
+                      <Ionicons name="checkmark" size={14} color={c.green} />
+                    ) : null}
+                  </Pressable>
+                );
+              }}
+            />
+          )}
+
+          {/* Footer */}
+          <View style={[s.dropdownFooter, { borderTopColor: c.border }]}>
+            <Pressable
+              onPress={() => {
+                setShowCustom(!showCustom);
+                setShowDropdown(false);
+              }}
+            >
+              <AppText
+                style={{
+                  fontSize: 12,
+                  color: c.textMuted,
+                  textDecorationLine: "underline",
+                }}
+              >
+                + Can't find your profession? Add it
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Selected chips */}
@@ -433,20 +495,20 @@ const s = StyleSheet.create({
     position: "absolute",
     right: 12,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 16,
-  },
-  modalBox: {
-    width: "100%",
-    maxWidth: 480,
-    borderRadius: 14,
+
+  // Panel container — position (top/left/width) is set inline from the
+  // measured anchor so it sits directly under the input.
+  dropdown: {
+    borderRadius: 10,
     borderWidth: 1,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
   },
+
   dropdownHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
