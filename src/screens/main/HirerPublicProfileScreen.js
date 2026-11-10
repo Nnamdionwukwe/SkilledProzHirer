@@ -12,13 +12,12 @@ import {
   Linking,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons"; // Fallback for missing icons
+import { Ionicons } from "@expo/vector-icons";
 
 import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
@@ -52,20 +51,11 @@ import {
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// ── Breakpoints — mirrored from CSS @media rules ────────────────
+// ── Breakpoints ──────────────────────────────────────────────────────────
 const isSmallPhone = SCREEN_WIDTH <= 480;
 const isTinyPhone = SCREEN_WIDTH <= 359;
 
-// ── Helpers ────────────────────────────────────────────────────
-function formatSpent(amount) {
-  const n = Number(amount) || 0;
-  if (n === 0) return "0";
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 10_000) return `${Math.round(n / 1_000)}K`;
-  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}
-
+// ── Helpers ──────────────────────────────────────────────────────────────
 function timeAgo(date) {
   if (!date) return "—";
   const diff = Date.now() - new Date(date).getTime();
@@ -96,6 +86,210 @@ function Stars({ rating }) {
   );
 }
 
+// ── Job Card ─────────────────────────────────────────────────────────────
+function HirerJobCard({
+  job,
+  c,
+  viewerUser,
+  isOwnProfile,
+  onApply,
+  applying,
+  applyMsg,
+  onMsgChange,
+  applyResult,
+  onViewFull,
+}) {
+  const description =
+    typeof job?.description === "string" ? job.description : "";
+  const truncatedDesc =
+    description.length > 100 ? `${description.slice(0, 100)}...` : description;
+
+  const category = job?.category || {};
+  const applicantCount = job?._count?.applications ?? 0;
+  const hasJobId = Boolean(job?.id);
+
+  return (
+    <Pressable
+      onPress={onViewFull}
+      disabled={!hasJobId}
+      style={({ pressed }) => [
+        styles.jobCardNew,
+        {
+          backgroundColor: c.bgPanel,
+          borderColor: c.border,
+          opacity: !hasJobId ? 0.85 : pressed ? 0.92 : 1,
+        },
+      ]}
+    >
+      {/* Top: category chip + time ago */}
+      <View style={styles.jobCardTopNew}>
+        {category.icon || category.name ? (
+          <View
+            style={[
+              styles.catChipNew,
+              { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+            ]}
+          >
+            {category.icon ? (
+              <AppText style={{ fontSize: 11, color: c.orange }}>
+                {category.icon}{" "}
+              </AppText>
+            ) : null}
+            <AppText
+              style={{ fontSize: 11, fontWeight: "600", color: c.orange }}
+            >
+              {category.name}
+            </AppText>
+          </View>
+        ) : (
+          <View />
+        )}
+        {job.createdAt ? (
+          <AppText style={{ fontSize: 11, color: c.textMuted }}>
+            {timeAgo(job.createdAt)}
+          </AppText>
+        ) : null}
+      </View>
+
+      {/* Title */}
+      <AppText
+        variant="title"
+        weight="displayBlack"
+        style={styles.jobTitleNew}
+        numberOfLines={2}
+      >
+        {job.title}
+      </AppText>
+
+      {/* Description */}
+      {truncatedDesc ? (
+        <AppText style={styles.jobDescNew} numberOfLines={3}>
+          {truncatedDesc}
+        </AppText>
+      ) : null}
+
+      {/* Meta row: budget + applicants + address */}
+      <View style={styles.jobMetaRowNew}>
+        <AppText
+          variant="title"
+          weight="displayBlack"
+          style={{ fontSize: 14, color: c.orange }}
+        >
+          {job.currency} {Number(job.budget || 0).toLocaleString()}
+        </AppText>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <AppText style={{ fontSize: 11, color: c.textMuted }}>
+            {applicantCount} applicant{applicantCount !== 1 ? "s" : ""}
+          </AppText>
+          {job.address ? (
+            <View
+              style={[
+                styles.durPillNew,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
+            >
+              <FaMapMarkerAlt size={10} color={c.textMuted} />
+              <AppText
+                style={{ fontSize: 10, fontWeight: "600", color: c.textDim }}
+              >
+                {job.address.split(",")[0]}
+              </AppText>
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Apply section (worker, not own profile) */}
+      {viewerUser?.role === "WORKER" && !isOwnProfile ? (
+        <View style={[styles.applySectionNew, { borderTopColor: c.border }]}>
+          {applyResult?.success ? (
+            <View
+              style={[
+                styles.applyBanner,
+                {
+                  backgroundColor: "rgba(34,197,94,0.1)",
+                  borderColor: "rgba(34,197,94,0.2)",
+                },
+              ]}
+            >
+              <AppText style={{ fontSize: 12, color: c.green }}>
+                {applyResult.msg}
+              </AppText>
+            </View>
+          ) : null}
+          {applyResult && !applyResult.success ? (
+            <View
+              style={[
+                styles.applyBanner,
+                {
+                  backgroundColor: c.redDim,
+                  borderColor: "rgba(239,68,68,0.2)",
+                },
+              ]}
+            >
+              <AppText style={{ fontSize: 12, color: c.red }}>
+                {applyResult.msg}
+              </AppText>
+            </View>
+          ) : null}
+
+          {!applyResult?.success ? (
+            <>
+              <TextInput
+                value={applyMsg || ""}
+                onChangeText={onMsgChange}
+                placeholder="Add a message to your application (optional)..."
+                placeholderTextColor={c.textMuted}
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+                style={[
+                  styles.applyInput,
+                  {
+                    backgroundColor: c.bgInput,
+                    borderColor: c.border,
+                    color: c.text,
+                  },
+                ]}
+              />
+              <Pressable
+                onPress={onApply}
+                disabled={applying}
+                style={({ pressed }) => [
+                  styles.applyBtnNew,
+                  {
+                    backgroundColor: c.orange,
+                    opacity: applying ? 0.6 : pressed ? 0.9 : 1,
+                  },
+                ]}
+              >
+                {applying ? (
+                  <ActivityIndicator size="small" color="#000" />
+                ) : (
+                  <>
+                    <FaHandHoldingHeart size={14} color="#000" />
+                    <AppText
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "800",
+                        color: "#000",
+                        marginLeft: 6,
+                      }}
+                    >
+                      Apply Now
+                    </AppText>
+                  </>
+                )}
+              </Pressable>
+            </>
+          ) : null}
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+// ── Screen ───────────────────────────────────────────────────────────────
 export default function HirerPublicProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -115,6 +309,7 @@ export default function HirerPublicProfileScreen() {
   const [applyMsg, setApplyMsg] = useState({});
   const [applyResult, setApplyResult] = useState({});
   const [avatarLightbox, setAvatarLightbox] = useState(null);
+  const [openingChat, setOpeningChat] = useState(false);
 
   const isOwnProfile = viewerUser?.id === userId;
 
@@ -153,6 +348,51 @@ export default function HirerPublicProfileScreen() {
       toast.error(msg);
     } finally {
       setApplying(null);
+    }
+  }
+
+  async function handleOpenChat() {
+    if (!userId || openingChat) return;
+    setOpeningChat(true);
+    try {
+      // 1. Look for an existing conversation with this hirer
+      const res = await client.get("/messages/conversations", {
+        params: { page: 1, limit: 100, _t: Date.now() },
+      });
+      const convos = res.data?.data?.conversations || [];
+      const targetId = String(userId);
+      const existing = convos.find((convo) =>
+        (convo.users || []).some((u) => {
+          const uid = String(u.userId || u.user?.id || u.id);
+          return uid === targetId;
+        }),
+      );
+
+      if (existing?.id) {
+        navigation.navigate("Chat", {
+          conversationId: existing.id,
+          withUserId: userId,
+        });
+        return;
+      }
+
+      // 2. No conversation yet — create one via an empty message
+      const created = await client.post("/messages", {
+        receiverId: userId,
+        content: "👋",
+      });
+      const conversationId = created.data?.data?.conversationId;
+      navigation.navigate("Chat", {
+        conversationId,
+        withUserId: userId,
+      });
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          "Could not open chat. Please try again.",
+      );
+    } finally {
+      setOpeningChat(false);
     }
   }
 
@@ -211,7 +451,6 @@ export default function HirerPublicProfileScreen() {
   const isVerified = verificationStatus === "VERIFIED";
   const isBackgroundChecked = hirerUser.workerProfile?.backgroundCheck === true;
 
-  // Format website URL safely
   const websiteUrl = profile.website
     ? profile.website.startsWith("http")
       ? profile.website
@@ -284,12 +523,14 @@ export default function HirerPublicProfileScreen() {
           <View style={styles.heroInfo}>
             <View style={styles.nameRow}>
               <AppText
+                variant="title"
+                weight="displayBlack"
                 style={[
                   styles.heroName,
                   {
                     color: c.text,
-                    fontSize: isSmallPhone ? 18 : 24,
-                    lineHeight: isSmallPhone ? 22 : 30,
+                    fontSize: isSmallPhone ? 18 : 22,
+                    lineHeight: isSmallPhone ? 24 : 32,
                   },
                 ]}
                 numberOfLines={2}
@@ -353,7 +594,6 @@ export default function HirerPublicProfileScreen() {
               </View>
             )}
 
-            {/* Contact chips: Phone, Email, Gender, Language, Website */}
             <View style={styles.contactRow}>
               {hirerUser.phone && (
                 <Pressable
@@ -391,7 +631,6 @@ export default function HirerPublicProfileScreen() {
                 </Pressable>
               )}
 
-              {/* GENDER */}
               {hirerUser.gender && (
                 <View
                   style={[
@@ -408,7 +647,6 @@ export default function HirerPublicProfileScreen() {
                 </View>
               )}
 
-              {/* LANGUAGE */}
               {hirerUser.language && (
                 <View
                   style={[
@@ -429,7 +667,6 @@ export default function HirerPublicProfileScreen() {
                 </View>
               )}
 
-              {/* WEBSITE — clickable */}
               {websiteUrl && (
                 <Pressable
                   onPress={() => Linking.openURL(websiteUrl)}
@@ -482,7 +719,11 @@ export default function HirerPublicProfileScreen() {
 
             <View style={styles.statsRow}>
               <View style={styles.stat}>
-                <AppText style={[styles.statNum, { color: c.orange }]}>
+                <AppText
+                  variant="title"
+                  weight="displayBlack"
+                  style={[styles.statNum, { color: c.orange }]}
+                >
                   {stats.totalHires}
                 </AppText>
                 <AppText style={[styles.statLabel, { color: c.textMuted }]}>
@@ -493,7 +734,11 @@ export default function HirerPublicProfileScreen() {
                 style={[styles.statDivider, { backgroundColor: c.border }]}
               />
               <View style={styles.stat}>
-                <AppText style={[styles.statNum, { color: c.orange }]}>
+                <AppText
+                  variant="title"
+                  weight="displayBlack"
+                  style={[styles.statNum, { color: c.orange }]}
+                >
                   {stats.openJobs}
                 </AppText>
                 <AppText style={[styles.statLabel, { color: c.textMuted }]}>
@@ -516,20 +761,26 @@ export default function HirerPublicProfileScreen() {
         {!isOwnProfile && viewerUser?.role === "WORKER" && (
           <View style={[styles.heroCta, { borderTopColor: c.border }]}>
             <Pressable
-              onPress={() => navigation.navigate("Chat", { userId })}
+              onPress={handleOpenChat}
+              disabled={openingChat}
               style={({ pressed }) => [
                 styles.msgBtn,
                 {
                   backgroundColor: c.bgCard,
                   borderColor: c.border,
-                  opacity: pressed ? 0.85 : 1,
+                  opacity: openingChat ? 0.6 : pressed ? 0.85 : 1,
                 },
               ]}
             >
-              <FaCommentDots size={16} color={c.text} />
+              {openingChat ? (
+                <ActivityIndicator size="small" color={c.text} />
+              ) : (
+                <FaCommentDots size={16} color={c.text} />
+              )}
             </Pressable>
           </View>
         )}
+
         {isOwnProfile && (
           <View style={[styles.heroCta, { borderTopColor: c.border }]}>
             <Pressable
@@ -612,180 +863,21 @@ export default function HirerPublicProfileScreen() {
             </View>
           ) : (
             jobPosts.map((job) => (
-              <View
+              <HirerJobCard
                 key={job.id}
-                style={[
-                  styles.jobCard,
-                  { backgroundColor: c.bgPanel, borderColor: c.border },
-                ]}
-              >
-                <View style={styles.jobCardTop}>
-                  <View
-                    style={[
-                      styles.jobCat,
-                      {
-                        backgroundColor: c.orangeDim,
-                        borderColor: c.orangeGlow,
-                      },
-                    ]}
-                  >
-                    <AppText
-                      style={{
-                        fontSize: 11,
-                        fontWeight: "600",
-                        color: c.orange,
-                        lineHeight: 14,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {job.category.icon} {job.category.name}
-                    </AppText>
-                  </View>
-                  <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                    {timeAgo(job.createdAt)}
-                  </AppText>
-                </View>
-
-                <AppText
-                  style={[styles.jobTitle, { color: c.text }]}
-                  numberOfLines={2}
-                >
-                  {job.title}
-                </AppText>
-
-                <AppText
-                  style={{ fontSize: 12, color: c.textDim, lineHeight: 19.2 }}
-                  numberOfLines={2}
-                >
-                  {job.description.slice(0, 120)}
-                  {job.description.length > 120 ? "..." : ""}
-                </AppText>
-
-                <View style={styles.jobMeta}>
-                  <AppText style={[styles.jobBudget, { color: c.orange }]}>
-                    {job.currency} {Number(job.budget).toLocaleString()}
-                  </AppText>
-                  <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                    {job._count.applications} applicant
-                    {job._count.applications !== 1 ? "s" : ""}
-                  </AppText>
-                  {job.address && (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
-                      <FaMapMarkerAlt size={11} color={c.textMuted} />
-                      <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                        {job.address.split(",")[0]}
-                      </AppText>
-                    </View>
-                  )}
-                </View>
-
-                {viewerUser?.role === "WORKER" && !isOwnProfile && (
-                  <View
-                    style={[styles.applySection, { borderTopColor: c.border }]}
-                  >
-                    {applyResult[job.id]?.success && (
-                      <View
-                        style={[
-                          styles.applyBanner,
-                          {
-                            backgroundColor: "rgba(34,197,94,0.1)",
-                            borderColor: "rgba(34,197,94,0.2)",
-                          },
-                        ]}
-                      >
-                        <AppText style={{ fontSize: 12, color: c.green }}>
-                          {applyResult[job.id].msg}
-                        </AppText>
-                      </View>
-                    )}
-                    {applyResult[job.id] && !applyResult[job.id].success && (
-                      <View
-                        style={[
-                          styles.applyBanner,
-                          {
-                            backgroundColor: c.redDim,
-                            borderColor: "rgba(239,68,68,0.2)",
-                          },
-                        ]}
-                      >
-                        <AppText style={{ fontSize: 12, color: c.red }}>
-                          {applyResult[job.id].msg}
-                        </AppText>
-                      </View>
-                    )}
-
-                    {!applyResult[job.id]?.success && (
-                      <>
-                        <TextInput
-                          value={applyMsg[job.id] || ""}
-                          onChangeText={(v) =>
-                            setApplyMsg((m) => ({ ...m, [job.id]: v }))
-                          }
-                          placeholder="Add a message to your application (optional)..."
-                          placeholderTextColor={c.textMuted}
-                          multiline
-                          numberOfLines={2}
-                          textAlignVertical="top"
-                          style={[
-                            styles.applyInput,
-                            {
-                              backgroundColor: c.bgInput,
-                              borderColor: c.border,
-                              color: c.text,
-                            },
-                          ]}
-                        />
-                        <Pressable
-                          onPress={() => handleApply(job.id)}
-                          disabled={applying === job.id}
-                          style={({ pressed }) => [
-                            styles.applyBtn,
-                            {
-                              backgroundColor: c.orange,
-                              opacity:
-                                applying === job.id ? 0.6 : pressed ? 0.9 : 1,
-                            },
-                          ]}
-                        >
-                          {applying === job.id ? (
-                            <ActivityIndicator size="small" color="#000" />
-                          ) : (
-                            <>
-                              <FaHandHoldingHeart size={14} color="#000" />
-                              <AppText
-                                style={{
-                                  fontSize: 13,
-                                  fontWeight: "800",
-                                  color: "#000",
-                                }}
-                              >
-                                Apply Now
-                              </AppText>
-                            </>
-                          )}
-                        </Pressable>
-                      </>
-                    )}
-                  </View>
-                )}
-
-                <Pressable
-                  onPress={() =>
-                    navigation.navigate("JobDetail", { jobId: job.id })
-                  }
-                  style={{ marginTop: 8, alignSelf: "flex-start" }}
-                >
-                  <AppText style={{ fontSize: 12, color: c.textDim }}>
-                    View full details →
-                  </AppText>
-                </Pressable>
-              </View>
+                job={job}
+                c={c}
+                viewerUser={viewerUser}
+                isOwnProfile={isOwnProfile}
+                onApply={() => handleApply(job.id)}
+                applying={applying === job.id}
+                applyMsg={applyMsg[job.id] || ""}
+                onMsgChange={(v) => setApplyMsg((m) => ({ ...m, [job.id]: v }))}
+                applyResult={applyResult[job.id]}
+                onViewFull={() =>
+                  navigation.navigate("WorkerJobDetail", { jobId: job.id })
+                }
+              />
             ))
           )}
         </View>
@@ -911,9 +1003,9 @@ export default function HirerPublicProfileScreen() {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 // STYLES
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
   page: {
     paddingHorizontal: isTinyPhone ? 10 : isSmallPhone ? 16 : 24,
@@ -984,8 +1076,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   heroName: {
-    fontFamily: "Syne_800ExtraBold",
-    fontWeight: "800",
+    letterSpacing: -0.6,
   },
   badgesRow: {
     flexDirection: "row",
@@ -1078,10 +1169,9 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   statNum: {
-    fontFamily: "Syne_800ExtraBold",
     fontSize: 18,
-    fontWeight: "800",
-    lineHeight: 18,
+    lineHeight: 24,
+    letterSpacing: -0.5,
   },
   statLabel: {
     fontSize: 10,
@@ -1137,44 +1227,58 @@ const styles = StyleSheet.create({
   jobsGrid: {
     gap: 10,
   },
-  jobCard: {
-    borderRadius: 12,
+
+  // ── Job card styles (browse-jobs look) ──
+  jobCardNew: {
     borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 8,
-    flexDirection: "column",
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    gap: 10,
   },
-  jobCardTop: {
+  jobCardTopNew: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
   },
-  jobCat: {
+  catChipNew: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    maxWidth: "70%",
+  },
+  jobTitleNew: {
+    fontSize: 15,
+    color: "#fff",
+    lineHeight: 20,
+  },
+  jobDescNew: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.55)",
+    lineHeight: 19,
+  },
+  jobMetaRowNew: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  durPillNew: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 999,
     borderWidth: 1,
   },
-  jobTitle: {
-    fontFamily: "Syne_800ExtraBold",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  jobMeta: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    alignItems: "center",
-  },
-  jobBudget: {
-    fontFamily: "Syne_800ExtraBold",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  applySection: {
-    paddingTop: 8,
+  applySectionNew: {
+    paddingTop: 10,
     borderTopWidth: 1,
     gap: 6,
   },
@@ -1187,9 +1291,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     minHeight: 56,
   },
-  applyBtn: {
+  applyBtnNew: {
     width: "100%",
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
@@ -1202,6 +1306,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
+
   reviewsList: {
     gap: 10,
   },
