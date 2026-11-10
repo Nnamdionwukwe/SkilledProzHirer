@@ -84,13 +84,9 @@ function CurrencySwitch() {
         <Pressable style={s.modalOverlay} onPress={() => setShowModal(false)}>
           <View style={[s.modalBox, { backgroundColor: c.bgPanel }]}>
             <AppText
-              style={{
-                fontFamily: FONTS.display,
-                fontSize: 18,
-                fontWeight: "800",
-                color: c.text,
-                marginBottom: 16,
-              }}
+              variant="title"
+              weight="displayBlack"
+              style={{ fontSize: 18, color: c.text, marginBottom: 16 }}
             >
               Select Currency
             </AppText>
@@ -315,7 +311,11 @@ export default function WorkerDashboardScreen() {
         <View style={s.greetingTextWrap}>
           <AppText style={s.greetingText} numberOfLines={1}>
             {greeting},{" "}
-            <AppText style={s.greetingName}>
+            <AppText
+              variant="title"
+              weight="displayBlack"
+              style={s.greetingName}
+            >
               {user?.firstName || "Worker"}
             </AppText>
           </AppText>
@@ -381,6 +381,8 @@ export default function WorkerDashboardScreen() {
           <View style={{ zIndex: 1, width: "100%" }}>
             <AppText style={s.earningsLabel}>This Month</AppText>
             <AppText
+              variant="title"
+              weight="displayBlack"
               style={s.earningsValue}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -396,6 +398,8 @@ export default function WorkerDashboardScreen() {
           <View style={[s.pendingBox, { width: "100%", minWidth: 0 }]}>
             <AppText style={s.pendingLabel}>In Escrow</AppText>
             <AppText
+              variant="title"
+              weight="displayBlack"
               style={s.pendingValue}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -417,7 +421,9 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <AppText style={s.statLabel}>Active Jobs</AppText>
-          <AppText style={s.statValue}>{bookings.active || 0}</AppText>
+          <AppText variant="title" weight="displayBlack" style={s.statValue}>
+            {bookings.active || 0}
+          </AppText>
           <AppText style={s.statSub}>
             {bookings.pending || 0} pending requests
           </AppText>
@@ -434,7 +440,7 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <AppText style={s.statLabel}>Rating</AppText>
-          <AppText style={s.statValue}>
+          <AppText variant="title" weight="displayBlack" style={s.statValue}>
             {engagement?.avgRating
               ? Number(engagement.avgRating).toFixed(1)
               : "—"}
@@ -463,7 +469,7 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <AppText style={s.statLabel}>Jobs Done</AppText>
-          <AppText style={s.statValue}>
+          <AppText variant="title" weight="displayBlack" style={s.statValue}>
             {engagement?.completedJobs || 0}
           </AppText>
           <AppText style={s.statSub}>
@@ -482,7 +488,9 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <AppText style={s.statLabel}>Total Bookings</AppText>
-          <AppText style={s.statValue}>{bookings?.total || 0}</AppText>
+          <AppText variant="title" weight="displayBlack" style={s.statValue}>
+            {bookings?.total || 0}
+          </AppText>
           <AppText style={s.statSub}>
             {bookings?.completed || 0} completed · {bookings?.cancelled || 0}{" "}
             cancelled
@@ -500,7 +508,7 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <AppText style={s.statLabel}>Messages</AppText>
-          <AppText style={s.statValue}>
+          <AppText variant="title" weight="displayBlack" style={s.statValue}>
             {engagement?.unreadMessages || 0}
           </AppText>
           <AppText style={s.statSub}>Unread conversations</AppText>
@@ -519,7 +527,9 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <View style={s.cardHeader}>
-            <AppText style={s.cardTitle}>Earnings trend</AppText>
+            <AppText variant="title" weight="displayBlack" style={s.cardTitle}>
+              Earnings trend
+            </AppText>
             <Pressable onPress={() => navigation.navigate("WorkerEarnings")}>
               <AppText style={s.cardLink}>Full report →</AppText>
             </Pressable>
@@ -567,7 +577,13 @@ export default function WorkerDashboardScreen() {
           >
             <View style={s.completionHeader}>
               <AppText style={s.completionLabel}>Profile Completion</AppText>
-              <AppText style={s.completionPct}>{completion}%</AppText>
+              <AppText
+                variant="title"
+                weight="displayBlack"
+                style={s.completionPct}
+              >
+                {completion}%
+              </AppText>
             </View>
             <View style={s.progressTrack}>
               <View style={[s.progressFill, { width: `${completion}%` }]} />
@@ -592,7 +608,13 @@ export default function WorkerDashboardScreen() {
             ]}
           >
             <View style={s.cardHeader}>
-              <AppText style={s.cardTitle}>Upcoming jobs</AppText>
+              <AppText
+                variant="title"
+                weight="displayBlack"
+                style={s.cardTitle}
+              >
+                Upcoming jobs
+              </AppText>
               <Pressable onPress={() => navigation.navigate("WorkerBookings")}>
                 <AppText style={s.cardLink}>See all →</AppText>
               </Pressable>
@@ -655,7 +677,9 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <View style={s.cardHeader}>
-            <AppText style={s.cardTitle}>Recent bookings</AppText>
+            <AppText variant="title" weight="displayBlack" style={s.cardTitle}>
+              Recent bookings
+            </AppText>
             <Pressable onPress={() => navigation.navigate("WorkerBookings")}>
               <AppText style={s.cardLink}>View all →</AppText>
             </Pressable>
@@ -735,7 +759,9 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <View style={s.cardHeader}>
-            <AppText style={s.cardTitle}>Recent reviews</AppText>
+            <AppText variant="title" weight="displayBlack" style={s.cardTitle}>
+              Recent reviews
+            </AppText>
             <Pressable onPress={() => navigation.navigate("WorkerReviews")}>
               <AppText style={s.cardLink}>See all →</AppText>
             </Pressable>
@@ -868,9 +894,7 @@ const s = StyleSheet.create({
     fontWeight: "500",
   },
   greetingName: {
-    fontFamily: FONTS.display,
     fontSize: 24,
-    fontWeight: "800",
     color: "#fff",
     letterSpacing: -0.5,
   },
@@ -929,9 +953,7 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
   cardTitle: {
-    fontFamily: FONTS.display,
     fontSize: 15,
-    fontWeight: "700",
     color: "#fff",
   },
   cardLink: { fontSize: 13, fontWeight: "600", color: "#f97316" },
@@ -951,6 +973,7 @@ const s = StyleSheet.create({
     borderRadius: 80,
   },
   earningsLabel: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 1,
@@ -959,9 +982,7 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   earningsValue: {
-    fontFamily: FONTS.display,
     fontSize: 32,
-    fontWeight: "800",
     letterSpacing: -1.5,
     color: "#fff",
     marginBottom: 8,
@@ -978,6 +999,7 @@ const s = StyleSheet.create({
     zIndex: 1,
   },
   pendingLabel: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 10,
     fontWeight: "700",
     textTransform: "uppercase",
@@ -986,15 +1008,14 @@ const s = StyleSheet.create({
     marginBottom: 4,
   },
   pendingValue: {
-    fontFamily: FONTS.display,
     fontSize: 20,
-    fontWeight: "800",
     letterSpacing: -0.5,
     color: "#f97316",
   },
   pendingSub: { fontSize: 11, color: "rgba(249,115,22,0.55)", marginTop: 4 },
 
   statLabel: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 1.6,
@@ -1002,9 +1023,7 @@ const s = StyleSheet.create({
     color: "rgba(255,255,255,0.28)",
   },
   statValue: {
-    fontFamily: FONTS.display,
     fontSize: 30,
-    fontWeight: "800",
     letterSpacing: -1.2,
     color: "#fff",
     lineHeight: 36,
@@ -1051,7 +1070,6 @@ const s = StyleSheet.create({
     minWidth: 48,
   },
   dateDay: {
-    fontFamily: FONTS.display,
     fontSize: 18,
     fontWeight: "800",
     color: "#f97316",
@@ -1104,11 +1122,9 @@ const s = StyleSheet.create({
     color: "rgba(255,255,255,0.55)",
   },
   completionPct: {
-    fontFamily: FONTS.display,
     fontSize: 20,
-    fontWeight: "800",
-    color: "#f97316",
     letterSpacing: -0.5,
+    color: "#f97316",
   },
   progressTrack: {
     height: 6,
