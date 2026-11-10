@@ -498,7 +498,7 @@ export default function WorkerSavedJobsScreen() {
             <AppText
               variant="title"
               weight="displayBlack"
-              style={{ fontSize: 28, color: c.text, letterSpacing: -0.5 }}
+              style={{ fontSize: 18, color: c.text, letterSpacing: -0.5 }}
             >
               {t("workerSavedJobs.title", "Saved Jobs")}
             </AppText>
