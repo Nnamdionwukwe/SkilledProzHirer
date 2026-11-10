@@ -211,16 +211,13 @@ export default function WorkerDashboardScreen() {
   const handleToggleAvailability = async () => {
     const newValue = !(user?.isAvailable ?? true);
 
-    // Instantly update the global store so the drawer syncs
     if (updateUser) updateUser({ isAvailable: newValue });
     setIsTogglingAvail(true);
 
     try {
       await client.put("/workers/profile", { isAvailable: newValue });
-      // Silently pull updated stats (no skeleton flash)
       await fetchDashboardSilently();
     } catch (err) {
-      // Revert on failure
       if (updateUser) updateUser({ isAvailable: !newValue });
       toast.error("Failed to update availability");
     } finally {
@@ -309,52 +306,61 @@ export default function WorkerDashboardScreen() {
       contentContainerStyle={s.page}
       showsVerticalScrollIndicator={false}
     >
-      <View style={s.greetingContainer}>
-        <View style={{ flex: 1, paddingRight: 16 }}>
-          <AppText style={s.greetingText}>{greeting},</AppText>
-          <AppText style={s.greetingName}>
-            {user?.firstName || "Worker"}
-          </AppText>
+      {/* ── Row 1: Greeting Header + Availability ── */}
+      <View style={s.greetingRow}>
+        <View style={s.iconCircle}>
+          <Ionicons name="sunny" size={24} color={c.orange} />
+        </View>
 
-          <Pressable
-            onPress={handleToggleAvailability}
-            disabled={isTogglingAvail}
+        <View style={s.greetingTextWrap}>
+          <AppText style={s.greetingText} numberOfLines={1}>
+            {greeting},{" "}
+            <AppText style={s.greetingName}>
+              {user?.firstName || "Worker"}
+            </AppText>
+          </AppText>
+        </View>
+
+        {/* Availability pill tucked to the top right */}
+        <Pressable
+          onPress={handleToggleAvailability}
+          disabled={isTogglingAvail}
+          style={[
+            s.statusPill,
+            {
+              borderColor: isAvailable ? "rgba(34,197,94,0.3)" : c.border,
+              backgroundColor: isAvailable ? c.greenDim : c.bgCard,
+            },
+          ]}
+        >
+          {isTogglingAvail ? (
+            <ActivityIndicator
+              size="small"
+              color={isAvailable ? c.green : c.textDim}
+              style={{ marginRight: 4, transform: [{ scale: 0.6 }] }}
+            />
+          ) : (
+            <View
+              style={[
+                s.availabilityDot,
+                { backgroundColor: isAvailable ? c.green : c.textMuted },
+              ]}
+            />
+          )}
+          <AppText
             style={[
-              s.statusPill,
-              {
-                borderColor: isAvailable ? "rgba(34,197,94,0.3)" : c.border,
-                backgroundColor: isAvailable ? c.greenDim : c.bgCard,
-              },
+              s.availabilityText,
+              { color: isAvailable ? c.green : c.textDim },
             ]}
           >
-            {isTogglingAvail ? (
-              <ActivityIndicator
-                size="small"
-                color={isAvailable ? c.green : c.textDim}
-                style={{ marginRight: 6, transform: [{ scale: 0.7 }] }}
-              />
-            ) : (
-              <View
-                style={[
-                  s.availabilityDot,
-                  { backgroundColor: isAvailable ? c.green : c.textMuted },
-                ]}
-              />
-            )}
-            <AppText
-              style={[
-                s.availabilityText,
-                { color: isAvailable ? c.green : c.textDim },
-              ]}
-            >
-              {isAvailable ? "Available" : "Not available · Profile hidden"}
-            </AppText>
-          </Pressable>
-        </View>
+            {isAvailable ? "Available" : "Offline"}
+          </AppText>
+        </Pressable>
+      </View>
 
-        <View style={{ marginTop: 4 }}>
-          <CurrencySwitch />
-        </View>
+      {/* ── Row 2: Currency Switch (Full Width) ── */}
+      <View style={{ width: "100%" }}>
+        <CurrencySwitch />
       </View>
 
       <View style={[s.gridRow, { gap }]}>
@@ -832,47 +838,88 @@ const s = StyleSheet.create({
   },
   gridRow: { flexDirection: "row", flexWrap: "wrap", width: "100%" },
 
-  greetingContainer: {
+  // Row 1: Greeting Header + Availability
+  greetingRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 24,
+    backgroundColor: "rgba(249,115,22,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(249,115,22,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  greetingTextWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "baseline",
+    flexWrap: "wrap",
   },
   greetingText: {
     fontFamily: FONTS.body,
     fontSize: 14,
     color: "rgba(255,255,255,0.55)",
     fontWeight: "500",
-    marginBottom: 2,
   },
   greetingName: {
     fontFamily: FONTS.display,
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: "800",
     color: "#fff",
-    letterSpacing: -1,
-    lineHeight: 38,
-    marginBottom: 8,
+    letterSpacing: -0.5,
   },
+
+  // Availability pill
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
+    marginLeft: "auto",
     alignSelf: "flex-start",
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    transform: [{ translateY: 4 }],
+    paddingVertical: 4,
+    paddingHorizontal: 8,
     borderRadius: 20,
     borderWidth: 1,
   },
   availabilityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
   },
   availabilityText: {
+    fontSize: 8,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+
+  // Currency Switch
+  currWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    width: "100%",
+  },
+  currLabel: {
     fontSize: 12,
+    color: "rgba(255,255,255,0.55)",
     fontWeight: "600",
   },
+  currSelect: { fontSize: 13, fontWeight: "700", color: "#f97316" },
 
   card: { borderWidth: 1, borderRadius: 12, padding: 24, minWidth: 0 },
   cardHeader: {
@@ -1087,23 +1134,6 @@ const s = StyleSheet.create({
     textTransform: "uppercase",
   },
 
-  currWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  currLabel: {
-    fontSize: 11.5,
-    color: "rgba(255,255,255,0.55)",
-    fontWeight: "600",
-  },
-  currSelect: { fontSize: 12.8, fontWeight: "700", color: "#f97316" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
