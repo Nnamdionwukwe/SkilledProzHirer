@@ -213,7 +213,7 @@ function FloatingTabBar() {
   }, [translateY]);
 
   const tabs = [
-    { name: "Dashboard", icon: "grid-outline" },
+    { name: "Dashboard", icon: "home-outline" },
     { name: "WorkerBookings", icon: "calendar-outline" },
     { name: "WorkerJobs", icon: "search-outline" },
     { name: "WorkerApplications", icon: "document-text-outline" },

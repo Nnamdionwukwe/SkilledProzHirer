@@ -2,7 +2,11 @@
 import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useNavigationState } from "@react-navigation/native";
+import {
+  useNavigation,
+  useNavigationState,
+  CommonActions,
+} from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AppText from "./AppText";
@@ -11,10 +15,8 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAuthStore } from "../store/authStore";
 import { FaCommentDots } from "../icons/fa";
 import { rem } from "../constants/theme";
-import {
-  openDrawer,
-  navigate as globalNavigate,
-} from "../navigation/navigationRef";
+import { navigationRef } from "../navigation/navigationRef";
+import { useUnread } from "../navigation/WorkerNavigator"; // 👈 pull counts from context
 
 const SCREEN_FALLBACK = {
   Dashboard: { title: "Dashboard", subtitle: "Your work at a glance" },
@@ -93,14 +95,23 @@ const SCREEN_FALLBACK = {
 export default function TopBar({
   title: titleProp,
   subtitle: subtitleProp,
-  showBack,
-  unreadCount = 0, // ← Pull from WorkerNavigator
-  unreadMessages = 0, // ← Pull from WorkerNavigator
+  unreadCount: propUnread = null,
+  unreadMessages: propMessages = null,
 }) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user } = useAuthStore();
+
+  // 👇 pull live counts from context (falls back to props if provided)
+  let ctx = { unreadNotifs: 0, unreadMessages: 0 };
+  try {
+    ctx = useUnread() || ctx;
+  } catch (e) {
+    // If TopBar is used outside WorkerNavigator (e.g. Hirer), it falls back to props.
+  }
+  const unreadCount = propUnread ?? ctx.unreadNotifs ?? 0;
+  const unreadMessages = propMessages ?? ctx.unreadMessages ?? 0;
 
   const routeName = useNavigationState(
     (state) => state?.routes?.[state.index]?.name,
@@ -109,20 +120,30 @@ export default function TopBar({
   const title = titleProp ?? fallback.title ?? prettyTitle(routeName);
   const resolvedSub = subtitleProp ?? fallback.subtitle ?? null;
 
-  const handleLeft = () => {
-    if (showBack) {
-      if (navigation.canGoBack()) navigation.goBack();
-      else openDrawer();
-    } else {
-      openDrawer();
+  // ── Smart hamburger ─────────────────────────────────────────────
+  const handleMenu = () => {
+    const parent = navigation.getParent();
+    if (parent) {
+      try {
+        parent.openDrawer();
+        return;
+      } catch (e) {}
     }
+    try {
+      navigation.dispatch(CommonActions.navigate({ name: "WorkerHome" }));
+      setTimeout(() => {
+        try {
+          navigationRef.dispatch({ type: "OPEN_DRAWER" });
+        } catch (e3) {}
+      }, 80);
+    } catch (e) {}
   };
 
   const openNotifications = () => {
     try {
       navigation.navigate("Notifications");
     } catch {
-      globalNavigate("Notifications");
+      navigationRef.navigate("Notifications");
     }
   };
 
@@ -130,7 +151,7 @@ export default function TopBar({
     try {
       navigation.navigate("Messages");
     } catch {
-      globalNavigate("Messages");
+      navigationRef.navigate("Messages");
     }
   };
 
@@ -139,7 +160,7 @@ export default function TopBar({
     try {
       navigation.navigate(target);
     } catch {
-      globalNavigate(target);
+      navigationRef.navigate(target);
     }
   };
 
@@ -155,9 +176,9 @@ export default function TopBar({
       ]}
     >
       <View style={styles.row}>
-        {/* Menu / back button */}
+        {/* Hamburger */}
         <Pressable
-          onPress={handleLeft}
+          onPress={handleMenu}
           hitSlop={10}
           style={({ pressed }) => [
             styles.iconBtn,
@@ -168,14 +189,10 @@ export default function TopBar({
             },
           ]}
         >
-          <Ionicons
-            name={showBack ? "arrow-back" : "menu"}
-            size={18}
-            color={theme.colors.textDim}
-          />
+          <Ionicons name="menu" size={18} color={theme.colors.textDim} />
         </Pressable>
 
-        {/* Title block */}
+        {/* Title */}
         <View style={{ flex: 1, marginLeft: rem(0.75) }}>
           <AppText
             numberOfLines={1}
@@ -305,7 +322,6 @@ function prettyTitle(route) {
   return route.replace(/([A-Z])/g, " $1").trim();
 }
 
-// ─── Styles ────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   wrap: { borderBottomWidth: StyleSheet.hairlineWidth },
   row: {
