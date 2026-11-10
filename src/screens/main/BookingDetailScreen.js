@@ -739,9 +739,34 @@ export default function BookingDetailScreen() {
 
   const handleShowRefundModal = () => setShowRefundModal(true);
 
-  // Back to Bookings list
+  // Back to Bookings list — route differs by role
   const handleBack = () => {
-    navigation.navigate("Bookings");
+    if (user?.role === "WORKER") {
+      try {
+        // Navigate into the nested drawer's WorkerBookings screen
+        navigation.navigate("WorkerHome", { screen: "WorkerBookings" });
+        return;
+      } catch {
+        try {
+          navigation.navigate("WorkerHome", { screen: "Dashboard" });
+          return;
+        } catch {}
+      }
+    }
+
+    // Hirer path — Bookings lives inside the Hirer drawer
+    try {
+      navigation.navigate("Bookings");
+      return;
+    } catch {
+      try {
+        navigation.navigate("Dashboard");
+        return;
+      } catch {}
+    }
+
+    // Final fallback
+    navigation.goBack();
   };
 
   // ── Loading — SKELETON ─────────────────────────────────────────

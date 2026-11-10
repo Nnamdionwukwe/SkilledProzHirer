@@ -63,6 +63,7 @@ import EditProfileScreen from "../screens/main/EditProfileScreen";
 import VideoCallScreen from "../screens/main/VideoCallScreen";
 import SupportChatScreen from "../screens/main/SupportChatScreen";
 import SupportTicketThreadScreen from "../screens/main/SupportTicketThreadScreen";
+import BookingsScreen from "../screens/main/BookingsScreen";
 
 // ── Your Placeholder Screen ──
 // (Assuming you have one at src/screens/main/PlaceholderScreen.js)
@@ -362,7 +363,7 @@ function WorkerDrawer() {
         {() => <ScreenWithChrome Screen={WorkerDashboardScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerBookings">
-        {() => <ScreenWithChrome Screen={WorkerBookingsScreen} />}
+        {() => <ScreenWithChrome Screen={BookingsScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerJobs">
         {() => <ScreenWithChrome Screen={WorkerJobsScreen} />}
