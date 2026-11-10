@@ -30,7 +30,6 @@ import WorkerDashboardScreen from "../screens/main/worker/WorkerDashboardScreen"
 import WorkerJobsScreen from "../screens/main/worker/WorkerJobsScreen";
 import WorkerApplicationsScreen from "../screens/main/worker/WorkerApplicationsScreen";
 import WorkerCategoriesScreen from "../screens/main/worker/WorkerCategoriesScreen";
-import WorkerBookingsScreen from "../screens/main/worker/WorkerBookingsScreen";
 import WorkerEarningsScreen from "../screens/main/worker/WorkerEarningsScreen";
 import WorkerWithdrawalsScreen from "../screens/main/worker/WorkerWithdrawalsScreen";
 import DisputesScreen from "../screens/main/DisputesScreen";
@@ -52,7 +51,7 @@ import FeaturedBoostScreen from "../screens/main/FeaturedBoostScreen";
 import SettingsScreen from "../screens/main/SettingsScreen";
 
 // ── Stack screens ──
-import WorkerJobDetailScreen from "../screens/main/worker/WorkerJobDetailScreen";
+import JobDetailScreen from "../screens/main/JobDetailScreen";
 import BookingDetailScreen from "../screens/main/BookingDetailScreen";
 import HirerPublicProfileScreen from "../screens/main/HirerPublicProfileScreen";
 import ChatScreen from "../screens/main/ChatScreen";
@@ -535,10 +534,7 @@ function WorkerStack() {
           name="HirerPublicProfile"
           component={HirerPublicProfileScreen}
         />
-        <Stack.Screen
-          name="WorkerJobDetail"
-          component={WorkerJobDetailScreen}
-        />
+        <Stack.Screen name="WorkerJobDetail" component={JobDetailScreen} />
         <Stack.Screen name="Chat" component={ChatScreen} />
         <Stack.Screen name="PostDetail" component={PostDetailScreen} />
         <Stack.Screen name="RefundDetail" component={RefundDetailScreen} />

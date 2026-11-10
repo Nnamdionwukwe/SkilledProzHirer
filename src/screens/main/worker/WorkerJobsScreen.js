@@ -239,7 +239,8 @@ function JobCard({ job, isWorker }) {
       <View style={s.cardActions}>
         <Pressable
           onPress={() =>
-            hasJobId && navigation.navigate("WorkerJobDetail", { id: job.id })
+            hasJobId &&
+            navigation.navigate("WorkerJobDetail", { jobId: job.id, job })
           }
           disabled={!hasJobId}
           style={({ pressed }) => [

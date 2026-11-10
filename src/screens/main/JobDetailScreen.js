@@ -407,11 +407,32 @@ export default function JobDetailScreen() {
   const canManage = isOwner || isAdmin;
 
   const backDestination = isWorker
-    ? "Jobs"
+    ? "WorkerJobs"
     : isHirer
       ? "JobsManagement"
       : "Landing";
 
+  const handleBack = () => {
+    if (isWorker) {
+      // WorkerJobs lives inside the WorkerHome drawer.
+      // Navigate into WorkerHome first, then into WorkerJobs.
+      try {
+        navigation.navigate("WorkerHome", { screen: "WorkerJobs" });
+        return;
+      } catch {
+        try {
+          navigation.navigate("WorkerHome", { screen: "Dashboard" });
+          return;
+        } catch {}
+      }
+    }
+    // Hirer navigator is a flat drawer — plain navigate works
+    try {
+      navigation.navigate(backDestination);
+    } catch {
+      navigation.goBack();
+    }
+  };
   // ── Fetch ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!jobId) {
@@ -710,7 +731,7 @@ export default function JobDetailScreen() {
             {t("jobs.detail.notFoundTitle")}
           </AppText>
           <Pressable
-            onPress={() => navigation.navigate(backDestination)}
+            onPress={handleBack}
             style={({ pressed }) => [
               styles.backLinkBtn,
               {
@@ -736,7 +757,7 @@ export default function JobDetailScreen() {
     <AppScreen contentContainerStyle={{ paddingBottom: 40 }}>
       {/* Back link */}
       <Pressable
-        onPress={() => navigation.navigate(backDestination)}
+        onPress={handleBack}
         style={({ pressed }) => [
           styles.backLinkBtn,
           { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
@@ -2119,7 +2140,9 @@ export default function JobDetailScreen() {
           </View>
           <Pressable
             onPress={() =>
-              navigation.navigate("HirerDetail", { userId: job.hirer.id })
+              navigation.navigate("HirerPublicProfile", {
+                userId: job.hirer.id,
+              })
             }
             style={({ pressed }) => [
               styles.viewHirerBtn,
