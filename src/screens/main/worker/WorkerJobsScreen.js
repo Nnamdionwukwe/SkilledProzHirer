@@ -1,662 +1,282 @@
 // src/screens/main/worker/WorkerJobsScreen.js
-// Mirrors: website /worker/browse-jobs
-// APIs:
-//   GET /categories                             — category dropdown
-//   GET /jobs?status=OPEN&search=&categoryId=   — job listing
-//   POST /jobs/:id/apply { message }            — apply to job
+// Verbatim port of pages/worker/HirerJobBoard.jsx + HirerJobBoard.module.css
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
+  View,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  TextInput,
+  useWindowDimensions,
   Image,
   Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
+  FlatList,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 
 import AppText from "../../../components/AppText";
-import Avatar from "../../../components/Avatar";
+import Skeleton from "../../../components/Skeleton";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useAuthStore } from "../../../store/authStore";
-import { categoriesApi } from "../../../api/categories";
+import { rem, FONTS } from "../../../constants/theme";
 import client from "../../../api/client";
 
-const SCREEN_W = Dimensions.get("window").width;
-const H_PAD = 12; // horizontal padding each side
-const COL_GAP = 10; // gap between the 2 columns
-const CARD_W = (SCREEN_W - H_PAD * 2 - COL_GAP) / 2;
+// ── Duration formatter (mirror of utils/formatDuration on web) ──────────
+function formatJobDuration(job) {
+  if (!job) return null;
+  const unit = job.estimatedUnit || "hours";
+  const value = job.estimatedValue;
+  const hours = job.estimatedHours;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-// timeAgo now takes t as a parameter since it's called inside components
-function timeAgo(date, t) {
-  if (!date) return "";
-  const diff = Date.now() - new Date(date).getTime();
-  const d = Math.floor(diff / 86_400_000);
-  if (d < 1) return t("workerJobs.job.today");
-  if (d < 7) return t("workerJobs.job.daysAgo", { d });
-  if (d < 30) return t("workerJobs.job.weeksAgo", { w: Math.floor(d / 7) });
-  const m = Math.floor(d / 30);
-  if (m < 12) return t("workerJobs.job.monthsAgo", { m });
-  return t("workerJobs.job.yearsAgo", { y: Math.floor(m / 12) });
-}
+  if (!value && !hours) return null;
 
-// Format estimated duration exactly as website: "80 hours (≈10 days)"
-function formatDuration(value, unit, t) {
-  if (!value || !unit) return null;
-  const v = parseFloat(value);
-  if (!v) return null;
-  const u = String(unit).toLowerCase();
-  if (u === "hours" || u === "hour") {
-    if (v >= 8) {
-      const days = v / 8;
-      const daysStr = Number.isInteger(days) ? days : days.toFixed(1);
-      return t("workerJobs.job.durationFormat", { value: v, days: daysStr });
-    }
-    return `${v} ${v !== 1 ? t("workerJobs.job.hoursPlural") : t("workerJobs.job.hours")}`;
-  }
-  if (u === "days" || u === "day")
-    return `${v} ${v !== 1 ? t("workerJobs.job.daysPlural") : t("workerJobs.job.days")}`;
-  if (u === "weeks" || u === "week")
-    return `${v} ${v !== 1 ? t("workerJobs.job.weeksPlural") : t("workerJobs.job.weeks")}`;
-  if (u === "months" || u === "month")
-    return `${v} ${v !== 1 ? t("workerJobs.job.monthsPlural") : t("workerJobs.job.months")}`;
-  return `${v} ${unit}`;
-}
+  if (unit === "custom") return value || null;
 
-function fmtBudget(currency, budget) {
-  if (!budget && budget !== 0) return "";
-  return `${currency ?? ""} ${Number(budget).toLocaleString()}`.trim();
-}
-
-// ─── Category selector Modal ───────────────────────────────────────────────────
-function CategoryModal({
-  visible,
-  categories,
-  selected,
-  onSelect,
-  onClose,
-  c,
-  modalBg,
-}) {
-  const { t } = useTranslation();
-  const [q, setQ] = useState("");
-  const filtered = [
-    { id: null, slug: null, name: t("workerJobs.category.all"), icon: "🔍" },
-    ...categories,
-  ].filter((cat) => !q || cat.name.toLowerCase().includes(q.toLowerCase()));
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable style={cm.backdrop} onPress={onClose}>
-        <Pressable
-          style={[
-            cm.sheet,
-            { backgroundColor: modalBg, borderTopColor: c.border },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={[cm.handle, { backgroundColor: c.border }]} />
-          <AppText
-            variant="title"
-            weight="semibold"
-            style={{ color: c.text, paddingHorizontal: 20, marginBottom: 12 }}
-          >
-            {t("workerJobs.category.select")}
-          </AppText>
-
-          {/* Search */}
-          <View
-            style={[
-              cm.searchBox,
-              {
-                borderColor: c.border,
-                backgroundColor: c.bgInput,
-                marginHorizontal: 16,
-              },
-            ]}
-          >
-            <Ionicons
-              name="search"
-              size={15}
-              color={c.textMuted}
-              style={{ marginRight: 8 }}
-            />
-            <TextInput
-              value={q}
-              onChangeText={setQ}
-              placeholder={t("workerJobs.category.search")}
-              placeholderTextColor={c.textMuted}
-              style={{ flex: 1, color: c.text, fontSize: 14 }}
-            />
-            {q ? (
-              <Pressable onPress={() => setQ("")} hitSlop={8}>
-                <Ionicons name="close-circle" size={16} color={c.textMuted} />
-              </Pressable>
-            ) : null}
-          </View>
-
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => String(item.slug ?? "all")}
-            style={{ maxHeight: 380, marginTop: 8 }}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => {
-              const sel = item.slug === selected;
-              return (
-                <Pressable
-                  onPress={() => {
-                    onSelect(item.slug);
-                    onClose();
-                  }}
-                  style={[
-                    cm.option,
-                    {
-                      borderBottomColor: c.border,
-                      backgroundColor: sel ? `${c.orange}15` : "transparent",
-                    },
-                  ]}
-                >
-                  <AppText
-                    style={{ fontSize: 18, lineHeight: 30, marginRight: 10 }}
-                  >
-                    {item.icon}
-                  </AppText>
-                  <AppText
-                    variant="body"
-                    style={{ flex: 1, color: sel ? c.orange : c.text }}
-                  >
-                    {item.name}
-                  </AppText>
-                  {sel && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={18}
-                      color={c.orange}
-                    />
-                  )}
-                </Pressable>
-              );
-            }}
-          />
-          <View style={{ height: 20 }} />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-const cm = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    paddingTop: 12,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 12,
-  },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 42,
-    marginBottom: 4,
-  },
-  option: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-});
-
-// ─── Apply bottom-sheet Modal ─────────────────────────────────────────────────
-function ApplyModal({ visible, job, onClose, c, modalBg, toast }) {
-  const { t } = useTranslation();
-  const [msg, setMsg] = useState("");
-  const [sending, setSending] = useState(false);
-  const [result, setResult] = useState(null);
-
-  useEffect(() => {
-    if (!visible) {
-      setMsg("");
-      setResult(null);
-      setSending(false);
-    }
-  }, [visible]);
-
-  const handleApply = async () => {
-    setSending(true);
-    try {
-      await client.post(`/jobs/${job.id}/apply`, { message: msg.trim() });
-      setResult({
-        success: true,
-        msg: t("workerJobs.apply.success"),
-      });
-    } catch (err) {
-      setResult({
-        success: false,
-        msg: err?.response?.data?.message ?? t("workerJobs.apply.failed"),
-      });
-    } finally {
-      setSending(false);
-    }
+  const labels = {
+    hours: "hour",
+    days: "day",
+    weeks: "week",
+    months: "month",
+    years: "year",
   };
 
-  if (!job) return null;
+  if (value) {
+    const num = parseFloat(value);
+    if (isNaN(num) || num <= 0) return value;
+    const label = (labels[unit] || unit) + (num !== 1 ? "s" : "");
+    const eqv = unit !== "hours" && hours ? ` (≈ ${hours}h)` : "";
+    return `${num} ${label}${eqv}`;
+  }
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable style={am.backdrop} onPress={onClose}>
-        <Pressable
-          style={[
-            am.sheet,
-            { backgroundColor: modalBg, borderTopColor: c.border },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={[am.handle, { backgroundColor: c.border }]} />
+  if (hours) {
+    const num = parseFloat(hours);
+    if (isNaN(num) || num <= 0) return `${hours} hours`;
+    return `${num} hours`;
+  }
 
-          {/* Job title */}
-          <AppText
-            variant="body"
-            weight="semibold"
-            style={{ color: c.orange, paddingHorizontal: 20, marginBottom: 2 }}
-          >
-            {job.category?.icon} {job.category?.name}
-          </AppText>
-          <AppText
-            variant="title"
-            weight="semibold"
-            style={{ color: c.text, paddingHorizontal: 20, marginBottom: 4 }}
-            numberOfLines={2}
-          >
-            {job.title}
-          </AppText>
-          <AppText
-            variant="small"
-            tone="dim"
-            style={{ paddingHorizontal: 20, marginBottom: 16 }}
-          >
-            {fmtBudget(job.currency, job.budget)}
-          </AppText>
-
-          {result?.success ? (
-            <View style={{ paddingHorizontal: 20 }}>
-              <View
-                style={[
-                  am.resultBox,
-                  {
-                    backgroundColor: "rgba(34,197,94,0.12)",
-                    borderColor: "#22c55e",
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="checkmark-circle"
-                  size={20}
-                  color="#22c55e"
-                  style={{ marginRight: 8 }}
-                />
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ color: "#22c55e", flex: 1 }}
-                >
-                  {result.msg}
-                </AppText>
-              </View>
-              <Pressable
-                onPress={onClose}
-                style={[
-                  am.btn,
-                  {
-                    backgroundColor: c.bgPanel,
-                    borderColor: c.border,
-                    borderWidth: 1,
-                    marginTop: 8,
-                  },
-                ]}
-              >
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  style={{ color: c.text }}
-                >
-                  {t("workerJobs.apply.close")}
-                </AppText>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={{ paddingHorizontal: 20 }}>
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{
-                  color: c.textMuted,
-                  letterSpacing: 0.6,
-                  marginBottom: 8,
-                  fontSize: 11,
-                }}
-              >
-                {t("workerJobs.apply.message")}
-              </AppText>
-              <TextInput
-                value={msg}
-                onChangeText={setMsg}
-                placeholder={t("workerJobs.apply.messagePlaceholder")}
-                placeholderTextColor={c.textMuted}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                style={[
-                  am.textarea,
-                  {
-                    color: c.text,
-                    backgroundColor: c.bgInput,
-                    borderColor: c.border,
-                  },
-                ]}
-              />
-              {result && !result.success && (
-                <View
-                  style={[
-                    am.resultBox,
-                    {
-                      backgroundColor: "rgba(239,68,68,0.12)",
-                      borderColor: "#ef4444",
-                      marginBottom: 10,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="alert-circle"
-                    size={16}
-                    color="#ef4444"
-                    style={{ marginRight: 6 }}
-                  />
-                  <AppText
-                    variant="small"
-                    style={{ color: "#ef4444", flex: 1 }}
-                  >
-                    {result.msg}
-                  </AppText>
-                </View>
-              )}
-              <Pressable
-                onPress={handleApply}
-                disabled={sending}
-                style={[
-                  am.btn,
-                  { backgroundColor: c.orange, opacity: sending ? 0.75 : 1 },
-                ]}
-              >
-                {sending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <AppText
-                    variant="body"
-                    weight="semibold"
-                    style={{ color: "#fff" }}
-                  >
-                    {t("workerJobs.apply.button")}
-                  </AppText>
-                )}
-              </Pressable>
-              <Pressable onPress={onClose} style={am.cancelBtn}>
-                <AppText variant="small" tone="dim">
-                  {t("workerJobs.apply.cancel")}
-                </AppText>
-              </Pressable>
-            </View>
-          )}
-          <View style={{ height: 24 }} />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
+  return null;
 }
 
-const am = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    paddingTop: 12,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  textarea: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    minHeight: 80,
-    marginBottom: 12,
-  },
-  btn: { paddingVertical: 15, borderRadius: 14, alignItems: "center" },
-  cancelBtn: { paddingVertical: 12, alignItems: "center" },
-  resultBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 12,
-  },
-});
+function timeAgo(date) {
+  const diff = Date.now() - new Date(date).getTime();
+  const d = Math.floor(diff / 86400000);
+  if (d < 1) return "Today";
+  if (d < 7) return `${d}d ago`;
+  if (d < 30) return `${Math.floor(d / 7)}w ago`;
+  return `${Math.floor(d / 30)}mo ago`;
+}
 
-// ─── Hirer mini-card (inside job card) ───────────────────────────────────────
-function HirerMiniCard({ hirer, c }) {
-  const profile = hirer?.hirerProfile ?? {};
-  const companyName =
-    profile.companyName ??
-    `${hirer?.firstName ?? ""} ${hirer?.lastName ?? ""}`.trim();
-  const location = [hirer?.city, hirer?.country].filter(Boolean).join(", ");
-  const rating = profile.avgRating ?? 0;
+// ── Job Card ────────────────────────────────────────────────────────────
+function JobCard({ job, isWorker }) {
+  const navigation = useNavigation();
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const { t } = useTranslation();
+
+  const description =
+    typeof job?.description === "string" ? job.description : "";
+  const truncatedDesc =
+    description.length > 100 ? `${description.slice(0, 100)}...` : description;
+
+  const hirer = job?.hirer || {};
+  const hirerProfile = hirer?.hirerProfile || {};
+  const category = job?.category || {};
+  const applicantCount = job?._count?.applications ?? 0;
+
+  const hasJobId = Boolean(job?.id);
+  const hasHirerId = Boolean(hirer?.id);
+
+  const hirerDisplayName =
+    hirerProfile.companyName ||
+    [hirer.firstName, hirer.lastName].filter(Boolean).join(" ") ||
+    t("workerJobs.unknownHirer", "Unknown Hirer");
+
+  const hirerInitials = [hirer.firstName?.[0], hirer.lastName?.[0]]
+    .filter(Boolean)
+    .join("");
+
+  const hirerLocation = [hirer.city, hirer.country].filter(Boolean).join(", ");
+  const dur = formatJobDuration(job);
 
   return (
     <View
-      style={[mc.wrap, { backgroundColor: c.bgPanel, borderColor: c.border }]}
+      style={[s.card, { backgroundColor: c.bgPanel, borderColor: c.border }]}
     >
-      <Avatar
-        uri={hirer?.avatar}
-        firstName={hirer?.firstName}
-        lastName={hirer?.lastName}
-        size={36}
-      />
-      <View style={{ flex: 1, marginLeft: 8 }}>
-        <AppText
-          variant="small"
-          weight="semibold"
-          style={{ color: c.text }}
-          numberOfLines={1}
-        >
-          {companyName}
-        </AppText>
-        {location ? (
-          <AppText variant="small" tone="dim" numberOfLines={1}>
-            📍 {location}
+      {/* Top: category chip + time ago */}
+      <View style={s.cardTop}>
+        {category.icon || category.name ? (
+          <View
+            style={[
+              s.catChip,
+              { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+            ]}
+          >
+            {category.icon ? (
+              <AppText style={{ fontSize: 11, color: c.orange }}>
+                {category.icon}{" "}
+              </AppText>
+            ) : null}
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: "600",
+                color: c.orange,
+              }}
+            >
+              {category.name}
+            </AppText>
+          </View>
+        ) : (
+          <View />
+        )}
+        {job.createdAt ? (
+          <AppText style={{ fontSize: 11, color: c.textMuted }}>
+            {timeAgo(job.createdAt)}
           </AppText>
         ) : null}
       </View>
-      {rating > 0 && (
-        <AppText variant="small" weight="semibold" style={{ color: c.orange }}>
-          ★ {Number(rating).toFixed(1)}
-        </AppText>
-      )}
-    </View>
-  );
-}
 
-const mc = StyleSheet.create({
-  wrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 10,
-    marginVertical: 10,
-  },
-});
-
-// ─── Job card ─────────────────────────────────────────────────────────────────
-function JobCard({ job, onApply, onHirerProfile, onViewDetail, c }) {
-  const { t } = useTranslation();
-  const duration = formatDuration(
-    job.estimatedValue ?? job.estValue ?? job.defaultEstValue,
-    job.estimatedUnit ?? job.estUnit ?? job.defaultEstUnit,
-    t,
-  );
-  const applied = job._count?.applications ?? 0;
-  const budgetStr = fmtBudget(job.currency, job.budget);
-
-  return (
-    <View
-      style={[jc.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
-    >
-      {/* Category badge + time ago */}
-      <View style={jc.topRow}>
-        <View
-          style={[
-            jc.catBadge,
-            { backgroundColor: c.bgPanel, borderColor: "rgba(249,115,22,0.4)" },
-          ]}
-        >
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange, fontSize: 11 }}
-            numberOfLines={1}
-          >
-            {job.category?.icon} {job.category?.name}
-          </AppText>
-        </View>
-        <AppText
-          variant="small"
-          tone="dim"
-          style={{ fontSize: 11, flexShrink: 0, marginLeft: 4 }}
-        >
-          {timeAgo(job.createdAt, t)}
-        </AppText>
-      </View>
-
-      {/* Job title — displayBlack weight, exactly as website */}
+      {/* Title */}
       <AppText
+        variant="title"
         weight="displayBlack"
-        style={[jc.title, { color: c.text }]}
+        style={s.cardTitle}
         numberOfLines={2}
       >
         {job.title}
       </AppText>
 
       {/* Description */}
-      <AppText variant="small" tone="dim" style={jc.desc} numberOfLines={3}>
-        {job.description}
-      </AppText>
-
-      {/* Hirer mini-card */}
-      {job.hirer && <HirerMiniCard hirer={job.hirer} c={c} />}
-
-      {/* Budget row: large orange displayBlack + duration badge + applied */}
-      <View style={jc.budgetRow}>
-        {/* Budget — displayBlack weight, orange, large — wraps naturally on narrow cards */}
-        <AppText
-          weight="displayBlack"
-          style={[jc.budget, { color: c.orange }]}
-          numberOfLines={2}
-        >
-          {budgetStr}
+      {truncatedDesc ? (
+        <AppText style={s.cardDesc} numberOfLines={3}>
+          {truncatedDesc}
         </AppText>
-      </View>
+      ) : null}
 
-      {/* Duration + applied count row */}
-      <View style={jc.metaRow}>
-        {duration && (
-          <View
-            style={[
-              jc.durationBadge,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
-          >
+      {/* Hirer row */}
+      <View style={[s.hirerRow, { backgroundColor: c.bgCard }]}>
+        <View
+          style={[
+            s.hirerAvatar,
+            { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+          ]}
+        >
+          {hirer.avatar ? (
+            <Image
+              source={{ uri: hirer.avatar }}
+              style={{ width: "100%", height: "100%" }}
+            />
+          ) : (
             <AppText
-              variant="small"
-              style={{ color: c.textMuted, fontSize: 11 }}
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: c.orange,
+              }}
+            >
+              {hirerInitials || "?"}
+            </AppText>
+          )}
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <AppText
+            style={{ fontSize: 12, fontWeight: "600", color: c.text }}
+            numberOfLines={1}
+          >
+            {hirerDisplayName}
+          </AppText>
+          {hirerLocation ? (
+            <AppText
+              style={{ fontSize: 11, color: c.textMuted }}
               numberOfLines={1}
             >
-              ⏱ {duration}
+              📍 {hirerLocation}
             </AppText>
-          </View>
+          ) : null}
+        </View>
+        {Number(hirerProfile.avgRating) > 0 && (
+          <AppText style={{ fontSize: 11, fontWeight: "700", color: c.orange }}>
+            ★ {Number(hirerProfile.avgRating).toFixed(1)}
+          </AppText>
         )}
-        <AppText
-          variant="small"
-          tone="dim"
-          style={{ fontSize: 11, flexShrink: 0 }}
-        >
-          {t("workerJobs.job.applied", { count: applied })}
-        </AppText>
       </View>
 
-      {/* Buttons */}
-      <View style={jc.btnRow}>
-        <Pressable
-          onPress={() => onViewDetail(job.id)}
-          style={[jc.applyBtn, { backgroundColor: c.orange }]}
+      {/* Footer: budget + duration + applicants */}
+      <View style={s.cardFooter}>
+        <AppText
+          variant="title"
+          weight="displayBlack"
+          style={{ fontSize: 14, color: c.orange }}
         >
-          <AppText weight="semibold" style={{ color: "#fff", fontSize: 13 }}>
-            {t("workerJobs.job.viewApply")}
+          {job.currency} {Number(job.budget || 0).toLocaleString()}
+        </AppText>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {dur ? (
+            <View
+              style={[
+                s.durPill,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
+            >
+              <AppText
+                style={{ fontSize: 10, fontWeight: "600", color: c.textDim }}
+              >
+                ⏱ {dur}
+              </AppText>
+            </View>
+          ) : null}
+          <AppText style={{ fontSize: 11, color: c.textMuted }}>
+            {applicantCount} {t("workerJobs.applied", "applied")}
+          </AppText>
+        </View>
+      </View>
+
+      {/* Actions */}
+      <View style={s.cardActions}>
+        <Pressable
+          onPress={() =>
+            hasJobId && navigation.navigate("WorkerJobDetail", { id: job.id })
+          }
+          disabled={!hasJobId}
+          style={({ pressed }) => [
+            s.viewBtn,
+            {
+              backgroundColor: c.orange,
+              opacity: !hasJobId ? 0.4 : pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <AppText
+            variant="title"
+            weight="displayBlack"
+            style={{ fontSize: 12, color: "#000", textAlign: "center" }}
+          >
+            {t("workerJobs.job.viewApply", "View & Apply")} →
           </AppText>
         </Pressable>
         <Pressable
-          onPress={() => onHirerProfile(job.hirer?.id)}
-          style={[
-            jc.hirerBtn,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
+          onPress={() =>
+            hasHirerId &&
+            navigation.navigate("HirerPublicProfile", { userId: hirer.id })
+          }
+          disabled={!hasHirerId}
+          style={({ pressed }) => [
+            s.profileBtn,
+            {
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
+              opacity: !hasHirerId ? 0.4 : pressed ? 0.85 : 1,
+            },
           ]}
         >
-          <AppText weight="semibold" style={{ color: c.text, fontSize: 13 }}>
-            {t("workerJobs.job.hirerProfile")}
+          <AppText
+            style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
+          >
+            {t("workerJobs.job.hirerProfile", "Hirer Profile")}
           </AppText>
         </Pressable>
       </View>
@@ -664,397 +284,587 @@ function JobCard({ job, onApply, onHirerProfile, onViewDetail, c }) {
   );
 }
 
-const jc = StyleSheet.create({
-  card: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 12,
-    width: CARD_W,
-  },
-
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  catBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    flex: 1,
-    maxWidth: CARD_W * 0.7,
-    overflow: "hidden",
-  },
-
-  title: { fontSize: 18, lineHeight: 24, marginBottom: 4 },
-  desc: { lineHeight: 18, marginBottom: 2 },
-
-  budgetRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 2 },
-  budget: { fontSize: 22, lineHeight: 28, flexShrink: 1 },
-
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 6,
-    marginBottom: 12,
-    gap: 4,
-  },
-  durationBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    flex: 1,
-    overflow: "hidden",
-  },
-
-  btnRow: { gap: 6 },
-  applyBtn: { paddingVertical: 11, borderRadius: 12, alignItems: "center" },
-  hirerBtn: {
-    paddingVertical: 11,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-  },
-});
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function WorkerJobsScreen({ navigation }) {
+// ── Main ────────────────────────────────────────────────────────────────
+export default function WorkerJobsScreen() {
   const { t } = useTranslation();
-  const { theme: th } = useTheme();
+  const navigation = useNavigation();
+  const { theme } = useTheme();
   const { toast } = useToast();
   const { user } = useAuthStore();
-  const c = th.colors;
-  const modalBg = th.mode === "dark" ? "#111118" : "#ffffff";
+  const c = theme.colors;
+  const { width } = useWindowDimensions();
 
-  // Data
+  const isMobile = width <= 640;
+
   const [jobs, setJobs] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Filters
-  const [searchText, setSearchText] = useState("");
-  const [committed, setCommitted] = useState(""); // committed search (on Search press)
-  const [catSlug, setCatSlug] = useState(null); // backend filters by slug not id
-  const [showCatModal, setShowCatModal] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
-  // Apply modal
-  const [applyJob, setApplyJob] = useState(null);
-  const [showApply, setShowApply] = useState(false);
+  const [q, setQ] = useState("");
+  const [category, setCategory] = useState("");
+  const [page, setPage] = useState(1);
 
-  // ── Load categories ─────────────────────────────────────────────────────────
+  // Load ALL categories — backend returns every row unbounded when `all=true`.
+  // Includes user-submitted (custom) categories because the backend orders
+  // them first: orderBy: [{ isUserSubmitted: "desc" }, { name: "asc" }].
   useEffect(() => {
+    let isMounted = true;
     client
-      .get("/categories")
+      .get("/categories", { params: { all: "true" } })
       .then((res) => {
-        const d = res.data.data ?? res.data;
-        setCategories(d.categories ?? d ?? []);
+        if (!isMounted) return;
+        const raw = res.data?.data;
+        const list = Array.isArray(raw) ? raw : raw?.categories || [];
+        // De-dupe by slug in case a custom and seeded category share a slug
+        const seen = new Set();
+        const unique = list.filter((cat) => {
+          const key = cat.slug || cat.id;
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setCategories(unique);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (isMounted) setCategories([]);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // ── Load jobs ───────────────────────────────────────────────────────────────
+  // Load jobs
   const loadJobs = useCallback(async () => {
+    setLoading(true);
     try {
-      const params = { limit: 20, page: 1 };
-      // backend param is "q" not "search"
-      if (committed) params.q = committed;
-      // backend param is "category" (slug) not "categoryId"
-      if (catSlug) params.category = catSlug;
-
+      const params = { page, limit: 15 };
+      if (q) params.q = q;
+      if (category) params.category = category;
       const res = await client.get("/jobs", { params });
-      const d = res.data.data ?? res.data;
-      // backend returns "jobPosts" not "jobs"
-      setJobs(d.jobPosts ?? d.jobs ?? []);
-      setTotal(d.total ?? d.jobPosts?.length ?? 0);
+      setJobs(res.data?.data?.jobPosts || []);
+      setTotal(res.data?.data?.total || 0);
+      setPages(res.data?.data?.pages || 1);
     } catch (err) {
-      toast.error(t("workerJobs.toast.loadError"));
+      toast.error(
+        err?.response?.data?.message ||
+          t("workerJobs.toast.loadError", "Could not load jobs"),
+      );
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
-  }, [committed, catSlug]);
+  }, [q, category, page, t, toast]);
 
   useEffect(() => {
     loadJobs();
   }, [loadJobs]);
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
-  const selectedCat = categories.find((c) => c.slug === catSlug);
-  const catLabel = selectedCat
-    ? `${selectedCat.icon} ${selectedCat.name}`
-    : t("workerJobs.category.all");
-
-  // Group jobs into rows of 2 for the 2-column grid
-  const rows = [];
-  for (let i = 0; i < jobs.length; i += 2) {
-    rows.push([jobs[i], jobs[i + 1]].filter(Boolean));
-  }
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
   const handleSearch = () => {
-    setLoading(true);
-    setCommitted(searchText.trim());
+    setPage(1);
+    loadJobs();
   };
 
-  const handleApplyPress = (job) => {
-    setApplyJob(job);
-    setShowApply(true);
-  };
+  const activeCategoryName =
+    categories.find((cat) => cat.slug === category)?.name || "";
 
-  const handleViewDetail = (jobId) => {
-    navigation.navigate("WorkerJobDetail", { jobId });
-  };
-
-  const handleHirerProfile = (hirerId) => {
-    if (!hirerId) return;
-    navigation.navigate("HirerPublicProfile", { userId: hirerId });
-  };
-
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={{ paddingHorizontal: H_PAD, paddingBottom: 40 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            loadJobs();
-          }}
-          tintColor={c.orange}
-        />
-      }
+      contentContainerStyle={s.page}
       showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
     >
-      {/* ── Search + Category row ── */}
-      <View style={s.filterRow}>
-        {/* Search input */}
+      {/* ── External Jobs CTA ── */}
+      {user?.role === "WORKER" && (
         <View
           style={[
-            s.searchBox,
-            { backgroundColor: c.bgCard, borderColor: c.border, flex: 1 },
+            s.externalCta,
+            { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
           ]}
         >
-          <Ionicons
-            name="search-outline"
-            size={16}
-            color={c.textMuted}
-            style={{ marginRight: 8 }}
-          />
-          <TextInput
-            value={searchText}
-            onChangeText={setSearchText}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-            placeholder={t("workerJobs.search.placeholder")}
-            placeholderTextColor={c.textMuted}
-            style={{ flex: 1, color: c.text, fontSize: 14 }}
-          />
-          {searchText ? (
-            <Pressable
-              onPress={() => {
-                setSearchText("");
-                setCommitted("");
-              }}
-              hitSlop={8}
+          <Pressable
+            onPress={() => navigation.navigate("ExternalJobs")}
+            style={({ pressed }) => [
+              s.externalLink,
+              { backgroundColor: c.orange, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <AppText
+              variant="title"
+              weight="displayBlack"
+              style={{ fontSize: 13, color: "#000" }}
             >
-              <Ionicons name="close-circle" size={16} color={c.textMuted} />
-            </Pressable>
-          ) : null}
+              🌐 {t("workerJobs.externalJobs", "Browse External Jobs")}
+            </AppText>
+            <View style={[s.externalBadge, { backgroundColor: "#000" }]}>
+              <AppText
+                style={{ fontSize: 9, fontWeight: "700", color: "#fff" }}
+              >
+                {t("workerJobs.newBadge", "New")}
+              </AppText>
+            </View>
+          </Pressable>
+          <AppText style={{ fontSize: 11, color: c.textDim }}>
+            {t(
+              "workerJobs.externalNote",
+              "Discover jobs posted on partner platforms",
+            )}
+          </AppText>
         </View>
+      )}
 
-        {/* Category dropdown */}
-        <Pressable
-          onPress={() => setShowCatModal(true)}
+      {/* ── Search bar ── */}
+      <View style={[s.searchBar, isMobile && { flexDirection: "column" }]}>
+        <TextInput
+          value={q}
+          onChangeText={setQ}
+          placeholder={t(
+            "workerJobs.search.placeholder",
+            "Search jobs by title or description...",
+          )}
+          placeholderTextColor={c.textMuted}
           style={[
-            s.catDropdown,
-            { backgroundColor: c.bgCard, borderColor: c.border },
+            s.searchInput,
+            {
+              backgroundColor: c.bgPanel,
+              borderColor: c.border,
+              color: c.text,
+            },
+          ]}
+          onSubmitEditing={handleSearch}
+          returnKeyType="search"
+        />
+        <Pressable
+          onPress={() => setCategoryModalOpen(true)}
+          style={[
+            s.filterSelect,
+            {
+              backgroundColor: c.bgPanel,
+              borderColor: c.border,
+              flex: 1,
+              minWidth: isMobile ? "100%" : 160,
+            },
+          ]}
+        >
+          <AppText style={{ fontSize: 13, color: c.text }} numberOfLines={1}>
+            {category
+              ? activeCategoryName
+              : t("workerJobs.category.all", "All Categories")}
+          </AppText>
+          <Ionicons name="chevron-down" size={14} color={c.textMuted} />
+        </Pressable>
+        <Pressable
+          onPress={handleSearch}
+          style={({ pressed }) => [
+            s.searchBtn,
+            { backgroundColor: c.orange, opacity: pressed ? 0.85 : 1 },
           ]}
         >
           <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.text, flex: 1, fontSize: 13 }}
-            numberOfLines={1}
+            variant="title"
+            weight="displayBlack"
+            style={{ fontSize: 13, color: "#000" }}
           >
-            {catLabel}
+            {t("workerJobs.search.button", "Search")}
           </AppText>
-          <Ionicons
-            name="chevron-down"
-            size={14}
-            color={c.textMuted}
-            style={{ marginLeft: 4 }}
-          />
         </Pressable>
       </View>
 
-      {/* ── Search button ── */}
-      <Pressable
-        onPress={handleSearch}
-        style={[s.searchBtn, { backgroundColor: c.orange }]}
-      >
-        <AppText weight="semibold" style={{ color: "#fff", fontSize: 15 }}>
-          {t("workerJobs.search.button")}
+      {/* ── Results header ── */}
+      <View style={s.resultsHeader}>
+        <AppText style={{ fontSize: 13, color: c.textDim }}>
+          {loading
+            ? t("workerJobs.loading", "Searching...")
+            : `${total} ${t(
+                total === 1
+                  ? "workerJobs.job.jobOpenSingular"
+                  : "workerJobs.job.jobOpenPlural",
+                total === 1 ? "open job found" : "open jobs found",
+              )}`}
         </AppText>
-      </Pressable>
+      </View>
 
-      {/* ── Result count ── */}
-      {!loading && (
-        <AppText
-          variant="body"
-          tone="dim"
-          style={{ marginTop: 16, marginBottom: 14 }}
-        >
-          {t("workerJobs.search.resultsFound", {
-            count: total,
-            s: total !== 1 ? "s" : "",
-          })}
-        </AppText>
-      )}
-
-      {/* ── Loading ── */}
-      {loading && (
-        <View style={s.loadingWrap}>
-          <ActivityIndicator size="large" color={c.orange} />
+      {/* ── Jobs grid ── */}
+      {loading ? (
+        <View style={s.grid}>
+          {[1, 2, 3, 4].map((i) => (
+            <View
+              key={i}
+              style={[
+                s.skCard,
+                { backgroundColor: c.bgPanel, borderColor: c.border },
+              ]}
+            />
+          ))}
         </View>
-      )}
-
-      {/* ── Empty ── */}
-      {!loading && jobs.length === 0 && (
+      ) : jobs.length === 0 ? (
         <View style={s.empty}>
-          <AppText style={{ fontSize: 48, marginBottom: 12 }}>📋</AppText>
+          <Ionicons
+            name="document-text-outline"
+            size={40}
+            color={c.textMuted}
+          />
           <AppText
             variant="title"
-            weight="semibold"
-            style={{ color: c.text, marginBottom: 6 }}
+            weight="displayBlack"
+            style={{ fontSize: 18, color: c.text, marginTop: 8 }}
           >
-            {t("workerJobs.empty.title")}
+            {t("workerJobs.empty.title", "No jobs found")}
           </AppText>
-          <AppText variant="body" tone="dim" style={{ textAlign: "center" }}>
-            {t("workerJobs.empty.subtitle")}
+          <AppText
+            style={{ fontSize: 13, color: c.textDim, textAlign: "center" }}
+          >
+            {t(
+              "workerJobs.empty.subtitle",
+              "Try different keywords or check back later.",
+            )}
           </AppText>
-          {(committed || catSlug) && (
-            <Pressable
-              onPress={() => {
-                setSearchText("");
-                setCommitted("");
-                setCatSlug(null);
-              }}
-              style={[s.clearBtn, { borderColor: c.border, marginTop: 16 }]}
-            >
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.text }}
-              >
-                {t("workerJobs.empty.clearFilters")}
-              </AppText>
-            </Pressable>
-          )}
+        </View>
+      ) : (
+        <View style={s.grid}>
+          {jobs.map((job) => (
+            <JobCard
+              key={job.id}
+              job={job}
+              isWorker={user?.role === "WORKER"}
+            />
+          ))}
         </View>
       )}
 
-      {/* ── 2-column job grid ── */}
-      {!loading &&
-        rows.map((row, rowIdx) => (
-          <View key={rowIdx} style={s.row}>
-            {row.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                onApply={handleApplyPress}
-                onHirerProfile={handleHirerProfile}
-                onViewDetail={handleViewDetail}
-                c={c}
-              />
-            ))}
-            {/* If last row has 1 item, add spacer so it doesn't stretch */}
-            {row.length === 1 && <View style={{ width: CARD_W }} />}
-          </View>
-        ))}
+      {/* ── Pagination ── */}
+      {pages > 1 && (
+        <View style={s.pagination}>
+          <Pressable
+            disabled={page === 1}
+            onPress={() => setPage((p) => p - 1)}
+            style={[
+              s.pageBtn,
+              {
+                backgroundColor: c.bgPanel,
+                borderColor: c.border,
+                opacity: page === 1 ? 0.35 : 1,
+              },
+            ]}
+          >
+            <AppText style={{ fontSize: 12, color: c.textDim }}>
+              ← {t("workerJobs.prev", "Prev")}
+            </AppText>
+          </Pressable>
+          <AppText style={{ fontSize: 12, color: c.textMuted }}>
+            {page} {t("workerJobs.of", "of")} {pages}
+          </AppText>
+          <Pressable
+            disabled={page === pages}
+            onPress={() => setPage((p) => p + 1)}
+            style={[
+              s.pageBtn,
+              {
+                backgroundColor: c.bgPanel,
+                borderColor: c.border,
+                opacity: page === pages ? 0.35 : 1,
+              },
+            ]}
+          >
+            <AppText style={{ fontSize: 12, color: c.textDim }}>
+              {t("workerJobs.next", "Next")} →
+            </AppText>
+          </Pressable>
+        </View>
+      )}
 
-      {/* ── Category modal ── */}
-      <CategoryModal
-        visible={showCatModal}
-        categories={categories}
-        selected={catSlug}
-        onSelect={(slug) => {
-          setCatSlug(slug);
-          setLoading(true);
-        }}
-        onClose={() => setShowCatModal(false)}
-        c={c}
-        modalBg={modalBg}
-      />
-
-      {/* ── Apply modal ── */}
-      <ApplyModal
-        visible={showApply}
-        job={applyJob}
-        onClose={() => setShowApply(false)}
-        c={c}
-        modalBg={modalBg}
-        toast={toast}
-      />
+      {/* ── Category picker modal ── */}
+      <Modal
+        visible={categoryModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCategoryModalOpen(false)}
+      >
+        <Pressable
+          onPress={() => setCategoryModalOpen(false)}
+          style={s.modalOverlay}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            style={[s.modalBox, { backgroundColor: c.bgPanel }]}
+          >
+            <AppText
+              variant="title"
+              weight="displayBlack"
+              style={{ fontSize: 16, color: c.text, marginBottom: 12 }}
+            >
+              {t("workerJobs.category.select", "Select Category")}
+            </AppText>
+            <FlatList
+              data={[
+                {
+                  id: "",
+                  slug: "",
+                  name: t("workerJobs.category.all", "All Categories"),
+                },
+                ...categories,
+              ]}
+              keyExtractor={(item) => item.slug || "all"}
+              style={{ maxHeight: 400 }}
+              renderItem={({ item }) => {
+                const active = category === item.slug;
+                return (
+                  <Pressable
+                    onPress={() => {
+                      setCategory(item.slug);
+                      setPage(1);
+                      setCategoryModalOpen(false);
+                    }}
+                    style={({ pressed }) => [
+                      s.currRow,
+                      {
+                        borderBottomColor: c.border,
+                        backgroundColor: active ? c.orangeDim : "transparent",
+                        opacity: pressed ? 0.85 : 1,
+                      },
+                    ]}
+                  >
+                    <AppText
+                      style={{
+                        fontSize: 13,
+                        color: active ? c.orange : c.text,
+                        fontWeight: active ? "700" : "500",
+                      }}
+                    >
+                      {item.name}
+                    </AppText>
+                  </Pressable>
+                );
+              }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  filterRow: { flexDirection: "row", gap: 10, marginTop: 16, marginBottom: 10 },
-
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 50,
+  page: {
+    padding: rem(1.25),
+    paddingBottom: rem(6),
+    gap: rem(1.5),
+    maxWidth: 1200,
+    alignSelf: "center",
+    width: "100%",
   },
 
-  catDropdown: {
+  // External CTA
+  externalCta: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: rem(0.75),
+    paddingVertical: rem(0.75),
+    paddingHorizontal: rem(1),
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 50,
-    width: SCREEN_W * 0.37,
+    borderRadius: rem(12 / 14),
+  },
+  externalLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: rem(0.5),
+    paddingHorizontal: rem(1.2),
+    borderRadius: rem(8 / 14),
+  },
+  externalBadge: {
+    paddingHorizontal: rem(0.5),
+    paddingVertical: 1,
+    borderRadius: 999,
   },
 
+  // Search
+  searchBar: {
+    flexDirection: "row",
+    gap: rem(0.75),
+    flexWrap: "wrap",
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 200,
+    paddingVertical: rem(0.75),
+    paddingHorizontal: rem(1),
+    borderWidth: 1,
+    borderRadius: rem(10 / 14),
+    fontSize: 13,
+  },
+  filterSelect: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: rem(0.75),
+    paddingHorizontal: rem(1),
+    borderWidth: 1,
+    borderRadius: rem(10 / 14),
+    minWidth: 160,
+  },
   searchBtn: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: rem(0.75),
+    paddingHorizontal: rem(1.5),
+    borderRadius: rem(10 / 14),
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  row: {
+  // Results
+  resultsHeader: {
     flexDirection: "row",
-    gap: COL_GAP,
-    marginBottom: COL_GAP,
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 
-  loadingWrap: { paddingVertical: 60, alignItems: "center" },
-  empty: { paddingVertical: 60, alignItems: "center", paddingHorizontal: 24 },
+  // Grid
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: rem(1),
+  },
 
-  clearBtn: {
+  // Card
+  card: {
+    flexGrow: 1,
+    flexBasis: "47%",
+    minWidth: 280,
     borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    borderRadius: rem(14 / 14),
+    paddingVertical: rem(1.25),
+    paddingHorizontal: rem(1.5),
+    gap: rem(0.75),
+  },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  catChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 3,
+    paddingHorizontal: rem(10 / 14),
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  cardTitle: {
+    fontSize: 15,
+    color: "#fff",
+    lineHeight: 20,
+  },
+  cardDesc: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.55)",
+    lineHeight: 19,
+  },
+  hirerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: rem(0.625),
+    padding: rem(0.75),
+    borderRadius: rem(8 / 14),
+  },
+  hirerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  cardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  durPill: {
+    paddingVertical: 2,
+    paddingHorizontal: rem(8 / 14),
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  cardActions: {
+    flexDirection: "row",
+    gap: rem(0.625),
+  },
+  viewBtn: {
+    flex: 1,
+    paddingVertical: rem(0.5),
+    paddingHorizontal: rem(1),
+    borderRadius: rem(8 / 14),
+    alignItems: "center",
+  },
+  profileBtn: {
+    paddingVertical: rem(0.5),
+    paddingHorizontal: rem(0.875),
+    borderRadius: rem(8 / 14),
+    borderWidth: 1,
+    alignItems: "center",
+  },
+
+  // Empty
+  empty: {
+    alignItems: "center",
+    paddingVertical: rem(4),
+    paddingHorizontal: rem(1.5),
+    gap: rem(0.75),
+  },
+
+  // Skeleton
+  skCard: {
+    flexGrow: 1,
+    flexBasis: "47%",
+    minWidth: 280,
+    height: 220,
+    borderRadius: rem(14 / 14),
+    borderWidth: 1,
+    opacity: 0.5,
+  },
+
+  // Pagination
+  pagination: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: rem(0.75),
+    marginTop: rem(1.5),
+  },
+  pageBtn: {
+    paddingVertical: rem(0.4375),
+    paddingHorizontal: rem(1),
+    borderWidth: 1,
+    borderRadius: rem(8 / 14),
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: rem(1),
+  },
+  modalBox: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: rem(16 / 14),
+    padding: rem(1.25),
+    borderWidth: 1,
+  },
+  currRow: {
+    paddingVertical: rem(0.75),
+    paddingHorizontal: rem(0.75),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderRadius: rem(8 / 14),
   },
 });
