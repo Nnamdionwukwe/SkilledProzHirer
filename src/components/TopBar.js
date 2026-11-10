@@ -16,7 +16,7 @@ import { useAuthStore } from "../store/authStore";
 import { FaCommentDots } from "../icons/fa";
 import { rem } from "../constants/theme";
 import { navigationRef } from "../navigation/navigationRef";
-import { useUnread } from "../navigation/WorkerNavigator"; // 👈 pull counts from context
+import { useUnread } from "../navigation/WorkerNavigator";
 
 const SCREEN_FALLBACK = {
   Dashboard: { title: "Dashboard", subtitle: "Your work at a glance" },
@@ -103,7 +103,7 @@ export default function TopBar({
   const navigation = useNavigation();
   const { user } = useAuthStore();
 
-  // 👇 pull live counts from context (falls back to props if provided)
+  // Pull live counts from context (falls back to props if provided)
   let ctx = { unreadNotifs: 0, unreadMessages: 0 };
   try {
     ctx = useUnread() || ctx;
@@ -139,29 +139,32 @@ export default function TopBar({
     } catch (e) {}
   };
 
-  const openNotifications = () => {
-    try {
-      navigation.navigate("Notifications");
-    } catch {
-      navigationRef.navigate("Notifications");
+  // ── Role-aware navigation ───────────────────────────────────────
+  // Worker Drawer screens (Notifications, Messages, WorkerProfile) live
+  // nested inside WorkerHome. From a Stack screen we must go through
+  // WorkerHome with the `screen` param so React Navigation can resolve
+  // the child drawer's routes.
+  const safeNavigate = (screen) => {
+    if (user?.role === "WORKER") {
+      try {
+        navigation.navigate("WorkerHome", { screen });
+        return;
+      } catch (e1) {}
     }
+    try {
+      navigation.navigate(screen);
+      return;
+    } catch (e2) {}
+    try {
+      navigationRef.navigate(screen);
+    } catch (e3) {}
   };
 
-  const openMessages = () => {
-    try {
-      navigation.navigate("Messages");
-    } catch {
-      navigationRef.navigate("Messages");
-    }
-  };
-
+  const openNotifications = () => safeNavigate("Notifications");
+  const openMessages = () => safeNavigate("Messages");
   const openProfile = () => {
     const target = user?.role === "WORKER" ? "WorkerProfile" : "Profile";
-    try {
-      navigation.navigate(target);
-    } catch {
-      navigationRef.navigate(target);
-    }
+    safeNavigate(target);
   };
 
   return (
