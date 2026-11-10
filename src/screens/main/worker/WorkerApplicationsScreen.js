@@ -1,94 +1,33 @@
 // src/screens/main/worker/WorkerApplicationsScreen.js
-// Mirrors: website /worker/applications
-// API: GET /jobs/worker/my-applications?limit=100
+// Verbatim port of pages/worker/MyJobApplications.jsx + MyJobApplications.module.css
+//
+// Endpoints:
+//   GET /jobs/worker/my-applications?page&limit&status
 
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
+  Image,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
+  useWindowDimensions,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 
 import AppText from "../../../components/AppText";
-import Avatar from "../../../components/Avatar";
+import Skeleton from "../../../components/Skeleton";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { useToast } from "../../../contexts/ToastContext";
+import { useAuthStore } from "../../../store/authStore";
+import { rem, FONTS } from "../../../constants/theme";
 import client from "../../../api/client";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const ITEMS_PER_PAGE = 8;
-
-// ─── Status meta - now functions that accept t ──────────────────────────────
-function getAppStatusMeta(t) {
-  return {
-    PENDING: {
-      label: t("workerApplications.status.pending"),
-      color: "#f97316",
-      bg: "rgba(249,115,22,0.15)",
-    },
-    ACCEPTED: {
-      label: t("workerApplications.status.accepted"),
-      color: "#22c55e",
-      bg: "rgba(34,197,94,0.15)",
-    },
-    REJECTED: {
-      label: t("workerApplications.status.rejected"),
-      color: "#ef4444",
-      bg: "rgba(239,68,68,0.15)",
-    },
-  };
-}
-
-function getJobStatusMeta(t) {
-  return {
-    OPEN: {
-      label: t("workerApplications.jobStatus.open"),
-      color: "#22c55e",
-      bg: "rgba(34,197,94,0.15)",
-    },
-    FILLED: {
-      label: t("workerApplications.jobStatus.filled"),
-      color: "#3b82f6",
-      bg: "rgba(59,130,246,0.15)",
-    },
-    CANCELLED: {
-      label: t("workerApplications.jobStatus.cancelled"),
-      color: "#ef4444",
-      bg: "rgba(239,68,68,0.15)",
-    },
-  };
-}
-
-function getFilterTabs(t) {
-  return [
-    { key: null, label: t("workerApplications.filter.all") },
-    { key: "PENDING", label: t("workerApplications.filter.pending") },
-    { key: "ACCEPTED", label: t("workerApplications.filter.accepted") },
-    { key: "REJECTED", label: t("workerApplications.filter.rejected") },
-  ];
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function timeAgo(date, t) {
-  if (!date) return "";
-  const diff = Date.now() - new Date(date).getTime();
-  const d = Math.floor(diff / 86_400_000);
-  if (d < 1) return t("workerApplications.time.today");
-  if (d < 7) return t("workerApplications.time.daysAgo", { d });
-  if (d < 30)
-    return t("workerApplications.time.weeksAgo", { w: Math.floor(d / 7) });
-  const m = Math.floor(d / 30);
-  if (m < 12) return t("workerApplications.time.monthsAgo", { m });
-  return t("workerApplications.time.yearsAgo", { y: Math.floor(m / 12) });
-}
-
+// ── Helpers ─────────────────────────────────────────────────────────────
 function fmtDate(d) {
-  if (!d) return null;
+  if (!d) return "—";
   return new Date(d).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
@@ -96,597 +35,716 @@ function fmtDate(d) {
   });
 }
 
-// ─── Application card ─────────────────────────────────────────────────────────
-function ApplicationCard({ app, onViewJob, onMessage, onHirerProfile, c }) {
-  const { t } = useTranslation();
-  const APP_STATUS_META = getAppStatusMeta(t);
-  const JOB_STATUS_META = getJobStatusMeta(t);
+function timeAgo(date, t) {
+  if (!date) return "";
+  const diff = Date.now() - new Date(date).getTime();
+  const d = Math.floor(diff / 86400000);
+  if (d < 1) return t("workerApplications.time.today", "Today");
+  if (d < 7) return `${d}d ago`;
+  if (d < 30) return `${Math.floor(d / 7)}w ago`;
+  return `${Math.floor(d / 30)}mo ago`;
+}
 
-  const job = app.jobPost ?? {};
-  const hirer = job.hirer ?? {};
-  const profile = hirer.hirerProfile ?? {};
-  const company =
-    profile.companyName ??
-    `${hirer.firstName ?? ""} ${hirer.lastName ?? ""}`.trim();
-  const appMeta = APP_STATUS_META[app.status] ?? APP_STATUS_META.PENDING;
-  const jobMeta = JOB_STATUS_META[job.status] ?? JOB_STATUS_META.OPEN;
-  const isAccepted = app.status === "ACCEPTED";
+const STATUS_META = {
+  PENDING: { labelKey: "workerApplications.status.pending", bgKey: "orange" },
+  ACCEPTED: { labelKey: "workerApplications.status.accepted", bgKey: "green" },
+  REJECTED: { labelKey: "workerApplications.status.rejected", bgKey: "red" },
+};
 
+const JOB_STATUS_META = {
+  OPEN: {
+    labelKey: "workerApplications.jobStatus.open",
+    color: "#22c55e",
+    bg: "rgba(34,197,94,0.12)",
+  },
+  FILLED: {
+    labelKey: "workerApplications.jobStatus.filled",
+    color: "#60a5fa",
+    bg: "rgba(59,130,246,0.12)",
+  },
+  CANCELLED: {
+    labelKey: "workerApplications.jobStatus.cancelled",
+    color: "#ef4444",
+    bg: "rgba(239,68,68,0.12)",
+  },
+};
+
+// ── Empty state ─────────────────────────────────────────────────────────
+function EmptyState({ filtered, onBrowse, t, c }) {
   return (
-    <View
-      style={[ac.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
-    >
-      {/* ── Category badge + job status ── */}
-      <View style={ac.topRow}>
-        <View
-          style={[
-            ac.catBadge,
-            {
-              backgroundColor: "rgba(249,115,22,0.15)",
-              borderColor: "rgba(249,115,22,0.4)",
-            },
-          ]}
-        >
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange }}
-            numberOfLines={1}
-          >
-            {job.category?.icon} {job.category?.name}
-          </AppText>
-        </View>
-        <View
-          style={[
-            ac.statusPill,
-            { backgroundColor: jobMeta.bg, borderColor: `${jobMeta.color}55` },
-          ]}
-        >
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: jobMeta.color, fontSize: 11 }}
-          >
-            {jobMeta.label}
-          </AppText>
-        </View>
-      </View>
-
-      {/* ── Job title ── */}
+    <View style={s.empty}>
+      <Ionicons
+        name="clipboard-outline"
+        size={48}
+        color={c.textMuted}
+        style={{ marginBottom: 4 }}
+      />
       <AppText
-        weight="semibold"
-        style={[ac.jobTitle, { color: c.text }]}
-        numberOfLines={2}
+        variant="title"
+        weight="displayBlack"
+        style={{ fontSize: 20, color: c.text, textAlign: "center" }}
       >
-        {job.title}
+        {filtered
+          ? t(
+              "workerApplications.empty.noApplications",
+              "No applications match this filter",
+            )
+          : t("workerApplications.empty.noApplications", "No applications yet")}
       </AppText>
-
-      {/* ── Meta row ── */}
-      <View style={ac.metaRow}>
-        {job.address && (
-          <AppText variant="small" tone="dim" style={ac.metaItem}>
-            📍 {job.address}
-          </AppText>
-        )}
-        {job.scheduledAt && (
-          <AppText variant="small" tone="dim" style={ac.metaItem}>
-            📅 {fmtDate(job.scheduledAt)}
-          </AppText>
-        )}
-        {job.budget && (
-          <AppText variant="small" tone="dim" style={ac.metaItem}>
-            💰 {job.currency} {Number(job.budget).toLocaleString()}
-          </AppText>
-        )}
-      </View>
-
-      {/* ── Hirer row ── */}
-      {company && (
-        <View style={ac.hirerRow}>
-          <Avatar
-            uri={hirer.avatar}
-            firstName={hirer.firstName}
-            lastName={hirer.lastName}
-            size={32}
-          />
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.text, marginLeft: 10 }}
-            numberOfLines={1}
-          >
-            {company}
-          </AppText>
-        </View>
-      )}
-
-      {/* ── Cover message ── */}
-      {app.message && (
-        <View
-          style={[
-            ac.messageBox,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
-          ]}
-        >
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{
-              color: c.textMuted,
-              letterSpacing: 0.8,
-              fontSize: 10,
-              marginBottom: 6,
-            }}
-          >
-            {t("workerApplications.message.yourMessage")}
-          </AppText>
-          <AppText
-            variant="body"
-            style={{ color: c.textMuted, fontStyle: "italic" }}
-          >
-            "{app.message}"
-          </AppText>
-        </View>
-      )}
-
-      {/* ── Application status + Applied time ── */}
-      <View style={ac.statusRow}>
-        <View
-          style={[
-            ac.appStatusBadge,
-            { backgroundColor: appMeta.bg, borderColor: `${appMeta.color}55` },
-          ]}
-        >
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: appMeta.color }}
-          >
-            {appMeta.label}
-          </AppText>
-        </View>
-        <AppText variant="small" tone="dim" style={{ marginLeft: 10 }}>
-          {t("workerApplications.message.applied")} {timeAgo(app.createdAt, t)}
-        </AppText>
-      </View>
-
-      {/* ── Action buttons ── */}
-      <View style={ac.btnRow}>
-        {/* Always: View Job */}
+      <AppText
+        style={{
+          fontSize: 14,
+          color: c.textDim,
+          maxWidth: 320,
+          textAlign: "center",
+        }}
+      >
+        {filtered
+          ? t(
+              "workerApplications.empty.tryDifferentFilter",
+              "Try a different status filter.",
+            )
+          : t(
+              "workerApplications.empty.startBrowsing",
+              "Browse the job board and apply to jobs that match your skills.",
+            )}
+      </AppText>
+      {!filtered && (
         <Pressable
-          onPress={() => onViewJob(job.id)}
-          style={[
-            ac.btn,
-            { backgroundColor: c.bgPanel, borderColor: c.border },
+          onPress={onBrowse}
+          style={({ pressed }) => [
+            s.browseBtn,
+            { backgroundColor: c.orange, opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          <AppText variant="small" weight="semibold" style={{ color: c.text }}>
-            {t("workerApplications.button.viewJob")} →
+          <AppText style={{ fontSize: 13, fontWeight: "700", color: c.bg }}>
+            {t("workerApplications.header.browseJobs", "Browse Jobs")}
           </AppText>
+          <Ionicons name="arrow-forward" size={14} color={c.bg} />
         </Pressable>
-
-        {/* Accepted only: Message Hirer + Hirer Profile */}
-        {isAccepted && (
-          <>
-            <Pressable
-              onPress={() => onMessage(hirer.id)}
-              style={[
-                ac.btn,
-                {
-                  backgroundColor: "rgba(34,197,94,0.15)",
-                  borderColor: "#22c55e",
-                },
-              ]}
-            >
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: "#22c55e" }}
-              >
-                💬 {t("workerApplications.button.messageHirer")}
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => onHirerProfile(hirer.id)}
-              style={[
-                ac.btn,
-                {
-                  backgroundColor: "rgba(249,115,22,0.15)",
-                  borderColor: c.orange,
-                },
-              ]}
-            >
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.orange }}
-              >
-                {t("workerApplications.button.hirerProfile")}
-              </AppText>
-            </Pressable>
-          </>
-        )}
-      </View>
+      )}
     </View>
   );
 }
 
-const ac = StyleSheet.create({
-  card: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    marginBottom: 12,
-  },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 10,
-  },
-  catBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    flexShrink: 1,
-  },
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  jobTitle: { fontSize: 18, lineHeight: 24, marginBottom: 8 },
-  metaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 10,
-  },
-  metaItem: { lineHeight: 18 },
-  hirerRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  messageBox: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 12,
-    marginBottom: 12,
-  },
-  statusRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  appStatusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  btnRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  btn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-});
+// ── Card ────────────────────────────────────────────────────────────────
+function ApplicationCard({
+  app,
+  onViewJob,
+  onMessageHirer,
+  onViewHirer,
+  t,
+  c,
+  isMobile,
+}) {
+  const job = app.jobPost;
+  const hirer = job?.hirer;
+  const appMeta = STATUS_META[app.status] ?? STATUS_META.PENDING;
+  const jobMeta = JOB_STATUS_META[job?.status] ?? JOB_STATUS_META.OPEN;
 
-// ─── Filter tab ───────────────────────────────────────────────────────────────
-function FilterTab({ label, count, active, onPress, c }) {
+  const isAccepted = app.status === "ACCEPTED";
+  const hasJobId = Boolean(job?.id);
+
   return (
     <Pressable
-      onPress={onPress}
-      style={[
-        ft.tab,
+      onPress={onViewJob}
+      disabled={!hasJobId}
+      style={({ pressed }) => [
+        s.card,
         {
-          backgroundColor: active ? c.orange : c.bgCard,
-          borderColor: active ? c.orange : c.border,
+          backgroundColor: c.bgPanel,
+          borderColor: isAccepted ? "rgba(34,197,94,0.3)" : c.border,
+          opacity: !hasJobId ? 0.9 : pressed ? 0.94 : 1,
         },
       ]}
     >
-      <AppText
-        variant="small"
-        weight="semibold"
-        style={{ color: active ? "#fff" : c.text }}
+      {isAccepted && (
+        <View
+          style={{
+            height: 3,
+            backgroundColor: c.green,
+            width: "100%",
+          }}
+        />
+      )}
+
+      <View
+        style={[s.cardBody, isMobile && { flexDirection: "column", gap: 14 }]}
       >
-        {label}
-      </AppText>
-      {count != null && count > 0 && (
+        {/* Left: job info */}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {/* Category chip + job status */}
+          <View style={s.cardTopRow}>
+            <View
+              style={[
+                s.catChip,
+                { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+              ]}
+            >
+              {job?.category?.icon ? (
+                <AppText style={{ fontSize: 11 }}>{job.category.icon}</AppText>
+              ) : null}
+              <AppText
+                style={{ fontSize: 10, fontWeight: "600", color: c.orange }}
+              >
+                {job?.category?.name ?? "—"}
+              </AppText>
+            </View>
+            <View style={[s.jobStatusBadge, { backgroundColor: jobMeta.bg }]}>
+              <AppText
+                style={{
+                  fontSize: 10,
+                  fontWeight: "600",
+                  color: jobMeta.color,
+                }}
+              >
+                {t(jobMeta.labelKey, job?.status ?? "Open")}
+              </AppText>
+            </View>
+          </View>
+
+          {/* Job title */}
+          <AppText
+            variant="title"
+            weight="displayBlack"
+            style={s.jobTitle}
+            numberOfLines={isMobile ? 2 : 1}
+          >
+            {job?.title ?? t("workerApplications.job.removed", "Job removed")}
+          </AppText>
+
+          {/* Meta row */}
+          <View style={s.metaRow}>
+            {job?.address && (
+              <View style={s.metaItem}>
+                <Ionicons
+                  name="location-outline"
+                  size={12}
+                  color={c.textMuted}
+                />
+                <AppText
+                  style={{ fontSize: 12, color: c.textDim }}
+                  numberOfLines={1}
+                >
+                  {job.address.split(",")[0]}
+                </AppText>
+              </View>
+            )}
+            {job?.scheduledAt && (
+              <View style={s.metaItem}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={12}
+                  color={c.textMuted}
+                />
+                <AppText style={{ fontSize: 12, color: c.textDim }}>
+                  {fmtDate(job.scheduledAt)}
+                </AppText>
+              </View>
+            )}
+            {job?.budget && (
+              <View style={s.metaItem}>
+                <Ionicons name="cash-outline" size={12} color={c.textMuted} />
+                <AppText style={{ fontSize: 12, color: c.textDim }}>
+                  {job.currency} {Number(job.budget).toLocaleString()}
+                </AppText>
+              </View>
+            )}
+          </View>
+
+          {/* Hirer row */}
+          {hirer && (
+            <View style={s.hirerRow}>
+              <View
+                style={[
+                  s.hirerAvatar,
+                  { backgroundColor: c.bgCard, borderColor: c.border },
+                ]}
+              >
+                {hirer.avatar ? (
+                  <Image
+                    source={{ uri: hirer.avatar }}
+                    style={{ width: "100%", height: "100%" }}
+                  />
+                ) : (
+                  <AppText
+                    style={{ fontSize: 9, fontWeight: "600", color: c.textDim }}
+                  >
+                    {hirer.firstName?.[0]}
+                    {hirer.lastName?.[0]}
+                  </AppText>
+                )}
+              </View>
+              <AppText
+                style={{ fontSize: 12, color: c.textDim, flexShrink: 1 }}
+                numberOfLines={1}
+              >
+                {hirer.hirerProfile?.companyName ||
+                  `${hirer.firstName} ${hirer.lastName}`}
+              </AppText>
+            </View>
+          )}
+
+          {/* Your message */}
+          {app.message && (
+            <View
+              style={[
+                s.yourMessage,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
+            >
+              <AppText
+                style={{
+                  fontSize: 9,
+                  color: c.textMuted,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                  marginBottom: 3,
+                }}
+              >
+                {t("workerApplications.message.yourMessage", "Your message")}
+              </AppText>
+              <AppText
+                style={{
+                  fontSize: 12,
+                  color: c.textDim,
+                  lineHeight: 18,
+                  fontStyle: "italic",
+                }}
+                numberOfLines={2}
+              >
+                "{app.message}"
+              </AppText>
+            </View>
+          )}
+        </View>
+
+        {/* Right: status + actions */}
         <View
           style={[
-            ft.badge,
-            { backgroundColor: active ? "rgba(255,255,255,0.3)" : c.bgPanel },
+            s.cardRight,
+            isMobile && {
+              flexDirection: "row",
+              flexWrap: "wrap",
+              alignItems: "flex-start",
+            },
           ]}
         >
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: active ? "#fff" : c.text, fontSize: 11 }}
+          {/* App status badge */}
+          <View
+            style={[
+              s.appStatusBadge,
+              {
+                backgroundColor:
+                  app.status === "ACCEPTED"
+                    ? "rgba(34,197,94,0.12)"
+                    : app.status === "REJECTED"
+                      ? c.redDim
+                      : c.orangeDim,
+                borderColor:
+                  app.status === "ACCEPTED"
+                    ? "rgba(34,197,94,0.25)"
+                    : app.status === "REJECTED"
+                      ? "rgba(239,68,68,0.2)"
+                      : c.orangeGlow,
+                borderWidth: 1,
+              },
+            ]}
           >
-            {count}
+            {isAccepted && (
+              <Ionicons name="checkmark-circle" size={13} color={c.green} />
+            )}
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color:
+                  app.status === "ACCEPTED"
+                    ? c.green
+                    : app.status === "REJECTED"
+                      ? c.red
+                      : c.orange,
+                letterSpacing: 0.2,
+              }}
+            >
+              {t(appMeta.labelKey, app.status)}
+            </AppText>
+          </View>
+
+          <AppText style={{ fontSize: 11, color: c.textMuted }}>
+            {t("workerApplications.time.applied", "Applied")}{" "}
+            {timeAgo(app.createdAt, t)}
           </AppText>
+
+          {/* Action buttons */}
+          <View
+            style={[
+              s.cardActions,
+              isMobile && { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+            ]}
+          >
+            {isAccepted && hirer?.id && (
+              <Pressable
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  onMessageHirer();
+                }}
+                style={({ pressed }) => [
+                  s.messageBtn,
+                  {
+                    backgroundColor: c.greenDim,
+                    borderColor: "rgba(34,197,94,0.25)",
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="chatbubble-outline" size={12} color={c.green} />
+                <AppText
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "600",
+                    color: c.green,
+                  }}
+                >
+                  {t("workerApplications.button.messageHirer", "Message Hirer")}
+                </AppText>
+              </Pressable>
+            )}
+            {isAccepted && hirer?.id && (
+              <Pressable
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  onViewHirer();
+                }}
+                style={({ pressed }) => [
+                  s.hirerProfileBtn,
+                  {
+                    backgroundColor: c.orangeDim,
+                    borderColor: c.orangeGlow,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "600",
+                    color: c.orange,
+                  }}
+                >
+                  {t("workerApplications.button.hirerProfile", "Hirer Profile")}
+                </AppText>
+              </Pressable>
+            )}
+          </View>
         </View>
-      )}
+      </View>
     </Pressable>
   );
 }
 
-const ft = StyleSheet.create({
-  tab: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  badge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 12,
-    minWidth: 20,
-    alignItems: "center",
-  },
-});
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function WorkerApplicationsScreen({ navigation }) {
+// ── Main ────────────────────────────────────────────────────────────────
+export default function WorkerApplicationsScreen() {
   const { t } = useTranslation();
-  const { theme: th } = useTheme();
+  const navigation = useNavigation();
+  const { theme } = useTheme();
   const { toast } = useToast();
-  const c = th.colors;
+  const { user } = useAuthStore();
+  const c = theme.colors;
+  const { width } = useWindowDimensions();
+  const isMobile = width <= 640;
 
-  const [allApps, setAllApps] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState(null); // null = All
+  const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [page, setPage] = useState(1);
 
-  // Get FILTER_TABS inside component with t()
-  const FILTER_TABS = getFilterTabs(t);
+  const LIMIT = 10;
 
-  // ── Load ────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    setError(null);
     try {
-      const res = await client.get("/jobs/worker/my-applications", {
-        params: { limit: 100, page: 1 }, // load all, filter client-side
-      });
-      const d = res.data.data ?? res.data;
-      setAllApps(d.applications ?? []);
-    } catch (err) {
-      toast.error(
-        err?.response?.data?.message ??
-          t("workerApplications.error.loadFailed"),
+      const params = { page, limit: LIMIT };
+      if (statusFilter !== "ALL") params.status = statusFilter;
+      const res = await client.get("/jobs/worker/my-applications", { params });
+      const d = res.data?.data;
+      setApplications(d?.applications || []);
+      setTotal(d?.total || 0);
+      setPages(d?.pages || 1);
+    } catch (e) {
+      setError(
+        t(
+          "workerApplications.error.loadFailed",
+          "Failed to load your applications.",
+        ),
       );
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
-  }, []);
+  }, [page, statusFilter, user?.id, t]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
-  const counts = {
-    PENDING: allApps.filter((a) => a.status === "PENDING").length,
-    ACCEPTED: allApps.filter((a) => a.status === "ACCEPTED").length,
-    REJECTED: allApps.filter((a) => a.status === "REJECTED").length,
-  };
+  const counts = applications.reduce((acc, a) => {
+    acc[a.status] = (acc[a.status] || 0) + 1;
+    return acc;
+  }, {});
 
-  const filtered = activeTab
-    ? allApps.filter((a) => a.status === activeTab)
-    : allApps;
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const displayed = filtered.slice(
-    (page - 1) * ITEMS_PER_PAGE,
-    page * ITEMS_PER_PAGE,
-  );
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
+  const handleFilter = (s) => {
+    setStatusFilter(s);
     setPage(1);
   };
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
-  const onViewJob = (jobId) =>
-    navigation.navigate("WorkerJobDetail", { jobId });
-  const onMessage = (userId) =>
-    navigation.navigate("Chat", { recipientId: userId });
-  const onHirerProfile = (userId) =>
-    navigation.navigate("HirerPublicProfile", { userId });
+  // Open a chat with the hirer (find or create the conversation)
+  const openChatWithHirer = async (hirerId) => {
+    if (!hirerId) return;
+    try {
+      const res = await client.get("/messages/conversations", {
+        params: { page: 1, limit: 100, _t: Date.now() },
+      });
+      const convos = res.data?.data?.conversations || [];
+      const target = String(hirerId);
+      const found = convos.find((cv) =>
+        (cv.users || []).some((u) => {
+          const uid = String(u.userId || u.user?.id || u.id);
+          return uid === target;
+        }),
+      );
+      if (found?.id) {
+        navigation.navigate("Chat", {
+          conversationId: found.id,
+          withUserId: hirerId,
+        });
+        return;
+      }
+      const created = await client.post("/messages", {
+        receiverId: hirerId,
+        content: "👋",
+      });
+      navigation.navigate("Chat", {
+        conversationId: created.data?.data?.conversationId,
+        withUserId: hirerId,
+      });
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          "Could not open chat. Please try again.",
+      );
+    }
+  };
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: c.bg,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color={c.orange} />
-      </View>
-    );
-  }
-
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            load();
-          }}
-          tintColor={c.orange}
-        />
-      }
+      contentContainerStyle={s.page}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── Page header ── */}
+      {/* Header */}
       <View style={s.pageHeader}>
-        <View style={{ flex: 1 }}>
-          <AppText variant="body" tone="dim" style={{ marginTop: 4 }}>
-            {t("workerApplications.header.submitted", {
-              count: allApps.length,
-              s: allApps.length !== 1 ? "s" : "",
-            })}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <AppText
+            variant="title"
+            weight="displayBlack"
+            style={[s.pageTitle, { color: c.text }]}
+          >
+            {t("workerApplications.header.title", "My Applications")}
+          </AppText>
+          <AppText style={[s.pageSubtitle, { color: c.textDim }]}>
+            {total}{" "}
+            {t(
+              total === 1
+                ? "workerApplications.header.submittedSingular"
+                : "workerApplications.header.submittedPlural",
+              total === 1 ? "application submitted" : "applications submitted",
+            )}
           </AppText>
         </View>
         <Pressable
           onPress={() => navigation.navigate("WorkerJobs")}
-          style={[
-            s.browseBtn,
-            { backgroundColor: "rgba(249,115,22,0.15)", borderColor: c.orange },
+          style={({ pressed }) => [
+            s.browseLink,
+            {
+              backgroundColor: c.orangeDim,
+              borderColor: c.orangeGlow,
+              opacity: pressed ? 0.85 : 1,
+            },
           ]}
         >
-          <AppText
-            variant="small"
-            weight="semibold"
-            style={{ color: c.orange }}
-          >
-            {t("workerApplications.header.browseJobs")} →
+          <AppText style={{ fontSize: 12, fontWeight: "600", color: c.orange }}>
+            {t("workerApplications.header.browseJobs", "Browse Jobs")}
           </AppText>
+          <Ionicons name="arrow-forward" size={13} color={c.orange} />
         </Pressable>
       </View>
 
-      {/* ── Filter tabs ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ marginBottom: 20 }}
-        contentContainerStyle={{ gap: 8 }}
-      >
-        {FILTER_TABS.map((tab) => {
-          const count = tab.key ? counts[tab.key] || 0 : allApps.length;
+      {/* Filter tabs */}
+      <View style={s.tabs}>
+        {["ALL", "PENDING", "ACCEPTED", "REJECTED"].map((st) => {
+          const active = statusFilter === st;
           return (
-            <FilterTab
-              key={String(tab.key)}
-              label={tab.label}
-              count={count}
-              active={activeTab === tab.key}
-              onPress={() => handleTabChange(tab.key)}
-              c={c}
-            />
-          );
-        })}
-      </ScrollView>
-
-      {/* ── Empty state ── */}
-      {filtered.length === 0 && (
-        <View style={s.empty}>
-          <AppText style={{ fontSize: 52, marginBottom: 14 }}>📋</AppText>
-          <AppText
-            variant="title"
-            weight="semibold"
-            style={{ color: c.text, marginBottom: 8 }}
-          >
-            {activeTab
-              ? t("workerApplications.empty.noFiltered", {
-                  status: activeTab.toLowerCase(),
-                })
-              : t("workerApplications.empty.noApplications")}
-          </AppText>
-          <AppText
-            variant="body"
-            tone="dim"
-            style={{ textAlign: "center", marginBottom: 20 }}
-          >
-            {activeTab
-              ? t("workerApplications.empty.tryDifferentFilter")
-              : t("workerApplications.empty.startBrowsing")}
-          </AppText>
-          {!activeTab && (
             <Pressable
-              onPress={() => navigation.navigate("WorkerJobs")}
-              style={[s.browseEmptyBtn, { backgroundColor: c.orange }]}
+              key={st}
+              onPress={() => handleFilter(st)}
+              style={({ pressed }) => [
+                s.tab,
+                {
+                  backgroundColor: active ? c.orangeDim : "transparent",
+                  borderColor: active ? c.orange : c.border,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
             >
               <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: "#fff" }}
+                style={{
+                  fontSize: 12,
+                  color: active ? c.orange : c.textDim,
+                  fontWeight: active ? "700" : "500",
+                }}
               >
-                {t("workerApplications.header.browseJobs")} →
+                {st === "ALL"
+                  ? t("workerApplications.filter.all", "All")
+                  : t(STATUS_META[st]?.labelKey, st)}
               </AppText>
+              {st !== "ALL" && counts[st] > 0 && (
+                <View
+                  style={[
+                    s.tabBadge,
+                    {
+                      backgroundColor:
+                        st === "ACCEPTED"
+                          ? "rgba(34,197,94,0.15)"
+                          : st === "REJECTED"
+                            ? c.redDim
+                            : "rgba(249,115,22,0.2)",
+                    },
+                  ]}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 10,
+                      fontWeight: "700",
+                      color:
+                        st === "ACCEPTED"
+                          ? c.green
+                          : st === "REJECTED"
+                            ? c.red
+                            : c.orange,
+                    }}
+                  >
+                    {counts[st]}
+                  </AppText>
+                </View>
+              )}
             </Pressable>
-          )}
+          );
+        })}
+      </View>
+
+      {/* Content */}
+      {error ? (
+        <AppText
+          style={{
+            fontSize: 13,
+            color: c.red,
+            textAlign: "center",
+            padding: 24,
+          }}
+        >
+          {error}
+        </AppText>
+      ) : loading ? (
+        <View style={s.list}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} width="100%" height={140} radius={14} />
+          ))}
+        </View>
+      ) : applications.length === 0 ? (
+        <EmptyState
+          filtered={statusFilter !== "ALL"}
+          onBrowse={() => navigation.navigate("WorkerJobs")}
+          t={t}
+          c={c}
+        />
+      ) : (
+        <View style={s.list}>
+          {applications.map((app) => (
+            <ApplicationCard
+              key={app.id}
+              app={app}
+              onViewJob={() =>
+                navigation.navigate("WorkerJobDetail", {
+                  jobId: app.jobPost?.id,
+                })
+              }
+              onMessageHirer={() => openChatWithHirer(app.jobPost?.hirer?.id)}
+              onViewHirer={() =>
+                navigation.navigate("HirerPublicProfile", {
+                  userId: app.jobPost?.hirer?.id,
+                })
+              }
+              t={t}
+              c={c}
+              isMobile={isMobile}
+            />
+          ))}
         </View>
       )}
 
-      {/* ── Application cards ── */}
-      {displayed.map((app) => (
-        <ApplicationCard
-          key={app.id}
-          app={app}
-          onViewJob={onViewJob}
-          onMessage={onMessage}
-          onHirerProfile={onHirerProfile}
-          c={c}
-        />
-      ))}
-
-      {/* ── Pagination ── */}
-      {totalPages > 1 && (
-        <View style={[s.pagination, { borderTopColor: c.border }]}>
+      {/* Pagination */}
+      {!loading && pages > 1 && (
+        <View style={s.pagination}>
           <Pressable
-            onPress={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            style={[
+            onPress={() => setPage((p) => p - 1)}
+            style={({ pressed }) => [
               s.pageBtn,
               {
                 backgroundColor: c.bgCard,
-                borderColor: c.border,
-                opacity: page === 1 ? 0.4 : 1,
+                borderColor: page === 1 ? c.border : c.orange,
+                opacity: page === 1 ? 0.35 : pressed ? 0.85 : 1,
               },
             ]}
           >
             <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: c.text }}
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: page === 1 ? c.textDim : c.orange,
+              }}
             >
-              {t("workerApplications.pagination.prev")}
+              ← {t("workerApplications.pagination.prev", "Prev")}
             </AppText>
           </Pressable>
-
-          <View
-            style={[
-              s.pageIndicator,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
-          >
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: c.text }}
-            >
-              {page} {t("workerApplications.pagination.of")} {totalPages}
-            </AppText>
-          </View>
-
+          <AppText style={{ fontSize: 12, color: c.textDim }}>
+            {page} {t("workerApplications.pagination.of", "of")} {pages}
+          </AppText>
           <Pressable
-            onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            style={[
+            disabled={page === pages}
+            onPress={() => setPage((p) => p + 1)}
+            style={({ pressed }) => [
               s.pageBtn,
               {
                 backgroundColor: c.bgCard,
-                borderColor: c.border,
-                opacity: page === totalPages ? 0.4 : 1,
+                borderColor: page === pages ? c.border : c.orange,
+                opacity: page === pages ? 0.35 : pressed ? 0.85 : 1,
               },
             ]}
           >
             <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: c.text }}
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: page === pages ? c.textDim : c.orange,
+              }}
             >
-              {t("workerApplications.pagination.next")} →
+              {t("workerApplications.pagination.next", "Next")} →
             </AppText>
           </Pressable>
         </View>
@@ -695,49 +753,223 @@ export default function WorkerApplicationsScreen({ navigation }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Styles (mirroring MyJobApplications.module.css) ─────────────────────
 const s = StyleSheet.create({
+  page: {
+    padding: rem(1.25),
+    paddingBottom: rem(6),
+    maxWidth: 1200,
+    alignSelf: "center",
+    width: "100%",
+  },
+
   pageHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 20,
+    justifyContent: "space-between",
+    marginBottom: 24,
+    gap: 12,
+    flexWrap: "wrap",
   },
-  pageTitle: { fontSize: 32, lineHeight: 38 },
-  browseBtn: {
+  pageTitle: {
+    fontSize: 28,
+    letterSpacing: -0.8,
+    lineHeight: 32,
+  },
+  pageSubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  browseLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginLeft: 12,
-    flexShrink: 0,
-  },
-  browseEmptyBtn: {
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 14,
   },
 
-  empty: { paddingVertical: 60, alignItems: "center", paddingHorizontal: 24 },
+  // Tabs
+  tabs: {
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: 20,
+    flexWrap: "wrap",
+  },
+  tab: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 34,
+  },
+  tabBadge: {
+    paddingVertical: 1,
+    paddingHorizontal: 6,
+    borderRadius: 999,
+  },
 
+  // List
+  list: {
+    gap: 14,
+  },
+
+  // Card
+  card: {
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+    position: "relative",
+  },
+  cardBody: {
+    flexDirection: "row",
+    gap: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+  },
+
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+    flexWrap: "wrap",
+  },
+  catChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  jobStatusBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+  },
+
+  jobTitle: {
+    fontSize: 15,
+    color: "#fff",
+    letterSpacing: -0.3,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 10,
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  hirerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  hirerAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+
+  yourMessage: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+
+  // Right column
+  cardRight: {
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: 8,
+    minWidth: 150,
+  },
+  appStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+  },
+  cardActions: {
+    flexDirection: "column",
+    gap: 6,
+    width: "100%",
+    marginTop: 4,
+  },
+  messageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 7,
+    borderWidth: 1,
+  },
+  hirerProfileBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 7,
+    borderWidth: 1,
+  },
+
+  // Empty
+  empty: {
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  browseBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+
+  // Pagination
   pagination: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
-    paddingTop: 20,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 8,
+    gap: 16,
+    marginTop: 24,
+    flexWrap: "wrap",
   },
   pageBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-  },
-  pageIndicator: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 11,
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

@@ -3031,30 +3031,61 @@
   "website": "Website",
   "weeklyRate": "Weekly Rate",
   "window": "Window",
-  "workerApplications.button.hirerProfile": "Worker Applications Button Hirer Profile",
-  "workerApplications.button.messageHirer": "Worker Applications Button Message Hirer",
-  "workerApplications.button.viewJob": "Worker Applications Button View Job",
-  "workerApplications.empty.noApplications": "Worker Applications Empty No Applications",
-  "workerApplications.empty.startBrowsing": "Worker Applications Empty Start Browsing",
-  "workerApplications.empty.tryDifferentFilter": "Worker Applications Empty Try Different Filter",
-  "workerApplications.error.loadFailed": "Worker Applications Error Load Failed",
-  "workerApplications.filter.accepted": "Worker Applications Filter Accepted",
-  "workerApplications.filter.all": "Worker Applications Filter All",
-  "workerApplications.filter.pending": "Worker Applications Filter Pending",
-  "workerApplications.filter.rejected": "Worker Applications Filter Rejected",
-  "workerApplications.header.browseJobs": "Worker Applications Header Browse Jobs",
-  "workerApplications.jobStatus.cancelled": "Worker Applications Job Status Cancelled",
-  "workerApplications.jobStatus.filled": "Worker Applications Job Status Filled",
-  "workerApplications.jobStatus.open": "Worker Applications Job Status Open",
-  "workerApplications.message.applied": "Worker Applications Message Applied",
-  "workerApplications.message.yourMessage": "Worker Applications Message Your Message",
-  "workerApplications.pagination.next": "Worker Applications Pagination Next",
-  "workerApplications.pagination.of": "Worker Applications Pagination Of",
-  "workerApplications.pagination.prev": "Worker Applications Pagination Prev",
-  "workerApplications.status.accepted": "Worker Applications Status Accepted",
-  "workerApplications.status.pending": "Worker Applications Status Pending",
-  "workerApplications.status.rejected": "Worker Applications Status Rejected",
-  "workerApplications.time.today": "Worker Applications Time Today",
+  "workerApplications": {
+    "header": {
+      "title": "My Applications",
+      "submittedSingular": "application submitted",
+      "submittedPlural": "applications submitted",
+      "browseJobs": "Browse Jobs"
+    },
+    "status": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "rejected": "Rejected"
+    },
+    "jobStatus": {
+      "open": "Open",
+      "filled": "Filled",
+      "cancelled": "Cancelled"
+    },
+    "filter": {
+      "all": "All"
+    },
+    "button": {
+      "viewJob": "View Job",
+      "messageHirer": "Message Hirer",
+      "hirerProfile": "Hirer Profile"
+    },
+    "message": {
+      "yourMessage": "Your message",
+      "applied": "Applied"
+    },
+    "time": {
+      "today": "Today",
+      "applied": "Applied"
+    },
+    "empty": {
+      "noApplications": "No applications yet",
+      "noApplicationsFiltered": "No applications match this filter",
+      "tryDifferentFilter": "Try a different status filter.",
+      "startBrowsing": "Browse the job board and apply to jobs that match your skills."
+    },
+    "error": {
+      "loadFailed": "Failed to load your applications."
+    },
+    "pagination": {
+      "prev": "Prev",
+      "next": "Next",
+      "of": "of"
+    },
+    "job": {
+      "removed": "Job removed"
+    },
+    "cards": {
+      "applicantSingular": "applicant",
+      "applicantPlural": "applicants"
+    }
+  },
   "workerAvailability.button.save": "Worker Availability Button Save",
   "workerAvailability.common.done": "Worker Availability Common Done",
   "workerAvailability.common.notAvailable": "Worker Availability Common Not Available",
