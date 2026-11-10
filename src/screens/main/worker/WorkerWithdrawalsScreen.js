@@ -1,7 +1,5 @@
 // src/screens/main/worker/WorkerWithdrawalsScreen.js
-// Mirrors: website src/pages/worker/dashboard/withdrawals/WorkerWithdrawals.jsx
-// Full feature parity: multi-currency wallets, PIN gate, bank search + verify,
-// mobile money, crypto, international wire, fee preview, receipt modal.
+// Verbatim port of pages/worker/dashboard/withdrawals/WorkerWithdrawals.jsx
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -14,36 +12,39 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AppText from "../../../components/AppText";
+import Skeleton from "../../../components/Skeleton";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useTranslation } from "react-i18next";
 import client from "../../../api/client";
+import ViewShot from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
 
 const SCREEN_W = Dimensions.get("window").width;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTS — mirrors website exactly
+// CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
 const CURRENCY_META = {
-  NGN: { flag: "🇳🇬", symbol: "₦", name: "Naira" },
-  GHS: { flag: "🇬🇭", symbol: "₵", name: "Cedi" },
-  KES: { flag: "🇰🇪", symbol: "KSh", name: "Shilling" },
-  ZAR: { flag: "🇿🇦", symbol: "R", name: "Rand" },
-  TZS: { flag: "🇹🇿", symbol: "TSh", name: "Shilling" },
-  UGX: { flag: "🇺🇬", symbol: "USh", name: "Shilling" },
-  USD: { flag: "🇺🇸", symbol: "$", name: "Dollar" },
-  EUR: { flag: "🇪🇺", symbol: "€", name: "Euro" },
-  GBP: { flag: "🇬🇧", symbol: "£", name: "Pound" },
-  CAD: { flag: "🇨🇦", symbol: "C$", name: "Dollar" },
-  AUD: { flag: "🇦🇺", symbol: "A$", name: "Dollar" },
-  INR: { flag: "🇮🇳", symbol: "₹", name: "Rupee" },
+  NGN: { symbol: "₦", name: "Naira" },
+  GHS: { symbol: "₵", name: "Cedi" },
+  KES: { symbol: "KSh", name: "Shilling" },
+  ZAR: { symbol: "R", name: "Rand" },
+  TZS: { symbol: "TSh", name: "Shilling" },
+  UGX: { symbol: "USh", name: "Shilling" },
+  USD: { symbol: "$", name: "Dollar" },
+  EUR: { symbol: "€", name: "Euro" },
+  GBP: { symbol: "£", name: "Pound" },
+  CAD: { symbol: "C$", name: "Dollar" },
+  AUD: { symbol: "A$", name: "Dollar" },
+  INR: { symbol: "₹", name: "Rupee" },
 };
 
 const CURRENCY_METHODS = {
@@ -52,7 +53,7 @@ const CURRENCY_METHODS = {
       key: "ng_bank",
       method: "bank_transfer",
       label: "Bank / Fintech",
-      icon: "🏦",
+      icon: "card-outline",
       desc: "GTBank, Kuda, OPay…",
       country: "NG",
       hasBankList: true,
@@ -61,25 +62,16 @@ const CURRENCY_METHODS = {
       key: "ng_mtn",
       method: "mobile_money",
       label: "MTN MoMo",
-      icon: "📡",
+      icon: "phone-portrait-outline",
       desc: "MTN Nigeria",
       country: "NG",
       provider: "MTN",
     },
     {
-      key: "ng_airtel",
-      method: "mobile_money",
-      label: "Airtel Money",
-      icon: "📲",
-      desc: "Airtel Nigeria",
-      country: "NG",
-      provider: "Airtel",
-    },
-    {
       key: "crypto",
       method: "crypto",
       label: "USDC / USDT",
-      icon: "₿",
+      icon: "logo-bitcoin",
       desc: "Stablecoin",
     },
   ],
@@ -88,34 +80,16 @@ const CURRENCY_METHODS = {
       key: "gh_bank",
       method: "bank_transfer",
       label: "Ghana Bank",
-      icon: "🏦",
+      icon: "card-outline",
       desc: "GCB, Ecobank…",
       country: "GH",
       hasBankList: true,
     },
     {
-      key: "gh_mtn",
-      method: "mobile_money",
-      label: "MTN MoMo",
-      icon: "📱",
-      desc: "Ghana",
-      country: "GH",
-      provider: "MTN",
-    },
-    {
-      key: "gh_voda",
-      method: "mobile_money",
-      label: "Vodafone",
-      icon: "📱",
-      desc: "Vodafone Cash",
-      country: "GH",
-      provider: "Vodafone",
-    },
-    {
       key: "crypto",
       method: "crypto",
       label: "USDC / USDT",
-      icon: "₿",
+      icon: "logo-bitcoin",
       desc: "Stablecoin",
     },
   ],
@@ -124,25 +98,16 @@ const CURRENCY_METHODS = {
       key: "ke_mpesa",
       method: "mobile_money",
       label: "M-Pesa",
-      icon: "📱",
+      icon: "phone-portrait-outline",
       desc: "Safaricom",
       country: "KE",
       provider: "mpesa",
     },
     {
-      key: "ke_bank",
-      method: "bank_transfer",
-      label: "KE Bank",
-      icon: "🏦",
-      desc: "Equity, KCB…",
-      country: "KE",
-      hasBankList: true,
-    },
-    {
       key: "crypto",
       method: "crypto",
       label: "USDC / USDT",
-      icon: "₿",
+      icon: "logo-bitcoin",
       desc: "Stablecoin",
     },
   ],
@@ -153,7 +118,7 @@ const INTL_METHODS = [
     key: "intl_bank",
     method: "bank_transfer",
     label: "SWIFT Wire",
-    icon: "🌐",
+    icon: "globe-outline",
     desc: "150+ countries",
     isInternational: true,
   },
@@ -161,7 +126,7 @@ const INTL_METHODS = [
     key: "crypto",
     method: "crypto",
     label: "USDC / USDT",
-    icon: "₿",
+    icon: "logo-bitcoin",
     desc: "Stablecoin",
   },
 ];
@@ -218,7 +183,6 @@ const BANK_TYPE_COLORS = {
   merchant: "#a78bfa",
 };
 
-// ─── STATUS_META - now a function that takes t ──────────────────────────────
 function getStatusMeta(t) {
   return {
     PENDING: {
@@ -264,7 +228,6 @@ function fmt(amount, currency = "NGN") {
   }
 }
 
-// timeAgo now accepts t as a parameter
 function timeAgo(d, t) {
   if (!d) return "—";
   const diff = Date.now() - new Date(d).getTime();
@@ -284,11 +247,10 @@ function getMethodsForCurrency(currency) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PIN BOXES — 4 individual digit boxes backed by a hidden TextInput
+// PIN BOXES
 // ─────────────────────────────────────────────────────────────────────────────
 function PinInput({ value, onChange, disabled, label, error, c }) {
   const inputRef = useRef();
-
   return (
     <View style={{ marginBottom: 4 }}>
       {label && (
@@ -348,7 +310,6 @@ function PinInput({ value, onChange, disabled, label, error, c }) {
             </View>
           );
         })}
-        {/* Hidden real input */}
         <TextInput
           ref={inputRef}
           value={value}
@@ -377,8 +338,8 @@ function PinInput({ value, onChange, disabled, label, error, c }) {
 }
 const pinSt = StyleSheet.create({
   box: {
-    width: 56,
-    height: 60,
+    width: 52,
+    height: 56,
     borderRadius: 12,
     borderWidth: 1.5,
     alignItems: "center",
@@ -388,7 +349,7 @@ const pinSt = StyleSheet.create({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PIN SETUP SCREEN
+// PIN SETUP
 // ─────────────────────────────────────────────────────────────────────────────
 function PinSetupScreen({ onDone, c }) {
   const { t } = useTranslation();
@@ -422,7 +383,7 @@ function PinSetupScreen({ onDone, c }) {
   if (success) {
     return (
       <View style={{ alignItems: "center", padding: 32, gap: 10 }}>
-        <AppText style={{ fontSize: 52 }}>✅</AppText>
+        <Ionicons name="checkmark-circle" size={52} color="#22c55e" />
         <AppText weight="displayBlack" style={{ fontSize: 20, color: c.text }}>
           {t("workerWithdrawals.pin.setup.success")}
         </AppText>
@@ -435,15 +396,20 @@ function PinSetupScreen({ onDone, c }) {
 
   return (
     <View style={{ padding: 24, gap: 16, alignItems: "center" }}>
-      <AppText style={{ fontSize: 52 }}>🔐</AppText>
+      <Ionicons name="lock-closed" size={52} color={c.orange} />
       <AppText
         weight="displayBlack"
-        style={{ fontSize: 20, color: c.text, textAlign: "center" }}
+        style={{ fontSize: 18, color: c.text, textAlign: "center" }}
       >
         {t("workerWithdrawals.pin.setup.title")}
       </AppText>
       <AppText
-        style={{ color: c.textMuted, textAlign: "center", lineHeight: 22 }}
+        style={{
+          color: c.textMuted,
+          textAlign: "center",
+          lineHeight: 20,
+          fontSize: 13,
+        }}
       >
         {t("workerWithdrawals.pin.setup.subtitle")}
       </AppText>
@@ -470,7 +436,7 @@ function PinSetupScreen({ onDone, c }) {
         style={[
           {
             width: "100%",
-            padding: 16,
+            padding: 14,
             borderRadius: 14,
             alignItems: "center",
             backgroundColor: c.orange,
@@ -483,7 +449,7 @@ function PinSetupScreen({ onDone, c }) {
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <AppText weight="semibold" style={{ color: "#fff", fontSize: 15 }}>
+          <AppText weight="semibold" style={{ color: "#fff", fontSize: 14 }}>
             {t("workerWithdrawals.pin.setup.button")}
           </AppText>
         )}
@@ -493,7 +459,7 @@ function PinSetupScreen({ onDone, c }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BANK SEARCH DROPDOWN (modal-style)
+// BANK PICKER
 // ─────────────────────────────────────────────────────────────────────────────
 function BankPickerModal({
   visible,
@@ -511,7 +477,6 @@ function BankPickerModal({
       b.name.toLowerCase().includes(search.toLowerCase()) ||
       b.code.includes(search),
   );
-  const selected = banks.find((b) => b.code === value);
 
   return (
     <Modal
@@ -536,13 +501,12 @@ function BankPickerModal({
             paddingBottom: 24,
           }}
         >
-          {/* Header */}
           <View
             style={{
               flexDirection: "row",
               justifyContent: "space-between",
               alignItems: "center",
-              padding: 18,
+              padding: 16,
               borderBottomWidth: 1,
               borderBottomColor: c.border,
             }}
@@ -568,7 +532,6 @@ function BankPickerModal({
               <Ionicons name="close" size={16} color={c.text} />
             </Pressable>
           </View>
-          {/* Search */}
           <View
             style={{
               flexDirection: "row",
@@ -608,20 +571,6 @@ function BankPickerModal({
               </Pressable>
             ) : null}
           </View>
-          {search ? (
-            <AppText
-              style={{
-                fontSize: 11,
-                color: c.textMuted,
-                paddingHorizontal: 16,
-                marginBottom: 4,
-              }}
-            >
-              {t("workerWithdrawals.bankPicker.resultsPlural", {
-                count: filtered.length,
-              })}
-            </AppText>
-          ) : null}
           <FlatList
             data={filtered}
             keyExtractor={(b) => b.code}
@@ -639,7 +588,7 @@ function BankPickerModal({
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: 14,
+                    padding: 12,
                     marginHorizontal: 12,
                     marginBottom: 2,
                     borderRadius: 10,
@@ -653,7 +602,7 @@ function BankPickerModal({
                       flex: 1,
                       color: sel ? c.orange : c.text,
                       fontWeight: sel ? "700" : "400",
-                      fontSize: 14,
+                      fontSize: 13,
                     }}
                   >
                     {b.name}
@@ -670,14 +619,7 @@ function BankPickerModal({
                     >
                       {b.type?.toUpperCase()}
                     </AppText>
-                    <AppText
-                      style={{
-                        fontSize: 10,
-                        color: c.textMuted,
-                        fontFamily:
-                          Platform.OS === "ios" ? "Courier" : "monospace",
-                      }}
-                    >
+                    <AppText style={{ fontSize: 10, color: c.textMuted }}>
                       {b.code}
                     </AppText>
                   </View>
@@ -693,265 +635,490 @@ function BankPickerModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RECEIPT MODAL — mirrors website ReceiptModal
+// RECEIPT MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
   const { t } = useTranslation();
   const STATUS_META = getStatusMeta(t);
+  const viewShotRef = useRef(null);
+
   if (!withdrawal) return null;
+
   const sm = STATUS_META[withdrawal.status] ?? STATUS_META.PENDING;
   const amount = Number(withdrawal.amount ?? 0);
   const feeRate = 0;
-  const feeAmt = parseFloat((amount * feeRate).toFixed(2));
-  const netAmt = parseFloat((amount - feeAmt).toFixed(2));
-  const isFree = feeRate === 0;
+  const feeAmt = 0;
+  const netAmt = amount;
   const cur = withdrawal.currency ?? "NGN";
 
+  const handleShare = async () => {
+    try {
+      // 1. Capture the receipt view as a PNG
+      const uri = await viewShotRef.current.capture();
+
+      // 2. Share the image
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "image/png",
+          dialogTitle: "Share Receipt",
+          UTI: "public.png",
+        });
+      } else {
+        // Fallback to React Native's built-in Share (text only, but at least something)
+        await Share.share({
+          url: uri,
+          message: `SkilledProz Withdrawal Receipt\nReference: #${String(
+            withdrawal.reference ?? withdrawal.id ?? "",
+          )
+            .slice(-8)
+            .toUpperCase()}`,
+        });
+      }
+    } catch (error) {
+      console.log("Share failed:", error);
+    }
+  };
+
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
+    <Modal transparent animationType="slide" onRequestClose={onClose}>
       <View
         style={{
           flex: 1,
           backgroundColor: "rgba(0,0,0,0.75)",
-          justifyContent: "center",
-          padding: 20,
+          justifyContent: "flex-end",
         }}
       >
         <View
-          style={{ backgroundColor: modalBg, borderRadius: 20, padding: 20 }}
+          style={{
+            backgroundColor: modalBg,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            width: "100%",
+            maxHeight: "92%",
+          }}
         >
-          {/* Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 16,
-            }}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ padding: 24, paddingBottom: 48 }}
           >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            {/* The ViewShot wrapper captures this entire content */}
+            <ViewShot
+              ref={viewShotRef}
+              options={{ format: "png", quality: 1.0 }}
             >
-              <View
+              <View style={{ backgroundColor: modalBg }}>
+                {/* Header */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 20,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: c.orange,
+                        borderRadius: 8,
+                        width: 32,
+                        height: 32,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <AppText
+                        style={{
+                          color: "#fff",
+                          fontWeight: "900",
+                          fontSize: 12,
+                        }}
+                      >
+                        SP
+                      </AppText>
+                    </View>
+                    <AppText
+                      weight="semibold"
+                      style={{ color: c.text, fontSize: 14 }}
+                    >
+                      SkilledProz
+                    </AppText>
+                  </View>
+                  <Pressable
+                    onPress={onClose}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="close" size={16} color={c.text} />
+                  </Pressable>
+                </View>
+
+                {/* Title & Status */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 10,
+                    marginBottom: 20,
+                  }}
+                >
+                  <AppText
+                    weight="displayBlack"
+                    style={{ fontSize: 20, color: c.text }}
+                  >
+                    {t("workerWithdrawals.receipt.title")}
+                  </AppText>
+                  <View
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 20,
+                      backgroundColor: sm.bg,
+                      borderWidth: 1,
+                      borderColor: sm.color + "55",
+                    }}
+                  >
+                    <AppText
+                      style={{
+                        fontSize: 11,
+                        color: sm.color,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {sm.label}
+                    </AppText>
+                  </View>
+                </View>
+
+                {/* Meta Grid */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 20,
+                    marginBottom: 20,
+                  }}
+                >
+                  <View style={{ width: "45%" }}>
+                    <AppText
+                      style={{
+                        fontSize: 10,
+                        color: c.textMuted,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {t("workerWithdrawals.receipt.reference")}
+                    </AppText>
+                    <AppText
+                      weight="semibold"
+                      style={{ color: c.text, marginTop: 4, fontSize: 13 }}
+                    >
+                      #
+                      {String(withdrawal.reference ?? withdrawal.id ?? "")
+                        .slice(-8)
+                        .toUpperCase()}
+                    </AppText>
+                  </View>
+                  <View style={{ width: "45%" }}>
+                    <AppText
+                      style={{
+                        fontSize: 10,
+                        color: c.textMuted,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {t("workerWithdrawals.receipt.method")}
+                    </AppText>
+                    <AppText
+                      weight="semibold"
+                      style={{
+                        color: c.text,
+                        marginTop: 4,
+                        fontSize: 13,
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {withdrawal.method?.replace(/_/g, " ") ?? "—"}
+                    </AppText>
+                  </View>
+                  <View style={{ width: "45%" }}>
+                    <AppText
+                      style={{
+                        fontSize: 10,
+                        color: c.textMuted,
+                        fontWeight: "700",
+                      }}
+                    >
+                      Requested
+                    </AppText>
+                    <AppText
+                      weight="semibold"
+                      style={{ color: c.text, marginTop: 4, fontSize: 13 }}
+                    >
+                      {new Date(withdrawal.createdAt).toLocaleString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </AppText>
+                  </View>
+                  {withdrawal.processedAt && (
+                    <View style={{ width: "45%" }}>
+                      <AppText
+                        style={{
+                          fontSize: 10,
+                          color: c.textMuted,
+                          fontWeight: "700",
+                        }}
+                      >
+                        Processed
+                      </AppText>
+                      <AppText
+                        weight="semibold"
+                        style={{ color: c.text, marginTop: 4, fontSize: 13 }}
+                      >
+                        {new Date(withdrawal.processedAt).toLocaleString(
+                          "en-GB",
+                          {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
+                      </AppText>
+                    </View>
+                  )}
+                  {withdrawal.completedAt && (
+                    <View style={{ width: "45%" }}>
+                      <AppText
+                        style={{
+                          fontSize: 10,
+                          color: c.textMuted,
+                          fontWeight: "700",
+                        }}
+                      >
+                        Completed
+                      </AppText>
+                      <AppText
+                        weight="semibold"
+                        style={{ color: c.text, marginTop: 4, fontSize: 13 }}
+                      >
+                        {new Date(withdrawal.completedAt).toLocaleString(
+                          "en-GB",
+                          {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
+                      </AppText>
+                    </View>
+                  )}
+                  <View style={{ width: "45%" }}>
+                    <AppText
+                      style={{
+                        fontSize: 10,
+                        color: c.textMuted,
+                        fontWeight: "700",
+                      }}
+                    >
+                      Currency
+                    </AppText>
+                    <AppText
+                      weight="semibold"
+                      style={{ color: c.text, marginTop: 4, fontSize: 13 }}
+                    >
+                      {cur}
+                    </AppText>
+                  </View>
+                </View>
+
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: c.border,
+                    marginVertical: 16,
+                  }}
+                />
+
+                {/* Paid To */}
+                <View style={{ marginBottom: 16 }}>
+                  <AppText
+                    style={{
+                      fontSize: 10,
+                      color: c.textMuted,
+                      fontWeight: "700",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {t("workerWithdrawals.receipt.paidTo")}
+                  </AppText>
+                  <AppText
+                    style={{ color: c.text, fontSize: 14, fontWeight: "500" }}
+                  >
+                    {withdrawal.destination ?? withdrawal.accountName ?? "—"}
+                  </AppText>
+                </View>
+
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: c.border,
+                    marginVertical: 16,
+                  }}
+                />
+
+                {/* Breakdown */}
+                <View style={{ gap: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <AppText style={{ color: c.textMuted, fontSize: 13 }}>
+                      {t("workerWithdrawals.receipt.amount")}
+                    </AppText>
+                    <AppText
+                      weight="semibold"
+                      style={{ color: c.text, fontSize: 13 }}
+                    >
+                      {fmt(amount, cur)}
+                    </AppText>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <AppText style={{ color: c.textMuted, fontSize: 13 }}>
+                      {t("workerWithdrawals.receipt.fee")}
+                    </AppText>
+                    <AppText
+                      weight="semibold"
+                      style={{ color: "#22c55e", fontSize: 13 }}
+                    >
+                      {t("workerWithdrawals.receipt.free")}
+                    </AppText>
+                  </View>
+                </View>
+
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: c.border,
+                    marginVertical: 16,
+                  }}
+                />
+
+                {/* Total */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 24,
+                  }}
+                >
+                  <AppText
+                    weight="semibold"
+                    style={{ color: c.text, fontSize: 15 }}
+                  >
+                    {t("workerWithdrawals.receipt.receive")}
+                  </AppText>
+                  <AppText
+                    weight="displayBlack"
+                    style={{
+                      color: c.orange,
+                      fontSize: 24,
+                      letterSpacing: -0.5,
+                    }}
+                  >
+                    {fmt(netAmt, cur)}
+                  </AppText>
+                </View>
+
+                <View style={{ alignItems: "center", marginTop: 16 }}>
+                  <AppText style={{ fontSize: 10, color: c.textMuted }}>
+                    {t("workerWithdrawals.receipt.footer")}
+                  </AppText>
+                </View>
+              </View>
+            </ViewShot>
+
+            {/* Actions (outside the ViewShot so they don't appear in the image) */}
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 10,
+                borderTopWidth: 1,
+                borderTopColor: c.border,
+                paddingTop: 16,
+                marginTop: 16,
+              }}
+            >
+              <Pressable
+                onPress={handleShare}
                 style={{
-                  backgroundColor: c.orange,
-                  borderRadius: 8,
-                  width: 32,
-                  height: 32,
+                  flex: 1,
+                  backgroundColor: c.orangeDim,
+                  borderRadius: 10,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="share-outline" size={18} color={c.orange} />
+                <AppText
+                  style={{ color: c.orange, fontSize: 13, fontWeight: "700" }}
+                >
+                  Share Receipt
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={onClose}
+                style={{
+                  flex: 1,
+                  backgroundColor: c.bgCard,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  paddingVertical: 14,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
                 <AppText
-                  style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}
+                  style={{ color: c.text, fontSize: 13, fontWeight: "600" }}
                 >
-                  SP
+                  Close
                 </AppText>
-              </View>
-              <AppText weight="semibold" style={{ color: c.text }}>
-                SkilledProz
-              </AppText>
+              </Pressable>
             </View>
-            <Pressable
-              onPress={onClose}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: c.border,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons name="close" size={16} color={c.text} />
-            </Pressable>
-          </View>
-          {/* Title + status */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 16,
-            }}
-          >
-            <AppText
-              weight="displayBlack"
-              style={{ fontSize: 20, color: c.text }}
-            >
-              {t("workerWithdrawals.receipt.title")}
-            </AppText>
-            <View
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                borderRadius: 20,
-                backgroundColor: sm.bg,
-                borderWidth: 1,
-                borderColor: sm.color + "55",
-              }}
-            >
-              <AppText
-                style={{ fontSize: 12, color: sm.color, fontWeight: "700" }}
-              >
-                {sm.label}
-              </AppText>
-            </View>
-          </View>
-          {/* Meta */}
-          <View style={{ flexDirection: "row", gap: 24, marginBottom: 14 }}>
-            {[
-              {
-                label: t("workerWithdrawals.receipt.reference"),
-                value: `#${String(withdrawal.reference ?? withdrawal.id ?? "")
-                  .slice(-8)
-                  .toUpperCase()}`,
-              },
-              {
-                label: t("workerWithdrawals.receipt.method"),
-                value: withdrawal.method?.replace(/_/g, " ") ?? "—",
-              },
-            ].map((m) => (
-              <View key={m.label}>
-                <AppText
-                  style={{
-                    fontSize: 9,
-                    color: c.textMuted,
-                    letterSpacing: 0.8,
-                    fontWeight: "700",
-                  }}
-                >
-                  {m.label}
-                </AppText>
-                <AppText
-                  weight="semibold"
-                  style={{ color: c.text, marginTop: 3, fontSize: 13 }}
-                >
-                  {m.value}
-                </AppText>
-              </View>
-            ))}
-          </View>
-          <View
-            style={{
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: c.border,
-              marginVertical: 10,
-            }}
-          />
-          <View style={{ marginBottom: 12 }}>
-            <AppText
-              style={{
-                fontSize: 9,
-                color: c.textMuted,
-                letterSpacing: 0.8,
-                fontWeight: "700",
-                marginBottom: 3,
-              }}
-            >
-              {t("workerWithdrawals.receipt.paidTo")}
-            </AppText>
-            <AppText style={{ color: c.text, fontSize: 14 }}>
-              {withdrawal.destination ?? withdrawal.accountName ?? "—"}
-            </AppText>
-          </View>
-          <View
-            style={{
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: c.border,
-              marginVertical: 10,
-            }}
-          />
-          {/* Breakdown */}
-          {[
-            {
-              label: t("workerWithdrawals.receipt.amount"),
-              value: fmt(amount, cur),
-              color: c.text,
-            },
-            {
-              label: t("workerWithdrawals.receipt.fee"),
-              value: isFree
-                ? t("workerWithdrawals.receipt.free")
-                : `− ${fmt(feeAmt, cur)}`,
-              color: isFree ? "#22c55e" : "#ef4444",
-            },
-          ].map((row) => (
-            <View
-              key={row.label}
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                marginVertical: 5,
-              }}
-            >
-              <AppText style={{ color: c.textMuted, fontSize: 13 }}>
-                {row.label}
-              </AppText>
-              <AppText
-                weight="semibold"
-                style={{ color: row.color, fontSize: 13 }}
-              >
-                {row.value}
-              </AppText>
-            </View>
-          ))}
-          <View
-            style={{
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: c.border,
-              marginVertical: 10,
-            }}
-          />
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <AppText weight="semibold" style={{ color: c.text, fontSize: 14 }}>
-              {t("workerWithdrawals.receipt.receive")}
-            </AppText>
-            <AppText
-              weight="displayBlack"
-              style={{ color: c.orange, fontSize: 22 }}
-            >
-              {fmt(netAmt, cur)}
-            </AppText>
-          </View>
-          {/* Footer */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginTop: 16,
-              paddingTop: 12,
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderTopColor: c.border,
-            }}
-          >
-            <AppText style={{ fontSize: 10, color: c.textMuted }}>
-              {t("workerWithdrawals.receipt.footer")}
-            </AppText>
-            <Pressable
-              onPress={onClose}
-              style={{
-                backgroundColor: "rgba(249,115,22,0.15)",
-                borderRadius: 8,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-              }}
-            >
-              <AppText
-                style={{ color: c.orange, fontSize: 12, fontWeight: "700" }}
-              >
-                {t("workerWithdrawals.receipt.close")}
-              </AppText>
-            </Pressable>
-          </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -959,7 +1126,7 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WITHDRAWAL MODAL — full mirror of website WithdrawalModal
+// WITHDRAWAL MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 function WithdrawalModal({
   visible,
@@ -972,8 +1139,6 @@ function WithdrawalModal({
   modalBg,
 }) {
   const { t } = useTranslation();
-  const STATUS_META = getStatusMeta(t);
-
   const [currency, setCurrency] = useState(defaultCurrency ?? "NGN");
   const [selMethod, setSelMethod] = useState(null);
   const [form, setForm] = useState({});
@@ -988,14 +1153,12 @@ function WithdrawalModal({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // PIN state
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [pinStatus, setPinStatus] = useState(null);
   const [pinLoading, setPinLoading] = useState(true);
   const [showPinSetup, setShowPinSetup] = useState(false);
 
-  // Load pin status on open
   useEffect(() => {
     if (!visible) return;
     setPinLoading(true);
@@ -1012,6 +1175,11 @@ function WithdrawalModal({
       .finally(() => setPinLoading(false));
   }, [visible]);
 
+  // Auto-select currency when modal opens with a default
+  useEffect(() => {
+    if (visible && defaultCurrency) setCurrency(defaultCurrency);
+  }, [visible, defaultCurrency]);
+
   const methods = getMethodsForCurrency(currency);
 
   useEffect(() => {
@@ -1021,7 +1189,6 @@ function WithdrawalModal({
     setVerifyErr("");
   }, [currency]);
 
-  // Load banks when method changes
   useEffect(() => {
     if (!selMethod?.hasBankList) {
       setBanks([]);
@@ -1066,10 +1233,8 @@ function WithdrawalModal({
   const setF = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   async function verifyAccount() {
-    if (!form.accountNumber || !form.bankCode) {
-      setVerifyErr(t("workerWithdrawals.error.selectBankAccount"));
-      return;
-    }
+    if (!form.accountNumber || !form.bankCode)
+      return setVerifyErr(t("workerWithdrawals.error.selectBankAccount"));
     setVerifying(true);
     setVerifyErr("");
     setVerifiedName(null);
@@ -1093,11 +1258,9 @@ function WithdrawalModal({
   const availableForCurrency =
     currencyBalances[currency] ?? balance?.available ?? 0;
   const currMeta = CURRENCY_META[currency] ?? {
-    flag: "💱",
     symbol: currency,
     name: currency,
   };
-  const feeRate = 0;
 
   async function handleSubmit() {
     setError("");
@@ -1126,24 +1289,6 @@ function WithdrawalModal({
       if (!verifiedName)
         return setError(t("workerWithdrawals.error.verifyAccount"));
     }
-    if (m === "bank_transfer" && selMethod.isInternational) {
-      if (!form.accountNumber)
-        return setError(t("workerWithdrawals.error.enterIban"));
-      if (!form.swiftBic)
-        return setError(t("workerWithdrawals.error.enterSwift"));
-      if (!form.accountName)
-        return setError(t("workerWithdrawals.error.enterHolderName"));
-    }
-    if (m === "mobile_money" && !form.mobileNumber)
-      return setError(t("workerWithdrawals.error.enterMobile"));
-    if (m === "crypto") {
-      if (!form.cryptoAddress)
-        return setError(t("workerWithdrawals.error.enterAddress"));
-      if (!form.cryptoToken)
-        return setError(t("workerWithdrawals.error.selectToken"));
-      if (!form.cryptoNetwork)
-        return setError(t("workerWithdrawals.error.selectNetwork"));
-    }
 
     const payload = {
       pin,
@@ -1152,7 +1297,6 @@ function WithdrawalModal({
       method: m,
       country: selMethod.country ?? "INTL",
     };
-
     if (m === "bank_transfer" && !selMethod.isInternational) {
       Object.assign(payload, {
         bankCode: form.bankCode,
@@ -1160,19 +1304,11 @@ function WithdrawalModal({
         accountNumber: form.accountNumber,
         accountName: verifiedName ?? form.accountName,
       });
-    } else if (m === "bank_transfer" && selMethod.isInternational) {
-      Object.assign(payload, {
-        bankCode: form.swiftBic,
-        bankName: form.bankName,
-        accountNumber: form.accountNumber,
-        accountName: form.accountName,
-        swiftBic: form.swiftBic,
-      });
     } else if (m === "mobile_money") {
       Object.assign(payload, {
         mobileNumber: form.mobileNumber,
         mobileName: form.mobileName ?? "",
-        mobileProvider: selMethod.provider ?? "",
+        mobileProvider: selMethod.provider ?? form.mobileProvider ?? "",
       });
     } else if (m === "crypto") {
       Object.assign(payload, {
@@ -1214,7 +1350,6 @@ function WithdrawalModal({
   const withdrawableCurrencies = Object.entries(currencyBalances).filter(
     ([, b]) => b > 0,
   );
-
   if (!visible) return null;
 
   return (
@@ -1245,7 +1380,6 @@ function WithdrawalModal({
             }}
             onPress={(e) => e.stopPropagation()}
           >
-            {/* Handle */}
             <View
               style={{
                 width: 40,
@@ -1257,21 +1391,19 @@ function WithdrawalModal({
                 marginBottom: 4,
               }}
             />
-
-            {/* Header */}
             <View
               style={{
                 flexDirection: "row",
                 justifyContent: "space-between",
                 alignItems: "center",
-                padding: 18,
+                padding: 16,
                 borderBottomWidth: 1,
                 borderBottomColor: c.border,
               }}
             >
               <AppText
                 weight="displayBlack"
-                style={{ fontSize: 20, color: c.text }}
+                style={{ fontSize: 18, color: c.text }}
               >
                 {t("workerWithdrawals.modal.title")}
               </AppText>
@@ -1291,7 +1423,6 @@ function WithdrawalModal({
               </Pressable>
             </View>
 
-            {/* PIN loading */}
             {pinLoading && (
               <View
                 style={{
@@ -1302,13 +1433,12 @@ function WithdrawalModal({
                 }}
               >
                 <ActivityIndicator size="small" color={c.orange} />
-                <AppText style={{ color: c.textMuted }}>
+                <AppText style={{ color: c.textMuted, fontSize: 13 }}>
                   {t("workerWithdrawals.pin.status.checking")}
                 </AppText>
               </View>
             )}
 
-            {/* PIN setup */}
             {!pinLoading && showPinSetup && (
               <ScrollView>
                 <PinSetupScreen
@@ -1321,13 +1451,12 @@ function WithdrawalModal({
               </ScrollView>
             )}
 
-            {/* PIN locked */}
             {!pinLoading && !showPinSetup && pinStatus?.isLocked && (
               <View style={{ alignItems: "center", padding: 40, gap: 12 }}>
-                <AppText style={{ fontSize: 52 }}>🔒</AppText>
+                <Ionicons name="lock-closed" size={52} color="#ef4444" />
                 <AppText
                   weight="displayBlack"
-                  style={{ fontSize: 20, color: "#ef4444" }}
+                  style={{ fontSize: 18, color: "#ef4444" }}
                 >
                   {t("workerWithdrawals.pin.status.locked")}
                 </AppText>
@@ -1335,7 +1464,8 @@ function WithdrawalModal({
                   style={{
                     color: c.textMuted,
                     textAlign: "center",
-                    lineHeight: 22,
+                    lineHeight: 20,
+                    fontSize: 13,
                   }}
                 >
                   {t("workerWithdrawals.pin.status.lockedMessage")}
@@ -1352,20 +1482,19 @@ function WithdrawalModal({
                     borderColor: c.border,
                   }}
                 >
-                  <AppText style={{ color: c.textMuted }}>
+                  <AppText style={{ color: c.textMuted, fontSize: 13 }}>
                     {t("workerWithdrawals.modal.close")}
                   </AppText>
                 </Pressable>
               </View>
             )}
 
-            {/* Success */}
             {!pinLoading && !showPinSetup && !pinStatus?.isLocked && success ? (
               <View style={{ alignItems: "center", padding: 48, gap: 12 }}>
-                <AppText style={{ fontSize: 52 }}>🎉</AppText>
+                <Ionicons name="checkmark-circle" size={52} color="#22c55e" />
                 <AppText
                   weight="displayBlack"
-                  style={{ fontSize: 20, color: c.text }}
+                  style={{ fontSize: 18, color: c.text }}
                 >
                   {t("workerWithdrawals.modal.success")}
                 </AppText>
@@ -1373,7 +1502,8 @@ function WithdrawalModal({
                   style={{
                     color: c.textMuted,
                     textAlign: "center",
-                    lineHeight: 22,
+                    lineHeight: 20,
+                    fontSize: 13,
                   }}
                 >
                   {success}
@@ -1390,7 +1520,7 @@ function WithdrawalModal({
                 >
                   <AppText
                     weight="semibold"
-                    style={{ color: "#fff", fontSize: 15 }}
+                    style={{ color: "#fff", fontSize: 14 }}
                   >
                     {t("workerWithdrawals.modal.done")}
                   </AppText>
@@ -1398,7 +1528,6 @@ function WithdrawalModal({
               </View>
             ) : null}
 
-            {/* Main form */}
             {!pinLoading &&
               !showPinSetup &&
               !pinStatus?.isLocked &&
@@ -1406,9 +1535,8 @@ function WithdrawalModal({
                 <ScrollView
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={{ padding: 18, gap: 20 }}
+                  contentContainerStyle={{ padding: 16, gap: 16 }}
                 >
-                  {/* ── Currency wallet tabs ── */}
                   <SectionLabel
                     label={t("workerWithdrawals.modal.wallet")}
                     c={c}
@@ -1420,7 +1548,6 @@ function WithdrawalModal({
                   >
                     {withdrawableCurrencies.map(([cur, bal]) => {
                       const cm = CURRENCY_META[cur] ?? {
-                        flag: "💱",
                         symbol: cur,
                         name: cur,
                       };
@@ -1432,8 +1559,8 @@ function WithdrawalModal({
                           style={{
                             flexDirection: "row",
                             alignItems: "center",
-                            gap: 10,
-                            padding: 12,
+                            gap: 8,
+                            padding: 10,
                             marginRight: 8,
                             borderRadius: 12,
                             borderWidth: 1,
@@ -1443,11 +1570,19 @@ function WithdrawalModal({
                               : c.bgPanel,
                           }}
                         >
-                          <AppText style={{ fontSize: 20 }}>{cm.flag}</AppText>
+                          <AppText
+                            style={{
+                              fontSize: 16,
+                              fontWeight: "700",
+                              color: sel ? c.orange : c.text,
+                            }}
+                          >
+                            {cm.symbol}
+                          </AppText>
                           <View>
                             <AppText
                               style={{
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: "700",
                                 color: sel ? c.orange : c.text,
                               }}
@@ -1465,13 +1600,12 @@ function WithdrawalModal({
                     })}
                   </ScrollView>
 
-                  {/* Selected currency balance bar */}
                   <View
                     style={{
                       flexDirection: "row",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: 14,
+                      padding: 12,
                       borderRadius: 12,
                       backgroundColor: c.bgCard,
                       borderWidth: 1,
@@ -1482,16 +1616,22 @@ function WithdrawalModal({
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
-                        gap: 10,
+                        gap: 8,
                       }}
                     >
-                      <AppText style={{ fontSize: 24 }}>
-                        {currMeta.flag}
+                      <AppText
+                        style={{
+                          fontSize: 20,
+                          fontWeight: "700",
+                          color: c.orange,
+                        }}
+                      >
+                        {currMeta.symbol}
                       </AppText>
                       <View>
                         <AppText
                           style={{
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: "700",
                             color: c.text,
                           }}
@@ -1508,7 +1648,6 @@ function WithdrawalModal({
                         style={{
                           fontSize: 9,
                           color: c.textMuted,
-                          letterSpacing: 0.8,
                           fontWeight: "700",
                         }}
                       >
@@ -1518,14 +1657,13 @@ function WithdrawalModal({
                       </AppText>
                       <AppText
                         weight="displayBlack"
-                        style={{ fontSize: 18, color: c.orange }}
+                        style={{ fontSize: 16, color: c.orange }}
                       >
                         {fmt(availableForCurrency, currency)}
                       </AppText>
                     </View>
                   </View>
 
-                  {/* ── Method selector ── */}
                   <SectionLabel
                     label={t("workerWithdrawals.modal.method")}
                     c={c}
@@ -1544,8 +1682,8 @@ function WithdrawalModal({
                             setVerifiedName(null);
                           }}
                           style={{
-                            width: (SCREEN_W - 36 - 16) / 2 - 4,
-                            padding: 12,
+                            width: (SCREEN_W - 32 - 16) / 2 - 4,
+                            padding: 10,
                             borderRadius: 12,
                             borderWidth: 1,
                             borderColor: sel ? c.orange : c.border,
@@ -1556,10 +1694,14 @@ function WithdrawalModal({
                             gap: 4,
                           }}
                         >
-                          <AppText style={{ fontSize: 22 }}>{m.icon}</AppText>
+                          <Ionicons
+                            name={m.icon}
+                            size={20}
+                            color={sel ? c.orange : c.textMuted}
+                          />
                           <AppText
                             style={{
-                              fontSize: 12,
+                              fontSize: 11,
                               fontWeight: "700",
                               color: sel ? c.orange : c.text,
                               textAlign: "center",
@@ -1569,7 +1711,7 @@ function WithdrawalModal({
                           </AppText>
                           <AppText
                             style={{
-                              fontSize: 10,
+                              fontSize: 9,
                               color: c.textMuted,
                               textAlign: "center",
                             }}
@@ -1581,22 +1723,19 @@ function WithdrawalModal({
                     })}
                   </View>
 
-                  {/* ── Dynamic fields ── */}
                   {selMethod && (
                     <>
                       <SectionLabel
                         label={t("workerWithdrawals.modal.details")}
                         c={c}
                       />
-
-                      {/* Local bank transfer */}
                       {selMethod.method === "bank_transfer" &&
                         !selMethod.isInternational && (
                           <View style={{ gap: 12 }}>
                             <View>
                               <AppText
                                 style={{
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   color: c.textMuted,
                                   fontWeight: "600",
                                   marginBottom: 6,
@@ -1610,7 +1749,7 @@ function WithdrawalModal({
                                   flexDirection: "row",
                                   justifyContent: "space-between",
                                   alignItems: "center",
-                                  padding: 12,
+                                  padding: 10,
                                   borderRadius: 10,
                                   borderWidth: 1,
                                   borderColor: c.border,
@@ -1620,7 +1759,7 @@ function WithdrawalModal({
                                 <AppText
                                   style={{
                                     color: form.bankName ? c.text : c.textMuted,
-                                    fontSize: 14,
+                                    fontSize: 13,
                                   }}
                                 >
                                   {form.bankName ??
@@ -1651,7 +1790,6 @@ function WithdrawalModal({
                                 modalBg={modalBg}
                               />
                             </View>
-
                             <FormField
                               label={t("workerWithdrawals.field.accountNumber")}
                               placeholder={t(
@@ -1662,8 +1800,6 @@ function WithdrawalModal({
                               keyboard="number-pad"
                               c={c}
                             />
-
-                            {/* Verify row */}
                             <View
                               style={{
                                 flexDirection: "row",
@@ -1675,7 +1811,7 @@ function WithdrawalModal({
                                 {verifiedName ? (
                                   <View
                                     style={{
-                                      padding: 10,
+                                      padding: 8,
                                       borderRadius: 8,
                                       backgroundColor: "rgba(34,197,94,0.1)",
                                       borderWidth: 1,
@@ -1684,18 +1820,18 @@ function WithdrawalModal({
                                   >
                                     <AppText
                                       style={{
-                                        fontSize: 13,
+                                        fontSize: 12,
                                         color: "#22c55e",
                                         fontWeight: "700",
                                       }}
                                     >
-                                      ✅ {verifiedName}
+                                      {verifiedName}
                                     </AppText>
                                   </View>
                                 ) : verifyErr ? (
                                   <View
                                     style={{
-                                      padding: 10,
+                                      padding: 8,
                                       borderRadius: 8,
                                       backgroundColor: "rgba(239,68,68,0.1)",
                                       borderWidth: 1,
@@ -1703,14 +1839,14 @@ function WithdrawalModal({
                                     }}
                                   >
                                     <AppText
-                                      style={{ fontSize: 12, color: "#ef4444" }}
+                                      style={{ fontSize: 11, color: "#ef4444" }}
                                     >
-                                      ❌ {verifyErr}
+                                      {verifyErr}
                                     </AppText>
                                   </View>
                                 ) : (
                                   <AppText
-                                    style={{ fontSize: 12, color: c.textMuted }}
+                                    style={{ fontSize: 11, color: c.textMuted }}
                                   >
                                     {t("workerWithdrawals.modal.verifyAccount")}
                                   </AppText>
@@ -1724,8 +1860,8 @@ function WithdrawalModal({
                                   !form.bankCode
                                 }
                                 style={{
-                                  paddingHorizontal: 16,
-                                  paddingVertical: 10,
+                                  paddingHorizontal: 14,
+                                  paddingVertical: 8,
                                   borderRadius: 8,
                                   borderWidth: 1,
                                   borderColor: c.border,
@@ -1746,7 +1882,7 @@ function WithdrawalModal({
                                     style={{
                                       color: c.text,
                                       fontWeight: "600",
-                                      fontSize: 13,
+                                      fontSize: 12,
                                     }}
                                   >
                                     {t("workerWithdrawals.modal.verify")}
@@ -1757,7 +1893,6 @@ function WithdrawalModal({
                           </View>
                         )}
 
-                      {/* International wire */}
                       {selMethod.method === "bank_transfer" &&
                         selMethod.isInternational && (
                           <View style={{ gap: 12 }}>
@@ -1819,7 +1954,6 @@ function WithdrawalModal({
                           </View>
                         )}
 
-                      {/* Mobile money */}
                       {selMethod.method === "mobile_money" && (
                         <View style={{ gap: 12 }}>
                           <FormField
@@ -1854,9 +1988,11 @@ function WithdrawalModal({
                                 borderColor: "rgba(249,115,22,0.2)",
                               }}
                             >
-                              <AppText style={{ fontSize: 16 }}>
-                                {selMethod.icon}
-                              </AppText>
+                              <Ionicons
+                                name="phone-portrait-outline"
+                                size={16}
+                                color={c.orange}
+                              />
                               <AppText
                                 style={{ fontSize: 13, color: c.orange }}
                               >
@@ -1869,7 +2005,6 @@ function WithdrawalModal({
                         </View>
                       )}
 
-                      {/* Crypto */}
                       {selMethod.method === "crypto" && (
                         <View style={{ gap: 14 }}>
                           <View>
@@ -1890,12 +2025,12 @@ function WithdrawalModal({
                                 flexWrap: "wrap",
                               }}
                             >
-                              {CRYPTO_TOKENS.map((t) => {
-                                const sel = form.cryptoToken === t;
+                              {CRYPTO_TOKENS.map((token) => {
+                                const sel = form.cryptoToken === token;
                                 return (
                                   <Pressable
-                                    key={t}
-                                    onPress={() => setF("cryptoToken", t)}
+                                    key={token}
+                                    onPress={() => setF("cryptoToken", token)}
                                     style={{
                                       paddingHorizontal: 16,
                                       paddingVertical: 8,
@@ -1914,7 +2049,7 @@ function WithdrawalModal({
                                         fontSize: 12,
                                       }}
                                     >
-                                      {t}
+                                      {token}
                                     </AppText>
                                   </Pressable>
                                 );
@@ -1986,7 +2121,11 @@ function WithdrawalModal({
                               borderColor: "rgba(234,179,8,0.2)",
                             }}
                           >
-                            <AppText style={{ fontSize: 14 }}>⚠️</AppText>
+                            <Ionicons
+                              name="warning-outline"
+                              size={16}
+                              color="#eab308"
+                            />
                             <AppText
                               style={{
                                 flex: 1,
@@ -2003,7 +2142,6 @@ function WithdrawalModal({
                     </>
                   )}
 
-                  {/* ── Amount ── */}
                   <SectionLabel
                     label={t("workerWithdrawals.modal.amount", { currency })}
                     c={c}
@@ -2021,18 +2159,18 @@ function WithdrawalModal({
                   >
                     <View
                       style={{
-                        paddingHorizontal: 14,
-                        height: 54,
+                        paddingHorizontal: 12,
+                        height: 48,
                         alignItems: "center",
                         justifyContent: "center",
                         backgroundColor: c.bgCard,
-                        borderRightWidth: StyleSheet.hairlineWidth,
+                        borderRightWidth: 1,
                         borderRightColor: c.border,
                       }}
                     >
                       <AppText
                         style={{
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: "700",
                           color: c.textMuted,
                         }}
@@ -2049,13 +2187,13 @@ function WithdrawalModal({
                       style={{
                         flex: 1,
                         color: c.text,
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: "700",
-                        paddingHorizontal: 14,
+                        paddingHorizontal: 12,
                       }}
                     />
                   </View>
-                  {/* Quick % buttons */}
+
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {[0.25, 0.5, 0.75, 1].map((f) => (
                       <Pressable
@@ -2065,7 +2203,7 @@ function WithdrawalModal({
                         }
                         style={{
                           flex: 1,
-                          padding: 9,
+                          padding: 8,
                           borderRadius: 8,
                           borderWidth: 1,
                           borderColor: c.border,
@@ -2075,7 +2213,7 @@ function WithdrawalModal({
                       >
                         <AppText
                           style={{
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: "600",
                             color: c.text,
                           }}
@@ -2085,7 +2223,7 @@ function WithdrawalModal({
                       </Pressable>
                     ))}
                   </View>
-                  {/* Fee preview */}
+
                   {amount && parseFloat(amount) > 0 && (
                     <View
                       style={{
@@ -2101,13 +2239,12 @@ function WithdrawalModal({
                         <AppText
                           style={{ color: "#22c55e", fontWeight: "700" }}
                         >
-                          {fmt(parseFloat(amount), currency)} — no fee 🎉
+                          {fmt(parseFloat(amount), currency)} — no fee
                         </AppText>
                       </AppText>
                     </View>
                   )}
 
-                  {/* ── PIN section ── */}
                   <View>
                     <View
                       style={{
@@ -2156,7 +2293,6 @@ function WithdrawalModal({
                     </Pressable>
                   </View>
 
-                  {/* Error */}
                   {error ? (
                     <View
                       style={{
@@ -2167,13 +2303,12 @@ function WithdrawalModal({
                         borderColor: "rgba(239,68,68,0.3)",
                       }}
                     >
-                      <AppText style={{ fontSize: 13, color: "#ef4444" }}>
-                        ⚠️ {error}
+                      <AppText style={{ fontSize: 12, color: "#ef4444" }}>
+                        {error}
                       </AppText>
                     </View>
                   ) : null}
 
-                  {/* Info */}
                   <View
                     style={{
                       flexDirection: "row",
@@ -2185,20 +2320,23 @@ function WithdrawalModal({
                       borderColor: c.border,
                     }}
                   >
-                    <AppText>ℹ️</AppText>
+                    <Ionicons
+                      name="information-circle"
+                      size={16}
+                      color={c.textMuted}
+                    />
                     <AppText
                       style={{
                         flex: 1,
-                        fontSize: 12,
+                        fontSize: 11,
                         color: c.textMuted,
-                        lineHeight: 18,
+                        lineHeight: 16,
                       }}
                     >
                       {t("workerWithdrawals.modal.info")}
                     </AppText>
                   </View>
 
-                  {/* Submit */}
                   <Pressable
                     onPress={handleSubmit}
                     disabled={
@@ -2207,7 +2345,7 @@ function WithdrawalModal({
                     style={[
                       {
                         width: "100%",
-                        padding: 16,
+                        padding: 14,
                         borderRadius: 14,
                         alignItems: "center",
                         backgroundColor: c.orange,
@@ -2226,7 +2364,7 @@ function WithdrawalModal({
                     ) : (
                       <AppText
                         weight="displayBlack"
-                        style={{ color: "#fff", fontSize: 16 }}
+                        style={{ color: "#fff", fontSize: 15 }}
                       >
                         {t("workerWithdrawals.modal.submit", {
                           amount: amount
@@ -2236,7 +2374,6 @@ function WithdrawalModal({
                       </AppText>
                     )}
                   </Pressable>
-
                   <View style={{ height: 32 }} />
                 </ScrollView>
               )}
@@ -2248,7 +2385,7 @@ function WithdrawalModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SMALL SHARED COMPONENTS
+// SHARED SMALL COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 function SectionLabel({ label, c, noMargin }) {
   return (
@@ -2280,7 +2417,7 @@ function FormField({
     <View>
       <AppText
         style={{
-          fontSize: 12,
+          fontSize: 11,
           color: c.textMuted,
           fontWeight: "600",
           marginBottom: 6,
@@ -2298,9 +2435,9 @@ function FormField({
           borderWidth: 1,
           borderColor: c.border,
           borderRadius: 10,
-          padding: 12,
+          padding: 10,
           color: c.text,
-          fontSize: 14,
+          fontSize: 13,
           backgroundColor: c.bgInput,
           fontFamily: mono && Platform.OS === "ios" ? "Courier" : undefined,
         }}
@@ -2314,7 +2451,7 @@ function StatCard({ label, value, sub, orange, c }) {
     <View
       style={{
         flex: 1,
-        padding: 14,
+        padding: 12,
         borderRadius: 14,
         borderWidth: 1,
         borderColor: orange ? "rgba(249,115,22,0.3)" : c.border,
@@ -2334,7 +2471,7 @@ function StatCard({ label, value, sub, orange, c }) {
       <AppText
         weight="displayBlack"
         style={{
-          fontSize: 20,
+          fontSize: 16,
           color: orange ? c.orange : c.text,
           marginTop: 4,
           letterSpacing: -0.5,
@@ -2354,13 +2491,13 @@ function WithdrawalCard({ w, onReceipt, c }) {
   const STATUS_META = getStatusMeta(t);
   const sm = STATUS_META[w.status] ?? STATUS_META.PENDING;
   const cur = w.currency ?? "NGN";
-  const cm = CURRENCY_META[cur] ?? { flag: "💱" };
+  const cm = CURRENCY_META[cur] ?? { symbol: cur };
 
   return (
     <View
       style={{
-        paddingVertical: 16,
-        borderBottomWidth: StyleSheet.hairlineWidth,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
         borderBottomColor: c.border,
       }}
     >
@@ -2369,50 +2506,53 @@ function WithdrawalCard({ w, onReceipt, c }) {
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "flex-start",
-          marginBottom: 8,
+          marginBottom: 6,
         }}
       >
         <View>
-          <AppText
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: c.text,
-              fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-            }}
-          >
+          <AppText style={{ fontSize: 11, fontWeight: "700", color: c.text }}>
             #
             {String(w.reference ?? w.id ?? "")
               .slice(-8)
               .toUpperCase()}
           </AppText>
-          <AppText style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}>
+          <AppText style={{ fontSize: 10, color: c.textMuted, marginTop: 2 }}>
             {timeAgo(w.createdAt, t)}
           </AppText>
         </View>
         <View
           style={{
-            paddingHorizontal: 10,
-            paddingVertical: 4,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
             borderRadius: 20,
             backgroundColor: sm.bg,
             borderWidth: 1,
             borderColor: sm.color + "55",
           }}
         >
-          <AppText style={{ fontSize: 11, color: sm.color, fontWeight: "700" }}>
+          <AppText style={{ fontSize: 10, color: sm.color, fontWeight: "700" }}>
             {sm.label}
           </AppText>
         </View>
       </View>
-      <AppText style={{ color: c.text, fontSize: 14, marginBottom: 4 }}>
-        {cm.flag} {w.method?.replace(/_/g, " ")}
-      </AppText>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          marginBottom: 4,
+        }}
+      >
+        <Ionicons name="card-outline" size={14} color={c.textMuted} />
+        <AppText style={{ color: c.text, fontSize: 13 }}>
+          {w.method?.replace(/_/g, " ")}
+        </AppText>
+      </View>
       <AppText
         weight="displayBlack"
         style={{
           color: c.text,
-          fontSize: 20,
+          fontSize: 18,
           letterSpacing: -0.5,
           marginBottom: 10,
         }}
@@ -2423,14 +2563,14 @@ function WithdrawalCard({ w, onReceipt, c }) {
         onPress={() => onReceipt(w)}
         style={{
           alignSelf: "flex-start",
-          paddingHorizontal: 16,
-          paddingVertical: 8,
+          paddingHorizontal: 14,
+          paddingVertical: 7,
           borderRadius: 10,
           borderWidth: 1,
           borderColor: c.border,
         }}
       >
-        <AppText style={{ fontSize: 12, fontWeight: "600", color: c.text }}>
+        <AppText style={{ fontSize: 11, fontWeight: "600", color: c.text }}>
           {t("workerWithdrawals.card.receipt")}
         </AppText>
       </Pressable>
@@ -2449,14 +2589,18 @@ export default function WorkerWithdrawalsScreen() {
   const modalBg = th.mode === "dark" ? "#111118" : "#ffffff";
 
   const [balance, setBalance] = useState(null);
-  const [currencyBalances, setCurrencyBalances] = useState({});
+  const [balancesByCurrency, setBalancesByCurrency] = useState({});
   const [withdrawals, setWithdrawals] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showPayout, setShowPayout] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState(null);
+  const [activeCurrency, setActiveCurrency] = useState("ALL");
   const [receipt, setReceipt] = useState(null);
+  const [allHistory, setAllHistory] = useState([]);
+
+  // Track which currency should be selected when opening the payout modal
+  const [payoutDefaultCurrency, setPayoutDefaultCurrency] = useState("NGN");
 
   const load = useCallback(async () => {
     try {
@@ -2467,36 +2611,16 @@ export default function WorkerWithdrawalsScreen() {
       setBalance(d.balance ?? {});
       setWithdrawals(d.withdrawals ?? []);
       setTotal(d.total ?? 0);
+      setBalancesByCurrency(d.balancesByCurrency ?? {});
 
-      // Per-currency balances
-      const earnRes = await client.get("/payments/earnings?limit=1");
-      const currencies = earnRes.data.data.availableCurrencies ?? ["NGN"];
-      const balMap = {};
-      await Promise.all(
-        currencies.map(async (cur) => {
-          try {
-            const r = await client.get(
-              `/payments/earnings?currency=${cur}&limit=1`,
-            );
-            const earned = r.data.data.summary?.totalEarned ?? 0;
-            const pending = (d.withdrawals ?? [])
-              .filter(
-                (w) =>
-                  w.currency === cur &&
-                  ["PENDING", "PROCESSING"].includes(w.status),
-              )
-              .reduce((s, w) => s + (w.amount || 0), 0);
-            balMap[cur] = Math.max(0, earned - pending);
-          } catch {
-            balMap[cur] = 0;
-          }
-        }),
-      );
-      setCurrencyBalances(balMap);
-      const topCur = Object.entries(balMap).sort(
-        ([, a], [, b]) => b - a,
-      )[0]?.[0];
-      if (topCur) setSelectedCurrency(topCur);
+      let wide = d.withdrawals ?? [];
+      try {
+        const wideRes = await client.get(
+          "/payments/withdrawals?page=1&limit=100",
+        );
+        wide = wideRes.data.data?.withdrawals ?? wide;
+      } catch {}
+      setAllHistory(wide);
     } catch (err) {
       toast.error(
         err?.response?.data?.message ?? t("workerWithdrawals.main.loadFailed"),
@@ -2511,22 +2635,85 @@ export default function WorkerWithdrawalsScreen() {
     load();
   }, [load]);
 
-  const currenciesWithBalance = Object.entries(currencyBalances)
-    .filter(([, v]) => v > 0)
-    .sort(([, a], [, b]) => b - a);
+  const currenciesWithBalance = Object.entries(balancesByCurrency).sort(
+    ([, a], [, b]) =>
+      (b.available || 0) +
+      (b.inEscrow || 0) -
+      ((a.available || 0) + (a.inEscrow || 0)),
+  );
+
+  const isFiltered = activeCurrency !== "ALL";
+  const activeMeta = isFiltered
+    ? (CURRENCY_META[activeCurrency] ?? { symbol: activeCurrency })
+    : null;
+  const activeBalance = isFiltered
+    ? (balancesByCurrency[activeCurrency] ?? null)
+    : null;
+
+  const visibleHistory = isFiltered
+    ? withdrawals.filter((w) => w.currency === activeCurrency)
+    : withdrawals;
+
+  const totalAvailable = isFiltered
+    ? (activeBalance?.available ?? 0)
+    : (balance?.available ?? 0);
+  const totalInEscrow = isFiltered
+    ? (activeBalance?.inEscrow ?? 0)
+    : (balance?.inEscrow ?? 0);
+
+  const totalPendingPayout = isFiltered
+    ? allHistory
+        .filter(
+          (w) =>
+            w.currency === activeCurrency &&
+            ["PENDING", "PROCESSING"].includes(w.status),
+        )
+        .reduce((sum, w) => sum + (w.amount || 0), 0)
+    : (balance?.pendingPayout ?? 0);
+
+  const pendingCount = isFiltered
+    ? allHistory.filter(
+        (w) =>
+          w.currency === activeCurrency &&
+          ["PENDING", "PROCESSING"].includes(w.status),
+      ).length
+    : allHistory.filter((w) => ["PENDING", "PROCESSING"].includes(w.status))
+        .length;
+
+  const openPayout = (currency = null) => {
+    if (currency) {
+      setPayoutDefaultCurrency(currency);
+    } else if (isFiltered) {
+      setPayoutDefaultCurrency(activeCurrency);
+    } else {
+      setPayoutDefaultCurrency(currenciesWithBalance[0]?.[0] ?? "NGN");
+    }
+    setShowPayout(true);
+  };
 
   if (loading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: c.bg,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+      <ScrollView
+        style={{ flex: 1, backgroundColor: c.bg }}
+        contentContainerStyle={{ padding: 16, gap: 16 }}
       >
-        <ActivityIndicator size="large" color={c.orange} />
-      </View>
+        <Skeleton width="60%" height={32} radius={8} />
+        <Skeleton width="40%" height={16} radius={8} />
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+          <Skeleton width={120} height={80} radius={14} />
+          <Skeleton width={120} height={80} radius={14} />
+        </View>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <Skeleton width="48%" height={80} radius={14} />
+          <Skeleton width="48%" height={80} radius={14} />
+        </View>
+        <Skeleton
+          width="100%"
+          height={200}
+          radius={14}
+          style={{ marginTop: 10 }}
+        />
+      </ScrollView>
     );
   }
 
@@ -2546,7 +2733,7 @@ export default function WorkerWithdrawalsScreen() {
       }
       showsVerticalScrollIndicator={false}
     >
-      {/* ── Header ── */}
+      {/* Header */}
       <View
         style={{
           flexDirection: "row",
@@ -2558,51 +2745,55 @@ export default function WorkerWithdrawalsScreen() {
         <View style={{ flex: 1 }}>
           <AppText
             style={{
-              fontSize: 11,
+              fontSize: 10,
               color: c.orange,
               fontWeight: "700",
               letterSpacing: 0.8,
             }}
           >
-            {t("workerWithdrawals.main.earningsPayouts")}
+            {isFiltered
+              ? `${activeCurrency} Wallet`
+              : t("workerWithdrawals.main.earningsPayouts")}
           </AppText>
           <AppText
             weight="displayBlack"
             style={{
-              fontSize: 32,
+              fontSize: 26,
               color: c.text,
               marginVertical: 4,
               letterSpacing: -0.5,
             }}
           >
-            {t("workerWithdrawals.main.title")}
+            {isFiltered ? (activeMeta?.name ?? activeCurrency) : "Your Wallet"}
           </AppText>
-          <AppText style={{ color: c.textMuted, fontSize: 13 }}>
-            {t("workerWithdrawals.main.subtitle")}
+          <AppText style={{ color: c.textMuted, fontSize: 12 }}>
+            {isFiltered
+              ? `Showing only ${activeCurrency} — click "All" to see combined`
+              : t("workerWithdrawals.main.subtitle")}
           </AppText>
         </View>
         <Pressable
-          onPress={() => setShowPayout(true)}
+          onPress={() => openPayout()}
           disabled={currenciesWithBalance.length === 0}
           style={{
             flexDirection: "row",
             alignItems: "center",
             gap: 6,
-            paddingHorizontal: 16,
-            paddingVertical: 12,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
             borderRadius: 14,
             backgroundColor: c.orange,
             opacity: currenciesWithBalance.length === 0 ? 0.4 : 1,
           }}
         >
           <Ionicons name="arrow-up" size={14} color="#fff" />
-          <AppText weight="semibold" style={{ color: "#fff", fontSize: 13 }}>
+          <AppText weight="semibold" style={{ color: "#fff", fontSize: 12 }}>
             {t("workerWithdrawals.main.withdraw")}
           </AppText>
         </Pressable>
       </View>
 
-      {/* ── Currency wallet cards ── */}
+      {/* Wallet Cards */}
       {currenciesWithBalance.length > 0 && (
         <>
           <AppText
@@ -2621,21 +2812,75 @@ export default function WorkerWithdrawalsScreen() {
             showsHorizontalScrollIndicator={false}
             style={{ marginBottom: 16 }}
           >
-            {currenciesWithBalance.map(([cur, bal]) => {
-              const cm = CURRENCY_META[cur] ?? {
-                flag: "💱",
-                symbol: cur,
-                name: cur,
-              };
-              const sel = selectedCurrency === cur;
+            <Pressable
+              onPress={() => setActiveCurrency("ALL")}
+              style={{
+                width: 120,
+                marginRight: 10,
+                padding: 14,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: activeCurrency === "ALL" ? c.orange : c.border,
+                backgroundColor:
+                  activeCurrency === "ALL" ? "rgba(249,115,22,0.1)" : c.bgPanel,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <Ionicons
+                  name="wallet-outline"
+                  size={20}
+                  color={activeCurrency === "ALL" ? c.orange : c.textMuted}
+                />
+                <AppText
+                  style={{
+                    fontSize: 10,
+                    color: activeCurrency === "ALL" ? c.orange : c.textMuted,
+                    fontWeight: "700",
+                    letterSpacing: 0.6,
+                  }}
+                >
+                  ALL
+                </AppText>
+              </View>
+              <AppText
+                weight="displayBlack"
+                style={{
+                  fontSize: 16,
+                  color: activeCurrency === "ALL" ? c.orange : c.text,
+                  letterSpacing: -0.5,
+                }}
+              >
+                {currenciesWithBalance.length} Wallets
+              </AppText>
+              <AppText
+                style={{ fontSize: 9, color: c.textMuted, marginTop: 2 }}
+              >
+                Combined view
+              </AppText>
+            </Pressable>
+
+            {currenciesWithBalance.map(([cur, info]) => {
+              const cm = CURRENCY_META[cur] ?? { symbol: cur, name: cur };
+              const sel = activeCurrency === cur;
+              const hasAvailable = (info.available ?? 0) > 0;
+              const hasEscrow = (info.inEscrow ?? 0) > 0;
+              const hasPending = (info.pendingPayout ?? 0) > 0;
+
               return (
                 <Pressable
                   key={cur}
-                  onPress={() => setSelectedCurrency(cur)}
+                  onPress={() => setActiveCurrency(cur)}
                   style={{
-                    width: 150,
+                    width: 130,
                     marginRight: 10,
-                    padding: 16,
+                    padding: 14,
                     borderRadius: 14,
                     borderWidth: 1,
                     borderColor: sel ? c.orange : c.border,
@@ -2646,11 +2891,19 @@ export default function WorkerWithdrawalsScreen() {
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 8,
+                      gap: 6,
                       marginBottom: 8,
                     }}
                   >
-                    <AppText style={{ fontSize: 22 }}>{cm.flag}</AppText>
+                    <AppText
+                      style={{
+                        fontSize: 16,
+                        fontWeight: "700",
+                        color: sel ? c.orange : c.text,
+                      }}
+                    >
+                      {cm.symbol}
+                    </AppText>
                     <AppText
                       style={{
                         fontSize: 10,
@@ -2665,40 +2918,62 @@ export default function WorkerWithdrawalsScreen() {
                   <AppText
                     weight="displayBlack"
                     style={{
-                      fontSize: 18,
+                      fontSize: 16,
                       color: sel ? c.orange : c.text,
                       letterSpacing: -0.5,
                     }}
                   >
-                    {fmt(bal, cur)}
+                    {fmt(info.available ?? 0, cur)}
                   </AppText>
                   <AppText
-                    style={{ fontSize: 10, color: c.textMuted, marginTop: 2 }}
+                    style={{ fontSize: 9, color: c.textMuted, marginTop: 2 }}
                   >
-                    {cm.name}
+                    {hasEscrow
+                      ? `${fmt(info.inEscrow, cur)} awaiting release`
+                      : `Available in ${cur}`}
                   </AppText>
+                  {(hasPending ||
+                    (info.totalEarned ?? 0) > (info.available ?? 0)) && (
+                    <AppText
+                      style={{
+                        fontSize: 9,
+                        color: c.orange,
+                        fontWeight: "600",
+                        marginTop: 2,
+                      }}
+                    >
+                      {hasPending
+                        ? `${fmt(info.pendingPayout, cur)} pending`
+                        : "incl. partial releases"}
+                    </AppText>
+                  )}
                   <Pressable
-                    onPress={() => {
-                      setSelectedCurrency(cur);
-                      setShowPayout(true);
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setActiveCurrency(cur);
+                      openPayout(cur);
                     }}
+                    disabled={!hasAvailable}
                     style={{
-                      marginTop: 10,
-                      paddingVertical: 7,
+                      marginTop: 8,
+                      paddingVertical: 6,
                       borderRadius: 8,
                       borderWidth: 1,
                       borderColor: c.border,
                       alignItems: "center",
+                      opacity: hasAvailable ? 1 : 0.4,
                     }}
                   >
                     <AppText
                       style={{
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: "700",
-                        color: c.textMuted,
+                        color: c.textDim,
                       }}
                     >
-                      {t("workerWithdrawals.main.withdraw")}
+                      {hasAvailable
+                        ? t("workerWithdrawals.main.withdraw")
+                        : "No funds yet"}
                     </AppText>
                   </Pressable>
                 </Pressable>
@@ -2708,18 +2983,22 @@ export default function WorkerWithdrawalsScreen() {
         </>
       )}
 
-      {/* ── Balance summary cards ── */}
+      {/* Summary Stats */}
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
         <StatCard
           label={t("workerWithdrawals.main.totalAvailable")}
-          value={fmt(balance?.available ?? 0)}
-          sub={t("workerWithdrawals.main.acrossCurrencies")}
+          value={fmt(totalAvailable, isFiltered ? activeCurrency : "USD")}
+          sub={
+            isFiltered
+              ? `${activeCurrency} available`
+              : t("workerWithdrawals.main.acrossCurrencies")
+          }
           orange
           c={c}
         />
         <StatCard
           label={t("workerWithdrawals.main.inEscrow")}
-          value={fmt(balance?.inEscrow ?? 0)}
+          value={fmt(totalInEscrow, isFiltered ? activeCurrency : "USD")}
           sub={t("workerWithdrawals.main.awaitingCompletion")}
           c={c}
         />
@@ -2727,11 +3006,9 @@ export default function WorkerWithdrawalsScreen() {
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
         <StatCard
           label={t("workerWithdrawals.main.pendingPayouts")}
-          value={fmt(balance?.pendingPayout ?? 0)}
+          value={fmt(totalPendingPayout, isFiltered ? activeCurrency : "USD")}
           sub={t("workerWithdrawals.main.requestPlural", {
-            count: withdrawals.filter((w) =>
-              ["PENDING", "PROCESSING"].includes(w.status),
-            ).length,
+            count: pendingCount,
           })}
           c={c}
         />
@@ -2743,12 +3020,12 @@ export default function WorkerWithdrawalsScreen() {
         />
       </View>
 
-      {/* ── History ── */}
+      {/* History */}
       <View
         style={{
           backgroundColor: c.bgPanel,
           borderRadius: 18,
-          borderWidth: StyleSheet.hairlineWidth,
+          borderWidth: 1,
           borderColor: c.border,
           padding: 16,
         }}
@@ -2760,49 +3037,60 @@ export default function WorkerWithdrawalsScreen() {
             alignItems: "center",
             marginBottom: 4,
             paddingBottom: 12,
-            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomWidth: 1,
             borderBottomColor: c.border,
           }}
         >
           <AppText
             weight="displayBlack"
-            style={{ fontSize: 17, color: c.text }}
+            style={{ fontSize: 15, color: c.text }}
           >
-            {t("workerWithdrawals.main.history")}
+            {t("workerWithdrawals.main.history")}{" "}
+            {isFiltered ? `· ${activeCurrency}` : ""}
           </AppText>
-          <AppText style={{ fontSize: 12, color: c.textMuted }}>
-            {total} {t("workerWithdrawals.main.records")}
+          <AppText style={{ fontSize: 11, color: c.textMuted }}>
+            {visibleHistory.length} {t("workerWithdrawals.main.records")}
           </AppText>
         </View>
-        {withdrawals.length === 0 ? (
-          <View style={{ paddingVertical: 48, alignItems: "center" }}>
-            <AppText style={{ fontSize: 40, marginBottom: 12 }}>💸</AppText>
+
+        {visibleHistory.length === 0 ? (
+          <View style={{ paddingVertical: 40, alignItems: "center" }}>
+            <Ionicons
+              name="cash-outline"
+              size={36}
+              color={c.textMuted}
+              style={{ opacity: 0.5, marginBottom: 12 }}
+            />
             <AppText
               weight="semibold"
-              style={{ color: c.text, marginBottom: 4 }}
+              style={{ color: c.text, marginBottom: 4, fontSize: 14 }}
             >
               {t("workerWithdrawals.main.noWithdrawals")}
             </AppText>
             <AppText
-              style={{ color: c.textMuted, textAlign: "center", fontSize: 13 }}
+              style={{ color: c.textMuted, textAlign: "center", fontSize: 12 }}
             >
               {t("workerWithdrawals.main.noWithdrawalsSub")}
             </AppText>
           </View>
         ) : (
-          withdrawals.map((w) => (
+          visibleHistory.map((w) => (
             <WithdrawalCard key={w.id} w={w} onReceipt={setReceipt} c={c} />
           ))
         )}
       </View>
 
-      {/* Modals */}
       <WithdrawalModal
         visible={showPayout}
         onClose={() => setShowPayout(false)}
         balance={balance}
-        currencyBalances={currencyBalances}
-        defaultCurrency={selectedCurrency ?? "NGN"}
+        currencyBalances={Object.fromEntries(
+          Object.entries(balancesByCurrency).map(([cur, info]) => [
+            cur,
+            info.available ?? 0,
+          ]),
+        )}
+        defaultCurrency={payoutDefaultCurrency}
         onSuccess={() => {
           setShowPayout(false);
           load();
