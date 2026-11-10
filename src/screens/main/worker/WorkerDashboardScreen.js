@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../../components/AppText";
 import Skeleton from "../../../components/Skeleton";
@@ -42,7 +43,7 @@ function initials(u) {
   return `${u.firstName?.[0] || ""}${u.lastName?.[0] || ""}`.toUpperCase();
 }
 
-function StatusBadge({ status, c }) {
+function StatusBadge({ status, c, t }) {
   const map = {
     PENDING: { bg: "rgba(234,179,8,0.12)", color: "#eab308" },
     IN_PROGRESS: { bg: "rgba(59,130,246,0.12)", color: "#60a5fa" },
@@ -55,12 +56,15 @@ function StatusBadge({ status, c }) {
   const style = map[status] || map.PENDING;
   return (
     <View style={[s.badge, { backgroundColor: style.bg }]}>
-      <AppText style={[s.badgeText, { color: style.color }]}>{status}</AppText>
+      <AppText style={[s.badgeText, { color: style.color }]}>
+        {t(`booking.status.${status?.toLowerCase() || "pending"}`)}
+      </AppText>
     </View>
   );
 }
 
 function CurrencySwitch() {
+  const { t } = useTranslation();
   const { dashboardCurrency, changeDashboardCurrency } = useCurrency();
   const [showModal, setShowModal] = useState(false);
   const { theme } = useTheme();
@@ -71,7 +75,7 @@ function CurrencySwitch() {
   return (
     <>
       <Pressable style={s.currWrap} onPress={() => setShowModal(true)}>
-        <AppText style={s.currLabel}>Viewing in</AppText>
+        <AppText style={s.currLabel}>{t("workerDash.viewingIn")}</AppText>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <AppText style={s.currSelect}>
             {activeCurrency?.symbol} {dashboardCurrency}
@@ -88,7 +92,7 @@ function CurrencySwitch() {
               weight="displayBlack"
               style={{ fontSize: 18, color: c.text, marginBottom: 16 }}
             >
-              Select Currency
+              {t("settings.select.currency")}
             </AppText>
             <ScrollView style={{ maxHeight: 300 }}>
               {CURRENCIES.map((cur) => (
@@ -132,6 +136,7 @@ function DashboardSkeleton() {
 }
 
 export default function WorkerDashboardScreen() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const { theme } = useTheme();
   const c = theme.colors;
@@ -143,7 +148,7 @@ export default function WorkerDashboardScreen() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [greeting, setGreeting] = useState("Good morning");
+  const [greeting, setGreeting] = useState("greetingMorning");
   const [isTogglingAvail, setIsTogglingAvail] = useState(false);
 
   const isMobile = width <= 640;
@@ -175,9 +180,9 @@ export default function WorkerDashboardScreen() {
 
   useEffect(() => {
     const hour = new Date().getHours();
-    if (hour < 12) setGreeting("Good morning");
-    else if (hour < 18) setGreeting("Good afternoon");
-    else setGreeting("Good evening");
+    if (hour < 12) setGreeting("greetingMorning");
+    else if (hour < 18) setGreeting("greetingAfternoon");
+    else setGreeting("greetingEvening");
 
     let isMounted = true;
     getWorkerDashboard()
@@ -215,7 +220,7 @@ export default function WorkerDashboardScreen() {
       await fetchDashboardSilently();
     } catch (err) {
       if (updateUser) updateUser({ isAvailable: !newValue });
-      toast.error("Failed to update availability");
+      toast.error(t("workerDash.failedAvailability"));
     } finally {
       setIsTogglingAvail(false);
     }
@@ -243,12 +248,12 @@ export default function WorkerDashboardScreen() {
             fontWeight: "700",
           }}
         >
-          Failed to load
+          {t("workerDash.failedToLoad")}
         </AppText>
         <AppText
           style={{ color: c.textDim, marginTop: 8, textAlign: "center" }}
         >
-          {error || "No data returned"}
+          {error || t("workerDash.noData")}
         </AppText>
       </View>
     );
@@ -310,7 +315,7 @@ export default function WorkerDashboardScreen() {
 
         <View style={s.greetingTextWrap}>
           <AppText style={s.greetingText} numberOfLines={1}>
-            {greeting},{" "}
+            {t(`workerDash.${greeting}`)},
             <AppText
               variant="title"
               weight="displayBlack"
@@ -321,7 +326,6 @@ export default function WorkerDashboardScreen() {
           </AppText>
         </View>
 
-        {/* Availability pill tucked to the top right */}
         <Pressable
           onPress={handleToggleAvailability}
           disabled={isTogglingAvail}
@@ -353,12 +357,14 @@ export default function WorkerDashboardScreen() {
               { color: isAvailable ? c.green : c.textDim },
             ]}
           >
-            {isAvailable ? "Available" : "Offline"}
+            {isAvailable
+              ? t("workerDash.available")
+              : t("workerDash.unavailable")}
           </AppText>
         </Pressable>
       </View>
 
-      {/* ── Row 2: Currency Switch (Full Width) ── */}
+      {/* ── Row 2: Currency Switch ── */}
       <View style={{ width: "100%" }}>
         <CurrencySwitch />
       </View>
@@ -379,7 +385,9 @@ export default function WorkerDashboardScreen() {
         >
           <View style={s.earningsBlob} />
           <View style={{ zIndex: 1, width: "100%" }}>
-            <AppText style={s.earningsLabel}>This Month</AppText>
+            <AppText style={s.earningsLabel}>
+              {t("workerDash.thisMonth")}
+            </AppText>
             <AppText
               variant="title"
               weight="displayBlack"
@@ -390,13 +398,17 @@ export default function WorkerDashboardScreen() {
               {formatCurrency(earnings.thisMonth || 0, dashboardCurrency)}
             </AppText>
             <AppText style={s.earningsMeta}>
-              Last month:{" "}
-              {formatCurrency(earnings.lastMonth || 0, dashboardCurrency)}
+              {t("workerDash.lastMonth", {
+                value: formatCurrency(
+                  earnings.lastMonth || 0,
+                  dashboardCurrency,
+                ),
+              })}
             </AppText>
           </View>
 
           <View style={[s.pendingBox, { width: "100%", minWidth: 0 }]}>
-            <AppText style={s.pendingLabel}>In Escrow</AppText>
+            <AppText style={s.pendingLabel}>{t("workerDash.inEscrow")}</AppText>
             <AppText
               variant="title"
               weight="displayBlack"
@@ -406,7 +418,9 @@ export default function WorkerDashboardScreen() {
             >
               {formatCurrency(earnings.pendingPayout || 0, dashboardCurrency)}
             </AppText>
-            <AppText style={s.pendingSub}>Awaiting release</AppText>
+            <AppText style={s.pendingSub}>
+              {t("workerDash.awaitingRelease")}
+            </AppText>
           </View>
         </View>
 
@@ -420,12 +434,14 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>Active Jobs</AppText>
+          <AppText style={s.statLabel}>{t("workerDash.activeJobs")}</AppText>
           <AppText variant="title" weight="displayBlack" style={s.statValue}>
             {bookings.active || 0}
           </AppText>
           <AppText style={s.statSub}>
-            {bookings.pending || 0} pending requests
+            {t("workerDash.pendingRequests", {
+              count: bookings.pending || 0,
+            })}
           </AppText>
         </View>
 
@@ -439,7 +455,7 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>Rating</AppText>
+          <AppText style={s.statLabel}>{t("workerDash.rating")}</AppText>
           <AppText variant="title" weight="displayBlack" style={s.statValue}>
             {engagement?.avgRating
               ? Number(engagement.avgRating).toFixed(1)
@@ -453,7 +469,9 @@ export default function WorkerDashboardScreen() {
               style={{ marginRight: 4 }}
             />
             <AppText style={s.statSub}>
-              from {engagement?.totalReviews || 0} reviews
+              {t("workerDash.fromReviews", {
+                count: engagement?.totalReviews || 0,
+              })}
             </AppText>
           </View>
         </View>
@@ -468,16 +486,17 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>Jobs Done</AppText>
+          <AppText style={s.statLabel}>{t("workerDash.jobsDone")}</AppText>
           <AppText variant="title" weight="displayBlack" style={s.statValue}>
             {engagement?.completedJobs || 0}
           </AppText>
           <AppText style={s.statSub}>
-            {engagement?.responseRate || 0}% response rate
+            {t("workerDash.responseRate", {
+              rate: engagement?.responseRate || 0,
+            })}
           </AppText>
         </View>
 
-        {/* Total Bookings — with disputed count */}
         <View
           style={[
             s.card,
@@ -488,7 +507,7 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>Total Bookings</AppText>
+          <AppText style={s.statLabel}>{t("workerDash.totalBookings")}</AppText>
           <AppText variant="title" weight="displayBlack" style={s.statValue}>
             {bookings?.total || 0}
           </AppText>
@@ -500,12 +519,16 @@ export default function WorkerDashboardScreen() {
             }}
           >
             <AppText style={s.statSub}>
-              {bookings?.completed || 0} completed · {bookings?.cancelled || 0}{" "}
-              cancelled
+              {t("workerDash.completedCancelled", {
+                completed: bookings?.completed || 0,
+                cancelled: bookings?.cancelled || 0,
+              })}
             </AppText>
             {Number(bookings?.disputed) > 0 && (
               <AppText style={[s.statSub, { color: c.red, marginLeft: 4 }]}>
-                · {bookings.disputed} disputed
+                {t("workerDash.disputedCount", {
+                  count: bookings.disputed,
+                })}
               </AppText>
             )}
           </View>
@@ -521,11 +544,15 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>Messages</AppText>
+          <AppText style={s.statLabel}>
+            {t("workerDash.unreadMessages")}
+          </AppText>
           <AppText variant="title" weight="displayBlack" style={s.statValue}>
             {engagement?.unreadMessages || 0}
           </AppText>
-          <AppText style={s.statSub}>Unread conversations</AppText>
+          <AppText style={s.statSub}>
+            {t("workerDash.unreadConversations")}
+          </AppText>
         </View>
       </View>
 
@@ -542,10 +569,12 @@ export default function WorkerDashboardScreen() {
         >
           <View style={s.cardHeader}>
             <AppText variant="title" weight="displayBlack" style={s.cardTitle}>
-              Earnings trend
+              {t("workerDash.earningsTrend")}
             </AppText>
             <Pressable onPress={() => navigation.navigate("WorkerEarnings")}>
-              <AppText style={s.cardLink}>Full report →</AppText>
+              <AppText style={s.cardLink}>
+                {t("workerDash.fullReport")} →
+              </AppText>
             </Pressable>
           </View>
           <View style={s.barChart}>
@@ -572,18 +601,22 @@ export default function WorkerDashboardScreen() {
             ]}
           >
             <AppText style={s.earningsMeta}>
-              This year:{" "}
-              {formatCurrency(earnings.thisYear || 0, dashboardCurrency)}
+              {t("workerDash.thisYear", {
+                value: formatCurrency(
+                  earnings.thisYear || 0,
+                  dashboardCurrency,
+                ),
+              })}
             </AppText>
             <AppText style={s.earningsMeta}>
-              All time:{" "}
-              {formatCurrency(earnings.allTime || 0, dashboardCurrency)}
+              {t("workerDash.allTime", {
+                value: formatCurrency(earnings.allTime || 0, dashboardCurrency),
+              })}
             </AppText>
           </View>
         </View>
 
         <View style={{ width: isMobile ? "100%" : desktopHalfWidth, gap: 16 }}>
-          {/* Profile Completion — hidden at 100% */}
           {completion < 100 && (
             <View
               style={[
@@ -592,7 +625,9 @@ export default function WorkerDashboardScreen() {
               ]}
             >
               <View style={s.completionHeader}>
-                <AppText style={s.completionLabel}>Profile Completion</AppText>
+                <AppText style={s.completionLabel}>
+                  {t("workerDash.profileCompletion")}
+                </AppText>
                 <AppText
                   variant="title"
                   weight="displayBlack"
@@ -605,12 +640,12 @@ export default function WorkerDashboardScreen() {
                 <View style={[s.progressFill, { width: `${completion}%` }]} />
               </View>
               <AppText style={s.completionHint}>
-                Complete your profile to attract more clients.{" "}
+                {t("workerDash.completeProfileHint")}
                 <AppText
                   style={{ color: c.orange, fontWeight: "600" }}
                   onPress={() => navigation.navigate("WorkerProfile")}
                 >
-                  Update now →
+                  {t("workerDash.updateNow")} →
                 </AppText>
               </AppText>
 
@@ -654,7 +689,7 @@ export default function WorkerDashboardScreen() {
                           letterSpacing: 0.4,
                         }}
                       >
-                        ✓ Verified
+                        {t("workerDash.verified")}
                       </AppText>
                     </View>
                   )}
@@ -680,7 +715,7 @@ export default function WorkerDashboardScreen() {
                           letterSpacing: 0.4,
                         }}
                       >
-                        ⏳ Pending
+                        {t("workerDash.pending")}
                       </AppText>
                     </View>
                   )}
@@ -701,10 +736,10 @@ export default function WorkerDashboardScreen() {
                 weight="displayBlack"
                 style={s.cardTitle}
               >
-                Upcoming jobs
+                {t("workerDash.upcomingJobs")}
               </AppText>
               <Pressable onPress={() => navigation.navigate("WorkerBookings")}>
-                <AppText style={s.cardLink}>See all →</AppText>
+                <AppText style={s.cardLink}>{t("workerDash.seeAll")} →</AppText>
               </Pressable>
             </View>
             {safeUpcoming.length === 0 ? (
@@ -714,7 +749,7 @@ export default function WorkerDashboardScreen() {
                   { textAlign: "center", paddingVertical: 12 },
                 ]}
               >
-                No upcoming jobs scheduled
+                {t("workerDash.noUpcomingJobs")}
               </AppText>
             ) : (
               safeUpcoming.map((b, i) => {
@@ -737,14 +772,14 @@ export default function WorkerDashboardScreen() {
                     )}
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <AppText style={s.listTitle} numberOfLines={1}>
-                        {b?.title || "Untitled"}
+                        {b?.title || t("workerDash.untitled")}
                       </AppText>
                       <AppText style={s.listMeta} numberOfLines={1}>
                         {b?.hirer?.firstName} {b?.hirer?.lastName} ·{" "}
                         {b?.category?.name}
                       </AppText>
                     </View>
-                    <StatusBadge status={b?.status || "PENDING"} c={c} />
+                    <StatusBadge status={b?.status || "PENDING"} c={c} t={t} />
                   </Pressable>
                 );
               })
@@ -766,17 +801,17 @@ export default function WorkerDashboardScreen() {
         >
           <View style={s.cardHeader}>
             <AppText variant="title" weight="displayBlack" style={s.cardTitle}>
-              Recent bookings
+              {t("workerDash.recentBookings")}
             </AppText>
             <Pressable onPress={() => navigation.navigate("WorkerBookings")}>
-              <AppText style={s.cardLink}>View all →</AppText>
+              <AppText style={s.cardLink}>{t("workerDash.viewAll")} →</AppText>
             </Pressable>
           </View>
           {safeBookings.length === 0 ? (
             <AppText
               style={[s.statSub, { textAlign: "center", paddingVertical: 12 }]}
             >
-              No bookings yet
+              {t("workerDash.noBookings")}
             </AppText>
           ) : (
             safeBookings.slice(0, 6).map((b, i) => {
@@ -814,7 +849,7 @@ export default function WorkerDashboardScreen() {
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <AppText style={s.listTitle} numberOfLines={1}>
-                      {b?.title || "Untitled"}
+                      {b?.title || t("workerDash.untitled")}
                     </AppText>
                     <AppText style={s.listMeta} numberOfLines={1}>
                       {b?.hirer?.firstName} {b?.hirer?.lastName} ·{" "}
@@ -822,7 +857,7 @@ export default function WorkerDashboardScreen() {
                     </AppText>
                   </View>
                   <View style={{ alignItems: "flex-end", gap: 4 }}>
-                    <StatusBadge status={b?.status || "PENDING"} c={c} />
+                    <StatusBadge status={b?.status || "PENDING"} c={c} t={t} />
                     {hasRelease && (
                       <View style={{ alignItems: "flex-end", gap: 2 }}>
                         <AppText
@@ -854,7 +889,7 @@ export default function WorkerDashboardScreen() {
                                 letterSpacing: 0.4,
                               }}
                             >
-                              Partial
+                              {t("workerDash.partial")}
                             </AppText>
                           </View>
                         )}
@@ -879,17 +914,17 @@ export default function WorkerDashboardScreen() {
         >
           <View style={s.cardHeader}>
             <AppText variant="title" weight="displayBlack" style={s.cardTitle}>
-              Recent reviews
+              {t("workerDash.recentReviews")}
             </AppText>
             <Pressable onPress={() => navigation.navigate("WorkerReviews")}>
-              <AppText style={s.cardLink}>See all →</AppText>
+              <AppText style={s.cardLink}>{t("workerDash.seeAll")} →</AppText>
             </Pressable>
           </View>
           {safeReviews.length === 0 ? (
             <AppText
               style={[s.statSub, { textAlign: "center", paddingVertical: 12 }]}
             >
-              No reviews yet
+              {t("workerDash.noReviews")}
             </AppText>
           ) : (
             safeReviews.map((r, i) => (
@@ -983,7 +1018,6 @@ const s = StyleSheet.create({
   },
   gridRow: { flexDirection: "row", flexWrap: "wrap", width: "100%" },
 
-  // Row 1: Greeting Header + Availability
   greetingRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1018,7 +1052,6 @@ const s = StyleSheet.create({
     letterSpacing: -0.7,
   },
 
-  // Availability pill
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1043,7 +1076,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Currency Switch
   currWrap: {
     flexDirection: "row",
     alignItems: "center",
