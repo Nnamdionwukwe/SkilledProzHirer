@@ -477,6 +477,7 @@ export default function WorkerDashboardScreen() {
           </AppText>
         </View>
 
+        {/* Total Bookings — with disputed count */}
         <View
           style={[
             s.card,
@@ -491,10 +492,23 @@ export default function WorkerDashboardScreen() {
           <AppText variant="title" weight="displayBlack" style={s.statValue}>
             {bookings?.total || 0}
           </AppText>
-          <AppText style={s.statSub}>
-            {bookings?.completed || 0} completed · {bookings?.cancelled || 0}{" "}
-            cancelled
-          </AppText>
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <AppText style={s.statSub}>
+              {bookings?.completed || 0} completed · {bookings?.cancelled || 0}{" "}
+              cancelled
+            </AppText>
+            {Number(bookings?.disputed) > 0 && (
+              <AppText style={[s.statSub, { color: c.red, marginLeft: 4 }]}>
+                · {bookings.disputed} disputed
+              </AppText>
+            )}
+          </View>
         </View>
 
         <View
@@ -569,26 +583,27 @@ export default function WorkerDashboardScreen() {
         </View>
 
         <View style={{ width: isMobile ? "100%" : desktopHalfWidth, gap: 16 }}>
-          <View
-            style={[
-              s.card,
-              { backgroundColor: c.bgCard, borderColor: c.border },
-            ]}
-          >
-            <View style={s.completionHeader}>
-              <AppText style={s.completionLabel}>Profile Completion</AppText>
-              <AppText
-                variant="title"
-                weight="displayBlack"
-                style={s.completionPct}
-              >
-                {completion}%
-              </AppText>
-            </View>
-            <View style={s.progressTrack}>
-              <View style={[s.progressFill, { width: `${completion}%` }]} />
-            </View>
-            {completion < 100 && (
+          {/* Profile Completion — hidden at 100% */}
+          {completion < 100 && (
+            <View
+              style={[
+                s.card,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
+            >
+              <View style={s.completionHeader}>
+                <AppText style={s.completionLabel}>Profile Completion</AppText>
+                <AppText
+                  variant="title"
+                  weight="displayBlack"
+                  style={s.completionPct}
+                >
+                  {completion}%
+                </AppText>
+              </View>
+              <View style={s.progressTrack}>
+                <View style={[s.progressFill, { width: `${completion}%` }]} />
+              </View>
               <AppText style={s.completionHint}>
                 Complete your profile to attract more clients.{" "}
                 <AppText
@@ -598,8 +613,81 @@ export default function WorkerDashboardScreen() {
                   Update now →
                 </AppText>
               </AppText>
-            )}
-          </View>
+
+              {profile?.title && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginTop: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <AppText
+                    style={{
+                      fontSize: 12,
+                      color: c.textDim,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {profile.title}
+                  </AppText>
+
+                  {profile.verificationStatus === "VERIFIED" && (
+                    <View
+                      style={{
+                        marginLeft: 8,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: c.green,
+                        backgroundColor: c.greenDim,
+                      }}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 10,
+                          fontWeight: "700",
+                          color: c.green,
+                          textTransform: "uppercase",
+                          letterSpacing: 0.4,
+                        }}
+                      >
+                        ✓ Verified
+                      </AppText>
+                    </View>
+                  )}
+
+                  {profile.verificationStatus === "PENDING" && (
+                    <View
+                      style={{
+                        marginLeft: 8,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: "rgba(251,191,36,0.3)",
+                        backgroundColor: "rgba(251,191,36,0.1)",
+                      }}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 10,
+                          fontWeight: "700",
+                          color: "#fbbf24",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.4,
+                        }}
+                      >
+                        ⏳ Pending
+                      </AppText>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
 
           <View
             style={[
@@ -691,60 +779,91 @@ export default function WorkerDashboardScreen() {
               No bookings yet
             </AppText>
           ) : (
-            safeBookings.slice(0, 6).map((b, i) => (
-              <Pressable
-                key={b?.id || i}
-                style={s.listItem}
-                onPress={() =>
-                  navigation.navigate("BookingDetail", { bookingId: b?.id })
-                }
-              >
-                <View style={s.avatar}>
-                  {b?.hirer?.avatar ? (
-                    <Image
-                      source={{ uri: b.hirer.avatar }}
-                      style={{ width: "100%", height: "100%" }}
-                    />
-                  ) : (
-                    <AppText
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: c.textDim,
-                      }}
-                    >
-                      {initials(b?.hirer)}
+            safeBookings.slice(0, 6).map((b, i) => {
+              const pay = b?.payments?.[0];
+              const released = Number(pay?.releasedAmount) || 0;
+              const promised = Number(pay?.workerPayout) || 0;
+              const hasRelease = pay && released > 0;
+              const isPartial = hasRelease && released < promised;
+
+              return (
+                <Pressable
+                  key={b?.id || i}
+                  style={s.listItem}
+                  onPress={() =>
+                    navigation.navigate("BookingDetail", { bookingId: b?.id })
+                  }
+                >
+                  <View style={s.avatar}>
+                    {b?.hirer?.avatar ? (
+                      <Image
+                        source={{ uri: b.hirer.avatar }}
+                        style={{ width: "100%", height: "100%" }}
+                      />
+                    ) : (
+                      <AppText
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "700",
+                          color: c.textDim,
+                        }}
+                      >
+                        {initials(b?.hirer)}
+                      </AppText>
+                    )}
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <AppText style={s.listTitle} numberOfLines={1}>
+                      {b?.title || "Untitled"}
                     </AppText>
-                  )}
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <AppText style={s.listTitle} numberOfLines={1}>
-                    {b?.title || "Untitled"}
-                  </AppText>
-                  <AppText style={s.listMeta} numberOfLines={1}>
-                    {b?.hirer?.firstName} {b?.hirer?.lastName} ·{" "}
-                    {b?.category?.name}
-                  </AppText>
-                </View>
-                <View style={{ alignItems: "flex-end", gap: 4 }}>
-                  <StatusBadge status={b?.status || "PENDING"} c={c} />
-                  {Number(b?.payments?.[0]?.releasedAmount) > 0 && (
-                    <AppText
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: c.green,
-                      }}
-                    >
-                      {formatCurrency(
-                        b.payments[0].releasedAmount,
-                        b.payments[0].currency,
-                      )}
+                    <AppText style={s.listMeta} numberOfLines={1}>
+                      {b?.hirer?.firstName} {b?.hirer?.lastName} ·{" "}
+                      {b?.category?.name}
                     </AppText>
-                  )}
-                </View>
-              </Pressable>
-            ))
+                  </View>
+                  <View style={{ alignItems: "flex-end", gap: 4 }}>
+                    <StatusBadge status={b?.status || "PENDING"} c={c} />
+                    {hasRelease && (
+                      <View style={{ alignItems: "flex-end", gap: 2 }}>
+                        <AppText
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: c.green,
+                          }}
+                        >
+                          {formatCurrency(released, pay.currency)}
+                        </AppText>
+                        {isPartial && (
+                          <View
+                            style={{
+                              paddingHorizontal: 6,
+                              paddingVertical: 1,
+                              borderRadius: 10,
+                              borderWidth: 1,
+                              borderColor: c.orangeGlow,
+                              backgroundColor: c.orangeDim,
+                            }}
+                          >
+                            <AppText
+                              style={{
+                                fontSize: 9,
+                                fontWeight: "700",
+                                color: c.orange,
+                                textTransform: "uppercase",
+                                letterSpacing: 0.4,
+                              }}
+                            >
+                              Partial
+                            </AppText>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })
           )}
         </View>
 
@@ -871,15 +990,15 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   iconCircle: {
-    width: 40,
-    height: 40,
+    width: 30,
+    height: 30,
     borderRadius: 24,
     backgroundColor: "rgba(249,115,22,0.12)",
     borderWidth: 1,
     borderColor: "rgba(249,115,22,0.25)",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: 10,
   },
   greetingTextWrap: {
     flex: 1,
@@ -889,14 +1008,14 @@ const s = StyleSheet.create({
   },
   greetingText: {
     fontFamily: FONTS.body,
-    fontSize: 14,
+    fontSize: 11,
     color: "rgba(255,255,255,0.55)",
     fontWeight: "500",
   },
   greetingName: {
-    fontSize: 24,
+    fontSize: 20,
     color: "#fff",
-    letterSpacing: -0.5,
+    letterSpacing: -0.7,
   },
 
   // Availability pill
@@ -918,7 +1037,7 @@ const s = StyleSheet.create({
     marginRight: 4,
   },
   availabilityText: {
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.3,
@@ -929,7 +1048,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 7,
     backgroundColor: "rgba(255,255,255,0.03)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
@@ -982,7 +1101,7 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   earningsValue: {
-    fontSize: 32,
+    fontSize: 20,
     letterSpacing: -1.5,
     color: "#fff",
     marginBottom: 8,
@@ -994,7 +1113,7 @@ const s = StyleSheet.create({
     borderColor: "rgba(249,115,22,0.25)",
     borderRadius: 10,
     paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     minWidth: 140,
     zIndex: 1,
   },
@@ -1008,7 +1127,7 @@ const s = StyleSheet.create({
     marginBottom: 4,
   },
   pendingValue: {
-    fontSize: 20,
+    fontSize: 15,
     letterSpacing: -0.5,
     color: "#f97316",
   },
@@ -1016,19 +1135,19 @@ const s = StyleSheet.create({
 
   statLabel: {
     fontFamily: FONTS.bodyBold,
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: "700",
     letterSpacing: 1.6,
     textTransform: "uppercase",
     color: "rgba(255,255,255,0.28)",
   },
   statValue: {
-    fontSize: 30,
+    fontSize: 20,
     letterSpacing: -1.2,
     color: "#fff",
     lineHeight: 36,
   },
-  statSub: { fontSize: 12, color: "rgba(255,255,255,0.55)" },
+  statSub: { fontSize: 10, color: "rgba(255,255,255,0.55)" },
 
   listItem: {
     flexDirection: "row",
