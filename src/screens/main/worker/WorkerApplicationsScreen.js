@@ -552,7 +552,7 @@ export default function WorkerApplicationsScreen() {
           <AppText
             variant="title"
             weight="displayBlack"
-            style={[s.pageTitle, { color: c.text }]}
+            style={[s.pageTitle, { color: c.text, fontSize: 15 }]}
           >
             {t("workerApplications.header.title", "My Applications")}
           </AppText>
@@ -603,7 +603,7 @@ export default function WorkerApplicationsScreen() {
             >
               <AppText
                 style={{
-                  fontSize: 12,
+                  fontSize: 10,
                   color: active ? c.orange : c.textDim,
                   fontWeight: active ? "700" : "500",
                 }}
