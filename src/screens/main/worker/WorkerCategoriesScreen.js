@@ -134,7 +134,7 @@ export default function WorkerCategoriesScreen() {
         <AppText
           variant="title"
           weight="displayBlack"
-          style={[s.title, { color: c.text }]}
+          style={[s.title, { color: c.text, fontSize: isTiny ? 15 : 18 }]}
         >
           {t("workerCat.title", "My Trade Categories")}
         </AppText>
@@ -186,7 +186,9 @@ export default function WorkerCategoriesScreen() {
         >
           {t("workerCat.addTitle", "Add a Category")}
         </AppText>
-        <AppText style={[s.cardSub, { color: c.textDim }]}>
+        <AppText
+          style={[s.cardSub, { color: c.textDim, fontSize: isTiny ? 10 : 13 }]}
+        >
           {t(
             "workerCat.addSub",
             "Search for your trade — it's already in our database, or add a custom one if you can't find it.",
@@ -390,17 +392,20 @@ export default function WorkerCategoriesScreen() {
         )}
       </View>
 
-      {/* Confirm-remove modal — mirrors the website .modalBox:
-          column layout, icon on top, centered title + text, button row. */}
+      {/* Confirm-remove modal */}
       <Modal
         visible={!!confirmState}
         transparent
         animationType="fade"
         onRequestClose={cancelRemove}
       >
-        <Pressable style={s.modalOverlay} onPress={cancelRemove}>
-          <Pressable
-            onPress={(e) => e.stopPropagation?.()}
+        <View style={s.modalOverlay}>
+          {/* Backdrop tap target */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={cancelRemove} />
+
+          {/* Box — children stretch to full width so wrapped text never
+              collapses to zero height. gap handles uniform spacing. */}
+          <View
             style={[
               s.modalBox,
               {
@@ -419,7 +424,7 @@ export default function WorkerCategoriesScreen() {
                   backgroundColor: c.redDim,
                   borderColor: "rgba(239,68,68,0.3)",
                 },
-                isTiny && { width: 46, height: 46, marginBottom: 12 },
+                isTiny && { width: 46, height: 46 },
               ]}
             >
               <Ionicons
@@ -498,8 +503,8 @@ export default function WorkerCategoriesScreen() {
                 </AppText>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </ScrollView>
   );
@@ -610,7 +615,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // ── Confirm modal (mirrors the website .modalBox stack) ────────────
+  // ── Confirm modal ──────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.72)",
@@ -623,9 +628,15 @@ const s = StyleSheet.create({
     maxWidth: 380,
     borderRadius: 16,
     borderWidth: 1,
-    // Column stack: icon → title → text → actions.
-    flexDirection: "column",
-    alignItems: "center",
+    gap: 16,
+    // Children stretch to full width so text never collapses.
+    alignItems: "stretch",
+    // Shadow
+    shadowColor: "#000",
+    shadowOpacity: 0.6,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 20 },
+    elevation: 24,
   },
   modalIconWrap: {
     width: 52,
@@ -634,19 +645,19 @@ const s = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    alignSelf: "center", // Only the icon is centered.
   },
   modalTitle: {
     fontSize: 18,
     lineHeight: 22,
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: 0,
   },
   modalText: {
     fontSize: 14,
     lineHeight: 22,
     textAlign: "center",
-    marginBottom: 24,
+    marginBottom: 8,
   },
   modalActions: {
     flexDirection: "row",
