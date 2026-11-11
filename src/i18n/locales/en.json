@@ -28,7 +28,6 @@
   "/campaign/submit": "Campaign Submit",
   "/categories": "Categories",
   "/categories/suggest": "Categories Suggest",
-  "/disputes/my": "Disputes My",
   "/featured/checkout": "Featured Checkout",
   "/featured/my": "Featured My",
   "/featured/packages": "Featured Packages",
@@ -4714,6 +4713,80 @@
       "previous": "Previous",
       "next": "Next",
       "pageOf": "Page {{page}} of {{pages}} · {{total}} total"
+    }
+  },
+  "disputes": {
+    "eyebrow": "Support",
+    "headerTitle": "My Disputes",
+    "subtitle": "Track and manage disputes raised on your bookings",
+
+    "stats": {
+      "total": "Total",
+      "active": "Active",
+      "resolved": "Resolved"
+    },
+
+    "filters": {
+      "all": "All",
+      "open": "Open",
+      "underReview": "Under Review",
+      "resolved": "Resolved",
+      "cancelled": "Cancelled"
+    },
+
+    "status": {
+      "open": "Open",
+      "underReview": "Under Review",
+      "resolved": "Resolved",
+      "cancelled": "Cancelled"
+    },
+
+    "emptyAll": "No disputes yet",
+    "emptyFiltered": "No disputes in this filter",
+    "emptyBody": "Disputes can be raised from any active booking that has an issue.",
+
+    "bookingDispute": "Booking dispute",
+    "loadFailed": "Failed to load disputes.",
+    "cancelledSuccess": "Dispute cancelled successfully.",
+    "cancelFailed": "Failed to cancel dispute.",
+    "pdfViewerTitle": "PDF",
+
+    "fields": {
+      "reason": "Reason",
+      "description": "Description",
+      "evidence": "Evidence",
+      "agreedRate": "Agreed Rate",
+      "duration": "Duration",
+      "address": "Address",
+      "scheduled": "Scheduled",
+      "jobType": "Job Type",
+      "locationType": "Location",
+      "paymentStatus": "Status",
+      "paymentAmount": "Amount"
+    },
+
+    "sections": {
+      "disputeInfo": "Dispute Info",
+      "bookingDetails": "Booking Details",
+      "parties": "Parties",
+      "payment": "Payment"
+    },
+
+    "roles": {
+      "hirer": "Hirer",
+      "worker": "Worker"
+    },
+
+    "actions": {
+      "cancel": "Cancel Dispute",
+      "viewBooking": "View Booking →"
+    },
+
+    "cancelModal": {
+      "title": "Cancel Dispute",
+      "body": "Are you sure you want to cancel this dispute? This action cannot be undone.",
+      "keep": "Cancel",
+      "confirm": "Confirm"
     }
   },
   "yearsExperience": "Years Experience",

@@ -1,26 +1,15 @@
-// src/screens/main/DisputesScreen.js
+// src/screens/main/MyDisputesScreen.js
 //
-// Port of pages/disputes/Disputes.jsx + Disputes.module.css.
+// Verbatim port of pages/disputes/MyDisputes.jsx.
 //
-// Preserved verbatim:
-//   - STATUS_META (DISPUTED / UNDER_REVIEW / RESOLVED / CANCELLED)
-//   - GET /disputes/my (list)
-//   - PATCH /disputes/:id/cancel (cancel)
-//   - Header stats trio (Total / Active / Resolved)
-//   - 5 filter tabs (All / Open / Under Review / Resolved / Cancelled)
-//   - Expandable card: card-top → card-body
-//   - Detail grid (reason / description / evidence)
-//   - Booking details section
-//   - Parties row (hirer + worker chips)
-//   - Payment info block
-//   - Actions: Cancel Dispute (only DISPUTED) + View Booking
-//   - Confirmation modal
-//   - Image lightbox
+// Fetch:  GET  /disputes/my
+// Cancel: PATCH /disputes/:bookingId/cancel
 //
-// Dedupe fix: `filtered` de-duplicates by id, so duplicate server rows can't
-// trigger React's "two children with the same key" warning.
+// Styling follows the retained-staff cards (WorkerRetainedEmployers /
+// WorkerRetainedEmployerDetail) — floating cards with top accent line,
+// pill-shaped status badges, stacked stat cards, section cards.
 
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -31,313 +20,328 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { WebView } from "react-native-webview";
 
+import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
-import Skeleton from "../../components/Skeleton";
+import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useAuthStore } from "../../store/authStore";
+import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
-import {
-  FaShieldAlt,
-  FaExclamationTriangle,
-  FaCheckCircle,
-  FaTimesCircle,
-  FaMoneyBillWave,
-  FaUser,
-  FaImage,
-  FaTrash,
-  FaEye,
-  FaTimes,
-  FaChevronRight,
-} from "../../icons/fa";
 
-const STATUS_META = {
-  DISPUTED: { label: "Open", key: "open" },
-  UNDER_REVIEW: { label: "Under Review", key: "review" },
-  RESOLVED: { label: "Resolved", key: "resolved" },
-  CANCELLED: { label: "Cancelled", key: "cancelled" },
+// ─────────────────────────────────────────────────────────────────────────────
+// CURRENCY — symbol-safe formatter
+// ─────────────────────────────────────────────────────────────────────────────
+const SYMBOL_MAP = {
+  NGN: "₦",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  GHS: "₵",
+  KES: "KSh ",
+  ZAR: "R ",
+  TZS: "TSh ",
+  UGX: "USh ",
+  CAD: "CA$",
+  AUD: "A$",
+  INR: "₹",
+  JPY: "¥",
+  CNY: "¥",
+  BRL: "R$",
+  MXN: "MX$",
+  AED: "AED ",
+  SAR: "SAR ",
+  EGP: "E£",
+  USDC: "USDC ",
+  USDT: "USDT ",
+  BTC: "₿ ",
+  ETH: "Ξ ",
 };
 
-function getStatusMeta(status) {
-  return STATUS_META[status] || { label: status, key: "open" };
-}
-
-function statusColors(key, c) {
-  switch (key) {
-    case "open":
-      return { bg: c.orangeDim, fg: c.orange, border: c.orangeGlow };
-    case "review":
-      return {
-        bg: "rgba(59,130,246,0.1)",
-        fg: "#60a5fa",
-        border: "rgba(59,130,246,0.2)",
-      };
-    case "resolved":
-      return { bg: c.greenDim, fg: c.green, border: "rgba(34,197,94,0.3)" };
-    case "cancelled":
-      return { bg: c.bgCard, fg: c.textMuted, border: c.border };
-    default:
-      return { bg: c.orangeDim, fg: c.orange, border: c.orangeGlow };
+function fmtMoney(amount, currency = "NGN") {
+  const n = Number(amount ?? 0);
+  const code = String(currency || "NGN").toUpperCase();
+  const symbol = SYMBOL_MAP[code];
+  let digits;
+  try {
+    digits = new Intl.NumberFormat("en", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    digits = n.toFixed(2);
   }
+  return symbol ? `${symbol}${digits}` : `${code} ${digits}`;
 }
 
-function formatCurrency(amount, currency = "NGN") {
-  if (amount == null) return `${currency} 0.00`;
-  return `${currency} ${Number(amount).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+function fmtDate(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
-// ── Status badge ──────────────────────────────────────────────────────
-function StatusBadge({ status, c }) {
-  const meta = getStatusMeta(status);
-  const colors = statusColors(meta.key, c);
+function fmtDateTime(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleString("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function isPdfUrl(url) {
+  if (!url) return false;
+  const clean = String(url).split("?")[0].split("#")[0].toLowerCase();
+  return clean.endsWith(".pdf");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEDUPE — the /disputes/my endpoint can return duplicate rows (same id,
+// different joined relation), which makes React complain about duplicate
+// keys. We drop duplicate ids here before render.
+// ─────────────────────────────────────────────────────────────────────────────
+function dedupeDisputes(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const d of list) {
+    const k = d?.id;
+    if (!k) {
+      out.push(d);
+      continue;
+    }
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(d);
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATUS META
+// ─────────────────────────────────────────────────────────────────────────────
+const STATUS_META = {
+  DISPUTED: {
+    key: "open",
+    color: "#f97316",
+    bg: "rgba(249,115,22,0.12)",
+    icon: "alert-circle-outline",
+  },
+  UNDER_REVIEW: {
+    key: "underReview",
+    color: "#60a5fa",
+    bg: "rgba(59,130,246,0.10)",
+    icon: "time-outline",
+  },
+  RESOLVED: {
+    key: "resolved",
+    color: "#22c55e",
+    bg: "rgba(34,197,94,0.12)",
+    icon: "checkmark-circle-outline",
+  },
+  CANCELLED: {
+    key: "cancelled",
+    color: "#9ca3af",
+    bg: "rgba(156,163,175,0.12)",
+    icon: "close-circle-outline",
+  },
+};
+
+const FILTERS = [
+  { key: "", tKey: "all" },
+  { key: "DISPUTED", tKey: "open" },
+  { key: "UNDER_REVIEW", tKey: "underReview" },
+  { key: "RESOLVED", tKey: "resolved" },
+  { key: "CANCELLED", tKey: "cancelled" },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAT CARD
+// ─────────────────────────────────────────────────────────────────────────────
+function StatCard({ label, value, accentColor, c }) {
   return (
     <View
       style={{
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        backgroundColor: colors.bg,
+        flex: 1,
+        minWidth: 0,
+        backgroundColor: c.bgPanel,
         borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 999,
+        borderColor: c.border,
+        borderRadius: 14,
+        padding: 12,
+        overflow: "hidden",
       }}
     >
-      <AppText style={{ fontSize: 10, fontWeight: "700", color: colors.fg }}>
-        {meta.label}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          backgroundColor: accentColor,
+          opacity: 0.5,
+        }}
+      />
+      <AppText
+        style={{
+          fontSize: 9,
+          fontWeight: "700",
+          color: c.textMuted,
+          letterSpacing: 0.8,
+          textTransform: "uppercase",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </AppText>
+      <AppText
+        weight="displayBlack"
+        style={{
+          fontSize: 18,
+          color: accentColor,
+          letterSpacing: -0.6,
+          lineHeight: 24,
+        }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {String(value)}
       </AppText>
     </View>
   );
 }
 
-// ── Confirmation modal ────────────────────────────────────────────────
-function ConfirmationModal({ isOpen, onClose, onConfirm, title, message, c }) {
-  if (!isOpen) return null;
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION CARD
+// ─────────────────────────────────────────────────────────────────────────────
+function SectionCard({ title, icon, c, children, style }) {
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.75)",
-          justifyContent: "center",
-          padding: 24,
-        }}
-        onPress={onClose}
-      >
-        <Pressable
-          onPress={(e) => e.stopPropagation?.()}
-          style={{
-            backgroundColor: c.bgPanel,
-            borderWidth: 1,
-            borderColor: c.border,
-            borderRadius: 18,
-            padding: 20,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: 10,
-            }}
-          >
-            <AppText
-              style={{
-                fontFamily: "Syne_800ExtraBold",
-                fontSize: 17,
-                fontWeight: "800",
-                color: c.text,
-                flex: 1,
-              }}
-            >
-              {title}
-            </AppText>
-            <Pressable onPress={onClose} hitSlop={8}>
-              <FaTimes size={18} color={c.textDim} />
-            </Pressable>
-          </View>
-          <AppText
-            style={{
-              fontSize: 13,
-              color: c.textDim,
-              lineHeight: 19,
-              marginTop: 10,
-            }}
-          >
-            {message}
-          </AppText>
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 8,
-              marginTop: 18,
-              justifyContent: "flex-end",
-            }}
-          >
-            <Pressable
-              onPress={onClose}
-              style={({ pressed }) => [
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 18,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: c.border,
-                  borderRadius: 8,
-                  opacity: pressed ? 0.75 : 1,
-                },
-              ]}
-            >
-              <AppText
-                style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
-              >
-                Cancel
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={onConfirm}
-              style={({ pressed }) => [
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 18,
-                  backgroundColor: c.red,
-                  borderRadius: 8,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <AppText
-                style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
-              >
-                Confirm
-              </AppText>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-// ── Image lightbox ────────────────────────────────────────────────────
-function ImageLightbox({ imageUrl, onClose }) {
-  if (!imageUrl) return null;
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <View
+      style={[
+        {
+          backgroundColor: c.bgPanel,
+          borderWidth: 1,
+          borderColor: c.border,
+          borderRadius: 14,
+          padding: 16,
+        },
+        style,
+      ]}
+    >
       <View
         style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.92)",
-          justifyContent: "center",
+          flexDirection: "row",
           alignItems: "center",
-          padding: 16,
+          gap: 6,
+          marginBottom: 12,
         }}
       >
-        <Pressable
-          onPress={onClose}
+        <Ionicons
+          name={icon || "information-circle-outline"}
+          size={12}
+          color={c.orange}
+        />
+        <AppText
           style={{
-            position: "absolute",
-            top: 60,
-            right: 20,
-            zIndex: 2,
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: "rgba(255,255,255,0.12)",
-            alignItems: "center",
-            justifyContent: "center",
+            fontSize: 10,
+            fontWeight: "800",
+            color: c.textMuted,
+            textTransform: "uppercase",
+            letterSpacing: 1,
           }}
         >
-          <FaTimes size={22} color="#fff" />
-        </Pressable>
-        <Image
-          source={{ uri: imageUrl }}
-          style={{ width: "100%", height: "100%" }}
-          resizeMode="contain"
-        />
+          {title}
+        </AppText>
       </View>
-    </Modal>
+      <View style={{ gap: 8 }}>{children}</View>
+    </View>
   );
 }
 
-// ── Detail item ───────────────────────────────────────────────────────
-function DetailItem({ label, value, c }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// GRID ITEM
+// ─────────────────────────────────────────────────────────────────────────────
+function GridItem({ label, value, c }) {
   return (
     <View
       style={{
-        backgroundColor: c.bgCard,
-        borderWidth: 1,
-        borderColor: c.border,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
         borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        gap: 3,
-        flexBasis: "48%",
-        minWidth: 140,
+        borderWidth: 1,
+        backgroundColor: c.bgCard,
+        borderColor: c.border,
       }}
     >
       <AppText
         style={{
-          fontFamily: "DMSans_600SemiBold",
           fontSize: 9,
           fontWeight: "700",
           color: c.textMuted,
-          letterSpacing: 0.6,
           textTransform: "uppercase",
+          letterSpacing: 0.4,
+          marginBottom: 3,
         }}
       >
         {label}
       </AppText>
-      <AppText style={{ fontSize: 12, color: c.text, lineHeight: 17 }}>
+      <AppText
+        style={{ fontSize: 12, color: c.text, fontWeight: "600" }}
+        numberOfLines={3}
+      >
         {value}
       </AppText>
     </View>
   );
 }
 
-// ── Party chip ────────────────────────────────────────────────────────
-function PartyChip({ person, role, c }) {
-  if (!person) return null;
-  const initials =
-    `${person.firstName?.[0] || ""}${
-      person.lastName?.[0] || ""
-    }`.toUpperCase() || "?";
+// ─────────────────────────────────────────────────────────────────────────────
+// PARTY CHIP
+// ─────────────────────────────────────────────────────────────────────────────
+function PartyChip({ party, role, c }) {
+  const initials = `${party.firstName?.[0] || ""}${
+    party.lastName?.[0] || ""
+  }`.toUpperCase();
   return (
     <View
       style={{
+        flex: 1,
+        minWidth: 140,
         flexDirection: "row",
         alignItems: "center",
         gap: 10,
-        backgroundColor: c.bgCard,
+        padding: 10,
+        borderRadius: 10,
         borderWidth: 1,
+        backgroundColor: c.bgCard,
         borderColor: c.border,
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
       }}
     >
       <View
         style={{
-          width: 30,
-          height: 30,
-          borderRadius: 15,
-          backgroundColor: c.orangeDim,
+          width: 32,
+          height: 32,
+          borderRadius: 16,
           borderWidth: 1,
-          borderColor: c.orangeGlow,
           alignItems: "center",
           justifyContent: "center",
           overflow: "hidden",
-          flexShrink: 0,
+          backgroundColor: c.orangeDim,
+          borderColor: c.orange + "55",
         }}
       >
-        {person.avatar ? (
+        {party.avatar ? (
           <Image
-            source={{ uri: person.avatar }}
+            source={{ uri: party.avatar }}
             style={{ width: "100%", height: "100%" }}
+            resizeMode="cover"
           />
         ) : (
           <AppText style={{ fontSize: 10, fontWeight: "700", color: c.orange }}>
@@ -347,20 +351,13 @@ function PartyChip({ person, role, c }) {
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <AppText
+          style={{ fontSize: 12, fontWeight: "600", color: c.text }}
           numberOfLines={1}
-          style={{ fontSize: 12, fontWeight: "700", color: c.text }}
         >
-          {`${person.firstName || ""} ${person.lastName || ""}`.trim() || "—"}
+          {party.firstName} {party.lastName}
         </AppText>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 3,
-            marginTop: 2,
-          }}
-        >
-          <FaUser size={9} color={c.textMuted} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+          <Ionicons name="person-outline" size={9} color={c.textMuted} />
           <AppText style={{ fontSize: 10, color: c.textMuted }}>{role}</AppText>
         </View>
       </View>
@@ -368,66 +365,67 @@ function PartyChip({ person, role, c }) {
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────
-export default function DisputesScreen() {
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
+export default function MyDisputesScreen({ route }) {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const { theme } = useTheme();
+  const { toast } = useToast();
   const c = theme.colors;
-  const { user } = useAuthStore();
 
   const [disputes, setDisputes] = useState([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(null);
-  const [success, setSuccess] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [expanded, setExpanded] = useState(null);
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelBookingId, setCancelBookingId] = useState(null);
   const [lightboxImage, setLightboxImage] = useState(null);
+  const [pdfViewerSrc, setPdfViewerSrc] = useState(null);
 
-  const load = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true);
-    setRefreshing(true);
-    setError("");
-    try {
-      const res = await client.get("/disputes/my");
-      const raw = res.data.data.disputes || [];
-
-      // De-duplicate by id BEFORE storing to state — a corrupted server
-      // response (double row for the same dispute) triggers React's
-      // "two children with the same key" warning on render.
-      const seen = new Set();
-      const all = raw.filter((d) => {
-        if (!d?.id || seen.has(d.id)) return false;
-        seen.add(d.id);
-        return true;
-      });
-
-      if (__DEV__ && all.length !== raw.length) {
-        console.log(
-          "[DisputesScreen] dropped",
-          raw.length - all.length,
-          "duplicate rows",
-        );
+  const load = useCallback(
+    async (isRefresh = false) => {
+      if (!isRefresh) setLoading(true);
+      try {
+        const res = await client.get("/disputes/my");
+        const list = res?.data?.data?.disputes || [];
+        setDisputes(dedupeDisputes(list));
+      } catch (err) {
+        toast.error(err?.response?.data?.message || t("disputes.loadFailed"));
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      setDisputes(all);
-      setTotal(all.length);
-    } catch {
-      setError("Failed to load disputes.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+    },
+    [t, toast],
+  );
 
   useEffect(() => {
-    load(true);
+    load(false);
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load(false);
+    }, [load]),
+  );
+
+  useEffect(() => {
+    const targetId = route?.params?.bookingId;
+    if (targetId && disputes.length > 0) {
+      const match = disputes.find((d) => d.id === targetId);
+      if (match) setExpanded(match.id);
+    }
+  }, [disputes, route?.params?.bookingId]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    load(true);
+  };
 
   const openCancelModal = (bookingId) => {
     setCancelBookingId(bookingId);
@@ -442,567 +440,651 @@ export default function DisputesScreen() {
   const confirmCancel = async () => {
     if (!cancelBookingId) return;
     setCancelling(cancelBookingId);
-    setError("");
-    setSuccess("");
     try {
       await client.patch(`/disputes/${cancelBookingId}/cancel`);
-      setSuccess("Dispute cancelled successfully.");
       setDisputes((prev) =>
         prev.map((d) =>
           d.id === cancelBookingId ? { ...d, status: "CANCELLED" } : d,
         ),
       );
+      toast.success(t("disputes.cancelledSuccess"));
       closeCancelModal();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to cancel dispute.");
+      toast.error(err?.response?.data?.message || t("disputes.cancelFailed"));
       closeCancelModal();
     } finally {
       setCancelling(null);
     }
   };
 
-  // Filter tabs — safe since disputes is already deduped
-  const seenIds = new Set();
-  const filtered = (
-    filterStatus ? disputes.filter((d) => d.status === filterStatus) : disputes
-  ).filter((d) => {
-    if (!d?.id || seenIds.has(d.id)) return false;
-    seenIds.add(d.id);
-    return true;
-  });
+  const openEvidence = (url) => {
+    if (!url) return;
+    const absoluteUrl = /^https?:\/\//i.test(url)
+      ? url
+      : `${client.defaults.baseURL.replace(/\/api\/?$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+    if (isPdfUrl(absoluteUrl)) {
+      setPdfViewerSrc(absoluteUrl);
+    } else {
+      setLightboxImage(absoluteUrl);
+    }
+  };
 
-  const filterTabs = [
-    { value: "", label: "All" },
-    { value: "DISPUTED", label: "Open" },
-    { value: "UNDER_REVIEW", label: "Under Review" },
-    { value: "RESOLVED", label: "Resolved" },
-    { value: "CANCELLED", label: "Cancelled" },
-  ];
-
-  const totalActive = disputes.filter(
+  const total = disputes.length;
+  const activeCount = disputes.filter(
     (d) => d.status === "DISPUTED" || d.status === "UNDER_REVIEW",
   ).length;
-  const totalResolved = disputes.filter((d) => d.status === "RESOLVED").length;
+  const resolvedCount = disputes.filter((d) => d.status === "RESOLVED").length;
 
-  // ── Loading ────────────────────────────────────────────────────
-  if (loading && disputes.length === 0) {
+  const filtered = useMemo(() => {
+    if (!filterStatus) return disputes;
+    return disputes.filter((d) => d.status === filterStatus);
+  }, [disputes, filterStatus]);
+
+  if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top"]}>
-        <View style={{ padding: 16, gap: 14 }}>
-          <Skeleton width="40%" height={14} radius={4} />
-          <Skeleton width="60%" height={28} radius={6} />
-          <Skeleton width="80%" height={14} radius={4} />
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Skeleton width="100%" height={56} radius={10} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Skeleton width="100%" height={56} radius={10} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Skeleton width="100%" height={56} radius={10} />
-            </View>
-          </View>
-          <Skeleton width="100%" height={32} radius={6} />
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} width="100%" height={90} radius={14} />
-          ))}
-        </View>
-      </SafeAreaView>
+      <AppScreen scroll={false}>
+        <PageSkeleton variant="list" rows={4} />
+      </AppScreen>
     );
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: c.bg }}
-      edges={["top", "left", "right"]}
+    <AppScreen
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={c.orange}
+        />
+      }
+      contentContainerStyle={{ paddingBottom: 48, paddingHorizontal: 16 }}
     >
-      <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 14 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => load(false)}
-            tintColor={c.orange}
-            colors={[c.orange]}
-          />
-        }
+      {/* ── Header ── */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 16,
+          marginBottom: 20,
+          marginTop: 12,
+          flexWrap: "wrap",
+        }}
       >
-        {/* Header */}
-        <View>
+        <View style={{ flex: 1, minWidth: 200 }}>
           <AppText
             style={{
-              fontFamily: "DMSans_600SemiBold",
               fontSize: 10,
-              fontWeight: "700",
+              fontWeight: "800",
               color: c.orange,
-              letterSpacing: 1,
+              letterSpacing: 1.5,
               textTransform: "uppercase",
               marginBottom: 4,
             }}
           >
-            Support
+            {t("disputes.eyebrow")}
           </AppText>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: "Syne_800ExtraBold",
-              fontSize: 24,
-              fontWeight: "800",
+              fontSize: 15,
               color: c.text,
-              letterSpacing: -0.3,
+              letterSpacing: -0.6,
+              lineHeight: 32,
+              marginBottom: 4,
             }}
           >
-            My Disputes
+            {t("disputes.headerTitle")}
           </AppText>
-          <AppText
-            style={{
-              fontSize: 12,
-              color: c.textDim,
-              marginTop: 4,
-              lineHeight: 17,
-            }}
-          >
-            Track and manage disputes raised on your bookings
+          <AppText style={{ fontSize: 13, color: c.textDim }}>
+            {t("disputes.subtitle")}
           </AppText>
-
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-around",
-              gap: 12,
-              marginTop: 14,
-              paddingHorizontal: 8,
-            }}
-          >
-            <View style={{ alignItems: "center" }}>
-              <AppText
-                style={{
-                  fontFamily: "Syne_800ExtraBold",
-                  fontSize: 20,
-                  fontWeight: "800",
-                  color: c.text,
-                }}
-              >
-                {total}
-              </AppText>
-              <AppText
-                style={{ fontSize: 10, color: c.textMuted, marginTop: 2 }}
-              >
-                Total
-              </AppText>
-            </View>
-            <View style={{ alignItems: "center" }}>
-              <AppText
-                style={{
-                  fontFamily: "Syne_800ExtraBold",
-                  fontSize: 20,
-                  fontWeight: "800",
-                  color: c.orange,
-                }}
-              >
-                {totalActive}
-              </AppText>
-              <AppText
-                style={{ fontSize: 10, color: c.textMuted, marginTop: 2 }}
-              >
-                Active
-              </AppText>
-            </View>
-            <View style={{ alignItems: "center" }}>
-              <AppText
-                style={{
-                  fontFamily: "Syne_800ExtraBold",
-                  fontSize: 20,
-                  fontWeight: "800",
-                  color: c.green,
-                }}
-              >
-                {totalResolved}
-              </AppText>
-              <AppText
-                style={{ fontSize: 10, color: c.textMuted, marginTop: 2 }}
-              >
-                Resolved
-              </AppText>
-            </View>
-          </View>
         </View>
-
-        {/* Filter tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            gap: 4,
-            borderBottomWidth: 1,
-            borderBottomColor: c.border,
-            paddingBottom: 1,
+        <Pressable
+          onPress={onRefresh}
+          disabled={loading}
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: c.border,
+            backgroundColor: c.bgPanel,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: loading ? 0.5 : 1,
           }}
         >
-          {filterTabs.map((tab) => {
-            const active = filterStatus === tab.value;
-            return (
-              <Pressable
-                key={tab.value || "all"}
-                onPress={() => setFilterStatus(tab.value)}
+          <Ionicons name="refresh" size={16} color={c.textDim} />
+        </Pressable>
+      </View>
+
+      {/* ── Stat cards ── */}
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+        <StatCard
+          label={t("disputes.stats.total")}
+          value={total}
+          accentColor={c.text}
+          c={c}
+        />
+        <StatCard
+          label={t("disputes.stats.active")}
+          value={activeCount}
+          accentColor={c.orange}
+          c={c}
+        />
+        <StatCard
+          label={t("disputes.stats.resolved")}
+          value={resolvedCount}
+          accentColor={c.green}
+          c={c}
+        />
+      </View>
+
+      {/* ── Filter pills ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0, marginBottom: 16 }}
+        contentContainerStyle={{ gap: 6 }}
+      >
+        {FILTERS.map((f) => {
+          const active = filterStatus === f.key;
+          return (
+            <Pressable
+              key={f.key || "all"}
+              onPress={() => setFilterStatus(f.key)}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: active ? c.orange : c.border,
+                backgroundColor: active ? c.orangeDim : c.bgPanel,
+              }}
+            >
+              <AppText
                 style={{
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  borderBottomWidth: 2,
-                  borderBottomColor: active ? c.orange : "transparent",
-                  marginBottom: -1,
+                  fontSize: 11,
+                  fontWeight: "600",
+                  color: active ? c.orange : c.textDim,
                 }}
               >
-                <AppText
-                  style={{
-                    fontSize: 12,
-                    fontWeight: active ? "700" : "500",
-                    color: active ? c.orange : c.textMuted,
-                  }}
-                >
-                  {tab.label}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        {/* Alerts */}
-        {error ? (
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              backgroundColor: c.redDim,
-              borderWidth: 1,
-              borderColor: c.red,
-              borderRadius: 8,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-            }}
-          >
-            <FaExclamationTriangle size={13} color={c.red} />
-            <AppText style={{ flex: 1, fontSize: 12, color: c.red }}>
-              {error}
-            </AppText>
-            <Pressable onPress={() => setError("")} hitSlop={6}>
-              <FaTimes size={12} color={c.red} />
+                {t(`disputes.filters.${f.tKey}`)}
+              </AppText>
             </Pressable>
-          </View>
-        ) : null}
+          );
+        })}
+      </ScrollView>
 
-        {success ? (
-          <View
+      {/* ── List ── */}
+      {filtered.length === 0 ? (
+        <View
+          style={{
+            alignItems: "center",
+            padding: 60,
+            gap: 8,
+            backgroundColor: c.bgPanel,
+            borderRadius: 16,
+            borderWidth: 1.5,
+            borderStyle: "dashed",
+            borderColor: c.border,
+          }}
+        >
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={48}
+            color={c.textMuted}
+            style={{ opacity: 0.5, marginBottom: 8 }}
+          />
+          <AppText
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              backgroundColor: c.greenDim,
-              borderWidth: 1,
-              borderColor: c.green,
-              borderRadius: 8,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
+              fontSize: 17,
+              fontWeight: "700",
+              color: c.text,
+              textAlign: "center",
+              marginBottom: 4,
             }}
           >
-            <FaCheckCircle size={13} color={c.green} />
-            <AppText style={{ flex: 1, fontSize: 12, color: c.green }}>
-              {success}
-            </AppText>
-            <Pressable onPress={() => setSuccess("")} hitSlop={6}>
-              <FaTimes size={12} color={c.green} />
-            </Pressable>
-          </View>
-        ) : null}
-
-        {/* List */}
-        {filtered.length === 0 ? (
-          <View
+            {filterStatus
+              ? t("disputes.emptyFiltered")
+              : t("disputes.emptyAll")}
+          </AppText>
+          <AppText
             style={{
-              alignItems: "center",
-              paddingVertical: 48,
-              paddingHorizontal: 20,
-              backgroundColor: c.bgPanel,
-              borderWidth: 1.5,
-              borderColor: c.border,
-              borderStyle: "dashed",
-              borderRadius: 14,
-              gap: 10,
+              fontSize: 13,
+              color: c.textDim,
+              textAlign: "center",
+              maxWidth: 320,
             }}
           >
-            <FaShieldAlt
-              size={40}
-              color={c.textMuted}
-              style={{ opacity: 0.5 }}
-            />
-            <AppText
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: c.text,
-                textAlign: "center",
-              }}
-            >
-              {filterStatus
-                ? `No ${getStatusMeta(filterStatus).label.toLowerCase()} disputes`
-                : "No disputes yet"}
-            </AppText>
-            <AppText
-              style={{
-                fontSize: 12,
-                color: c.textDim,
-                textAlign: "center",
-                maxWidth: 320,
-              }}
-            >
-              Disputes can be raised from any active booking that has an issue.
-            </AppText>
-          </View>
-        ) : (
-          <View style={{ gap: 12 }}>
-            {filtered.map((dispute) => {
-              const isExpanded = expanded === dispute.id;
-              const meta = getStatusMeta(dispute.status);
-              const colors = statusColors(meta.key, c);
-              const StatusIcon =
-                dispute.status === "RESOLVED"
-                  ? FaCheckCircle
-                  : dispute.status === "CANCELLED"
-                    ? FaTimesCircle
-                    : FaExclamationTriangle;
-
-              return (
+            {t("disputes.emptyBody")}
+          </AppText>
+        </View>
+      ) : (
+        <View style={{ gap: 14 }}>
+          {filtered.map((dispute, idx) => {
+            const meta = STATUS_META[dispute.status] || STATUS_META.DISPUTED;
+            const isExpanded = expanded === dispute.id;
+            return (
+              <View
+                key={`${dispute.id || "dispute"}-${idx}`}
+                style={{
+                  backgroundColor: c.bgPanel,
+                  borderWidth: 1,
+                  borderColor: isExpanded ? c.orange + "88" : c.border,
+                  borderRadius: 16,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Top accent line */}
                 <View
-                  key={dispute.id}
                   style={{
-                    backgroundColor: c.bgPanel,
-                    borderWidth: 1,
-                    borderColor: isExpanded ? c.orangeGlow : c.border,
-                    borderRadius: 14,
-                    overflow: "hidden",
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 2,
+                    backgroundColor: c.orange,
+                    opacity: 0.5,
+                    zIndex: 1,
+                  }}
+                />
+
+                {/* Card top */}
+                <Pressable
+                  onPress={() =>
+                    setExpanded((prev) =>
+                      prev === dispute.id ? null : dispute.id,
+                    )
+                  }
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 12,
+                    padding: 18,
+                    paddingTop: 20,
                   }}
                 >
-                  {/* Card top */}
-                  <Pressable
-                    onPress={() =>
-                      setExpanded((prev) =>
-                        prev === dispute.id ? null : dispute.id,
-                      )
-                    }
-                    style={({ pressed }) => [
-                      {
-                        flexDirection: "row",
-                        alignItems: "flex-start",
-                        justifyContent: "space-between",
-                        gap: 10,
-                        paddingHorizontal: 14,
-                        paddingVertical: 14,
-                        opacity: pressed ? 0.85 : 1,
-                      },
-                    ]}
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: meta.bg,
+                      borderWidth: 1,
+                      borderColor: meta.color + "55",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
                   >
-                    <View
+                    <Ionicons name={meta.icon} size={18} color={meta.color} />
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <AppText
+                      weight="displayBlack"
                       style={{
-                        flexDirection: "row",
-                        alignItems: "flex-start",
-                        gap: 10,
-                        flex: 1,
-                        minWidth: 0,
+                        fontSize: 11,
+                        color: c.text,
+                        lineHeight: 20,
+                        letterSpacing: -0.3,
+                        marginBottom: 4,
                       }}
+                      numberOfLines={2}
                     >
-                      <View
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 9,
-                          backgroundColor: colors.bg,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <StatusIcon size={14} color={colors.fg} />
-                      </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <AppText
-                          numberOfLines={2}
-                          style={{
-                            fontFamily: "DMSans_600SemiBold",
-                            fontSize: 13,
-                            fontWeight: "700",
-                            color: c.text,
-                          }}
-                        >
-                          {dispute.title || "Booking dispute"}
-                        </AppText>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            flexWrap: "wrap",
-                            alignItems: "center",
-                            gap: 5,
-                            marginTop: 5,
-                          }}
-                        >
-                          {dispute.disputeReason ? (
-                            <View
-                              style={{
-                                backgroundColor: c.bgCard,
-                                borderWidth: 1,
-                                borderColor: c.border,
-                                borderRadius: 4,
-                                paddingHorizontal: 6,
-                                paddingVertical: 1,
-                              }}
-                            >
-                              <AppText
-                                style={{
-                                  fontSize: 10,
-                                  color: c.textDim,
-                                  textTransform: "capitalize",
-                                }}
-                              >
-                                {dispute.disputeReason.replace(/_/g, " ")}
-                              </AppText>
-                            </View>
-                          ) : null}
-                          <AppText style={{ fontSize: 10, color: c.textDim }}>
-                            {new Date(dispute.createdAt).toLocaleDateString(
-                              "en-GB",
-                              {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              },
-                            )}
-                          </AppText>
-                        </View>
-                      </View>
-                    </View>
+                      {dispute.title || t("disputes.bookingDispute")}
+                    </AppText>
                     <View
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
-                        gap: 8,
-                        flexShrink: 0,
+                        gap: 6,
+                        flexWrap: "wrap",
                       }}
                     >
-                      <StatusBadge status={dispute.status} c={c} />
-                      <FaChevronRight
-                        size={12}
-                        color={c.textMuted}
-                        style={{
-                          transform: [
-                            { rotate: isExpanded ? "90deg" : "0deg" },
-                          ],
-                        }}
-                      />
-                    </View>
-                  </Pressable>
-
-                  {/* Card body */}
-                  {isExpanded ? (
-                    <View
-                      style={{
-                        borderTopWidth: 1,
-                        borderTopColor: c.border,
-                        paddingHorizontal: 14,
-                        paddingVertical: 14,
-                        gap: 14,
-                      }}
-                    >
-                      {/* Dispute details */}
-                      <View style={{ gap: 8 }}>
-                        {dispute.disputeReason ? (
-                          <DetailItem
-                            label="Reason"
-                            value={dispute.disputeReason.replace(/_/g, " ")}
-                            c={c}
-                          />
-                        ) : null}
-                        {dispute.disputeDescription ? (
-                          <DetailItem
-                            label="Description"
-                            value={dispute.disputeDescription}
-                            c={c}
-                          />
-                        ) : null}
-                        {dispute.disputeEvidence &&
-                        dispute.disputeEvidence.length > 0 ? (
-                          <View>
-                            <AppText
-                              style={{
-                                fontFamily: "DMSans_600SemiBold",
-                                fontSize: 9,
-                                fontWeight: "700",
-                                color: c.textMuted,
-                                letterSpacing: 0.6,
-                                textTransform: "uppercase",
-                                marginBottom: 6,
-                              }}
-                            >
-                              Evidence
-                            </AppText>
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                flexWrap: "wrap",
-                                gap: 6,
-                              }}
-                            >
-                              {dispute.disputeEvidence.map((url, idx) => (
-                                <Pressable
-                                  key={idx}
-                                  onPress={() => setLightboxImage(url)}
-                                  style={({ pressed }) => [
-                                    {
-                                      flexDirection: "row",
-                                      alignItems: "center",
-                                      gap: 4,
-                                      backgroundColor: c.bgInput || c.bgCard,
-                                      borderWidth: 1,
-                                      borderColor: c.border,
-                                      borderRadius: 6,
-                                      paddingHorizontal: 8,
-                                      paddingVertical: 5,
-                                      opacity: pressed ? 0.75 : 1,
-                                    },
-                                  ]}
-                                >
-                                  <FaImage size={11} color={c.textDim} />
-                                  <AppText
-                                    style={{
-                                      fontSize: 10,
-                                      color: c.textDim,
-                                    }}
-                                  >
-                                    View
-                                  </AppText>
-                                </Pressable>
-                              ))}
-                            </View>
-                          </View>
-                        ) : null}
-                      </View>
-
-                      {/* Booking details */}
-                      <View>
-                        <AppText
+                      {dispute.disputeReason ? (
+                        <View
                           style={{
-                            fontFamily: "DMSans_600SemiBold",
-                            fontSize: 9,
-                            fontWeight: "700",
-                            color: c.textMuted,
-                            letterSpacing: 0.6,
-                            textTransform: "uppercase",
-                            marginBottom: 6,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 4,
+                            borderWidth: 1,
+                            backgroundColor: c.bgCard,
+                            borderColor: c.border,
                           }}
                         >
-                          Booking Details
-                        </AppText>
+                          <AppText
+                            style={{
+                              fontSize: 10,
+                              color: c.textDim,
+                              textTransform: "capitalize",
+                              fontWeight: "600",
+                            }}
+                          >
+                            {String(dispute.disputeReason).replace(/_/g, " ")}
+                          </AppText>
+                        </View>
+                      ) : null}
+                      <AppText style={{ fontSize: 11, color: c.textMuted }}>
+                        {fmtDate(dispute.createdAt)}
+                      </AppText>
+                      {dispute.category ? (
+                        <View
+                          style={{
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 4,
+                            backgroundColor: c.orangeDim,
+                          }}
+                        >
+                          <AppText
+                            style={{
+                              fontSize: 10,
+                              fontWeight: "600",
+                              color: c.orange,
+                            }}
+                          >
+                            {dispute.category.icon} {dispute.category.name}
+                          </AppText>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <View style={{ alignItems: "flex-end", gap: 6 }}>
+                    <View
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 3,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: meta.color + "88",
+                        backgroundColor: meta.bg,
+                      }}
+                    >
+                      <AppText
+                        style={{
+                          fontSize: 9,
+                          fontWeight: "800",
+                          color: meta.color,
+                          textTransform: "uppercase",
+                          letterSpacing: 0.6,
+                        }}
+                      >
+                        {t(`disputes.status.${meta.key}`)}
+                      </AppText>
+                    </View>
+                    <Ionicons
+                      name={isExpanded ? "chevron-up" : "chevron-down"}
+                      size={14}
+                      color={c.textMuted}
+                    />
+                  </View>
+                </Pressable>
+
+                {/* Expanded body */}
+                {isExpanded ? (
+                  <View
+                    style={{
+                      padding: 18,
+                      paddingTop: 0,
+                      gap: 12,
+                    }}
+                  >
+                    {/* Dispute Info */}
+                    <SectionCard
+                      title={t("disputes.sections.disputeInfo")}
+                      icon="alert-circle-outline"
+                      c={c}
+                    >
+                      {dispute.disputeReason ? (
+                        <View>
+                          <AppText
+                            style={{
+                              fontSize: 10,
+                              fontWeight: "700",
+                              color: c.textMuted,
+                              textTransform: "uppercase",
+                              letterSpacing: 0.8,
+                              marginBottom: 3,
+                            }}
+                          >
+                            {t("disputes.fields.reason")}
+                          </AppText>
+                          <AppText
+                            style={{
+                              fontSize: 13,
+                              color: c.text,
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {String(dispute.disputeReason).replace(/_/g, " ")}
+                          </AppText>
+                        </View>
+                      ) : null}
+                      {dispute.disputeDescription ? (
+                        <View>
+                          <AppText
+                            style={{
+                              fontSize: 10,
+                              fontWeight: "700",
+                              color: c.textMuted,
+                              textTransform: "uppercase",
+                              letterSpacing: 0.8,
+                              marginBottom: 3,
+                            }}
+                          >
+                            {t("disputes.fields.description")}
+                          </AppText>
+                          <AppText
+                            style={{
+                              fontSize: 13,
+                              color: c.text,
+                              lineHeight: 20,
+                            }}
+                          >
+                            {dispute.disputeDescription}
+                          </AppText>
+                        </View>
+                      ) : null}
+                      {dispute.disputeEvidence?.length > 0 ? (
+                        <View>
+                          <AppText
+                            style={{
+                              fontSize: 10,
+                              fontWeight: "700",
+                              color: c.textMuted,
+                              textTransform: "uppercase",
+                              letterSpacing: 0.8,
+                              marginBottom: 6,
+                            }}
+                          >
+                            {t("disputes.fields.evidence")}
+                          </AppText>
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ gap: 8 }}
+                          >
+                            {dispute.disputeEvidence.map((url, eIdx) => {
+                              const pdf = isPdfUrl(url);
+                              return (
+                                <Pressable
+                                  key={`${dispute.id}-ev-${eIdx}`}
+                                  onPress={() => openEvidence(url)}
+                                  style={{
+                                    width: 68,
+                                    height: 68,
+                                    borderRadius: 8,
+                                    borderWidth: 1,
+                                    overflow: "hidden",
+                                    backgroundColor: c.bgInput,
+                                    borderColor: c.border,
+                                  }}
+                                >
+                                  {pdf ? (
+                                    <View
+                                      style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                      }}
+                                    >
+                                      <Ionicons
+                                        name="document-text-outline"
+                                        size={24}
+                                        color={c.red}
+                                      />
+                                      <AppText
+                                        style={{
+                                          fontSize: 8,
+                                          fontWeight: "700",
+                                          color: c.textMuted,
+                                          marginTop: 2,
+                                        }}
+                                      >
+                                        PDF
+                                      </AppText>
+                                    </View>
+                                  ) : (
+                                    <Image
+                                      source={{ uri: url }}
+                                      style={{
+                                        width: "100%",
+                                        height: "100%",
+                                      }}
+                                      resizeMode="cover"
+                                    />
+                                  )}
+                                  <View
+                                    pointerEvents="none"
+                                    style={{
+                                      ...StyleSheet.absoluteFillObject,
+                                      backgroundColor: "rgba(0,0,0,0.45)",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                  >
+                                    <Ionicons
+                                      name="eye-outline"
+                                      size={16}
+                                      color="#fff"
+                                    />
+                                  </View>
+                                </Pressable>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      ) : null}
+                    </SectionCard>
+
+                    {/* Booking Details */}
+                    <SectionCard
+                      title={t("disputes.sections.bookingDetails")}
+                      icon="calendar-outline"
+                      c={c}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 8,
+                        }}
+                      >
+                        {dispute.agreedRate != null ? (
+                          <GridItem
+                            label={t("disputes.fields.agreedRate")}
+                            value={fmtMoney(
+                              dispute.agreedRate,
+                              dispute.currency,
+                            )}
+                            c={c}
+                          />
+                        ) : null}
+                        {dispute.estimatedUnit && dispute.estimatedValue ? (
+                          <GridItem
+                            label={t("disputes.fields.duration")}
+                            value={`${dispute.estimatedValue} ${dispute.estimatedUnit}`}
+                            c={c}
+                          />
+                        ) : null}
+                        {dispute.address ? (
+                          <GridItem
+                            label={t("disputes.fields.address")}
+                            value={dispute.address}
+                            c={c}
+                          />
+                        ) : null}
+                        {dispute.scheduledAt ? (
+                          <GridItem
+                            label={t("disputes.fields.scheduled")}
+                            value={fmtDateTime(dispute.scheduledAt)}
+                            c={c}
+                          />
+                        ) : null}
+                        {dispute.jobType ? (
+                          <GridItem
+                            label={t("disputes.fields.jobType")}
+                            value={String(dispute.jobType).replace(/_/g, " ")}
+                            c={c}
+                          />
+                        ) : null}
+                        {dispute.locationType ? (
+                          <GridItem
+                            label={t("disputes.fields.locationType")}
+                            value={String(dispute.locationType).replace(
+                              /_/g,
+                              " ",
+                            )}
+                            c={c}
+                          />
+                        ) : null}
+                      </View>
+                    </SectionCard>
+
+                    {/* Parties */}
+                    {dispute.hirer || dispute.worker ? (
+                      <SectionCard
+                        title={t("disputes.sections.parties")}
+                        icon="people-outline"
+                        c={c}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            gap: 8,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          {dispute.hirer ? (
+                            <PartyChip
+                              party={dispute.hirer}
+                              role={t("disputes.roles.hirer")}
+                              c={c}
+                            />
+                          ) : null}
+                          {dispute.worker ? (
+                            <PartyChip
+                              party={dispute.worker}
+                              role={t("disputes.roles.worker")}
+                              c={c}
+                            />
+                          ) : null}
+                        </View>
+                      </SectionCard>
+                    ) : null}
+
+                    {/* Payment */}
+                    {dispute.payments?.length > 0 ? (
+                      <SectionCard
+                        title={t("disputes.sections.payment")}
+                        icon="cash-outline"
+                        c={c}
+                      >
                         <View
                           style={{
                             flexDirection: "row",
@@ -1010,249 +1092,328 @@ export default function DisputesScreen() {
                             gap: 8,
                           }}
                         >
-                          {dispute.agreedRate != null ? (
-                            <DetailItem
-                              label="Agreed Rate"
-                              value={formatCurrency(
-                                dispute.agreedRate,
-                                dispute.currency,
-                              )}
-                              c={c}
-                            />
-                          ) : null}
-                          {dispute.estimatedUnit && dispute.estimatedValue ? (
-                            <DetailItem
-                              label="Duration"
-                              value={`${dispute.estimatedValue} ${dispute.estimatedUnit}`}
-                              c={c}
-                            />
-                          ) : null}
-                          {dispute.address ? (
-                            <DetailItem
-                              label="Address"
-                              value={dispute.address}
-                              c={c}
-                            />
-                          ) : null}
-                          {dispute.scheduledAt ? (
-                            <DetailItem
-                              label="Scheduled"
-                              value={new Date(
-                                dispute.scheduledAt,
-                              ).toLocaleString("en-GB", {
-                                dateStyle: "medium",
-                                timeStyle: "short",
-                              })}
-                              c={c}
-                            />
-                          ) : null}
-                          {dispute.jobType ? (
-                            <DetailItem
-                              label="Job Type"
-                              value={dispute.jobType.replace(/_/g, " ")}
-                              c={c}
-                            />
-                          ) : null}
-                          {dispute.locationType ? (
-                            <DetailItem
-                              label="Location"
-                              value={dispute.locationType.replace(/_/g, " ")}
-                              c={c}
-                            />
-                          ) : null}
+                          <GridItem
+                            label={t("disputes.fields.paymentStatus")}
+                            value={dispute.payments[0].status}
+                            c={c}
+                          />
+                          <GridItem
+                            label={t("disputes.fields.paymentAmount")}
+                            value={fmtMoney(
+                              dispute.payments[0].amount,
+                              dispute.payments[0].currency,
+                            )}
+                            c={c}
+                          />
                         </View>
-                      </View>
+                      </SectionCard>
+                    ) : null}
 
-                      {/* Parties */}
-                      {dispute.hirer || dispute.worker ? (
-                        <View style={{ gap: 6 }}>
-                          {dispute.hirer ? (
-                            <PartyChip
-                              person={dispute.hirer}
-                              role="Hirer"
-                              c={c}
-                            />
-                          ) : null}
-                          {dispute.worker ? (
-                            <PartyChip
-                              person={dispute.worker}
-                              role="Worker"
-                              c={c}
-                            />
-                          ) : null}
-                        </View>
+                    {/* Actions */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {dispute.status === "DISPUTED" ? (
+                        <Pressable
+                          onPress={() => openCancelModal(dispute.id)}
+                          disabled={cancelling === dispute.id}
+                          style={({ pressed }) => ({
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: c.red,
+                            backgroundColor: pressed ? c.redDim : "transparent",
+                            opacity: cancelling === dispute.id ? 0.5 : 1,
+                          })}
+                        >
+                          {cancelling === dispute.id ? (
+                            <ActivityIndicator color={c.red} size="small" />
+                          ) : (
+                            <>
+                              <Ionicons
+                                name="trash-outline"
+                                size={12}
+                                color={c.red}
+                              />
+                              <AppText
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: "700",
+                                  color: c.red,
+                                }}
+                              >
+                                {t("disputes.actions.cancel")}
+                              </AppText>
+                            </>
+                          )}
+                        </Pressable>
                       ) : null}
-
-                      {/* Payment info */}
-                      {dispute.payments && dispute.payments.length > 0 ? (
-                        <View>
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 4,
-                              marginBottom: 6,
-                            }}
-                          >
-                            <FaMoneyBillWave size={10} color={c.orange} />
-                            <AppText
-                              style={{
-                                fontFamily: "DMSans_600SemiBold",
-                                fontSize: 9,
-                                fontWeight: "700",
-                                color: c.textMuted,
-                                letterSpacing: 0.6,
-                                textTransform: "uppercase",
-                              }}
-                            >
-                              Payment
-                            </AppText>
-                          </View>
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              flexWrap: "wrap",
-                              gap: 8,
-                            }}
-                          >
-                            <DetailItem
-                              label="Status"
-                              value={dispute.payments[0].status}
-                              c={c}
-                            />
-                            <DetailItem
-                              label="Amount"
-                              value={formatCurrency(
-                                dispute.payments[0].amount,
-                                dispute.payments[0].currency,
-                              )}
-                              c={c}
-                            />
-                          </View>
-                        </View>
-                      ) : null}
-
-                      {/* Actions */}
-                      <View
+                      <Pressable
+                        onPress={() =>
+                          navigation.navigate("BookingDetail", {
+                            id: dispute.id,
+                          })
+                        }
                         style={{
                           flexDirection: "row",
-                          flexWrap: "wrap",
-                          gap: 8,
-                          paddingTop: 8,
-                          borderTopWidth: 1,
-                          borderTopColor: c.border,
+                          alignItems: "center",
+                          gap: 4,
+                          paddingHorizontal: 14,
+                          paddingVertical: 10,
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: c.orange,
+                          marginLeft: "auto",
                         }}
                       >
-                        {dispute.status === "DISPUTED" ? (
-                          <Pressable
-                            onPress={() => openCancelModal(dispute.id)}
-                            disabled={cancelling === dispute.id}
-                            style={({ pressed }) => [
-                              {
-                                flexDirection: "row",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: 5,
-                                paddingHorizontal: 14,
-                                paddingVertical: 9,
-                                backgroundColor: "transparent",
-                                borderWidth: 1,
-                                borderColor: c.red,
-                                borderRadius: 8,
-                                opacity:
-                                  cancelling === dispute.id
-                                    ? 0.5
-                                    : pressed
-                                      ? 0.75
-                                      : 1,
-                              },
-                            ]}
-                          >
-                            {cancelling === dispute.id ? (
-                              <>
-                                <ActivityIndicator size="small" color={c.red} />
-                                <AppText
-                                  style={{
-                                    fontSize: 12,
-                                    fontWeight: "600",
-                                    color: c.red,
-                                  }}
-                                >
-                                  Cancelling...
-                                </AppText>
-                              </>
-                            ) : (
-                              <>
-                                <FaTrash size={11} color={c.red} />
-                                <AppText
-                                  style={{
-                                    fontSize: 12,
-                                    fontWeight: "600",
-                                    color: c.red,
-                                  }}
-                                >
-                                  Cancel Dispute
-                                </AppText>
-                              </>
-                            )}
-                          </Pressable>
-                        ) : null}
-                        <Pressable
-                          onPress={() =>
-                            navigation.navigate("BookingDetail", {
-                              bookingId: dispute.id,
-                            })
-                          }
-                          style={({ pressed }) => [
-                            {
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 4,
-                              paddingHorizontal: 10,
-                              paddingVertical: 9,
-                              marginLeft: "auto",
-                              opacity: pressed ? 0.75 : 1,
-                            },
-                          ]}
+                        <Ionicons
+                          name="eye-outline"
+                          size={12}
+                          color={c.orange}
+                        />
+                        <AppText
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: c.orange,
+                          }}
                         >
-                          <FaEye size={11} color={c.orange} />
-                          <AppText
-                            style={{
-                              fontSize: 12,
-                              fontWeight: "600",
-                              color: c.orange,
-                            }}
-                          >
-                            View Booking →
-                          </AppText>
-                        </Pressable>
-                      </View>
+                          {t("disputes.actions.viewBooking")}
+                        </AppText>
+                      </Pressable>
                     </View>
-                  ) : null}
-                </View>
-              );
-            })}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Cancel modal */}
+      <Modal
+        visible={showCancelModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeCancelModal}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.7)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 400,
+              padding: 20,
+              borderRadius: 16,
+              borderWidth: 1,
+              backgroundColor: c.bgPanel,
+              borderColor: c.border,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 10,
+              }}
+            >
+              <AppText
+                weight="displayBlack"
+                style={{ fontSize: 16, color: c.text }}
+              >
+                {t("disputes.cancelModal.title")}
+              </AppText>
+              <Pressable onPress={closeCancelModal} hitSlop={8}>
+                <Ionicons
+                  name="close-circle-outline"
+                  size={18}
+                  color={c.textDim}
+                />
+              </Pressable>
+            </View>
+            <AppText
+              style={{
+                fontSize: 13,
+                color: c.textDim,
+                lineHeight: 19,
+                marginBottom: 16,
+              }}
+            >
+              {t("disputes.cancelModal.body")}
+            </AppText>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable
+                onPress={closeCancelModal}
+                disabled={!!cancelling}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  backgroundColor: "transparent",
+                  borderColor: c.border,
+                  borderWidth: 1,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <AppText
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: c.textDim,
+                  }}
+                >
+                  {t("disputes.cancelModal.keep")}
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={confirmCancel}
+                disabled={!!cancelling}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  backgroundColor: c.red,
+                  opacity: cancelling ? 0.6 : pressed ? 0.9 : 1,
+                })}
+              >
+                {cancelling ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <AppText
+                    style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+                  >
+                    {t("disputes.cancelModal.confirm")}
+                  </AppText>
+                )}
+              </Pressable>
+            </View>
           </View>
-        )}
-      </ScrollView>
+        </View>
+      </Modal>
 
-      {/* Confirmation modal */}
-      <ConfirmationModal
-        isOpen={showCancelModal}
-        onClose={closeCancelModal}
-        onConfirm={confirmCancel}
-        title="Cancel Dispute"
-        message="Are you sure you want to cancel this dispute? This action cannot be undone."
-        c={c}
-      />
+      {/* Lightbox */}
+      <Modal
+        visible={!!lightboxImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLightboxImage(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.92)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Pressable
+            onPress={() => setLightboxImage(null)}
+            style={{
+              position: "absolute",
+              top: 60,
+              right: 20,
+              zIndex: 2,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: "rgba(255,255,255,0.12)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="close" size={22} color="#fff" />
+          </Pressable>
+          {lightboxImage ? (
+            <Image
+              source={{ uri: lightboxImage }}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode="contain"
+            />
+          ) : null}
+        </View>
+      </Modal>
 
-      {/* Image lightbox */}
-      <ImageLightbox
-        imageUrl={lightboxImage}
-        onClose={() => setLightboxImage(null)}
-      />
-    </SafeAreaView>
+      {/* PDF viewer */}
+      <Modal
+        visible={!!pdfViewerSrc}
+        animationType="slide"
+        onRequestClose={() => setPdfViewerSrc(null)}
+      >
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: c.bg }}
+          edges={["top", "bottom"]}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: c.border,
+              backgroundColor: c.bgPanel,
+            }}
+          >
+            <Pressable
+              onPress={() => setPdfViewerSrc(null)}
+              hitSlop={8}
+              accessibilityLabel={t("common.close")}
+            >
+              <Ionicons name="close" size={20} color={c.text} />
+            </Pressable>
+            <AppText
+              style={{ fontSize: 14, fontWeight: "600", color: c.text }}
+              numberOfLines={1}
+            >
+              {t("disputes.pdfViewerTitle")}
+            </AppText>
+            <View style={{ width: 20 }} />
+          </View>
+          {pdfViewerSrc ? (
+            <WebView
+              source={{
+                uri: `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(pdfViewerSrc)}`,
+              }}
+              style={{ flex: 1 }}
+              originWhitelist={["*"]}
+              startInLoadingState
+              renderLoading={() => (
+                <View
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: c.bg,
+                  }}
+                >
+                  <ActivityIndicator size="large" color={c.orange} />
+                </View>
+              )}
+            />
+          ) : null}
+        </SafeAreaView>
+      </Modal>
+    </AppScreen>
   );
 }
-
-const styles = StyleSheet.create({});
