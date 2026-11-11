@@ -2,7 +2,7 @@
 // Verbatim port of WorkerLayout.module.css sidebar + ConfirmationModal.
 // Receives unreadNotifications + unreadMessages from WorkerNavigator.
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Image,
   Modal,
@@ -20,7 +20,7 @@ import AppText from "./AppText";
 import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
 import { useAuthStore } from "../store/authStore";
-import client from "../api/client";
+import { useWorkerAvailability } from "../store/workerAvailabilityStore";
 import { rem, FONTS } from "../constants/theme";
 
 // ── Menu item ────────────────────────────────────────────────────────────
@@ -230,10 +230,18 @@ export default function WorkerDrawerContent(props) {
   const insets = useSafeAreaInsets();
   const c = theme.colors;
 
+  // ── Shared availability store — same source of truth used by the
+  //    Dashboard pill, Settings Work Profile toggle, and Availability
+  //    master switch. Any change in one flips the others instantly.
+  const {
+    isAvailable,
+    setAvailable,
+    loading: togglingAvail,
+  } = useWorkerAvailability();
+
   const unreadNotifications = props.unreadNotifications ?? 0;
   const unreadMessages = props.unreadMessages ?? 0;
 
-  const [togglingAvail, setTogglingAvail] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const activeRoute =
@@ -253,18 +261,13 @@ export default function WorkerDrawerContent(props) {
   };
 
   const handleToggleAvailability = async (value) => {
-    // Instantly update the global store so both Drawer and Dashboard sync
-    if (updateUser) updateUser({ isAvailable: value });
-
-    setTogglingAvail(true);
     try {
-      await client.put("/workers/profile", { isAvailable: value });
-    } catch {
-      // Revert on failure
-      if (updateUser) updateUser({ isAvailable: !value });
-      toast.error(t("nav.failedAvailability"));
-    } finally {
-      setTogglingAvail(false);
+      await setAvailable(value);
+      // Keep authStore mirrored so anything still reading user.isAvailable
+      // (TopBar, profile public view) stays in sync.
+      if (updateUser) updateUser({ isAvailable: value });
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t("nav.failedAvailability"));
     }
   };
 
@@ -657,12 +660,10 @@ export default function WorkerDrawerContent(props) {
               color: c.textDim,
             }}
           >
-            {(user?.isAvailable ?? true)
-              ? t("nav.available")
-              : t("nav.offline")}
+            {isAvailable ? t("nav.available") : t("nav.offline")}
           </AppText>
           <Switch
-            value={user?.isAvailable ?? true}
+            value={isAvailable}
             onValueChange={handleToggleAvailability}
             disabled={togglingAvail}
             trackColor={{ false: "rgba(255,255,255,0.1)", true: c.green }}

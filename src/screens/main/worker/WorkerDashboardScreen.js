@@ -13,6 +13,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
+import { useWorkerAvailability } from "../../../store/workerAvailabilityStore";
 
 import AppText from "../../../components/AppText";
 import Skeleton from "../../../components/Skeleton";
@@ -145,11 +146,20 @@ export default function WorkerDashboardScreen() {
   const { dashboardCurrency } = useCurrency();
   const { user, updateUser } = useAuthStore();
 
+  // ── Shared availability store — same source of truth used by Settings
+  //    Work Profile and WorkerAvailabilityScreen. Any change in one flips
+  //    the others instantly, no refresh needed.
+  const {
+    isAvailable,
+    setAvailable,
+    hydrate: hydrateAvailability,
+    loading: isTogglingAvail,
+  } = useWorkerAvailability();
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [greeting, setGreeting] = useState("greetingMorning");
-  const [isTogglingAvail, setIsTogglingAvail] = useState(false);
 
   const isMobile = width <= 640;
   const isTablet = width <= 1100;
@@ -166,6 +176,8 @@ export default function WorkerDashboardScreen() {
     try {
       const freshData = await getWorkerDashboard();
       setData(freshData);
+      // Seed the shared store from the fresh profile so all screens match.
+      hydrateAvailability(freshData?.profile || freshData?.user);
       if (
         freshData?.profile?.isAvailable !== undefined &&
         freshData.profile.isAvailable !== user?.isAvailable
@@ -176,7 +188,7 @@ export default function WorkerDashboardScreen() {
     } catch (err) {
       console.error("Silent fetch failed:", err);
     }
-  }, [updateUser, user?.isAvailable]);
+  }, [updateUser, user?.isAvailable, hydrateAvailability]);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -189,6 +201,8 @@ export default function WorkerDashboardScreen() {
       .then((resData) => {
         if (isMounted) {
           setData(resData);
+          // Seed the shared store from the initial fetch too.
+          hydrateAvailability(resData?.profile || resData?.user);
           if (
             resData?.profile?.isAvailable !== undefined &&
             resData.profile.isAvailable !== user?.isAvailable
@@ -209,20 +223,19 @@ export default function WorkerDashboardScreen() {
     };
   }, []); // eslint-disable-line
 
+  // ── Toggle — writes through the shared store. Optimistic update, auto
+  //    rollback on failure. Keeps authStore.isAvailable mirrored for any
+  //    legacy consumer (drawer, TopBar) that still reads it.
   const handleToggleAvailability = async () => {
-    const newValue = !(user?.isAvailable ?? true);
-
-    if (updateUser) updateUser({ isAvailable: newValue });
-    setIsTogglingAvail(true);
-
+    const next = !isAvailable;
     try {
-      await client.put("/workers/profile", { isAvailable: newValue });
-      await fetchDashboardSilently();
+      await setAvailable(next);
+      if (updateUser) updateUser({ isAvailable: next });
+      fetchDashboardSilently();
     } catch (err) {
-      if (updateUser) updateUser({ isAvailable: !newValue });
-      toast.error(t("workerDash.failedAvailability"));
-    } finally {
-      setIsTogglingAvail(false);
+      toast.error(
+        err?.response?.data?.message || t("workerDash.failedAvailability"),
+      );
     }
   };
 
@@ -299,7 +312,6 @@ export default function WorkerDashboardScreen() {
 
   const maxEarning = Math.max(...safeTrend.map((m) => m?.earnings || 0), 1);
   const completion = profile?.profileCompletion || 0;
-  const isAvailable = user?.isAvailable ?? true;
 
   return (
     <ScrollView

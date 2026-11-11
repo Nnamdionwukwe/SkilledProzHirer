@@ -2,8 +2,9 @@
 //
 // Full i18n port. Every string routes through t() with keys that already
 // exist in en.json under settings.*, common.*, toast.*.
-// Withdrawal PIN / Account Info / Account Status labels remain English to
-// match the web version (no keys in en.json for these three tab labels).
+// Work Profile availability toggle now reads/writes the shared
+// useWorkerAvailability store so it stays in sync with the drawer footer,
+// dashboard pill, and availability master switch.
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -28,6 +29,7 @@ import AppText from "../../components/AppText";
 import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore";
+import { useWorkerAvailability } from "../../store/workerAvailabilityStore";
 import {
   useCurrency,
   CURRENCY_META,
@@ -121,6 +123,16 @@ export default function SettingsScreen() {
   const { t } = useTranslation();
   const { theme, language, changeTheme, mode } = useTheme();
   const { user, updateUser } = useAuthStore();
+
+  // ── Shared availability store — same source of truth used by the drawer
+  //    footer, dashboard pill, and availability master switch. Any change
+  //    in one place flips the others instantly.
+  const {
+    isAvailable: isWorkerAvailable,
+    setAvailable: setWorkerAvailable,
+    hydrate: hydrateWorkerAvailability,
+  } = useWorkerAvailability();
+
   const {
     dashboardCurrency,
     paymentCurrency,
@@ -159,12 +171,16 @@ export default function SettingsScreen() {
       },
       { id: "privacy", icon: FaLock, label: t("settings.tabs.privacy") },
       { id: "security", icon: FaShieldAlt, label: t("settings.tabs.security") },
-      { id: "pin", icon: FaKey, label: "Withdrawal PIN" },
-      { id: "accountInfo", icon: FaInfoCircle, label: "Account Info" },
+      { id: "pin", icon: FaKey, label: t("settings.tabs.withdrawalPin") },
+      {
+        id: "accountInfo",
+        icon: FaInfoCircle,
+        label: t("settings.tabs.accountInfo"),
+      },
       {
         id: "accountStatus",
         icon: FaExclamationTriangle,
-        label: "Account Status",
+        label: t("settings.tabs.accountStatus"),
       },
       { id: "activity", icon: FaChartLine, label: t("settings.tabs.activity") },
     ],
@@ -193,12 +209,16 @@ export default function SettingsScreen() {
       },
       { id: "privacy", icon: FaLock, label: t("settings.tabs.privacy") },
       { id: "security", icon: FaShieldAlt, label: t("settings.tabs.security") },
-      { id: "pin", icon: FaKey, label: "Withdrawal PIN" },
-      { id: "accountInfo", icon: FaInfoCircle, label: "Account Info" },
+      { id: "pin", icon: FaKey, label: t("settings.tabs.withdrawalPin") },
+      {
+        id: "accountInfo",
+        icon: FaInfoCircle,
+        label: t("settings.tabs.accountInfo"),
+      },
       {
         id: "accountStatus",
         icon: FaExclamationTriangle,
-        label: "Account Status",
+        label: t("settings.tabs.accountStatus"),
       },
       { id: "activity", icon: FaChartLine, label: t("settings.tabs.activity") },
     ],
@@ -263,7 +283,6 @@ export default function SettingsScreen() {
     description: "",
     yearsExperience: "",
     serviceRadius: "25",
-    isAvailable: true,
   });
   const [companyForm, setCompanyForm] = useState({
     companyName: "",
@@ -339,7 +358,6 @@ export default function SettingsScreen() {
             description: wp.description || "",
             yearsExperience: wp.yearsExperience || "",
             serviceRadius: wp.serviceRadius || "25",
-            isAvailable: wp.isAvailable ?? true,
           });
           setPricing({
             hourlyRate: wp.hourlyRate || "",
@@ -361,6 +379,11 @@ export default function SettingsScreen() {
           });
         }
         updateUser?.(u);
+
+        // ⬇️ Seed the shared availability store from the fresh profile so
+        //    the Settings toggle, drawer footer, dashboard pill, and the
+        //    availability master switch all start in the same state.
+        hydrateWorkerAvailability(u);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -437,7 +460,7 @@ export default function SettingsScreen() {
     setSaving("pause");
     try {
       await client.post("/settings/pause", { password: pausePassword });
-      showToast("Account paused.");
+      showToast(t("settings.accountStatus.pausedToast"));
       setTimeout(
         () => navigation.reset({ index: 0, routes: [{ name: "Login" }] }),
         1500,
@@ -455,7 +478,7 @@ export default function SettingsScreen() {
     if (!deletePassword)
       return showToast(t("settings.security.enterCurrent"), "error");
     if (deleteConfirmText !== "DELETE")
-      return showToast('Type "DELETE" to confirm', "error");
+      return showToast(t("settings.accountStatus.typeDeleteError"), "error");
     setSaving("delete");
     try {
       await client.delete("/settings/account", {
@@ -465,7 +488,7 @@ export default function SettingsScreen() {
           confirmDelete: "DELETE",
         },
       });
-      showToast("Account scheduled for deletion.");
+      showToast(t("settings.accountStatus.scheduledToast"));
       setTimeout(
         () => navigation.reset({ index: 0, routes: [{ name: "Login" }] }),
         1500,
@@ -614,28 +637,30 @@ export default function SettingsScreen() {
   }
 
   async function setPins() {
-    if (pin.new !== pin.confirm) return setPinError("PINs do not match");
+    if (pin.new !== pin.confirm)
+      return setPinError(t("settings.pin.pinsMismatch"));
     if (!/^\d{4}$/.test(pin.new))
-      return setPinError("PIN must be exactly 4 digits");
+      return setPinError(t("settings.pin.pinFourDigits"));
     setPinError("");
     setSaving("pin");
     try {
       await client.post("/payments/pin/set", { pin: pin.new });
       setPinStatus((p) => ({ ...p, pinSet: true }));
       setPin({ new: "", confirm: "", current: "" });
-      showToast("Withdrawal PIN set");
+      showToast(t("settings.pin.setToast"));
     } catch (e) {
-      setPinError(e.response?.data?.message || "Failed to set PIN");
+      setPinError(e.response?.data?.message || t("settings.pin.setFailed"));
     } finally {
       setSaving("");
     }
   }
 
   async function changePin() {
-    if (pin.new !== pin.confirm) return setPinError("New PINs do not match");
+    if (pin.new !== pin.confirm)
+      return setPinError(t("settings.pin.newPinsMismatch"));
     if (!/^\d{4}$/.test(pin.new))
-      return setPinError("New PIN must be exactly 4 digits");
-    if (!pin.current) return setPinError("Current PIN is required");
+      return setPinError(t("settings.pin.newPinFourDigits"));
+    if (!pin.current) return setPinError(t("settings.pin.currentRequired"));
     setPinError("");
     setSaving("pin");
     try {
@@ -644,9 +669,9 @@ export default function SettingsScreen() {
         newPin: pin.new,
       });
       setPin({ new: "", confirm: "", current: "" });
-      showToast("Withdrawal PIN changed");
+      showToast(t("settings.pin.changedToast"));
     } catch (e) {
-      setPinError(e.response?.data?.message || "Failed to change PIN");
+      setPinError(e.response?.data?.message || t("settings.pin.changeFailed"));
     } finally {
       setSaving("");
     }
@@ -1004,11 +1029,21 @@ export default function SettingsScreen() {
                 numeric
               />
             </View>
+            {/* ── Shared availability toggle — same state as drawer footer,
+                dashboard pill, and availability master switch ── */}
             <Toggle
               label={t("settings.workProfile.availableLabel")}
               desc={t("settings.workProfile.availableSub")}
-              checked={workForm.isAvailable}
-              onChange={(v) => setWorkForm((f) => ({ ...f, isAvailable: v }))}
+              checked={isWorkerAvailable}
+              onChange={(v) => {
+                setWorkerAvailable(v).catch((err) => {
+                  showToast(
+                    err?.response?.data?.message ||
+                      t("settings.workProfile.saveFailed"),
+                    "error",
+                  );
+                });
+              }}
               c={c}
             />
             <SaveBtn
@@ -1561,9 +1596,9 @@ export default function SettingsScreen() {
         {/* ═══════════════ WITHDRAWAL PIN ═══════════════ */}
         {tab === "pin" && (
           <Card
-            title="Withdrawal PIN"
+            title={t("settings.pin.title")}
             icon={<FaKey size={18} color={c.orange} />}
-            desc="4-digit PIN required to authorise every wallet withdrawal"
+            desc={t("settings.pin.subtitle")}
             c={c}
           >
             {pinStatus === null ? (
@@ -1600,15 +1635,15 @@ export default function SettingsScreen() {
                     }}
                   >
                     {pinStatus.pinSet
-                      ? "PIN is set — required for all withdrawals"
-                      : "No PIN set — you must set one before withdrawing"}
+                      ? t("settings.pin.isSet")
+                      : t("settings.pin.notSet")}
                   </AppText>
                 </View>
                 {!pinStatus.pinSet ? (
                   <>
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <PinField
-                        label="New PIN"
+                        label={t("settings.pin.newPin")}
                         value={pin.new}
                         onChange={(v) => {
                           setPin((p) => ({ ...p, new: v }));
@@ -1617,7 +1652,7 @@ export default function SettingsScreen() {
                         c={c}
                       />
                       <PinField
-                        label="Confirm PIN"
+                        label={t("settings.pin.confirmPin")}
                         value={pin.confirm}
                         onChange={(v) => {
                           setPin((p) => ({ ...p, confirm: v }));
@@ -1632,7 +1667,7 @@ export default function SettingsScreen() {
                       </AppText>
                     ) : null}
                     <SaveBtn
-                      label="Set Withdrawal PIN"
+                      label={t("settings.pin.setButton")}
                       loading={saving === "pin"}
                       onClick={setPins}
                       c={c}
@@ -1644,7 +1679,7 @@ export default function SettingsScreen() {
                       style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
                     >
                       <PinField
-                        label="Current PIN"
+                        label={t("settings.pin.currentPin")}
                         value={pin.current}
                         onChange={(v) => {
                           setPin((p) => ({ ...p, current: v }));
@@ -1653,7 +1688,7 @@ export default function SettingsScreen() {
                         c={c}
                       />
                       <PinField
-                        label="New PIN"
+                        label={t("settings.pin.newPin")}
                         value={pin.new}
                         onChange={(v) => {
                           setPin((p) => ({ ...p, new: v }));
@@ -1662,7 +1697,7 @@ export default function SettingsScreen() {
                         c={c}
                       />
                       <PinField
-                        label="Confirm New PIN"
+                        label={t("settings.pin.confirmNewPin")}
                         value={pin.confirm}
                         onChange={(v) => {
                           setPin((p) => ({ ...p, confirm: v }));
@@ -1677,7 +1712,7 @@ export default function SettingsScreen() {
                       </AppText>
                     ) : null}
                     <SaveBtn
-                      label="Change PIN"
+                      label={t("settings.pin.changeButton")}
                       loading={saving === "pin"}
                       onClick={changePin}
                       c={c}
@@ -1802,8 +1837,9 @@ export default function SettingsScreen() {
                       color: "#facc15",
                     }}
                   >
-                    {blockers.length} item{blockers.length === 1 ? "" : "s"} to
-                    resolve first
+                    {t("settings.accountStatus.blockersTitle", {
+                      count: blockers.length,
+                    })}
                   </AppText>
                 </View>
                 {blockers.map((b) => (
@@ -1876,17 +1912,15 @@ export default function SettingsScreen() {
             ) : null}
 
             <Card
-              title="Take a Break"
+              title={t("settings.accountStatus.pauseTitle")}
               icon={<FaPauseCircle size={18} color={c.orange} />}
-              desc="Hide your profile and pause new bookings — reversible anytime"
+              desc={t("settings.accountStatus.pauseSubtitle")}
               c={c}
             >
               <AppText
                 style={{ fontSize: 12, color: c.textDim, lineHeight: 18 }}
               >
-                Pausing hides your profile and stops new bookings from coming
-                in. Your data, reviews, and history are fully preserved. Log
-                back in at any time to reactivate.
+                {t("settings.accountStatus.pauseBody")}
               </AppText>
               <Pressable
                 onPress={openPauseFlow}
@@ -1915,17 +1949,17 @@ export default function SettingsScreen() {
                     }}
                   >
                     {!canPause || hasBlockers
-                      ? "Resolve issues first"
-                      : "Pause Account"}
+                      ? t("settings.accountStatus.resolveFirst")
+                      : t("settings.accountStatus.pauseButton")}
                   </AppText>
                 )}
               </Pressable>
             </Card>
 
             <Card
-              title="Leave SkilledProz"
+              title={t("settings.accountStatus.deleteTitle")}
               icon={<FaTrash size={18} color={c.red} />}
-              desc="Permanently delete your profile after a 30-day grace period"
+              desc={t("settings.accountStatus.deleteSubtitle")}
               c={c}
             >
               <View
@@ -1945,20 +1979,14 @@ export default function SettingsScreen() {
                     marginBottom: 4,
                   }}
                 >
-                  What happens when you delete:
+                  {t("settings.accountStatus.deleteWhatHappens")}
                 </AppText>
-                {[
-                  "Your profile is hidden immediately",
-                  "Your data is permanently removed after 30 days",
-                  "Your reviews remain, anonymised as 'Former User'",
-                  "Transaction records are kept for legal compliance",
-                  "Log in within 30 days to cancel the deletion",
-                ].map((line) => (
+                {[1, 2, 3, 4, 5].map((n) => (
                   <AppText
-                    key={line}
+                    key={n}
                     style={{ fontSize: 11, color: c.textDim, lineHeight: 16 }}
                   >
-                    • {line}
+                    • {t(`settings.accountStatus.deleteBullets.${n}`)}
                   </AppText>
                 ))}
               </View>
@@ -1981,7 +2009,7 @@ export default function SettingsScreen() {
                     <AppText
                       style={{ fontSize: 12, fontWeight: "700", color: c.red }}
                     >
-                      Delete is disabled
+                      {t("settings.accountStatus.deleteDisabledTitle")}
                     </AppText>
                     <AppText
                       style={{
@@ -1991,10 +2019,9 @@ export default function SettingsScreen() {
                         lineHeight: 16,
                       }}
                     >
-                      You have {blockers.length} active commitment
-                      {blockers.length === 1 ? "" : "s"} on the platform.
-                      Resolve them first — the delete action unlocks
-                      automatically once your account is fully idle.
+                      {t("settings.accountStatus.deleteDisabledBody", {
+                        count: blockers.length,
+                      })}
                     </AppText>
                   </View>
                 </View>
@@ -2017,7 +2044,7 @@ export default function SettingsScreen() {
                     <AppText
                       style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}
                     >
-                      Delete Account
+                      {t("settings.accountStatus.deleteButton")}
                     </AppText>
                   )}
                 </Pressable>
@@ -2174,7 +2201,7 @@ export default function SettingsScreen() {
                   marginBottom: 8,
                 }}
               >
-                Pause your account?
+                {t("settings.accountStatus.pauseModalTitle")}
               </AppText>
               <Field
                 label={t("settings.security.currentPassword")}
@@ -2215,7 +2242,7 @@ export default function SettingsScreen() {
                   >
                     {saving === "pause"
                       ? t("settings.hiringPrefs.saving")
-                      : "Pause Account"}
+                      : t("settings.accountStatus.pauseButton")}
                   </AppText>
                 </Pressable>
               </View>
@@ -2258,7 +2285,7 @@ export default function SettingsScreen() {
                   marginBottom: 8,
                 }}
               >
-                Delete your account?
+                {t("settings.accountStatus.deleteModalTitle")}
               </AppText>
               <Field
                 label={t("settings.security.currentPassword")}
@@ -2269,7 +2296,7 @@ export default function SettingsScreen() {
                 full
               />
               <Field
-                label='Type "DELETE" to confirm'
+                label={t("settings.accountStatus.typeDeleteLabel")}
                 value={deleteConfirmText}
                 onChange={setDeleteConfirmText}
                 c={c}
@@ -2321,7 +2348,7 @@ export default function SettingsScreen() {
                   >
                     {saving === "delete"
                       ? t("settings.hiringPrefs.saving")
-                      : "Delete Account"}
+                      : t("settings.accountStatus.deleteButton")}
                   </AppText>
                 </Pressable>
               </View>
@@ -2417,12 +2444,12 @@ export default function SettingsScreen() {
                   marginBottom: 6,
                 }}
               >
-                Before you can proceed
+                {t("settings.accountStatus.blockerModalTitle")}
               </AppText>
               <AppText
                 style={{ fontSize: 11, color: c.textMuted, marginBottom: 12 }}
               >
-                Please resolve these first
+                {t("settings.accountStatus.blockerModalSubtitle")}
               </AppText>
               {blockers.map((b) => (
                 <View
@@ -2492,7 +2519,7 @@ export default function SettingsScreen() {
                 <AppText
                   style={{ fontSize: 12, fontWeight: "700", color: c.bg }}
                 >
-                  Got it
+                  {t("settings.accountStatus.gotIt")}
                 </AppText>
               </Pressable>
             </Pressable>
