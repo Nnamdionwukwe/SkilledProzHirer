@@ -3201,26 +3201,50 @@
       "applicantPlural": "applicants"
     }
   },
-  "workerAvailability.button.save": "Worker Availability Button Save",
-  "workerAvailability.common.done": "Worker Availability Common Done",
-  "workerAvailability.common.notAvailable": "Worker Availability Common Not Available",
-  "workerAvailability.common.to": "Worker Availability Common To",
-  "workerAvailability.days.friday": "Worker Availability Days Friday",
-  "workerAvailability.days.monday": "Worker Availability Days Monday",
-  "workerAvailability.days.saturday": "Worker Availability Days Saturday",
-  "workerAvailability.days.sunday": "Worker Availability Days Sunday",
-  "workerAvailability.days.thursday": "Worker Availability Days Thursday",
-  "workerAvailability.days.tuesday": "Worker Availability Days Tuesday",
-  "workerAvailability.days.wednesday": "Worker Availability Days Wednesday",
-  "workerAvailability.error.loadFailed": "Worker Availability Error Load Failed",
-  "workerAvailability.error.saveFailed": "Worker Availability Error Save Failed",
-  "workerAvailability.quick.everyDay": "Worker Availability Quick Every Day",
-  "workerAvailability.quick.monFri": "Worker Availability Quick Mon Fri",
-  "workerAvailability.quick.reset": "Worker Availability Quick Reset",
-  "workerAvailability.schedule.subtitle": "Worker Availability Schedule Subtitle",
-  "workerAvailability.schedule.title": "Worker Availability Schedule Title",
-  "workerAvailability.subtitle": "Worker Availability Subtitle",
-  "workerAvailability.success.saved": "Worker Availability Success Saved",
+  "workerAvailability": {
+    "title": "Weekly Availability",
+    "subtitle": "Set the days and hours you're available. This is shown to hirers on your profile.",
+    "activeDays": "{{count}} day active",
+    "activeDays_plural": "{{count}} days active",
+
+    "quick": {
+      "monFri": "Mon–Fri 8am–6pm",
+      "everyDay": "Every day",
+      "reset": "Reset"
+    },
+
+    "schedule": {
+      "title": "Weekly Schedule",
+      "subtitle": "Toggle days on/off and set your working hours."
+    },
+
+    "days": {
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday",
+      "sunday": "Sunday"
+    },
+
+    "common": {
+      "to": "to",
+      "notAvailable": "Not available"
+    },
+
+    "button": {
+      "save": "Save Availability"
+    },
+
+    "success": {
+      "saved": "Availability saved successfully!"
+    },
+
+    "error": {
+      "saveFailed": "Failed to save availability."
+    }
+  },
   "workerCat": {
     "addFail": "Failed to add category.",
     "addNew": "+ Add \"{{name}}\" as new category",
