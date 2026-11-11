@@ -411,7 +411,7 @@ export default function WorkerCertificationsScreen() {
         <AppText
           weight="displayBlack"
           style={{
-            fontSize: 22,
+            fontSize: 15,
             color: c.text,
             letterSpacing: -0.5,
             marginBottom: 4,
@@ -419,7 +419,7 @@ export default function WorkerCertificationsScreen() {
         >
           {t("workerCertifications.list.title")}
         </AppText>
-        <AppText style={{ fontSize: 13, color: c.textDim }}>
+        <AppText style={{ fontSize: 12, color: c.textDim }}>
           {t("workerCertifications.list.subtitle")}
         </AppText>
       </View>
@@ -445,7 +445,7 @@ export default function WorkerCertificationsScreen() {
           <Ionicons name="add-circle-outline" size={16} color={c.orange} />
           <AppText
             weight="displayBlack"
-            style={{ fontSize: 16, color: c.text }}
+            style={{ fontSize: 12, color: c.text }}
           >
             {t("workerCertifications.add.title")}
           </AppText>
@@ -622,7 +622,7 @@ export default function WorkerCertificationsScreen() {
           <Ionicons name="ribbon-outline" size={16} color={c.orange} />
           <AppText
             weight="displayBlack"
-            style={{ fontSize: 16, color: c.text }}
+            style={{ fontSize: 13, color: c.text }}
           >
             {t("workerCertifications.list.myTitle")}
           </AppText>
@@ -722,7 +722,7 @@ export default function WorkerCertificationsScreen() {
                     >
                       <AppText
                         weight="displayBlack"
-                        style={{ fontSize: 14, color: c.text }}
+                        style={{ fontSize: 11, color: c.text }}
                       >
                         {cert.name}
                       </AppText>

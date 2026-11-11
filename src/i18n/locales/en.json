@@ -3275,30 +3275,58 @@
   "removeFail": "Failed to remove category.",
   "primaryFail": "Failed to set primary.",
   "total": "{{count}} TOTAL",
-  "workerCertifications.add.title": "Add Certification",
-  "workerCertifications.add.name": "Certification Name",
-  "workerCertifications.add.namePlaceholder": "e.g. AWS Certified Developer",
-  "workerCertifications.add.issuedBy": "Issued By",
-  "workerCertifications.add.issuedByPlaceholder": "e.g. Amazon Web Services",
-  "workerCertifications.add.issueDate": "Issue Date",
-  "workerCertifications.add.expiryDate": "Expiry Date",
-  "workerCertifications.add.document": "Document (PDF / Image)",
-  "workerCertifications.add.documentPlaceholder": "Upload certificate document…",
-  "workerCertifications.add.button": "Add Certification",
-  "workerCertifications.list.title": "My Certifications",
-  "workerCertifications.list.emptyTitle": "No certifications yet",
-  "workerCertifications.list.emptySub": "Add your professional certifications to build trust with hirers.",
-  "workerCertifications.cert.issuedBy": "Issued by {{issuer}}",
-  "workerCertifications.cert.expires": "Expires {{date}}",
-  "workerCertifications.cert.expired": "Expired",
-  "workerCertifications.cert.view": "View",
-  "workerCertifications.common.done": "Done",
-  "workerCertifications.date.placeholder": "Select date",
-  "workerCertifications.error.loadFailed": "Failed to load certifications",
-  "workerCertifications.error.nameRequired": "Certification name is required",
-  "workerCertifications.error.issuerRequired": "Issuer is required",
-  "workerCertifications.error.addFailed": "Failed to add certification",
-  "workerCertifications.success.added": "Certification added successfully",
+  "workerCertifications": {
+    "toast": {
+      "libraryPermission": "File access permission is required.",
+      "pickerFailed": "Could not open file picker."
+    },
+    "add": {
+      "title": "Add Certification",
+      "name": "Certification Name",
+      "namePlaceholder": "e.g. City & Guilds Electrical",
+      "issuedBy": "Issued By",
+      "issuedByPlaceholder": "e.g. City & Guilds UK",
+      "issueDate": "Issue Date",
+      "expiryDate": "Expiry Date",
+      "document": "Certificate Document (optional)",
+      "documentPlaceholder": "Tap to upload PDF, JPG, or PNG",
+      "button": "Add Certification"
+    },
+    "list": {
+      "title": "Certifications",
+      "subtitle": "Add your trade certifications to build trust with clients",
+      "myTitle": "My Certifications",
+      "emptyTitle": "No certifications added",
+      "emptySub": "Add your trade certifications to build trust with clients",
+      "expired": "Expired",
+      "expires": "Expires {{date}}",
+      "verifiedOn": "Verified on {{date}}",
+      "view": "View",
+      "open": "Open",
+      "remove": "Remove"
+    },
+    "status": {
+      "verified": "Verified",
+      "rejected": "Rejected",
+      "pending": "Pending review"
+    },
+    "success": {
+      "added": "Certification added!",
+      "removed": "Certification removed."
+    },
+    "error": {
+      "nameRequired": "Certification name and issuer are required.",
+      "addFailed": "Upload failed. Please try again.",
+      "deleteFailed": "Delete failed. Please try again."
+    },
+    "delete": {
+      "title": "Delete certification?",
+      "message": "This certification and its document will be permanently removed. This action cannot be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    },
+    "pdfViewerTitle": "PDF"
+  },
   "workerDash": {
     "*": "*",
     "activeJobs": "Active Jobs",
