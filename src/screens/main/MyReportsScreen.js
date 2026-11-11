@@ -1043,16 +1043,24 @@ export default function MyReportsScreen() {
   }
 
   function openSupportHub() {
-    const routeNames = navigation.getState()?.routeNames || [];
-    if (routeNames.includes("Support")) {
-      navigation.navigate("Support");
-    } else if (routeNames.includes("SupportHub")) {
-      navigation.navigate("SupportHub");
-    } else if (routeNames.includes("Help")) {
-      navigation.navigate("Help");
-    } else {
-      Linking.openURL("https://skilledproz.com/support").catch(() => {});
+    // Support hub screens are nested inside the drawer/stack, so routeNames
+    // at the root level won't contain them. Try the known candidates first;
+    // React Navigation will simply be a no-op if the route doesn't exist,
+    // so we guard with `canNavigate`-style usage via a try/catch on navigate.
+    const candidates = ["WorkerSupportHub", "SupportHub", "Support", "Help"];
+
+    for (const name of candidates) {
+      try {
+        // `navigate` throws if the action can't be handled anywhere in the tree.
+        navigation.navigate(name);
+        return;
+      } catch {
+        // try next candidate
+      }
     }
+
+    // Nothing matched — show a toast instead of dumping to the website.
+    toast.error(t("reports.supportUnavailable"));
   }
 
   const pending = reports.filter((r) => r.status === "PENDING").length;
@@ -1100,7 +1108,7 @@ export default function MyReportsScreen() {
           >
             <AppText
               weight="displayBlack"
-              style={{ fontSize: 26, color: c.text, lineHeight: 32 }}
+              style={{ fontSize: 15, color: c.text, lineHeight: 32 }}
             >
               {t("reports.title")}
             </AppText>

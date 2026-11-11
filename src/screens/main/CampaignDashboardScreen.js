@@ -1573,7 +1573,7 @@ export default function CampaignDashboardScreen() {
               <AppText
                 weight="displayBlack"
                 style={{
-                  fontSize: 24,
+                  fontSize: 15,
                   lineHeight: 30,
                   color: c.text,
                   letterSpacing: -0.4,
@@ -1585,12 +1585,12 @@ export default function CampaignDashboardScreen() {
               <AppText
                 variant="body"
                 tone="dim"
-                style={{ lineHeight: 18, fontSize: 13 }}
+                style={{ lineHeight: 18, fontSize: 11 }}
               >
                 {t("campaign.subtitlePrefix")}{" "}
                 <AppText
                   weight="semibold"
-                  style={{ color: c.orange, fontWeight: "800" }}
+                  style={{ color: c.orange, fontWeight: "800", fontSize: 11 }}
                 >
                   ₦{rewardPerReferral}
                 </AppText>{" "}

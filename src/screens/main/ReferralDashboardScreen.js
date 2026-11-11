@@ -1250,7 +1250,7 @@ export default function ReferralDashboardScreen() {
             <AppText
               weight="displayBlack"
               style={{
-                fontSize: 26,
+                fontSize: 15,
                 lineHeight: 32,
                 color: c.text,
                 letterSpacing: -0.4,
@@ -1259,7 +1259,7 @@ export default function ReferralDashboardScreen() {
             >
               {t("referral.title")}
             </AppText>
-            <AppText variant="body" tone="dim" style={{ lineHeight: 20 }}>
+            <AppText variant="body" tone="dim" style={{ lineHeight: 16 }}>
               {t("referral.subtitle")}
             </AppText>
           </View>
