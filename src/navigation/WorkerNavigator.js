@@ -70,6 +70,7 @@ import PlaceholderScreen from "../screens/main/PlaceholderScreen";
 import WorkerSavedJobsScreen from "../screens/main/worker/WorkerSavedJobsScreen";
 import WorkerCompletedJobsScreen from "../screens/main/worker/WorkerCompletedJobsScreen";
 import WorkerRetainedEmployersScreen from "../screens/main/worker/WorkerRetainedEmployersScreen";
+import WorkerRetainedEmployerDetailScreen from "../screens/main/worker/WorkerRetainedEmployerDetailScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -548,6 +549,11 @@ function WorkerStack() {
         <Stack.Screen
           name="SupportTicketThread"
           component={SupportTicketThreadScreen}
+        />
+        <Stack.Screen
+          name="WorkerRetainedEmployerDetail"
+          component={WorkerRetainedEmployerDetailScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </View>

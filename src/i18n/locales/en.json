@@ -4631,6 +4631,41 @@
     "loadFailed": "Could not load your employers.",
     "tryAgain": "Try again"
   },
+  "workerRetainedEmployerDetail": {
+    "back": "Back to Employers",
+    "notFound": "Employment record not found.",
+    "loadFailed": "Could not load employment details.",
+    "errorTitle": "Could not load employer",
+    "tryAgain": "Try again",
+    "stats": {
+      "baseRate": "Base Pay Rate",
+      "lifetimeEarned": "Lifetime Earned",
+      "lifetimeEarnedSub": "From released cycles",
+      "inEscrow": "In Escrow",
+      "inEscrowSub": "Pending release"
+    },
+    "sections": {
+      "employment": "Employment Details",
+      "schedule": "Working Schedule",
+      "notes": "Notes from Employer"
+    },
+    "fields": {
+      "employer": "Employer",
+      "employmentType": "Employment Type",
+      "department": "Department",
+      "employeeNumber": "Employee #",
+      "manager": "Manager",
+      "locationType": "Location Type",
+      "workLocation": "Work Location",
+      "workDays": "Work Days",
+      "workingHours": "Working Hours"
+    },
+    "contact": {
+      "title": "Need to reach out?",
+      "body": "Message your employer directly for any questions.",
+      "button": "Send Message"
+    }
+  },
   "yearsExperience": "Years Experience",
   "booking.release.title": "Payment Fully Released",
   "booking.release.details": "Release Details",
