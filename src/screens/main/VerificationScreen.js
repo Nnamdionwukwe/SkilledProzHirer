@@ -1,6 +1,9 @@
 // src/screens/main/VerificationScreen.js
 // Role-aware: Worker  → GET /verification/status  + POST /verification/submit-id
 //             Hirer   → GET /verification/hirer/status + POST /verification/hirer/submit
+//
+// Modern styling matches the retained-staff / disputes / portfolio screens.
+// "Why verify" card is hidden once the user is VERIFIED.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -52,7 +55,7 @@ const STATUS_META = {
     labelKey: "verification.statusPending",
   },
   VERIFIED: {
-    icon: "checkmark-circle",
+    icon: "shield-checkmark",
     color: "#22c55e",
     labelKey: "verification.statusVerified",
   },
@@ -63,7 +66,60 @@ const STATUS_META = {
   },
 };
 
+function pickBackgroundStatus(data) {
+  // 1. Explicit status string — most trusted
+  const explicit =
+    data?.backgroundCheckStatus ?? data?.background_check_status ?? null;
+  if (typeof explicit === "string" && explicit.length > 0) {
+    return explicit.toUpperCase();
+  }
+
+  // 2. `backgroundCheck` may be:
+  //      - boolean true/false           → "CLEARED" / null
+  //      - object  { status, clearedAt } → use .status, or "CLEARED" if just clearedAt
+  //      - string  "CLEARED"             → uppercase
+  const raw = data?.backgroundCheck ?? data?.background_check ?? null;
+  if (raw) {
+    if (typeof raw === "boolean") return raw ? "CLEARED" : null;
+    if (typeof raw === "string") return raw.toUpperCase();
+    if (typeof raw === "object") {
+      const nested = raw.status ?? raw.verificationStatus ?? raw.result ?? null;
+      if (typeof nested === "string" && nested.length > 0) {
+        return nested.toUpperCase();
+      }
+      if (raw.clearedAt || raw.cleared || raw.passed || raw.verified) {
+        return "CLEARED";
+      }
+    }
+  }
+
+  // 3. Boolean "cleared" flag
+  const boolCleared =
+    data?.backgroundCheckCleared ?? data?.background_check_cleared ?? null;
+  if (typeof boolCleared === "boolean") {
+    return boolCleared ? "CLEARED" : null;
+  }
+
+  return null;
+}
+
+function pickBackgroundClearedAt(data) {
+  return (
+    data?.backgroundCheckClearedAt ??
+    data?.background_check_cleared_at ??
+    data?.backgroundCheckDate ??
+    (typeof data?.backgroundCheck === "object"
+      ? (data.backgroundCheck.clearedAt ??
+        data.backgroundCheck.cleared_at ??
+        null)
+      : null)
+  );
+}
+
 function normalize(data, role) {
+  const bgStatus = pickBackgroundStatus(data);
+  const bgClearedAt = pickBackgroundClearedAt(data);
+
   if (role === "WORKER") {
     return {
       currentStatus: data.verificationStatus ?? "UNVERIFIED",
@@ -77,9 +133,15 @@ function normalize(data, role) {
           }
         : null,
       latestReview: null,
+      backgroundCheckStatus: bgStatus,
+      backgroundCheckClearedAt: bgClearedAt,
     };
   }
-  return data;
+  return {
+    ...data,
+    backgroundCheckStatus: bgStatus,
+    backgroundCheckClearedAt: bgClearedAt,
+  };
 }
 
 // ─── Skeleton Loader ──────────────────────────────────────────────────────
@@ -133,6 +195,106 @@ function VerificationSkeleton({ c }) {
       <Block w="100%" h={60} mb={20} />
       <Block w="100%" h={180} mb={20} />
     </ScrollView>
+  );
+}
+
+function BackgroundCheckCard({ status, clearedAt, c }) {
+  const { t } = useTranslation();
+  if (!status) return null;
+
+  const isCleared =
+    status === "CLEARED" || status === "VERIFIED" || status === "PASSED";
+  const isPending = status === "PENDING" || status === "IN_PROGRESS";
+  const isFailed = status === "FAILED" || status === "REJECTED";
+
+  if (!isCleared && !isPending && !isFailed) return null;
+
+  const meta = isCleared
+    ? {
+        color: "#22c55e",
+        icon: "shield-checkmark",
+        labelKey: "verification.backgroundCheck.cleared",
+      }
+    : isPending
+      ? {
+          color: "#f97316",
+          icon: "time-outline",
+          labelKey: "verification.backgroundCheck.pending",
+        }
+      : {
+          color: "#ef4444",
+          icon: "close-circle",
+          labelKey: "verification.backgroundCheck.failed",
+        };
+
+  const fmtDate = (d) =>
+    d
+      ? new Date(d).toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+      : null;
+
+  return (
+    <View
+      style={[
+        s.statusCard,
+        { backgroundColor: c.bgPanel, borderColor: c.border },
+      ]}
+    >
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          backgroundColor: meta.color,
+          opacity: 0.6,
+          borderTopLeftRadius: 14,
+          borderTopRightRadius: 14,
+        }}
+      />
+      <AppText
+        weight="semibold"
+        style={{
+          color: c.textMuted,
+          letterSpacing: 0.8,
+          marginBottom: 10,
+          fontSize: 10,
+          textTransform: "uppercase",
+        }}
+      >
+        {t("verification.backgroundCheck.heading")}
+      </AppText>
+      <View
+        style={[
+          s.statusBadge,
+          {
+            backgroundColor: `${meta.color}22`,
+            borderColor: `${meta.color}55`,
+          },
+        ]}
+      >
+        <Ionicons
+          name={meta.icon}
+          size={12}
+          color={meta.color}
+          style={{ marginRight: 4 }}
+        />
+        <AppText weight="semibold" style={{ color: meta.color, fontSize: 11 }}>
+          {t(meta.labelKey)}
+        </AppText>
+      </View>
+      {isCleared && clearedAt ? (
+        <AppText style={{ color: c.textMuted, marginTop: 8, fontSize: 11 }}>
+          {t("verification.backgroundCheck.clearedOn", {
+            date: fmtDate(clearedAt),
+          })}
+        </AppText>
+      ) : null}
+    </View>
   );
 }
 
@@ -291,6 +453,7 @@ function DocumentUpload({ label, file, onPick, c }) {
           marginBottom: 8,
           letterSpacing: 0.4,
           fontSize: 11,
+          textTransform: "uppercase",
         }}
       >
         {label} *
@@ -361,13 +524,28 @@ function StatusCard({ data, c }) {
         { backgroundColor: c.bgPanel, borderColor: c.border },
       ]}
     >
+      {/* Top accent line */}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          backgroundColor: meta.color,
+          opacity: 0.6,
+          borderTopLeftRadius: 14,
+          borderTopRightRadius: 14,
+        }}
+      />
       <AppText
         weight="semibold"
         style={{
           color: c.textMuted,
-          letterSpacing: 0.6,
-          marginBottom: 8,
+          letterSpacing: 0.8,
+          marginBottom: 10,
           fontSize: 10,
+          textTransform: "uppercase",
         }}
       >
         {t("verification.statusHeading")}
@@ -391,11 +569,18 @@ function StatusCard({ data, c }) {
           {t(meta.labelKey)}
         </AppText>
       </View>
-      <AppText
-        style={{ color: c.textDim, marginTop: 8, lineHeight: 18, fontSize: 13 }}
-      >
-        {data.statusMessage}
-      </AppText>
+      {data.statusMessage ? (
+        <AppText
+          style={{
+            color: c.textDim,
+            marginTop: 10,
+            lineHeight: 19,
+            fontSize: 13,
+          }}
+        >
+          {data.statusMessage}
+        </AppText>
+      ) : null}
       {sub?.submittedAt && (
         <AppText style={{ color: c.textMuted, marginTop: 6, fontSize: 11 }}>
           {t("verification.submittedAt", { date: fmtDate(sub.submittedAt) })}
@@ -423,7 +608,7 @@ function StatusCard({ data, c }) {
   );
 }
 
-function StateCard({ status, c, onRetry }) {
+function StateCard({ status, c, onRetry, role }) {
   const { t } = useTranslation();
   const meta = STATUS_META[status] ?? STATUS_META.UNVERIFIED;
 
@@ -434,7 +619,10 @@ function StateCard({ status, c, onRetry }) {
     bodyKey = "verification.pendingBody";
   } else if (status === "VERIFIED") {
     titleKey = "verification.verifiedTitle";
-    bodyKey = "verification.verifiedBody";
+    bodyKey =
+      role === "WORKER"
+        ? "verification.verifiedBodyWorker"
+        : "verification.verifiedBodyHirer";
   } else if (status === "REJECTED") {
     titleKey = "verification.rejectedTitle";
     bodyKey = "verification.rejectedBody";
@@ -447,7 +635,7 @@ function StateCard({ status, c, onRetry }) {
         { backgroundColor: `${meta.color}15`, borderColor: `${meta.color}40` },
       ]}
     >
-      <Ionicons name={meta.icon} size={44} color={meta.color} />
+      <Ionicons name={meta.icon} size={48} color={meta.color} />
       <AppText style={[s.stateTitle, { color: c.text }]}>{t(titleKey)}</AppText>
       <AppText style={[s.stateBody, { color: c.textMuted }]}>
         {t(bodyKey)}
@@ -476,6 +664,7 @@ function Field({ label, required, c, children }) {
           letterSpacing: 0.4,
           marginBottom: 6,
           fontSize: 11,
+          textTransform: "uppercase",
         }}
       >
         {label}
@@ -665,7 +854,7 @@ export default function VerificationScreen() {
         <View
           style={[
             s.eyebrow,
-            { backgroundColor: c.orangeDim, borderColor: c.orange },
+            { backgroundColor: c.orangeDim, borderColor: c.orange + "55" },
           ]}
         >
           <AppText
@@ -675,55 +864,74 @@ export default function VerificationScreen() {
             {t("verification.heroEyebrow")}
           </AppText>
         </View>
-        <AppText style={[s.heroTitle, { color: c.text }]}>
+        <AppText
+          weight="displayBlack"
+          style={[s.heroTitle, { color: c.text, fontSize: 15 }]}
+        >
           {t("verification.heroTitle")}
         </AppText>
-        <AppText style={[s.heroSub, { color: c.textDim }]}>
+        <AppText style={[s.heroSub, { color: c.textDim, ontSize: 12 }]}>
           {isWorker
             ? t("verification.heroSubWorker")
             : t("verification.heroSubHirer")}
         </AppText>
       </View>
 
-      {/* ── Why verify ── */}
-      <View
-        style={[
-          s.whyCard,
-          { backgroundColor: c.bgCard, borderColor: c.border },
-        ]}
-      >
-        <AppText
-          weight="semibold"
-          style={{ color: c.text, marginBottom: 10, fontSize: 13 }}
+      {/* ── Why verify (hidden once VERIFIED) ── */}
+      {currentStatus !== "VERIFIED" && (
+        <View
+          style={[
+            s.whyCard,
+            { backgroundColor: c.bgPanel, borderColor: c.border },
+          ]}
         >
-          {t("verification.whyVerify")}
-        </AppText>
-        {whyList.map((reason, i) => (
-          <View key={i} style={s.whyRow}>
-            <Ionicons
-              name="arrow-forward"
-              size={12}
-              color={c.orange}
-              style={{ marginRight: 8, marginTop: 2 }}
-            />
-            <AppText
-              style={{
-                color: c.textDim,
-                flex: 1,
-                lineHeight: 18,
-                fontSize: 12,
-              }}
-            >
-              {reason}
-            </AppText>
-          </View>
-        ))}
-      </View>
+          <AppText
+            weight="displayBlack"
+            style={{
+              color: c.text,
+              marginBottom: 12,
+              fontSize: 15,
+              letterSpacing: -0.2,
+            }}
+          >
+            {t("verification.whyVerify")}
+          </AppText>
+          {whyList.map((reason, i) => (
+            <View key={i} style={s.whyRow}>
+              <Ionicons
+                name="arrow-forward"
+                size={12}
+                color={c.orange}
+                style={{ marginRight: 8, marginTop: 2 }}
+              />
+              <AppText
+                style={{
+                  color: c.textDim,
+                  flex: 1,
+                  lineHeight: 19,
+                  fontSize: 13,
+                }}
+              >
+                {reason}
+              </AppText>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* ── Status card ── */}
       {statusData && currentStatus !== "UNVERIFIED" && (
         <StatusCard data={statusData} c={c} />
       )}
+
+      {/* ── Background check ── */}
+      {statusData?.backgroundCheckStatus ? (
+        <BackgroundCheckCard
+          status={statusData.backgroundCheckStatus}
+          clearedAt={statusData.backgroundCheckClearedAt}
+          c={c}
+        />
+      ) : null}
 
       {/* ── State card ── */}
       {!forceForm &&
@@ -734,6 +942,7 @@ export default function VerificationScreen() {
             status={currentStatus}
             c={c}
             onRetry={() => setForceForm(true)}
+            role={user?.role}
           />
         )}
 
@@ -765,7 +974,7 @@ export default function VerificationScreen() {
                     style={[
                       s.typeCard,
                       {
-                        backgroundColor: active ? `${c.orange}18` : c.bgCard,
+                        backgroundColor: active ? `${c.orange}18` : c.bgPanel,
                         borderColor: active ? c.orange : c.border,
                       },
                     ]}
@@ -990,69 +1199,74 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   heroTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-    lineHeight: 30,
+    fontSize: 26,
+    letterSpacing: -0.6,
+    lineHeight: 32,
     marginBottom: 6,
   },
-  heroSub: { fontSize: 13, lineHeight: 18 },
+  heroSub: { fontSize: 13, lineHeight: 19 },
   whyCard: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 18,
     marginBottom: 16,
   },
-  whyRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
+  whyRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 10 },
   statusCard: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 18,
+    marginBottom: 14,
+    overflow: "hidden",
   },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
     borderWidth: 1,
   },
-  rejectionBox: { marginTop: 10, padding: 10, borderRadius: 8, borderWidth: 1 },
-  stateCard: {
-    borderRadius: 12,
+  rejectionBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    padding: 20,
+  },
+  stateCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 24,
     marginBottom: 16,
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
   stateTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "800",
     textAlign: "center",
-    marginTop: 4,
+    marginTop: 6,
   },
-  stateBody: { fontSize: 13, lineHeight: 18, textAlign: "center" },
+  stateBody: { fontSize: 13, lineHeight: 19, textAlign: "center" },
   retryBtn: {
     paddingHorizontal: 24,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 10,
-    marginTop: 4,
+    marginTop: 6,
   },
-  typeRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
+  typeRow: { flexDirection: "row", gap: 10, marginBottom: 18 },
   typeCard: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1.5,
-    padding: 14,
+    padding: 16,
     alignItems: "center",
   },
-  fieldWrap: { marginBottom: 14 },
+  fieldWrap: { marginBottom: 16 },
   input: {
     borderWidth: 1,
     borderRadius: 10,
@@ -1079,7 +1293,7 @@ const s = StyleSheet.create({
   },
   submitBtn: {
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: "center",
     marginTop: 8,
     marginBottom: 4,

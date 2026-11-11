@@ -4215,7 +4215,6 @@
     "pendingTitle": "Verification under review",
     "pendingBody": "Your documents are being reviewed. This usually takes 24–48 hours. You'll be notified once complete.",
     "verifiedTitle": "Account Verified",
-    "verifiedBody": "Your account is fully verified. Workers can see your Verified badge when browsing your profile.",
     "rejectedTitle": "Verification Rejected",
     "rejectedBody": "Please review the reason above and re-submit with a valid document.",
     "tryAgain": "Try Again",
@@ -4249,6 +4248,9 @@
     "uploadModalLibrarySub": "Select a photo from your gallery",
     "uploadModalFiles": "Choose File",
     "uploadModalFilesSub": "Select a PDF or image from storage",
+    "verifiedBody": "Your account is fully verified. Workers can see your Verified badge when browsing your profile.",
+    "verifiedBodyHirer": "Your account is fully verified. Workers can see your Verified badge when browsing your profile.",
+    "verifiedBodyWorker": "Your account is fully verified. Hirers can see your Verified badge when browsing your profile.",
     "cancel": "Cancel",
     "idTypes": {
       "nationalId": "National ID",
@@ -4268,8 +4270,17 @@
       "submitFailed": "Submission failed. Please try again.",
       "libraryPermission": "Photo library permission is required",
       "pickerFailed": "Could not open file picker"
+    },
+    "backgroundCheck": {
+      "heading": "Background Check",
+      "cleared": "Cleared",
+      "pending": "Pending",
+      "failed": "Not cleared",
+      "clearedOn": "Cleared on {{date}}",
+      "clearedBody": "Your identity and criminal background check have been verified. Hirers see a Background Checked badge on your profile."
     }
   },
+
   "reports": {
     "trust": "Safety & Trust",
     "title": "My Reports",
