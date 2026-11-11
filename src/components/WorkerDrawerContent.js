@@ -291,22 +291,21 @@ export default function WorkerDrawerContent(props) {
       >
         <View style={{ flexDirection: "row" }}>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: FONTS.displayBlack,
-              fontSize: rem(1.375),
-              fontWeight: "800",
-              letterSpacing: rem(1.375) * -0.04,
+              fontSize: 20,
               color: c.text,
+              letterSpacing: -0.5,
             }}
           >
             Skilled
           </AppText>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: FONTS.displayBlack,
-              fontSize: rem(1.375),
-              fontWeight: "800",
-              letterSpacing: rem(1.375) * -0.04,
+              fontSize: 20,
+              color: c.text,
+              letterSpacing: -0.5,
               color: c.orange,
             }}
           >
@@ -615,13 +614,13 @@ export default function WorkerDrawerContent(props) {
           c={c}
           onPress={() => goTo("WorkerSubscriptions")}
         />
-        <MenuItem
+        {/* <MenuItem
           icon="rocket-outline"
           label={t("nav.boostListing")}
           active={activeRoute === "WorkerBoost"}
           c={c}
           onPress={() => goTo("WorkerBoost")}
-        />
+        /> */}
         <MenuItem
           icon="settings-outline"
           label={t("nav.settings")}
