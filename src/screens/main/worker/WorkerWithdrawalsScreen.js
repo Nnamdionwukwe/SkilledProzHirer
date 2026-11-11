@@ -778,7 +778,7 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
                 >
                   <AppText
                     weight="displayBlack"
-                    style={{ fontSize: 20, color: c.text }}
+                    style={{ fontSize: 15, color: c.text }}
                   >
                     {t("workerWithdrawals.receipt.title")}
                   </AppText>
