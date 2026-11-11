@@ -74,6 +74,7 @@ import WorkerRetainedEmployerDetailScreen from "../screens/main/worker/WorkerRet
 import WorkerRetainedEarningsScreen from "../screens/main/worker/WorkerRetainedEarningsScreen";
 import WorkerRetainedCyclesScreen from "../screens/main/worker/WorkerRetainedCyclesScreen";
 import CommunityFeedScreen from "../screens/main/CommunityFeedScreen";
+import SupportHubScreen from "../screens/main/SupportHubScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -452,7 +453,7 @@ function WorkerDrawer() {
         {() => <ScreenWithChrome Screen={SupportChatScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerSupportHub">
-        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+        {() => <ScreenWithChrome Screen={SupportHubScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="Notifications">
         {() => <ScreenWithChrome Screen={NotificationsScreen} />}

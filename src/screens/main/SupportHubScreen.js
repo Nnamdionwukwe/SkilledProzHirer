@@ -710,14 +710,14 @@ export default function SupportHubScreen() {
         <View style={{ flex: 1 }}>
           <AppText
             weight="displayBlack"
-            style={{ fontSize: 24, color: c.text, lineHeight: 30 }}
+            style={{ fontSize: 15, color: c.text, lineHeight: 30 }}
           >
             Support Hub
           </AppText>
           <AppText
             variant="small"
             tone="dim"
-            style={{ marginTop: 4, lineHeight: 18 }}
+            style={{ marginTop: 4, lineHeight: 18, fontSize: 12 }}
           >
             View your past tickets or open a new one for detailed issues.
           </AppText>
