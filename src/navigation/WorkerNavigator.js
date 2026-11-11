@@ -449,7 +449,7 @@ function WorkerDrawer() {
         {() => <ScreenWithChrome Screen={MessagesScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerSupportChat">
-        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+        {() => <ScreenWithChrome Screen={SupportChatScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerSupportHub">
         {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
