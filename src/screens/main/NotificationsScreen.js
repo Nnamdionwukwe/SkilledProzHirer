@@ -25,7 +25,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import AppText from "../../components/AppText";
-import ConfirmModal from "../../components/ConfirmModal";
 import {
   getNotifications,
   markAsRead,
@@ -103,13 +102,13 @@ function DetailModal({ notification, onClose, c, t, modalBg }) {
                 <AppText
                   variant="body"
                   weight="semibold"
-                  style={{ color: c.text }}
+                  style={{ color: c.text, fontSize: 14 }}
                 >
                   {notification.title}
                 </AppText>
                 <AppText
                   variant="small"
-                  style={{ color: c.textMuted, marginTop: 2 }}
+                  style={{ color: c.textMuted, marginTop: 2, fontSize: 11 }}
                 >
                   {timeAgo(notification.createdAt)}
                 </AppText>
@@ -131,7 +130,12 @@ function DetailModal({ notification, onClose, c, t, modalBg }) {
           {/* Body */}
           <AppText
             variant="body"
-            style={{ color: c.text, lineHeight: 22, marginBottom: 16 }}
+            style={{
+              color: c.text,
+              fontSize: 13,
+              lineHeight: 20,
+              marginBottom: 16,
+            }}
           >
             {notification.body}
           </AppText>
@@ -220,6 +224,165 @@ function DetailModal({ notification, onClose, c, t, modalBg }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ConfirmModal — modern floating-card version (local to this screen)
+// ─────────────────────────────────────────────────────────────────────────────
+function ConfirmModal({
+  visible,
+  title,
+  message,
+  confirmLabel,
+  destructive = false,
+  onConfirm,
+  onCancel,
+}) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const modalBg = theme.mode === "dark" ? "#111118" : "#ffffff";
+
+  if (!visible) return null;
+
+  const confirmColor = destructive ? c.red : c.orange;
+  const confirmIcon = destructive ? "trash-outline" : "checkmark";
+
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+    >
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.75)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 20,
+        }}
+        onPress={onCancel}
+      >
+        <Pressable
+          style={{
+            width: "100%",
+            maxWidth: 400,
+            backgroundColor: modalBg,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: 18,
+            padding: 22,
+            overflow: "hidden",
+          }}
+          onPress={(e) => e.stopPropagation()}
+        >
+          {/* Top accent line */}
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 2,
+              backgroundColor: confirmColor,
+              opacity: 0.6,
+            }}
+          />
+
+          {/* Icon bubble */}
+          <View
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 26,
+              backgroundColor: `${confirmColor}22`,
+              borderWidth: 1,
+              borderColor: `${confirmColor}55`,
+              alignItems: "center",
+              justifyContent: "center",
+              alignSelf: "center",
+              marginTop: 4,
+              marginBottom: 16,
+            }}
+          >
+            <Ionicons name={confirmIcon} size={24} color={confirmColor} />
+          </View>
+
+          {/* Title */}
+          <AppText
+            weight="displayBlack"
+            style={{
+              fontSize: 18,
+              color: c.text,
+              textAlign: "center",
+              marginBottom: 8,
+              letterSpacing: -0.3,
+            }}
+          >
+            {title}
+          </AppText>
+
+          {/* Message */}
+          <AppText
+            variant="small"
+            style={{
+              color: c.textDim,
+              textAlign: "center",
+              lineHeight: 20,
+              fontSize: 13,
+              marginBottom: 24,
+            }}
+          >
+            {message}
+          </AppText>
+
+          {/* Actions */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={onCancel}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: c.border,
+                backgroundColor: "transparent",
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <AppText
+                weight="semibold"
+                style={{ fontSize: 13, color: c.textDim }}
+              >
+                Cancel
+              </AppText>
+            </Pressable>
+            <Pressable
+              onPress={onConfirm}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: "center",
+                backgroundColor: confirmColor,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <AppText
+                weight="semibold"
+                style={{ fontSize: 13, color: "#fff" }}
+              >
+                {confirmLabel}
+              </AppText>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Notification row
 // ─────────────────────────────────────────────────────────────────────────────
 function NotifRow({ notif, onPress, onDelete, c }) {
@@ -252,14 +415,14 @@ function NotifRow({ notif, onPress, onDelete, c }) {
           <AppText
             variant="body"
             weight="semibold"
-            style={{ color: c.text, flex: 1, fontSize: 14 }}
+            style={{ color: c.text, flex: 1, fontSize: 13 }}
             numberOfLines={1}
           >
             {notif.title}
           </AppText>
           <AppText
             variant="small"
-            style={{ color: c.textMuted, marginLeft: 8, fontSize: 11 }}
+            style={{ color: c.textMuted, marginLeft: 8, fontSize: 10 }}
           >
             {timeAgo(notif.createdAt)}
           </AppText>
@@ -268,9 +431,9 @@ function NotifRow({ notif, onPress, onDelete, c }) {
           variant="small"
           style={{
             color: c.textMuted,
-            lineHeight: 17,
+            lineHeight: 16,
             marginTop: 2,
-            fontSize: 12,
+            fontSize: 11,
           }}
           numberOfLines={2}
         >
@@ -536,7 +699,7 @@ export default function NotificationsScreen() {
                       weight={active ? "semibold" : "regular"}
                       style={{
                         color: active ? c.orange : c.textMuted,
-                        fontSize: 14,
+                        fontSize: 13,
                       }}
                     >
                       {label}
@@ -587,13 +750,13 @@ export default function NotificationsScreen() {
               <AppText
                 variant="body"
                 weight="semibold"
-                style={{ color: c.text, marginTop: 12, fontSize: 14 }}
+                style={{ color: c.text, marginTop: 12, fontSize: 13 }}
               >
                 {t("notifications.empty")}
               </AppText>
               <AppText
                 variant="small"
-                style={{ color: c.textMuted, marginTop: 6, fontSize: 12 }}
+                style={{ color: c.textMuted, marginTop: 6, fontSize: 11 }}
               >
                 {t("notifications.emptySub")}
               </AppText>
