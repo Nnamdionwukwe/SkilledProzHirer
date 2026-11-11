@@ -88,16 +88,23 @@ function ErrorModal({ visible, title, message, onClose, c }) {
           >
             <Ionicons name={ICONS.alertTriangle} size={22} color={c.red} />
           </View>
-          <AppText style={s.modalTitle}>{title}</AppText>
-          <AppText style={s.modalText}>{message}</AppText>
+          <AppText style={[s.modalTitle, { color: c.text }]}>{title}</AppText>
+          <AppText style={[s.modalText, { color: c.textDim }]}>
+            {message}
+          </AppText>
           <Pressable
             onPress={onClose}
-            style={[
+            style={({ pressed }) => [
               s.modalConfirmBtn,
-              { backgroundColor: c.red, width: "100%", marginTop: 16 },
+              {
+                backgroundColor: c.red,
+                width: "100%",
+                marginTop: 8,
+                opacity: pressed ? 0.88 : 1,
+              },
             ]}
           >
-            <AppText style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+            <AppText style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>
               Dismiss
             </AppText>
           </Pressable>
@@ -351,7 +358,7 @@ export default function SubscriptionPlansScreen() {
 
   return (
     <AppScreen
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -367,16 +374,13 @@ export default function SubscriptionPlansScreen() {
       <View style={s.header}>
         <View style={{ flex: 1 }}>
           <AppText
+            variant="title"
             weight="displayBlack"
-            style={{ fontSize: 24, color: c.text, lineHeight: 30 }}
+            style={{ fontSize: 15, color: c.text, letterSpacing: -0.5 }}
           >
             {t("subscription.title")}
           </AppText>
-          <AppText
-            variant="small"
-            tone="dim"
-            style={{ marginTop: 4, lineHeight: 18 }}
-          >
+          <AppText style={[s.sub, { color: c.textDim }]}>
             {user?.role === "WORKER"
               ? t("subscription.subtitleWorker")
               : t("subscription.subtitleHirer")}
@@ -389,17 +393,17 @@ export default function SubscriptionPlansScreen() {
         <View
           style={[
             s.currentBanner,
-            { backgroundColor: `${c.green}15`, borderColor: c.green },
+            { backgroundColor: c.greenDim, borderColor: c.green },
           ]}
         >
           <Ionicons name={ICONS.checkCircle} size={16} color={c.green} />
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <AppText style={{ fontSize: 13, color: c.text, fontWeight: "600" }}>
+          <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
+            <AppText style={[s.currentTitle, { color: c.text }]}>
               {t("subscription.currentBanner.active")}{" "}
               <AppText weight="bold">{current.plan?.name}</AppText>
             </AppText>
             {current.expiresAt && (
-              <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 2 }}>
+              <AppText style={[s.currentExpiry, { color: c.textDim }]}>
                 {t("subscription.currentBanner.renews", {
                   date: new Date(current.expiresAt).toLocaleDateString(
                     "en-GB",
@@ -419,18 +423,13 @@ export default function SubscriptionPlansScreen() {
               style={{ flexDirection: "row", alignItems: "center" }}
             >
               <Ionicons name={ICONS.download} size={14} color={c.orange} />
-              <AppText style={{ fontSize: 12, color: c.orange, marginLeft: 4 }}>
+              <AppText style={[s.cancelLink, { color: c.orange }]}>
+                {" "}
                 {t("subscription.currentBanner.receipt")}
               </AppText>
             </Pressable>
             <Pressable onPress={() => setShowCancelConfirm(true)}>
-              <AppText
-                style={{
-                  fontSize: 12,
-                  color: c.red,
-                  textDecorationLine: "underline",
-                }}
-              >
+              <AppText style={[s.cancelLink, { color: c.red }]}>
                 {t("subscription.currentBanner.cancel")}
               </AppText>
             </Pressable>
@@ -570,7 +569,9 @@ export default function SubscriptionPlansScreen() {
               (!current?.planId && current?.subscription?.tier === plan.tier);
             const isPopular = plan.popular;
             const discounted = getDiscountedPrice(plan.price);
-            const isYearly = plan.billingCycle === "yearly";
+            const isYearly =
+              plan.billingCycle === "yearly" ||
+              (typeof plan.id === "string" && plan.id.endsWith("_yearly"));
 
             return (
               <View
@@ -588,24 +589,14 @@ export default function SubscriptionPlansScreen() {
                 ]}
               >
                 {isPopular && (
-                  <View
-                    style={[
-                      s.popularBadge,
-                      { backgroundColor: c.orange, borderColor: c.orangeDim },
-                    ]}
-                  >
+                  <View style={[s.popularBadge, { backgroundColor: c.orange }]}>
                     <AppText style={[s.badgeText, { color: c.bg }]}>
                       {t("subscription.plan.mostPopular")}
                     </AppText>
                   </View>
                 )}
                 {isCurrent && (
-                  <View
-                    style={[
-                      s.currentBadge,
-                      { backgroundColor: c.green, borderColor: c.green },
-                    ]}
-                  >
+                  <View style={[s.currentBadge, { backgroundColor: c.green }]}>
                     <AppText style={[s.badgeText, { color: c.bg }]}>
                       {t("subscription.plan.currentPlan")}
                     </AppText>
@@ -613,39 +604,47 @@ export default function SubscriptionPlansScreen() {
                 )}
 
                 <AppText style={s.planTier}>{plan.tier}</AppText>
-                <AppText style={[s.planName, { color: c.text }]}>
+                <AppText
+                  variant="title"
+                  weight="displayBlack"
+                  style={{
+                    fontSize: 15,
+                    color: c.text,
+                    letterSpacing: -0.5,
+                    marginBottom: 20,
+                  }}
+                >
                   {plan.name}
                 </AppText>
 
                 {/* ── Price Block ── */}
                 <View style={s.planPriceWrap}>
                   {plan.price === 0 ? (
-                    <AppText style={[s.priceAmount, { color: c.orange }]}>
+                    <AppText
+                      weight="displayBlack"
+                      style={[s.priceAmount, { color: c.orange }]}
+                    >
                       {t("subscription.plan.free")}
                     </AppText>
                   ) : discounted ? (
                     <View style={s.priceDiscountWrap}>
-                      {/* Struck-through original */}
                       <AppText style={s.priceStrike}>
                         {plan.currency} {plan.price.toLocaleString()}
                       </AppText>
-
-                      {/* Discounted horizontal row */}
                       <View style={s.priceRow}>
                         <AppText style={s.priceCurrency}>
                           {plan.currency}
                         </AppText>
-                        <AppText style={[s.priceAmount, { color: c.orange }]}>
+                        <AppText
+                          weight="displayBlack"
+                          style={[s.priceAmount, { color: c.orange }]}
+                        >
                           {discounted.finalPrice.toLocaleString()}
                         </AppText>
                         <AppText style={s.pricePer}>
-                          {isYearly
-                            ? t("subscription.plan.perYear")
-                            : t("subscription.plan.perMonth")}
+                          /{isYearly ? "yr" : "mo"}
                         </AppText>
                       </View>
-
-                      {/* Savings pill */}
                       <View
                         style={[
                           s.savingsBadge,
@@ -659,23 +658,21 @@ export default function SubscriptionPlansScreen() {
                             fontWeight: "800",
                           }}
                         >
-                          {t("subscription.plan.save", {
-                            amount: discounted.discount.toLocaleString(),
-                          })}
+                          Save ₦{discounted.discount.toLocaleString()}
                         </AppText>
                       </View>
                     </View>
                   ) : (
-                    // Normal horizontal row
                     <View style={s.priceRow}>
                       <AppText style={s.priceCurrency}>{plan.currency}</AppText>
-                      <AppText style={[s.priceAmount, { color: c.orange }]}>
+                      <AppText
+                        weight="displayBlack"
+                        style={[s.priceAmount, { color: c.orange }]}
+                      >
                         {plan.price.toLocaleString()}
                       </AppText>
                       <AppText style={s.pricePer}>
-                        {isYearly
-                          ? t("subscription.plan.perYear")
-                          : t("subscription.plan.perMonth")}
+                        /{isYearly ? "yr" : "mo"}
                       </AppText>
                     </View>
                   )}
@@ -709,6 +706,7 @@ export default function SubscriptionPlansScreen() {
                         : isPopular
                           ? c.orange
                           : c.border,
+                      borderWidth: isPopular && !isCurrent ? 0 : 1,
                       opacity:
                         isCurrent || plan.price === 0 || subscribing === plan.id
                           ? 0.6
@@ -755,7 +753,9 @@ export default function SubscriptionPlansScreen() {
         </View>
       )}
 
-      <AppText style={s.disclaimer}>{t("subscription.disclaimer")}</AppText>
+      <AppText style={[s.disclaimer, { color: c.textMuted }]}>
+        {t("subscription.disclaimer")}
+      </AppText>
 
       {/* ── Cancel confirmation modal ── */}
       <Modal
@@ -783,15 +783,21 @@ export default function SubscriptionPlansScreen() {
             >
               <Ionicons name={ICONS.alertTriangle} size={20} color="#fbbf24" />
             </View>
-            <AppText style={s.modalTitle}>
+            <AppText
+              weight="displayBlack"
+              style={[s.modalTitle, { color: c.text }]}
+            >
               {t("subscription.cancelModal.title")}
             </AppText>
-            <AppText style={s.modalText}>
+            <AppText style={[s.modalText, { color: c.textDim }]}>
               {t("subscription.cancelModal.body")}
             </AppText>
             <View style={s.modalActions}>
               <Pressable
-                style={[s.modalCancelBtn, { borderColor: c.border }]}
+                style={({ pressed }) => [
+                  s.modalCancelBtn,
+                  { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
+                ]}
                 onPress={() => setShowCancelConfirm(false)}
                 disabled={cancelling}
               >
@@ -802,7 +808,10 @@ export default function SubscriptionPlansScreen() {
                 </AppText>
               </Pressable>
               <Pressable
-                style={[s.modalConfirmBtn, { backgroundColor: c.red }]}
+                style={({ pressed }) => [
+                  s.modalConfirmBtn,
+                  { backgroundColor: c.red, opacity: pressed ? 0.88 : 1 },
+                ]}
                 onPress={confirmCancel}
                 disabled={cancelling}
               >
@@ -841,7 +850,7 @@ export default function SubscriptionPlansScreen() {
               backgroundColor: c.bgPanel,
             }}
           >
-            <AppText weight="bold" style={{ fontSize: 16 }}>
+            <AppText weight="bold" style={{ fontSize: 16, color: c.text }}>
               {t("subscription.receipt.modalTitle")}
             </AppText>
             <Pressable onPress={() => setReceiptHtml(null)} hitSlop={10}>
@@ -876,35 +885,63 @@ export default function SubscriptionPlansScreen() {
 const s = StyleSheet.create({
   header: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 28,
     gap: 12,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    lineHeight: 32,
+    marginBottom: 4,
+  },
+  sub: {
+    fontSize: 13,
+    lineHeight: 19,
   },
   currentBanner: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
     borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 20,
+    gap: 6,
+  },
+  currentTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  currentExpiry: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  cancelLink: {
+    fontSize: 12,
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
+    paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 14,
     gap: 8,
   },
   successBox: {
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
+    paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 14,
     gap: 8,
   },
   promoSection: {
@@ -913,7 +950,6 @@ const s = StyleSheet.create({
   promoInputRow: {
     flexDirection: "row",
     gap: 8,
-    maxWidth: 380,
   },
   promoInput: {
     flex: 1,
@@ -921,11 +957,11 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     borderWidth: 1.5,
     borderRadius: 8,
-    fontSize: 14,
+    fontSize: 13,
     letterSpacing: 0.8,
   },
   promoApplyBtn: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 10,
     borderWidth: 1.5,
     borderRadius: 8,
@@ -936,10 +972,9 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    maxWidth: 380,
+    flexWrap: "wrap",
   },
   promoTag: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
@@ -954,38 +989,40 @@ const s = StyleSheet.create({
     paddingVertical: 4,
   },
   plansGrid: {
-    gap: 16,
-    marginBottom: 24,
+    gap: 20,
+    marginBottom: 20,
   },
   skeleton: {
-    height: 360,
+    height: 400,
     borderRadius: 16,
     opacity: 0.5,
   },
   planCard: {
     borderRadius: 16,
     borderWidth: 1.5,
-    padding: 20,
+    paddingVertical: 26,
+    paddingHorizontal: 22,
     position: "relative",
     alignItems: "flex-start",
+    overflow: "visible",
   },
   popularBadge: {
     position: "absolute",
     top: -12,
-    alignSelf: "center",
+    left: "50%",
+    transform: [{ translateX: -50 }],
     paddingHorizontal: 14,
     paddingVertical: 4,
     borderRadius: 100,
-    borderWidth: 2,
   },
   currentBadge: {
     position: "absolute",
     top: -12,
-    alignSelf: "center",
+    left: "50%",
+    transform: [{ translateX: -50 }],
     paddingHorizontal: 14,
     paddingVertical: 4,
     borderRadius: 100,
-    borderWidth: 2,
   },
   badgeText: {
     fontSize: 10,
@@ -1000,56 +1037,51 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   planName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "800",
-    marginBottom: 12,
+    marginBottom: 16,
   },
-
-  /* ── Price Block ── */
   planPriceWrap: {
     width: "100%",
-    marginBottom: 18,
+    marginBottom: 20,
   },
   priceRow: {
     flexDirection: "row",
     alignItems: "baseline",
+    gap: 3,
   },
   priceCurrency: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#9ca3af",
-    marginRight: 3,
   },
   priceAmount: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.4,
+    fontSize: 28,
+    letterSpacing: -0.6,
   },
   pricePer: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#9ca3af",
-    marginLeft: 3,
   },
   priceDiscountWrap: {
     width: "100%",
   },
   priceStrike: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#9ca3af",
     textDecorationLine: "line-through",
     marginBottom: 2,
   },
   savingsBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 2,
     borderRadius: 100,
     alignSelf: "flex-start",
     marginTop: 6,
   },
-
   featureList: {
     flex: 1,
     width: "100%",
-    marginBottom: 20,
+    marginBottom: 22,
     gap: 8,
   },
   featureItem: {
@@ -1067,13 +1099,11 @@ const s = StyleSheet.create({
     width: "100%",
     paddingVertical: 12,
     borderRadius: 10,
-    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   disclaimer: {
     fontSize: 11,
-    color: "#9ca3af",
     textAlign: "center",
     marginBottom: 20,
   },
@@ -1082,7 +1112,7 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.7)",
     alignItems: "center",
     justifyContent: "center",
-    padding: 20,
+    padding: 16,
   },
   modalBox: {
     width: "100%",
@@ -1091,7 +1121,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     padding: 24,
     alignItems: "center",
-    textAlign: "center",
     gap: 10,
   },
   modalIcon: {
@@ -1100,7 +1129,7 @@ const s = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   modalTitle: {
     fontSize: 18,
@@ -1109,26 +1138,25 @@ const s = StyleSheet.create({
   },
   modalText: {
     fontSize: 13,
-    color: "#6b7280",
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 21,
   },
   modalActions: {
     flexDirection: "row",
     gap: 10,
     width: "100%",
-    marginTop: 16,
+    marginTop: 8,
   },
   modalCancelBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderWidth: 1,
     borderRadius: 10,
     alignItems: "center",
   },
   modalConfirmBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
