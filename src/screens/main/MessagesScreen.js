@@ -307,11 +307,12 @@ export default function MessagesScreen() {
       <View style={{ marginBottom: rem(0.75) }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: "Syne_800ExtraBold",
-              fontSize: rem(1.7),
-              fontWeight: "800",
+              fontSize: 15,
               color: c.text,
+              letterSpacing: -0.5,
+              marginBottom: 4,
             }}
           >
             {t("messages.title", "Messages")}
