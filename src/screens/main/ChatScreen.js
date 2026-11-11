@@ -816,15 +816,29 @@ export default function ChatScreen() {
     : null;
 
   const handleBack = () => {
-    const state = navigation.getState?.();
-    const routes = state?.routes || [];
-    const prevRoute = routes[routes.length - 2]?.name;
-
-    if (prevRoute === "Messages") {
+    // 1. Prefer real back navigation — returns to whichever screen opened
+    //    Chat (Messages, employer detail, refund list, etc.).
+    if (navigation.canGoBack?.()) {
       navigation.goBack();
-    } else {
-      navigation.navigate("Messages");
+      return;
     }
+
+    // 2. Deep-linked / cold-start: no history to pop. Climb to the parent
+    //    navigator (WorkerHome / Drawer) and open Messages there.
+    try {
+      const parent = navigation.getParent?.();
+      if (parent) {
+        parent.navigate("Messages");
+        return;
+      }
+    } catch {
+      // fall through
+    }
+
+    // 3. Last resort — nothing else worked, try to pop anyway.
+    try {
+      navigation.goBack();
+    } catch {}
   };
 
   const renderItem = ({ item }) => {
