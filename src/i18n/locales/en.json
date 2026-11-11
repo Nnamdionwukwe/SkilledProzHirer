@@ -4191,6 +4191,136 @@
       }
     }
   },
+  "screenTitles": {
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Your work at a glance"
+    },
+    "workerBookings": {
+      "title": "My Bookings",
+      "subtitle": "Jobs assigned to you"
+    },
+    "workerJobs": {
+      "title": "Browse Jobs",
+      "subtitle": "Find your next opportunity"
+    },
+    "workerSavedJobs": {
+      "title": "Saved Jobs",
+      "subtitle": "Bookmarked opportunities"
+    },
+    "workerApplications": {
+      "title": "My Applications",
+      "subtitle": "Jobs you've applied to"
+    },
+    "workerCategories": {
+      "title": "My Trade Categories",
+      "subtitle": "Your trade categories"
+    },
+    "workerEarnings": {
+      "title": "Earnings",
+      "subtitle": "Track your income"
+    },
+    "workerWithdrawals": {
+      "title": "Wallet",
+      "subtitle": "Earnings & payouts"
+    },
+    "refundHistory": {
+      "title": "Refund History",
+      "subtitle": "Every refund that has affected your earnings"
+    },
+    "workerCompletedJobs": {
+      "title": "Completed Jobs",
+      "subtitle": "History of your finished jobs"
+    },
+    "workerEmployers": {
+      "title": "My Employers",
+      "subtitle": "Companies you are currently retained by"
+    },
+    "workerRetainedEarnings": {
+      "title": "Retained Earnings",
+      "subtitle": "Lifetime and pending earnings from your retained employers"
+    },
+    "workerRetainedCycles": {
+      "title": "Payment History",
+      "subtitle": "Every payroll cycle you've received from retained employers"
+    },
+    "workerDisputes": {
+      "title": "My Disputes",
+      "subtitle": "Active disputes"
+    },
+    "workerPortfolio": {
+      "title": "Portfolio",
+      "subtitle": "Your work gallery"
+    },
+    "workerCertifications": {
+      "title": "Certifications",
+      "subtitle": "Your trade certifications"
+    },
+    "workerAvailability": {
+      "title": "Weekly Availability",
+      "subtitle": "Set your weekly schedule"
+    },
+    "workerVerification": {
+      "title": "Verification",
+      "subtitle": "Trust & Safety"
+    },
+    "workerCommunityFeed": {
+      "title": "Community Feed",
+      "subtitle": "Your posts & updates"
+    },
+    "myPosts": {
+      "title": "My Posts",
+      "subtitle": "Your community posts and updates"
+    },
+    "campaign": {
+      "title": "Daily Campaign",
+      "subtitle": "Refer & earn daily"
+    },
+    "referralDashboard": {
+      "title": "Referral Dashboard",
+      "subtitle": "Invite & earn rewards"
+    },
+    "myReports": {
+      "title": "My Reports",
+      "subtitle": "Track reports you've submitted"
+    },
+    "workerReviews": {
+      "title": "Reviews",
+      "subtitle": "Feedback from hirers"
+    },
+    "messages": {
+      "title": "Messages",
+      "subtitle": "Your conversations"
+    },
+    "workerSupportChat": {
+      "title": "Support Chat",
+      "subtitle": "Chat with our team"
+    },
+    "workerSupportHub": {
+      "title": "Support Hub",
+      "subtitle": "View your past tickets or open a new one"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "subtitle": "View & manage alerts"
+    },
+    "workerSubscriptions": {
+      "title": "Subscriptions",
+      "subtitle": "Plans & billing"
+    },
+    "settings": {
+      "title": "Settings",
+      "subtitle": "Preferences & security"
+    },
+    "workerProfile": {
+      "title": "My Profile",
+      "subtitle": "Your public profile"
+    },
+    "workerBoost": {
+      "title": "Boost Listing",
+      "subtitle": "Stand out in search"
+    }
+  },
   "workerUserProfile": {
     "back": "Back",
     "goBack": "Go back",

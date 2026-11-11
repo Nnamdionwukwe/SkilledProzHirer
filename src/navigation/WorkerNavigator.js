@@ -64,8 +64,6 @@ import SupportChatScreen from "../screens/main/SupportChatScreen";
 import SupportTicketThreadScreen from "../screens/main/SupportTicketThreadScreen";
 import BookingsScreen from "../screens/main/BookingsScreen";
 
-// ── Your Placeholder Screen ──
-// (Assuming you have one at src/screens/main/PlaceholderScreen.js)
 import PlaceholderScreen from "../screens/main/PlaceholderScreen";
 import WorkerSavedJobsScreen from "../screens/main/worker/WorkerSavedJobsScreen";
 import WorkerCompletedJobsScreen from "../screens/main/worker/WorkerCompletedJobsScreen";
@@ -226,7 +224,7 @@ function FloatingTabBar() {
     { name: "WorkerJobs", icon: "search-outline" },
     { name: "WorkerApplications", icon: "document-text-outline" },
     { name: "WorkerWithdrawals", icon: "wallet-outline" },
-    { name: "WorkerEmployers", icon: "briefcase-outline" }, // My Employers
+    { name: "WorkerEmployers", icon: "briefcase-outline" },
   ];
 
   const isDark = effectiveMode !== "light";
@@ -313,9 +311,9 @@ function FloatingTabBar() {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Screen With Chrome Wrapper
+// Screen With Chrome Wrapper — now accepts title + subtitle
 // ════════════════════════════════════════════════════════════════════════
-function ScreenWithChrome({ Screen }) {
+function ScreenWithChrome({ Screen, title, subtitle }) {
   const { theme } = useTheme();
   const navigation = useNavigation();
   const route = useRoute();
@@ -324,7 +322,7 @@ function ScreenWithChrome({ Screen }) {
   return (
     <ScrollContext.Provider value={scrollY}>
       <View style={[styles.shell, { backgroundColor: theme.colors.bg }]}>
-        <TopBar navigation={navigation} />
+        <TopBar navigation={navigation} title={title} subtitle={subtitle} />
         <Animated.ScrollView
           style={styles.body}
           contentContainerStyle={{ paddingBottom: 120 }}
@@ -344,10 +342,11 @@ function ScreenWithChrome({ Screen }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Drawer (Matches the full Web NAV exactly)
+// Drawer — every Drawer.Screen now passes title + subtitle
 // ════════════════════════════════════════════════════════════════════════
 function WorkerDrawer() {
   const { unreadNotifs, unreadMessages } = useUnread();
+  const { t } = useTranslation();
 
   return (
     <Drawer.Navigator
@@ -367,117 +366,309 @@ function WorkerDrawer() {
     >
       {/* 1. Overview */}
       <Drawer.Screen name="Dashboard">
-        {() => <ScreenWithChrome Screen={WorkerDashboardScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerDashboardScreen}
+            title={t("screenTitles.dashboard.title")}
+            subtitle={t("screenTitles.dashboard.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerBookings">
-        {() => <ScreenWithChrome Screen={BookingsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={BookingsScreen}
+            title={t("screenTitles.workerBookings.title")}
+            subtitle={t("screenTitles.workerBookings.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerJobs">
-        {() => <ScreenWithChrome Screen={WorkerJobsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerJobsScreen}
+            title={t("screenTitles.workerJobs.title")}
+            subtitle={t("screenTitles.workerJobs.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerSavedJobs">
-        {() => <ScreenWithChrome Screen={WorkerSavedJobsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerSavedJobsScreen}
+            title={t("screenTitles.workerSavedJobs.title")}
+            subtitle={t("screenTitles.workerSavedJobs.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerApplications">
-        {() => <ScreenWithChrome Screen={WorkerApplicationsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerApplicationsScreen}
+            title={t("screenTitles.workerApplications.title")}
+            subtitle={t("screenTitles.workerApplications.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerCategories">
-        {() => <ScreenWithChrome Screen={WorkerCategoriesScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerCategoriesScreen}
+            title={t("screenTitles.workerCategories.title")}
+            subtitle={t("screenTitles.workerCategories.subtitle")}
+          />
+        )}
       </Drawer.Screen>
 
       {/* 2. Finances & History */}
       <Drawer.Screen name="WorkerEarnings">
-        {() => <ScreenWithChrome Screen={WorkerEarningsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerEarningsScreen}
+            title={t("screenTitles.workerEarnings.title")}
+            subtitle={t("screenTitles.workerEarnings.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerWithdrawals">
-        {() => <ScreenWithChrome Screen={WorkerWithdrawalsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerWithdrawalsScreen}
+            title={t("screenTitles.workerWithdrawals.title")}
+            subtitle={t("screenTitles.workerWithdrawals.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="RefundHistory">
-        {() => <ScreenWithChrome Screen={RefundHistoryScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={RefundHistoryScreen}
+            title={t("screenTitles.refundHistory.title")}
+            subtitle={t("screenTitles.refundHistory.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerCompletedJobs">
-        {() => <ScreenWithChrome Screen={WorkerCompletedJobsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerCompletedJobsScreen}
+            title={t("screenTitles.workerCompletedJobs.title")}
+            subtitle={t("screenTitles.workerCompletedJobs.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerEmployers">
-        {() => <ScreenWithChrome Screen={WorkerRetainedEmployersScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerRetainedEmployersScreen}
+            title={t("screenTitles.workerEmployers.title")}
+            subtitle={t("screenTitles.workerEmployers.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerRetainedEarnings">
-        {() => <ScreenWithChrome Screen={WorkerRetainedEarningsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerRetainedEarningsScreen}
+            title={t("screenTitles.workerRetainedEarnings.title")}
+            subtitle={t("screenTitles.workerRetainedEarnings.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerRetainedCycles">
-        {() => <ScreenWithChrome Screen={WorkerRetainedCyclesScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerRetainedCyclesScreen}
+            title={t("screenTitles.workerRetainedCycles.title")}
+            subtitle={t("screenTitles.workerRetainedCycles.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerDisputes">
-        {() => <ScreenWithChrome Screen={DisputesScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={DisputesScreen}
+            title={t("screenTitles.workerDisputes.title")}
+            subtitle={t("screenTitles.workerDisputes.subtitle")}
+          />
+        )}
       </Drawer.Screen>
 
       {/* 3. Profile */}
       <Drawer.Screen name="WorkerPortfolio">
-        {() => <ScreenWithChrome Screen={WorkerPortfolioScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerPortfolioScreen}
+            title={t("screenTitles.workerPortfolio.title")}
+            subtitle={t("screenTitles.workerPortfolio.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerCertifications">
-        {() => <ScreenWithChrome Screen={WorkerCertificationsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerCertificationsScreen}
+            title={t("screenTitles.workerCertifications.title")}
+            subtitle={t("screenTitles.workerCertifications.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerAvailability">
-        {() => <ScreenWithChrome Screen={WorkerAvailabilityScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerAvailabilityScreen}
+            title={t("screenTitles.workerAvailability.title")}
+            subtitle={t("screenTitles.workerAvailability.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerVerification">
-        {() => <ScreenWithChrome Screen={VerificationScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={VerificationScreen}
+            title={t("screenTitles.workerVerification.title")}
+            subtitle={t("screenTitles.workerVerification.subtitle")}
+          />
+        )}
       </Drawer.Screen>
 
       {/* 4. Community & Growth */}
       <Drawer.Screen name="WorkerCommunityFeed">
-        {() => <ScreenWithChrome Screen={CommunityFeedScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={CommunityFeedScreen}
+            title={t("screenTitles.workerCommunityFeed.title")}
+            subtitle={t("screenTitles.workerCommunityFeed.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="MyPosts">
-        {() => <ScreenWithChrome Screen={MyPostsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={MyPostsScreen}
+            title={t("screenTitles.myPosts.title")}
+            subtitle={t("screenTitles.myPosts.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="Campaign">
-        {() => <ScreenWithChrome Screen={CampaignDashboardScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={CampaignDashboardScreen}
+            title={t("screenTitles.campaign.title")}
+            subtitle={t("screenTitles.campaign.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="ReferralDashboard">
-        {() => <ScreenWithChrome Screen={ReferralDashboardScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={ReferralDashboardScreen}
+            title={t("screenTitles.referralDashboard.title")}
+            subtitle={t("screenTitles.referralDashboard.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="MyReports">
-        {() => <ScreenWithChrome Screen={MyReportsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={MyReportsScreen}
+            title={t("screenTitles.myReports.title")}
+            subtitle={t("screenTitles.myReports.subtitle")}
+          />
+        )}
       </Drawer.Screen>
 
       {/* 5. Account & Support */}
       <Drawer.Screen name="WorkerReviews">
-        {() => <ScreenWithChrome Screen={WorkerReviewsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerReviewsScreen}
+            title={t("screenTitles.workerReviews.title")}
+            subtitle={t("screenTitles.workerReviews.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="Messages">
-        {() => <ScreenWithChrome Screen={MessagesScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={MessagesScreen}
+            title={t("screenTitles.messages.title")}
+            subtitle={t("screenTitles.messages.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerSupportChat">
-        {() => <ScreenWithChrome Screen={SupportChatScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={SupportChatScreen}
+            title={t("screenTitles.workerSupportChat.title")}
+            subtitle={t("screenTitles.workerSupportChat.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerSupportHub">
-        {() => <ScreenWithChrome Screen={SupportHubScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={SupportHubScreen}
+            title={t("screenTitles.workerSupportHub.title")}
+            subtitle={t("screenTitles.workerSupportHub.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="Notifications">
-        {() => <ScreenWithChrome Screen={NotificationsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={NotificationsScreen}
+            title={t("screenTitles.notifications.title")}
+            subtitle={t("screenTitles.notifications.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerSubscriptions">
-        {() => <ScreenWithChrome Screen={SubscriptionsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={SubscriptionsScreen}
+            title={t("screenTitles.workerSubscriptions.title")}
+            subtitle={t("screenTitles.workerSubscriptions.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="Settings">
-        {() => <ScreenWithChrome Screen={SettingsScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={SettingsScreen}
+            title={t("screenTitles.settings.title")}
+            subtitle={t("screenTitles.settings.subtitle")}
+          />
+        )}
       </Drawer.Screen>
 
       {/* Extra screens not in drawer but used elsewhere */}
       <Drawer.Screen name="WorkerProfile">
-        {() => <ScreenWithChrome Screen={WorkerProfileScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={WorkerProfileScreen}
+            title={t("screenTitles.workerProfile.title")}
+            subtitle={t("screenTitles.workerProfile.subtitle")}
+          />
+        )}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerBoost">
-        {() => <ScreenWithChrome Screen={FeaturedBoostScreen} />}
+        {() => (
+          <ScreenWithChrome
+            Screen={FeaturedBoostScreen}
+            title={t("screenTitles.workerBoost.title")}
+            subtitle={t("screenTitles.workerBoost.subtitle")}
+          />
+        )}
       </Drawer.Screen>
     </Drawer.Navigator>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Stack
+// Stack (unchanged)
 // ════════════════════════════════════════════════════════════════════════
 function WorkerStack() {
   const { t } = useTranslation();
