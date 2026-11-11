@@ -255,7 +255,7 @@ function CompletedJobCard({ booking, c, t, onPress }) {
           marginTop: 2,
         }}
       >
-        <AppText weight="displayBlack" style={{ fontSize: 16, color: c.text }}>
+        <AppText weight="displayBlack" style={{ fontSize: 12, color: c.text }}>
           {fmtMoney(booking.agreedRate, booking.currency)}
         </AppText>
         <View
@@ -438,7 +438,7 @@ export default function WorkerCompletedJobsScreen() {
             <AppText
               weight="displayBlack"
               style={{
-                fontSize: 22,
+                fontSize: 15,
                 color: c.text,
                 letterSpacing: -0.5,
               }}
