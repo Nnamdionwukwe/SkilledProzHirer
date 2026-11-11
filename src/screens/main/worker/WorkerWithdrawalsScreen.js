@@ -1266,14 +1266,34 @@ function WithdrawalModal({
     setError("");
     setPinError("");
     const amt = parseFloat(amount);
+
     if (!amt || amt <= 0)
       return setError(t("workerWithdrawals.error.validAmount"));
+
+    // Minimum withdrawal check — uses the actual currency the user is withdrawing in
+    if (amt < 1)
+      return setError(
+        t("workerWithdrawals.error.minimumAmount", {
+          amount: `${currMeta.symbol} ${Number(1).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+        }),
+      );
+
+    // Exceeds available balance — uses the actual currency the user is withdrawing in
     if (amt > availableForCurrency)
       return setError(
         t("workerWithdrawals.error.exceedsBalance", {
-          balance: fmt(availableForCurrency, currency),
+          balance: `${currMeta.symbol} ${Number(
+            availableForCurrency || 0,
+          ).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
         }),
       );
+
     if (!selMethod) return setError(t("workerWithdrawals.error.selectMethod"));
     if (!pin || pin.length < 4)
       return setPinError(t("workerWithdrawals.modal.pinRequired"));
@@ -1322,7 +1342,12 @@ function WithdrawalModal({
     try {
       await client.post("/payments/withdraw", payload);
       setSuccess(
-        t("workerWithdrawals.withdraw.success", { amount: fmt(amt, currency) }),
+        t("workerWithdrawals.withdraw.success", {
+          amount: `${currMeta.symbol} ${Number(amt).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+        }),
       );
       onSuccess();
     } catch (err) {
@@ -1403,7 +1428,7 @@ function WithdrawalModal({
             >
               <AppText
                 weight="displayBlack"
-                style={{ fontSize: 18, color: c.text }}
+                style={{ fontSize: 15, color: c.text }}
               >
                 {t("workerWithdrawals.modal.title")}
               </AppText>
@@ -1657,9 +1682,14 @@ function WithdrawalModal({
                       </AppText>
                       <AppText
                         weight="displayBlack"
-                        style={{ fontSize: 16, color: c.orange }}
+                        style={{ fontSize: 13, color: c.orange }}
                       >
-                        {fmt(availableForCurrency, currency)}
+                        {`${currMeta.symbol} ${Number(
+                          availableForCurrency || 0,
+                        ).toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}`}
                       </AppText>
                     </View>
                   </View>
@@ -2364,11 +2394,16 @@ function WithdrawalModal({
                     ) : (
                       <AppText
                         weight="displayBlack"
-                        style={{ color: "#fff", fontSize: 15 }}
+                        style={{ color: "#fff", fontSize: 11 }}
                       >
                         {t("workerWithdrawals.modal.submit", {
                           amount: amount
-                            ? fmt(parseFloat(amount) || 0, currency)
+                            ? `${currMeta.symbol} ${Number(
+                                parseFloat(amount) || 0,
+                              ).toLocaleString("en-US", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}`
                             : "",
                         })}
                       </AppText>
@@ -2471,7 +2506,7 @@ function StatCard({ label, value, sub, orange, c }) {
       <AppText
         weight="displayBlack"
         style={{
-          fontSize: 16,
+          fontSize: 12,
           color: orange ? c.orange : c.text,
           marginTop: 4,
           letterSpacing: -0.5,
@@ -2552,12 +2587,15 @@ function WithdrawalCard({ w, onReceipt, c }) {
         weight="displayBlack"
         style={{
           color: c.text,
-          fontSize: 18,
+          fontSize: 15,
           letterSpacing: -0.5,
           marginBottom: 10,
         }}
       >
-        {fmt(w.amount, cur)}
+        {`${cm.symbol} ${Number(w.amount || 0).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`}
       </AppText>
       <Pressable
         onPress={() => onReceipt(w)}
@@ -2758,13 +2796,13 @@ export default function WorkerWithdrawalsScreen() {
           <AppText
             weight="displayBlack"
             style={{
-              fontSize: 26,
+              fontSize: 16,
               color: c.text,
               marginVertical: 4,
               letterSpacing: -0.5,
             }}
           >
-            {isFiltered ? (activeMeta?.name ?? activeCurrency) : "Your Wallet"}
+            {isFiltered ? (activeMeta?.name ?? activeCurrency) : "My Wallet"}
           </AppText>
           <AppText style={{ color: c.textMuted, fontSize: 12 }}>
             {isFiltered
@@ -2815,7 +2853,7 @@ export default function WorkerWithdrawalsScreen() {
             <Pressable
               onPress={() => setActiveCurrency("ALL")}
               style={{
-                width: 120,
+                width: 125,
                 marginRight: 10,
                 padding: 14,
                 borderRadius: 14,
@@ -2852,7 +2890,7 @@ export default function WorkerWithdrawalsScreen() {
               <AppText
                 weight="displayBlack"
                 style={{
-                  fontSize: 16,
+                  fontSize: 13,
                   color: activeCurrency === "ALL" ? c.orange : c.text,
                   letterSpacing: -0.5,
                 }}
@@ -2878,9 +2916,9 @@ export default function WorkerWithdrawalsScreen() {
                   key={cur}
                   onPress={() => setActiveCurrency(cur)}
                   style={{
-                    width: 130,
+                    width: 190,
                     marginRight: 10,
-                    padding: 14,
+                    padding: 10,
                     borderRadius: 14,
                     borderWidth: 1,
                     borderColor: sel ? c.orange : c.border,
@@ -2918,12 +2956,18 @@ export default function WorkerWithdrawalsScreen() {
                   <AppText
                     weight="displayBlack"
                     style={{
-                      fontSize: 16,
+                      fontSize: 11,
                       color: sel ? c.orange : c.text,
                       letterSpacing: -0.5,
                     }}
                   >
-                    {fmt(info.available ?? 0, cur)}
+                    {`${cm.symbol} ${Number(info.available ?? 0).toLocaleString(
+                      "en-US",
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      },
+                    )}`}
                   </AppText>
                   <AppText
                     style={{ fontSize: 9, color: c.textMuted, marginTop: 2 }}
@@ -2987,7 +3031,7 @@ export default function WorkerWithdrawalsScreen() {
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
         <StatCard
           label={t("workerWithdrawals.main.totalAvailable")}
-          value={fmt(totalAvailable, isFiltered ? activeCurrency : "USD")}
+          value={`${CURRENCY_META[isFiltered ? activeCurrency : "USD"]?.symbol ?? "$"} ${Number(totalAvailable || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           sub={
             isFiltered
               ? `${activeCurrency} available`
@@ -2998,15 +3042,17 @@ export default function WorkerWithdrawalsScreen() {
         />
         <StatCard
           label={t("workerWithdrawals.main.inEscrow")}
-          value={fmt(totalInEscrow, isFiltered ? activeCurrency : "USD")}
+          value={`${CURRENCY_META[isFiltered ? activeCurrency : "USD"]?.symbol ?? "$"} ${Number(totalInEscrow || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           sub={t("workerWithdrawals.main.awaitingCompletion")}
           c={c}
         />
       </View>
-      <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
+      <View
+        style={{ flexDirection: "row", fontSize: 2, gap: 10, marginBottom: 16 }}
+      >
         <StatCard
           label={t("workerWithdrawals.main.pendingPayouts")}
-          value={fmt(totalPendingPayout, isFiltered ? activeCurrency : "USD")}
+          value={`${CURRENCY_META[isFiltered ? activeCurrency : "USD"]?.symbol ?? "$"} ${Number(totalPendingPayout || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           sub={t("workerWithdrawals.main.requestPlural", {
             count: pendingCount,
           })}
@@ -3043,7 +3089,7 @@ export default function WorkerWithdrawalsScreen() {
         >
           <AppText
             weight="displayBlack"
-            style={{ fontSize: 15, color: c.text }}
+            style={{ fontSize: 10, color: c.text }}
           >
             {t("workerWithdrawals.main.history")}{" "}
             {isFiltered ? `· ${activeCurrency}` : ""}
