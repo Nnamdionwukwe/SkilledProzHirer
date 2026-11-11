@@ -4689,6 +4689,33 @@
     "loadFailed": "Could not load earnings.",
     "retry": "Try again"
   },
+  "workerRetainedCycles": {
+    "header": {
+      "title": "Payment History",
+      "subtitle": "Every payroll cycle you've received from retained employers"
+    },
+    "filters": {
+      "all": "All",
+      "awaitingPayment": "Awaiting Payment",
+      "held": "In Escrow",
+      "partiallyReleased": "Partially Released",
+      "released": "Released",
+      "cancelled": "Cancelled"
+    },
+    "card": {
+      "payDate": "Pay date: {{date}}"
+    },
+    "emptyAll": "No cycles yet.",
+    "emptyFiltered": "No {{status}} cycles yet.",
+    "errorTitle": "Could not load cycles",
+    "loadFailed": "Could not load your cycles.",
+    "tryAgain": "Try again",
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next",
+      "pageOf": "Page {{page}} of {{pages}} · {{total}} total"
+    }
+  },
   "yearsExperience": "Years Experience",
   "booking.release.title": "Payment Fully Released",
   "booking.release.details": "Release Details",

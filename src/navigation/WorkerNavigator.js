@@ -72,6 +72,7 @@ import WorkerCompletedJobsScreen from "../screens/main/worker/WorkerCompletedJob
 import WorkerRetainedEmployersScreen from "../screens/main/worker/WorkerRetainedEmployersScreen";
 import WorkerRetainedEmployerDetailScreen from "../screens/main/worker/WorkerRetainedEmployerDetailScreen";
 import WorkerRetainedEarningsScreen from "../screens/main/worker/WorkerRetainedEarningsScreen";
+import WorkerRetainedCyclesScreen from "../screens/main/worker/WorkerRetainedCyclesScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -402,7 +403,7 @@ function WorkerDrawer() {
         {() => <ScreenWithChrome Screen={WorkerRetainedEarningsScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerRetainedCycles">
-        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+        {() => <ScreenWithChrome Screen={WorkerRetainedCyclesScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerDisputes">
         {() => <ScreenWithChrome Screen={DisputesScreen} />}
