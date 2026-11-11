@@ -68,6 +68,7 @@ import BookingsScreen from "../screens/main/BookingsScreen";
 // (Assuming you have one at src/screens/main/PlaceholderScreen.js)
 import PlaceholderScreen from "../screens/main/PlaceholderScreen";
 import WorkerSavedJobsScreen from "../screens/main/worker/WorkerSavedJobsScreen";
+import WorkerCompletedJobsScreen from "../screens/main/worker/WorkerCompletedJobsScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -389,7 +390,7 @@ function WorkerDrawer() {
         {() => <ScreenWithChrome Screen={RefundHistoryScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerCompletedJobs">
-        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+        {() => <ScreenWithChrome Screen={WorkerCompletedJobsScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="WorkerEmployers">
         {() => <ScreenWithChrome Screen={PlaceholderScreen} />}

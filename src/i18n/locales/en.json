@@ -4589,6 +4589,31 @@
       "yearsAgo": "{{y}}y ago"
     }
   },
+  "workerCompletedJobs": {
+    "header": {
+      "eyebrow": "History",
+      "title": "Completed Jobs"
+    },
+    "card": {
+      "status": "Completed",
+      "earned": "Earned {{amount}}"
+    },
+    "list": {
+      "loadFailed": "Could not load your completed jobs.",
+      "errorTitle": "Could not load completed jobs",
+      "tryAgain": "Try again"
+    },
+    "empty": {
+      "title": "No completed jobs yet",
+      "body": "You haven't completed any jobs. Keep working and they'll appear here!",
+      "browseJobs": "Browse Jobs"
+    },
+    "pagination": {
+      "prev": "Prev",
+      "next": "Next",
+      "pageOf": "{{page}} of {{pages}}"
+    }
+  },
   "yearsExperience": "Years Experience",
   "booking.release.title": "Payment Fully Released",
   "booking.release.details": "Release Details",
