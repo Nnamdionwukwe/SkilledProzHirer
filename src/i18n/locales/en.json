@@ -4666,6 +4666,29 @@
       "button": "Send Message"
     }
   },
+  "workerRetainedEarnings": {
+    "header": {
+      "title": "Retained Earnings",
+      "subtitle": "Lifetime and pending earnings from your retained employers"
+    },
+    "kpi": {
+      "lifetime": "Lifetime Received",
+      "pending": "Pending Release",
+      "employers": "Employers"
+    },
+    "byStatus": "By Status",
+    "byEmployer": "By Employer",
+    "row": {
+      "released": "Released",
+      "pending": "Pending",
+      "cycles": "Cycles"
+    },
+    "emptyEmployers": "No retained employment yet.",
+    "errorTitle": "Could not load earnings",
+    "errorBody": "Please try refreshing the page.",
+    "loadFailed": "Could not load earnings.",
+    "retry": "Try again"
+  },
   "yearsExperience": "Years Experience",
   "booking.release.title": "Payment Fully Released",
   "booking.release.details": "Release Details",
