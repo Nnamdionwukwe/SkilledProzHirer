@@ -30,6 +30,7 @@ import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore";
 import { useWorkerAvailability } from "../../store/workerAvailabilityStore";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import {
   useCurrency,
   CURRENCY_META,
@@ -725,14 +726,18 @@ export default function SettingsScreen() {
   const canDelete = deactivationCheck?.canDelete ?? !hasBlockers;
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-      style={{ flex: 1 }}
-    >
-      <AppScreen
-        keyboardShouldPersistTaps="handled"
+    <View style={{ flex: 1 }}>
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        enableOnAndroid
+        enableAutomaticScroll
+        extraScrollHeight={Platform.OS === "ios" ? 90 : 60}
+        extraHeight={Platform.OS === "ios" ? 90 : 60}
+        enableResetScrollToCoords={false}
+        keyboardOpeningTime={100}
       >
         {/* Toast */}
         {toast ? (
@@ -2525,8 +2530,8 @@ export default function SettingsScreen() {
             </Pressable>
           </Pressable>
         </Modal>
-      </AppScreen>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
