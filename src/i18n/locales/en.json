@@ -4455,19 +4455,35 @@
   "workerReg.yourCategories": "Your Categories",
   "workerReg.yourProfile": "Your Professional Profile",
   "workerReviews": {
-    "loadFail": "Failed to load reviews",
-    "noReviews": "No reviews yet",
-    "noReviewsSub": "Complete bookings to start receiving reviews from hirers.",
-    "subtitle": "See what hirers think of your work",
-    "title": "My Reviews"
+    "title": "Reviews",
+    "subtitleReceived": "Feedback you've received from clients",
+    "subtitleGiven": "Feedback you've given to hirers you worked with",
+
+    "tabs": {
+      "received": "Received",
+      "given": "Given"
+    },
+
+    "reviewCount": "{{count}} review",
+    "reviewCount_plural": "{{count}} reviews",
+
+    "givenBadge": "Review given by you",
+
+    "emptyReceivedTitle": "No reviews yet",
+    "emptyReceivedBody": "Complete jobs to start receiving reviews from clients.",
+    "emptyGivenTitle": "No reviews given yet",
+    "emptyGivenBody": "After completing a booking, you can leave feedback for the hirer. Your reviews will appear here.",
+
+    "errorTitle": "Could not load reviews",
+    "loadFailed": "Could not load your reviews. Please try again.",
+    "givenLoadFailed": "Could not load your given reviews. Please try again.",
+
+    "pagination": {
+      "prev": "Prev",
+      "next": "Next",
+      "pageOf": "{{page}} of {{pages}}"
+    }
   },
-  "workerReviews.empty.noReviews": "Worker Reviews Empty No Reviews",
-  "workerReviews.empty.noReviewsSub": "Worker Reviews Empty No Reviews Sub",
-  "workerReviews.error.loadFailed": "Worker Reviews Error Load Failed",
-  "workerReviews.role.hirer": "Worker Reviews Role Hirer",
-  "workerReviews.role.worker": "Worker Reviews Role Worker",
-  "workerReviews.subtitle": "Worker Reviews Subtitle",
-  "workerReviews.title": "Reviews",
   "workerWallet": {
     "allTime": "All time",
     "amountLabel": "AMOUNT",
