@@ -1163,6 +1163,8 @@ export default function SettingsScreen() {
               c={c}
             >
               <InfoBox c={c} text={t("settings.currencies.info")} />
+
+              {/* Dashboard display currency — same for both roles */}
               <Section
                 label={t("settings.currencies.dashboardLabel")}
                 labelIcon={<FaChartLine size={11} color={c.orange} />}
@@ -1180,16 +1182,25 @@ export default function SettingsScreen() {
                   c={c}
                 />
               </Section>
+
               <Divider c={c} />
+
+              {/* Role-aware payout / payment currency */}
               <Section
-                label={t("settings.currencies.paymentLabel")}
+                label={
+                  isWorker
+                    ? t("settings.currencies.payoutLabel")
+                    : t("settings.currencies.paymentLabel")
+                }
                 labelIcon={<FaCreditCard size={11} color={c.orange} />}
                 c={c}
               >
                 <AppText
                   style={{ fontSize: 11, color: c.textMuted, lineHeight: 16 }}
                 >
-                  {t("settings.currencies.paymentDesc")}
+                  {isWorker
+                    ? t("settings.currencies.payoutDesc")
+                    : t("settings.currencies.paymentDesc")}
                 </AppText>
                 <CurrencyPickerRow
                   current={paymentCurrency}
@@ -1198,7 +1209,59 @@ export default function SettingsScreen() {
                   c={c}
                 />
               </Section>
+
+              {/* Profile rate currency — worker only */}
+              {isWorker && (
+                <>
+                  <Divider c={c} />
+                  <Section
+                    label={t("settings.currencies.profileRateLabel")}
+                    labelIcon={<FaTag size={11} color={c.orange} />}
+                    c={c}
+                  >
+                    <AppText
+                      style={{
+                        fontSize: 11,
+                        color: c.textMuted,
+                        lineHeight: 16,
+                      }}
+                    >
+                      {t("settings.currencies.profileRateDesc")}
+                    </AppText>
+                    <CurrencyPickerRow
+                      current={pricing.currency || "USD"}
+                      onChange={(v) =>
+                        setPricing((p) => ({ ...p, currency: v }))
+                      }
+                      onOpen={() => openCurrencyPicker("pricing")}
+                      c={c}
+                    />
+                    <SaveBtn
+                      label={t("settings.currencies.profileRateSave")}
+                      loading={saving === "pricing"}
+                      onClick={async () => {
+                        setSaving("pricing");
+                        try {
+                          await client.patch("/settings/worker-profile", {
+                            currency: pricing.currency,
+                          });
+                          showToast(t("settings.currencies.profileRateSaved"));
+                        } catch {
+                          showToast(
+                            t("settings.currencies.saveFailed"),
+                            "error",
+                          );
+                        } finally {
+                          setSaving("");
+                        }
+                      }}
+                      c={c}
+                    />
+                  </Section>
+                </>
+              )}
             </Card>
+
             <Card
               title={t("settings.currencies.summaryTitle")}
               icon={<FaFileAlt size={18} color={c.orange} />}
@@ -1215,10 +1278,22 @@ export default function SettingsScreen() {
                   },
                   {
                     icon: <FaCreditCard size={18} color={c.orange} />,
-                    label: t("settings.currencies.youPayIn"),
+                    label: isWorker
+                      ? t("settings.currencies.youReceiveIn")
+                      : t("settings.currencies.youPayIn"),
                     value: `${CURRENCY_META[paymentCurrency]?.symbol} ${paymentCurrency}`,
                     hint: t("settings.currencies.usedForTransactions"),
                   },
+                  ...(isWorker
+                    ? [
+                        {
+                          icon: <FaTag size={18} color={c.orange} />,
+                          label: t("settings.currencies.profileRateShows"),
+                          value: `${CURRENCY_META[pricing.currency || "USD"]?.symbol} ${pricing.currency || "USD"}`,
+                          hint: t("settings.currencies.profileRateShowsHint"),
+                        },
+                      ]
+                    : []),
                 ]}
                 c={c}
               />

@@ -2854,7 +2854,16 @@
       "summarySubtitle": "How your currencies are configured",
       "saved": "Currency settings saved",
       "saveFailed": "Could not save currency settings",
-      "save": "Save Currency Settings"
+      "save": "Save Currency Settings",
+      "payoutLabel": "PAYOUT CURRENCY",
+      "payoutDesc": "The currency you receive payments in. Workers are paid in this currency when a job is completed.",
+      "profileRateLabel": "PROFILE RATE CURRENCY",
+      "profileRateDesc": "The currency displayed on your profile cards and search results — what hirers see your rates quoted in. Set this to your local currency to attract local clients.",
+      "profileRateSave": "Save Profile Currency",
+      "profileRateSaved": "Profile currency saved",
+      "profileRateShows": "Your profile rates shown in",
+      "profileRateShowsHint": "Displayed to hirers searching",
+      "youReceiveIn": "You receive payments in"
     },
 
     "company": {
