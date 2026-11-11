@@ -845,7 +845,7 @@ export default function WorkerUserProfileScreen() {
             <AppText
               weight="displayBlack"
               style={{
-                fontSize: 21,
+                fontSize: 13,
                 color: c.text,
                 letterSpacing: -0.5,
               }}
@@ -858,65 +858,79 @@ export default function WorkerUserProfileScreen() {
             ) : null}
           </View>
 
-          <ProBadge isOwn={isOwn} t={t} c={c} />
-
-          {isVerified ? (
+          {(isOwn && (isVerified || true)) || isVerified ? (
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 4,
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-                borderRadius: 999,
-                backgroundColor: c.greenDim,
-                borderWidth: 1,
-                borderColor: c.green + "33",
+                gap: 6,
+                flexWrap: "wrap",
+                justifyContent: "center",
               }}
             >
-              <Ionicons name="shield-checkmark" size={10} color={c.green} />
-              <AppText
-                style={{ fontSize: 10, fontWeight: "700", color: c.green }}
-              >
-                {user.role === "WORKER"
-                  ? t("workerUserProfile.verifiedWorker")
-                  : t("workerUserProfile.verifiedHirer")}
-              </AppText>
+              <ProBadge isOwn={isOwn} t={t} c={c} />
+
+              {isVerified ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 999,
+                    backgroundColor: c.greenDim,
+                    borderWidth: 1,
+                    borderColor: c.green + "33",
+                  }}
+                >
+                  <Ionicons name="shield-checkmark" size={10} color={c.green} />
+                  <AppText
+                    style={{ fontSize: 10, fontWeight: "700", color: c.green }}
+                  >
+                    {user.role === "WORKER"
+                      ? t("workerUserProfile.verifiedWorker")
+                      : t("workerUserProfile.verifiedHirer")}
+                  </AppText>
+                </View>
+              ) : null}
             </View>
           ) : null}
 
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 5,
-              paddingHorizontal: 10,
-              paddingVertical: 3,
-              borderRadius: 20,
-              backgroundColor: c.orangeDim,
-              borderWidth: 1,
-              borderColor: c.orange + "33",
-            }}
-          >
-            <Ionicons
-              name={user.role === "WORKER" ? "construct" : "briefcase"}
-              size={11}
-              color={c.orange}
-            />
-            <AppText
+          {!isVerified ? (
+            <View
               style={{
-                fontSize: 10,
-                fontWeight: "700",
-                color: c.orange,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                borderRadius: 20,
+                backgroundColor: c.orangeDim,
+                borderWidth: 1,
+                borderColor: c.orange + "33",
               }}
             >
-              {user.role === "WORKER"
-                ? t("workerUserProfile.roleWorker")
-                : t("workerUserProfile.roleHirer")}
-            </AppText>
-          </View>
+              <Ionicons
+                name={user.role === "WORKER" ? "construct" : "briefcase"}
+                size={11}
+                color={c.orange}
+              />
+              <AppText
+                style={{
+                  fontSize: 10,
+                  fontWeight: "700",
+                  color: c.orange,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                {user.role === "WORKER"
+                  ? t("workerUserProfile.roleWorker")
+                  : t("workerUserProfile.roleHirer")}
+              </AppText>
+            </View>
+          ) : null}
 
           {wp?.title ? (
             <AppText
@@ -1365,7 +1379,16 @@ export default function WorkerUserProfileScreen() {
             ) : null}
 
             {/* Badges row */}
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                paddingRight: 4,
+              }}
+            >
               <View
                 style={{
                   flexDirection: "row",
@@ -1388,7 +1411,7 @@ export default function WorkerUserProfileScreen() {
                 />
                 <AppText
                   style={{
-                    fontSize: 12,
+                    fontSize: 9,
                     fontWeight: "600",
                     color: user.isEmailVerified ? c.green : c.textMuted,
                   }}
@@ -1420,7 +1443,7 @@ export default function WorkerUserProfileScreen() {
                   />
                   <AppText
                     style={{
-                      fontSize: 12,
+                      fontSize: 9,
                       fontWeight: "600",
                       color: c.orange,
                     }}
@@ -1447,7 +1470,7 @@ export default function WorkerUserProfileScreen() {
                   <Ionicons name="ribbon-outline" size={13} color="#60a5fa" />
                   <AppText
                     style={{
-                      fontSize: 12,
+                      fontSize: 9,
                       fontWeight: "600",
                       color: "#60a5fa",
                     }}
@@ -1456,7 +1479,7 @@ export default function WorkerUserProfileScreen() {
                   </AppText>
                 </View>
               ) : null}
-            </View>
+            </ScrollView>
           </View>
         ) : null}
 
@@ -2100,7 +2123,7 @@ function StatPill({ icon, value, label, c }) {
       <Ionicons name={icon} size={16} color={c.orange} />
       <AppText
         weight="displayBlack"
-        style={{ fontSize: 13, color: c.text, textAlign: "center" }}
+        style={{ fontSize: 10, color: c.text, textAlign: "center" }}
         numberOfLines={1}
         adjustsFontSizeToFit
       >
