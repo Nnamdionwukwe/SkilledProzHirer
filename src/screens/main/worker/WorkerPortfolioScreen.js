@@ -1,19 +1,17 @@
 // src/screens/main/worker/WorkerPortfolioScreen.js
-// Mirrors: website /worker/portfolio
-// APIs:
-//   GET  /workers/:userId       — load portfolio + videoIntroUrl
-//   POST /workers/portfolio     — FormData: image, title, description
-//   DELETE /workers/portfolio/:id
-//   POST /workers/video-intro   — FormData: file
+// Verbatim port of pages/worker/portfolio/PortfolioPage.jsx.
+//
+// Endpoints:
+//   GET    /workers/:id                → worker + portfolio + videoIntroUrl
+//   POST   /workers/video-intro        → { videoUrl }
 //   DELETE /workers/video-intro
+//   POST   /workers/portfolio          → { portfolio: [...] }
+//   DELETE /workers/portfolio/:id
 
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Dimensions,
   Image,
-  Linking,
   Modal,
   Pressable,
   RefreshControl,
@@ -23,190 +21,309 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
+import { Video } from "expo-av";
 
-import AppScreen from "../../../components/AppScreen";
 import AppText from "../../../components/AppText";
+import Skeleton from "../../../components/Skeleton";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useAuthStore } from "../../../store/authStore";
 import client from "../../../api/client";
 
-const SCREEN_W = Dimensions.get("window").width;
-const CARD_W = (SCREEN_W - 48 - 10) / 2; // 2-col grid, 16px padding, 10px gap
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIRMATION MODAL — RN port of components/ui/ConfirmationModal.jsx
+// ─────────────────────────────────────────────────────────────────────────────
+function ConfirmationModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  confirmVariant = "danger",
+  c,
+}) {
+  if (!isOpen) return null;
+  const confirmColor =
+    confirmVariant === "primary"
+      ? c.orange
+      : confirmVariant === "warning"
+        ? "#fbbf24"
+        : c.red;
 
-// ─── Full-screen image viewer ──────────────────────────────────────────────────
-function ImageViewer({ uri, onClose }) {
   return (
-    <Modal
-      visible={!!uri}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={iv.bg}>
-        <Pressable style={iv.closeBtn} onPress={onClose} hitSlop={12}>
-          <Ionicons name="close" size={26} color="#fff" />
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.72)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 20,
+        }}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={{
+            width: "100%",
+            maxWidth: 400,
+            padding: 22,
+            borderRadius: 16,
+            borderWidth: 1,
+            backgroundColor: c.bgPanel,
+            borderColor: c.border,
+          }}
+        >
+          <AppText
+            weight="displayBlack"
+            style={{ fontSize: 16, color: c.text, marginBottom: 8 }}
+          >
+            {title}
+          </AppText>
+          <AppText
+            style={{
+              fontSize: 13,
+              color: c.textDim,
+              lineHeight: 20,
+              marginBottom: 20,
+            }}
+          >
+            {message}
+          </AppText>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              onPress={onClose}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: c.border,
+                backgroundColor: "transparent",
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <AppText
+                style={{ fontSize: 13, fontWeight: "700", color: c.textDim }}
+              >
+                {cancelLabel}
+              </AppText>
+            </Pressable>
+            <Pressable
+              onPress={onConfirm}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: "center",
+                backgroundColor: confirmColor,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <AppText
+                style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+              >
+                {confirmLabel}
+              </AppText>
+            </Pressable>
+          </View>
         </Pressable>
-        {uri && <Image source={{ uri }} style={iv.img} resizeMode="contain" />}
-      </View>
+      </Pressable>
     </Modal>
   );
 }
 
-const iv = StyleSheet.create({
-  bg: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.97)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeBtn: {
-    position: "absolute",
-    top: 52,
-    right: 20,
-    zIndex: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderRadius: 20,
-    padding: 8,
-  },
-  img: { width: SCREEN_W, height: SCREEN_W * 1.2, maxHeight: "85%" },
-});
+// ─────────────────────────────────────────────────────────────────────────────
+// SKELETON — mirrors the full page
+// ─────────────────────────────────────────────────────────────────────────────
+function PortfolioSkeleton({ c }) {
+  return (
+    <View style={{ gap: 14 }}>
+      <Skeleton width="100%" height={280} radius={14} />
+      <Skeleton width="100%" height={220} radius={14} />
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Skeleton width="100%" height={180} radius={12} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Skeleton width="100%" height={180} radius={12} />
+        </View>
+      </View>
+    </View>
+  );
+}
 
-// ─── Video Intro card ─────────────────────────────────────────────────────────
-function VideoIntroCard({ videoUrl, onReload, c, toast }) {
-  const { t } = useTranslation();
+// ─────────────────────────────────────────────────────────────────────────────
+// VIDEO INTRO SECTION
+// ─────────────────────────────────────────────────────────────────────────────
+function VideoIntro({ currentUrl, onUpdate, c, t, toast }) {
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState(currentUrl || null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const pickAndUpload = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
+  useEffect(() => {
+    setPreview(currentUrl || null);
+  }, [currentUrl]);
+
+  async function pickAndUpload() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
       toast.error(t("workerPortfolio.permissionRequired"));
       return;
     }
-    const r = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       quality: 1,
     });
-    if (r.canceled || !r.assets?.[0]) return;
-    const a = r.assets[0];
-    if (a.fileSize && a.fileSize > 100 * 1024 * 1024) {
-      toast.error(t("workerPortfolio.video.tooLarge"));
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    const sizeMb = (asset.fileSize || 0) / (1024 * 1024);
+    if (sizeMb > 100) {
+      toast.error(t("workerPortfolio.videoTooLarge"));
       return;
     }
-    const formData = new FormData();
-    formData.append("file", {
-      uri: a.uri,
-      name: a.fileName ?? "intro.mp4",
-      type: a.mimeType ?? "video/mp4",
-    });
+
+    setPreview(asset.uri);
     setUploading(true);
     try {
-      await client.post("/workers/video-intro", formData, {
+      const fd = new FormData();
+      fd.append("file", {
+        uri: asset.uri,
+        name: asset.fileName || `video-${Date.now()}.mp4`,
+        type: asset.mimeType || "video/mp4",
+      });
+      const res = await client.post("/workers/video-intro", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       toast.success(t("workerPortfolio.video.uploadSuccess"));
-      onReload();
+      onUpdate?.(res.data.data.videoUrl);
     } catch {
       toast.error(t("workerPortfolio.video.uploadFailed"));
+      setPreview(currentUrl || null);
     } finally {
       setUploading(false);
     }
-  };
+  }
 
-  const handleDelete = () => {
-    Alert.alert(
-      t("workerPortfolio.video.removeTitle"),
-      t("workerPortfolio.video.removeMessage"),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("common.remove"),
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await client.delete("/workers/video-intro");
-              toast.success(t("workerPortfolio.video.removeSuccess"));
-              onReload();
-            } catch {
-              toast.error(t("workerPortfolio.video.removeFailed"));
-            }
-          },
-        },
-      ],
-    );
-  };
+  async function confirmDelete() {
+    setConfirmOpen(false);
+    try {
+      await client.delete("/workers/video-intro");
+      setPreview(null);
+      toast.success(t("workerPortfolio.video.removeSuccess"));
+      onUpdate?.(null);
+    } catch {
+      toast.error(t("workerPortfolio.video.removeFailed"));
+    }
+  }
 
   return (
     <View
-      style={[p.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
+      style={{
+        backgroundColor: c.bgPanel,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderRadius: 14,
+        padding: 18,
+      }}
     >
-      <AppText
-        variant="title"
-        weight="semibold"
-        style={{ color: c.text, marginBottom: 4 }}
+      {/* Header */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 4,
+        }}
       >
-        🎬 {t("workerPortfolio.video.title")}
-      </AppText>
-      <AppText variant="small" tone="dim" style={{ marginBottom: 16 }}>
+        <Ionicons name="videocam-outline" size={16} color={c.orange} />
+        <AppText weight="displayBlack" style={{ fontSize: 13, color: c.text }}>
+          {t("workerPortfolio.video.title")}
+        </AppText>
+      </View>
+      <AppText style={{ fontSize: 13, color: c.textDim, marginBottom: 14 }}>
         {t("workerPortfolio.video.subtitle")}
       </AppText>
 
-      {videoUrl ? (
+      {preview ? (
         <View>
-          {/* Video preview — tap to open in device player */}
-          <Pressable
-            onPress={() => Linking.openURL(videoUrl)}
-            style={[
-              p.videoPreview,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
+          <View
+            style={{
+              borderRadius: 10,
+              overflow: "hidden",
+              backgroundColor: "#000",
+              marginBottom: 12,
+            }}
           >
-            <View style={p.playOverlay}>
-              <View style={p.playCircle}>
-                <Ionicons
-                  name="play"
-                  size={32}
-                  color="#fff"
-                  style={{ marginLeft: 4 }}
-                />
-              </View>
-            </View>
-            <AppText variant="small" tone="dim" style={{ marginTop: 12 }}>
-              {t("workerPortfolio.video.tapToPlay")}
-            </AppText>
-          </Pressable>
-
-          <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
+            <Video
+              source={{ uri: preview }}
+              useNativeControls
+              style={{ width: "100%", height: 200 }}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable
               onPress={pickAndUpload}
               disabled={uploading}
-              style={[
-                p.actionBtn,
-                { borderColor: c.orange, opacity: uploading ? 0.7 : 1 },
-              ]}
+              style={({ pressed }) => ({
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 10,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: c.orange + "88",
+                backgroundColor: c.orangeDim,
+                opacity: uploading ? 0.5 : pressed ? 0.85 : 1,
+              })}
             >
               {uploading ? (
                 <ActivityIndicator size="small" color={c.orange} />
               ) : (
-                <AppText
-                  variant="small"
-                  weight="semibold"
-                  style={{ color: c.orange }}
-                >
-                  {t("workerPortfolio.video.replace")}
-                </AppText>
+                <>
+                  <Ionicons name="refresh" size={14} color={c.orange} />
+                  <AppText
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: c.orange,
+                    }}
+                  >
+                    {t("workerPortfolio.video.replace")}
+                  </AppText>
+                </>
               )}
             </Pressable>
             <Pressable
-              onPress={handleDelete}
-              style={[p.actionBtn, { borderColor: "#ef4444" }]}
+              onPress={() => setConfirmOpen(true)}
+              disabled={uploading}
+              style={({ pressed }) => ({
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 10,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: c.red + "88",
+                backgroundColor: c.redDim,
+                opacity: uploading ? 0.5 : pressed ? 0.85 : 1,
+              })}
             >
+              <Ionicons name="trash-outline" size={13} color={c.red} />
               <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: "#ef4444" }}
+                style={{ fontSize: 13, fontWeight: "700", color: c.red }}
               >
                 {t("workerPortfolio.video.remove")}
               </AppText>
@@ -215,64 +332,99 @@ function VideoIntroCard({ videoUrl, onReload, c, toast }) {
         </View>
       ) : (
         <Pressable
-          onPress={pickAndUpload}
+          onPress={() => !uploading && pickAndUpload()}
           disabled={uploading}
-          style={[
-            p.dropzone,
-            { borderColor: c.border, backgroundColor: c.bgPanel },
-          ]}
+          style={({ pressed }) => ({
+            borderWidth: 2,
+            borderStyle: "dashed",
+            borderColor: c.border,
+            borderRadius: 12,
+            paddingVertical: 36,
+            paddingHorizontal: 20,
+            alignItems: "center",
+            gap: 8,
+            opacity: pressed ? 0.85 : 1,
+          })}
         >
-          {uploading ? (
-            <ActivityIndicator size="large" color={c.orange} />
-          ) : (
-            <>
-              <AppText style={{ fontSize: 40, marginBottom: 10 }}>🎥</AppText>
-              <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: c.text, marginBottom: 4 }}
-              >
-                {t("workerPortfolio.video.upload")}
-              </AppText>
-              <AppText variant="small" tone="dim">
-                {t("workerPortfolio.video.requirements")}
-              </AppText>
-            </>
+          <Ionicons
+            name="cloud-upload-outline"
+            size={42}
+            color={c.orange}
+            style={{ opacity: 0.75 }}
+          />
+          <AppText style={{ fontSize: 14, fontWeight: "600", color: c.text }}>
+            {uploading
+              ? t("workerPortfolio.video.uploading")
+              : t("workerPortfolio.video.upload")}
+          </AppText>
+          <AppText
+            style={{
+              fontSize: 12,
+              color: c.textMuted,
+              textAlign: "center",
+              maxWidth: 280,
+            }}
+          >
+            {t("workerPortfolio.video.requirements")}
+          </AppText>
+          {uploading && (
+            <ActivityIndicator
+              size="small"
+              color={c.orange}
+              style={{ marginTop: 6 }}
+            />
           )}
         </Pressable>
       )}
+
+      <ConfirmationModal
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={confirmDelete}
+        title={t("workerPortfolio.video.removeTitle")}
+        message={t("workerPortfolio.video.removeMessage")}
+        confirmLabel={t("workerPortfolio.video.remove")}
+        cancelLabel={t("workerPortfolio.video.keep")}
+        confirmVariant="danger"
+        c={c}
+      />
     </View>
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
 export default function WorkerPortfolioScreen() {
   const { t } = useTranslation();
-  const { theme: th } = useTheme();
+  const { theme } = useTheme();
   const { toast } = useToast();
   const { user } = useAuthStore();
-  const c = th.colors;
+  const c = theme.colors;
 
   const [worker, setWorker] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
-  const [fullImg, setFullImg] = useState(null);
 
-  // Form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [imageFile, setImageFile] = useState(null); // { uri, name, type }
+  const [imageAsset, setImageAsset] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  // ── Load ────────────────────────────────────────────────────────────────────
-  const load = useCallback(async () => {
-    if (!user?.id) return;
+  const [deletingId, setDeletingId] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [lightboxItem, setLightboxItem] = useState(null);
+
+  const fetchWorker = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
     try {
       const res = await client.get(`/workers/${user.id}`);
       setWorker(res.data.data?.worker ?? null);
     } catch {
-      toast.error(t("workerPortfolio.error.loadFailed"));
+      setWorker(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -280,432 +432,566 @@ export default function WorkerPortfolioScreen() {
   }, [user?.id]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    fetchWorker();
+  }, [fetchWorker]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchWorker();
+    }, [fetchWorker]),
+  );
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchWorker();
+  };
 
   const portfolio = worker?.portfolio ?? [];
   const videoUrl = worker?.videoIntroUrl ?? null;
 
-  // ── Pick image ──────────────────────────────────────────────────────────────
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
+  async function pickImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
       toast.error(t("workerPortfolio.permissionRequired"));
       return;
     }
-    const r = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.85,
-      allowsEditing: true,
     });
-    if (!r.canceled && r.assets?.[0]) {
-      const a = r.assets[0];
-      setImageFile({
-        uri: a.uri,
-        name: a.fileName ?? "photo.jpg",
-        type: a.mimeType ?? "image/jpeg",
-      });
-    }
-  };
+    if (result.canceled || !result.assets?.[0]) return;
+    setImageAsset(result.assets[0]);
+  }
 
-  // ── Upload portfolio item ───────────────────────────────────────────────────
-  const handleUpload = async () => {
+  async function handleUpload() {
     if (!title.trim()) {
       toast.error(t("workerPortfolio.error.titleRequired"));
       return;
     }
-    if (!imageFile) {
+    if (!imageAsset) {
       toast.error(t("workerPortfolio.error.imageRequired"));
       return;
     }
-    const formData = new FormData();
-    formData.append("image", imageFile);
-    formData.append("title", title.trim());
-    if (description.trim()) formData.append("description", description.trim());
     setSaving(true);
     try {
-      await client.post("/workers/portfolio", formData, {
+      const fd = new FormData();
+      fd.append("image", {
+        uri: imageAsset.uri,
+        name: imageAsset.fileName || `portfolio-${Date.now()}.jpg`,
+        type: imageAsset.mimeType || "image/jpeg",
+      });
+      fd.append("title", title.trim());
+      if (description.trim()) fd.append("description", description.trim());
+
+      await client.post("/workers/portfolio", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+
       setTitle("");
       setDescription("");
-      setImageFile(null);
+      setImageAsset(null);
       toast.success(t("workerPortfolio.add.success"));
-      load();
+      fetchWorker();
     } catch (err) {
       toast.error(
-        err?.response?.data?.message ?? t("workerPortfolio.add.failed"),
+        err?.response?.data?.message || t("workerPortfolio.add.failed"),
       );
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  // ── Delete portfolio item ───────────────────────────────────────────────────
-  const handleDelete = (id) => {
-    Alert.alert(
-      t("workerPortfolio.remove.title"),
-      t("workerPortfolio.remove.message"),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("common.delete"),
-          style: "destructive",
-          onPress: async () => {
-            setDeletingId(id);
-            try {
-              await client.delete(`/workers/portfolio/${id}`);
-              toast.success(t("workerPortfolio.remove.success"));
-              load();
-            } catch {
-              toast.error(t("workerPortfolio.remove.failed"));
-            } finally {
-              setDeletingId(null);
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: c.bg,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color={c.orange} />
-      </View>
-    );
+  async function confirmDelete() {
+    const id = pendingDelete;
+    setPendingDelete(null);
+    if (!id) return;
+    setDeletingId(id);
+    try {
+      await client.delete(`/workers/portfolio/${id}`);
+      fetchWorker();
+    } catch {
+      toast.error(t("workerPortfolio.remove.failed"));
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
-    <AppScreen
+    <ScrollView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      contentContainerStyle={{ padding: 16, paddingBottom: 48, gap: 14 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            load();
-          }}
+          onRefresh={handleRefresh}
           tintColor={c.orange}
         />
       }
-      contentContainerStyle={{ paddingBottom: 40, gap: 16 }}
     >
-      {/* ── Video Intro ── */}
-      <VideoIntroCard videoUrl={videoUrl} onReload={load} c={c} toast={toast} />
-
-      {/* ── Add Portfolio Item ── */}
-      <View
-        style={[p.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
-      >
+      {/* Header */}
+      <View style={{ marginBottom: 6, marginTop: 4 }}>
         <AppText
-          variant="title"
-          weight="semibold"
-          style={{ color: c.text, marginBottom: 16 }}
+          weight="displayBlack"
+          style={{
+            fontSize: 15,
+            color: c.text,
+            letterSpacing: -0.5,
+            marginBottom: 4,
+          }}
         >
-          {t("workerPortfolio.add.title")}
+          {t("workerPortfolio.list.title")}
         </AppText>
-
-        <AppText variant="small" weight="semibold" style={p.label}>
-          {t("workerPortfolio.add.titleLabel")} *
+        <AppText style={{ fontSize: 13, color: c.textDim }}>
+          {t("workerPortfolio.list.subtitle")}
         </AppText>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder={t("workerPortfolio.add.titlePlaceholder")}
-          placeholderTextColor={c.textMuted}
-          style={[
-            p.input,
-            {
-              color: c.text,
-              backgroundColor: c.bgInput,
-              borderColor: c.border,
-            },
-          ]}
-        />
-
-        <AppText
-          variant="small"
-          weight="semibold"
-          style={[p.label, { marginTop: 14 }]}
-        >
-          {t("workerPortfolio.add.photo")} *
-        </AppText>
-        <Pressable
-          onPress={pickImage}
-          style={[
-            p.imagePicker,
-            {
-              borderColor: imageFile ? c.orange : c.border,
-              backgroundColor: imageFile ? `${c.orange}08` : c.bgInput,
-            },
-          ]}
-        >
-          {imageFile ? (
-            <View style={{ alignItems: "center", gap: 6 }}>
-              <Image source={{ uri: imageFile.uri }} style={p.imagePreview} />
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.orange }}
-              >
-                {t("workerPortfolio.add.changePhoto")}
-              </AppText>
-            </View>
-          ) : (
-            <View style={{ alignItems: "center", gap: 8 }}>
-              <Ionicons name="image-outline" size={36} color={c.textMuted} />
-              <AppText
-                variant="body"
-                weight="semibold"
-                style={{ color: c.text }}
-              >
-                {t("workerPortfolio.add.selectPhoto")}
-              </AppText>
-              <AppText variant="small" tone="dim">
-                {t("workerPortfolio.add.photoRequirements")}
-              </AppText>
-            </View>
-          )}
-        </Pressable>
-
-        <AppText
-          variant="small"
-          weight="semibold"
-          style={[p.label, { marginTop: 14 }]}
-        >
-          {t("workerPortfolio.add.description")}
-        </AppText>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder={t("workerPortfolio.add.descriptionPlaceholder")}
-          placeholderTextColor={c.textMuted}
-          style={[
-            p.input,
-            {
-              color: c.text,
-              backgroundColor: c.bgInput,
-              borderColor: c.border,
-            },
-          ]}
-        />
-
-        <Pressable
-          onPress={handleUpload}
-          disabled={saving}
-          style={[
-            p.addBtn,
-            {
-              backgroundColor: c.orange,
-              opacity: saving ? 0.75 : 1,
-              marginTop: 16,
-            },
-          ]}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <AppText variant="body" weight="semibold" style={{ color: "#fff" }}>
-              + {t("workerPortfolio.add.button")}
-            </AppText>
-          )}
-        </Pressable>
       </View>
 
-      {/* ── Portfolio Grid ── */}
-      <View
-        style={[p.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
-      >
-        <AppText
-          variant="title"
-          weight="semibold"
-          style={{ color: c.text, marginBottom: 16 }}
-        >
-          {t("workerPortfolio.list.title")}{" "}
-          <AppText variant="body" tone="dim">
-            ({portfolio.length})
-          </AppText>
-        </AppText>
+      {loading ? (
+        <PortfolioSkeleton c={c} />
+      ) : (
+        <>
+          {/* Video intro */}
+          <VideoIntro
+            currentUrl={videoUrl}
+            onUpdate={(url) =>
+              setWorker((w) => (w ? { ...w, videoIntroUrl: url } : w))
+            }
+            c={c}
+            t={t}
+            toast={toast}
+          />
 
-        {portfolio.length === 0 ? (
-          <View style={p.empty}>
-            <AppText style={{ fontSize: 48, marginBottom: 10 }}>🖼️</AppText>
+          {/* Upload form */}
+          <View
+            style={{
+              backgroundColor: c.bgPanel,
+              borderWidth: 1,
+              borderColor: c.border,
+              borderRadius: 14,
+              padding: 18,
+            }}
+          >
             <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: c.text, marginBottom: 4 }}
+              weight="displayBlack"
+              style={{ fontSize: 13, color: c.text, marginBottom: 12 }}
             >
-              {t("workerPortfolio.list.emptyTitle")}
+              {t("workerPortfolio.add.title")}
             </AppText>
-            <AppText variant="small" tone="dim" style={{ textAlign: "center" }}>
-              {t("workerPortfolio.list.emptySub")}
+
+            {/* Title */}
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: "600",
+                color: c.textDim,
+                marginBottom: 4,
+              }}
+            >
+              {t("workerPortfolio.add.titleLabel")}
             </AppText>
-          </View>
-        ) : (
-          <View style={p.grid}>
-            {portfolio.map((item) => (
-              <View
-                key={item.id}
-                style={[
-                  p.gridCard,
-                  { backgroundColor: c.bgPanel, borderColor: c.border },
-                ]}
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder={t("workerPortfolio.add.titlePlaceholder")}
+              placeholderTextColor={c.textMuted}
+              style={{
+                backgroundColor: c.bgInput,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                color: c.text,
+                fontSize: 13,
+                marginBottom: 12,
+              }}
+            />
+
+            {/* Description */}
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: "600",
+                color: c.textDim,
+                marginBottom: 4,
+              }}
+            >
+              {t("workerPortfolio.add.description")}
+            </AppText>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder={t("workerPortfolio.add.descriptionPlaceholder")}
+              placeholderTextColor={c.textMuted}
+              multiline
+              style={{
+                backgroundColor: c.bgInput,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                color: c.text,
+                fontSize: 13,
+                minHeight: 64,
+                textAlignVertical: "top",
+                marginBottom: 12,
+              }}
+            />
+
+            {/* Image picker */}
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: "600",
+                color: c.textDim,
+                marginBottom: 6,
+              }}
+            >
+              {t("workerPortfolio.add.photo")}
+            </AppText>
+            <Pressable
+              onPress={pickImage}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderStyle: "dashed",
+                backgroundColor: c.bgInput,
+                opacity: pressed ? 0.85 : 1,
+                marginBottom: 14,
+              })}
+            >
+              {imageAsset ? (
+                <Image
+                  source={{ uri: imageAsset.uri }}
+                  style={{ width: 40, height: 40, borderRadius: 6 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Ionicons name="image-outline" size={22} color={c.orange} />
+              )}
+              <AppText
+                style={{ flex: 1, fontSize: 13, color: c.text }}
+                numberOfLines={1}
               >
-                {/* Tap image → fullscreen */}
-                <Pressable onPress={() => setFullImg(item.imageUrl)}>
-                  <Image
-                    source={{ uri: item.imageUrl }}
-                    style={p.gridImg}
-                    resizeMode="cover"
-                  />
-                </Pressable>
-                <View style={p.gridBody}>
+                {imageAsset
+                  ? imageAsset.fileName || t("workerPortfolio.add.changePhoto")
+                  : t("workerPortfolio.add.selectPhoto")}
+              </AppText>
+              <Ionicons
+                name={imageAsset ? "refresh" : "add"}
+                size={16}
+                color={c.textMuted}
+              />
+            </Pressable>
+
+            {/* Submit */}
+            <Pressable
+              onPress={handleUpload}
+              disabled={saving}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 12,
+                borderRadius: 10,
+                backgroundColor: c.orange,
+                opacity: saving ? 0.5 : pressed ? 0.9 : 1,
+              })}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="add" size={16} color="#fff" />
                   <AppText
-                    variant="body"
-                    weight="semibold"
-                    style={{ color: c.text }}
-                    numberOfLines={1}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "700",
+                      color: "#fff",
+                    }}
                   >
-                    {item.title}
+                    {t("workerPortfolio.add.button")}
                   </AppText>
-                  {item.description ? (
-                    <AppText
-                      variant="small"
-                      tone="dim"
-                      numberOfLines={2}
-                      style={{ marginTop: 2 }}
+                </>
+              )}
+            </Pressable>
+          </View>
+
+          {/* Portfolio grid */}
+          <View
+            style={{
+              backgroundColor: c.bgPanel,
+              borderWidth: 1,
+              borderColor: c.border,
+              borderRadius: 14,
+              padding: 18,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 12,
+                gap: 6,
+              }}
+            >
+              <AppText
+                weight="displayBlack"
+                style={{ fontSize: 13, color: c.text }}
+              >
+                {t("workerPortfolio.list.title")}
+              </AppText>
+              <AppText style={{ fontSize: 13, color: c.textDim }}>
+                ({portfolio.length})
+              </AppText>
+            </View>
+
+            {portfolio.length === 0 ? (
+              <View
+                style={{
+                  alignItems: "center",
+                  paddingVertical: 40,
+                  gap: 8,
+                }}
+              >
+                <Ionicons
+                  name="image-outline"
+                  size={42}
+                  color={c.textDim}
+                  style={{ opacity: 0.5 }}
+                />
+                <AppText
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: c.textDim,
+                    textAlign: "center",
+                  }}
+                >
+                  {t("workerPortfolio.list.emptyTitle")}
+                </AppText>
+                <AppText
+                  style={{
+                    fontSize: 12,
+                    color: c.textMuted,
+                    textAlign: "center",
+                    maxWidth: 280,
+                  }}
+                >
+                  {t("workerPortfolio.list.emptySub")}
+                </AppText>
+              </View>
+            ) : (
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 10,
+                }}
+              >
+                {portfolio.map((item) => (
+                  <View
+                    key={item.id}
+                    style={{
+                      width: "48%",
+                      backgroundColor: c.bgCard,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      borderRadius: 12,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Pressable
+                      onPress={() => setLightboxItem(item)}
+                      style={{ position: "relative", height: 140 }}
                     >
-                      {item.description}
+                      <Image
+                        source={{ uri: item.imageUrl }}
+                        style={{ width: "100%", height: "100%" }}
+                        resizeMode="cover"
+                      />
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: 8,
+                          right: 8,
+                          width: 28,
+                          height: 28,
+                          borderRadius: 6,
+                          backgroundColor: "rgba(0,0,0,0.55)",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Ionicons
+                          name="expand-outline"
+                          size={14}
+                          color="#fff"
+                        />
+                      </View>
+                    </Pressable>
+                    <View style={{ padding: 10, gap: 4 }}>
+                      <AppText
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "600",
+                          color: c.text,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {item.title}
+                      </AppText>
+                      {item.description ? (
+                        <AppText
+                          style={{ fontSize: 11, color: c.textDim }}
+                          numberOfLines={2}
+                        >
+                          {item.description}
+                        </AppText>
+                      ) : null}
+                      <Pressable
+                        onPress={() => setPendingDelete(item.id)}
+                        disabled={deletingId === item.id}
+                        style={({ pressed }) => ({
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 4,
+                          alignSelf: "flex-start",
+                          marginTop: 6,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: c.red + "88",
+                          backgroundColor: c.redDim,
+                          opacity:
+                            deletingId === item.id ? 0.5 : pressed ? 0.85 : 1,
+                        })}
+                      >
+                        {deletingId === item.id ? (
+                          <ActivityIndicator size="small" color={c.red} />
+                        ) : (
+                          <>
+                            <Ionicons
+                              name="trash-outline"
+                              size={11}
+                              color={c.red}
+                            />
+                            <AppText
+                              style={{
+                                fontSize: 11,
+                                fontWeight: "700",
+                                color: c.red,
+                              }}
+                            >
+                              {t("workerPortfolio.list.remove")}
+                            </AppText>
+                          </>
+                        )}
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        </>
+      )}
+
+      {/* Lightbox */}
+      <Modal
+        visible={!!lightboxItem}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLightboxItem(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.94)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <Pressable
+            onPress={() => setLightboxItem(null)}
+            style={{
+              position: "absolute",
+              top: 60,
+              right: 20,
+              zIndex: 2,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: "rgba(255,255,255,0.12)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="close" size={22} color="#fff" />
+          </Pressable>
+          {lightboxItem && (
+            <>
+              <Image
+                source={{ uri: lightboxItem.imageUrl }}
+                style={{ width: "100%", height: "70%" }}
+                resizeMode="contain"
+              />
+              {lightboxItem.title || lightboxItem.description ? (
+                <View
+                  style={{
+                    marginTop: 16,
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  {lightboxItem.title ? (
+                    <AppText
+                      weight="displayBlack"
+                      style={{ fontSize: 16, color: "#fff" }}
+                    >
+                      {lightboxItem.title}
                     </AppText>
                   ) : null}
-                  <Pressable
-                    onPress={() => handleDelete(item.id)}
-                    disabled={deletingId === item.id}
-                    style={[p.removeBtn, { borderColor: "#ef4444" }]}
-                  >
-                    {deletingId === item.id ? (
-                      <ActivityIndicator size="small" color="#ef4444" />
-                    ) : (
-                      <>
-                        <Ionicons
-                          name="trash-outline"
-                          size={14}
-                          color="#ef4444"
-                          style={{ marginRight: 4 }}
-                        />
-                        <AppText
-                          variant="small"
-                          weight="semibold"
-                          style={{ color: "#ef4444" }}
-                        >
-                          {t("workerPortfolio.list.remove")}
-                        </AppText>
-                      </>
-                    )}
-                  </Pressable>
+                  {lightboxItem.description ? (
+                    <AppText
+                      style={{
+                        fontSize: 13,
+                        color: "rgba(255,255,255,0.75)",
+                        textAlign: "center",
+                      }}
+                    >
+                      {lightboxItem.description}
+                    </AppText>
+                  ) : null}
                 </View>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
+              ) : null}
+            </>
+          )}
+        </View>
+      </Modal>
 
-      {/* ── Full-screen image viewer ── */}
-      <ImageViewer uri={fullImg} onClose={() => setFullImg(null)} />
-    </AppScreen>
+      {/* Delete confirmation */}
+      <ConfirmationModal
+        isOpen={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        title={t("workerPortfolio.remove.title")}
+        message={t("workerPortfolio.remove.message")}
+        confirmLabel={t("workerPortfolio.remove.confirm")}
+        cancelLabel={t("workerPortfolio.remove.cancel")}
+        confirmVariant="danger"
+        c={c}
+      />
+    </ScrollView>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-const p = StyleSheet.create({
-  card: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-  },
-
-  label: {
-    color: "#6b7280",
-    letterSpacing: 0.6,
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 15,
-  },
-
-  imagePicker: {
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderRadius: 14,
-    padding: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 130,
-  },
-  imagePreview: { width: 120, height: 80, borderRadius: 8 },
-  addBtn: { paddingVertical: 15, borderRadius: 14, alignItems: "center" },
-
-  videoPreview: {
-    height: 200,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playOverlay: { alignItems: "center", justifyContent: "center" },
-  playCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dropzone: {
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderRadius: 14,
-    padding: 40,
-    alignItems: "center",
-  },
-  actionBtn: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  gridCard: {
-    width: CARD_W,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-  },
-  gridImg: { width: "100%", height: CARD_W * 0.75 },
-  gridBody: { padding: 10 },
-  removeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 7,
-    marginTop: 8,
-  },
-
-  empty: { paddingVertical: 36, alignItems: "center" },
-});
