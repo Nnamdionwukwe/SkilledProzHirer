@@ -1108,6 +1108,13 @@ export default function SettingsScreen() {
                 onChange={(v) => setPricing((p) => ({ ...p, monthlyRate: v }))}
                 c={c}
               />
+              <PriceField
+                label={t("settings.pricing.yearly")}
+                suffix="/yr"
+                value={pricing.yearlyRate}
+                onChange={(v) => setPricing((p) => ({ ...p, yearlyRate: v }))}
+                c={c}
+              />
             </View>
             <Divider label={t("settings.pricing.custom")} c={c} />
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>

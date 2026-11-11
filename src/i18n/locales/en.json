@@ -2825,6 +2825,7 @@
       "daily": "Daily Rate",
       "weekly": "Weekly Rate",
       "monthly": "Monthly Rate",
+      "yearly": "Yearly Rate",
       "custom": "Custom Rate",
       "customAmount": "Custom Rate Amount",
       "amountPlaceholder": "0.00",
