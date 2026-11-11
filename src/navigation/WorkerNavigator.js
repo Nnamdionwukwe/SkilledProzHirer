@@ -73,6 +73,7 @@ import WorkerRetainedEmployersScreen from "../screens/main/worker/WorkerRetained
 import WorkerRetainedEmployerDetailScreen from "../screens/main/worker/WorkerRetainedEmployerDetailScreen";
 import WorkerRetainedEarningsScreen from "../screens/main/worker/WorkerRetainedEarningsScreen";
 import WorkerRetainedCyclesScreen from "../screens/main/worker/WorkerRetainedCyclesScreen";
+import CommunityFeedScreen from "../screens/main/CommunityFeedScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -425,7 +426,7 @@ function WorkerDrawer() {
 
       {/* 4. Community & Growth */}
       <Drawer.Screen name="WorkerCommunityFeed">
-        {() => <ScreenWithChrome Screen={PlaceholderScreen} />}
+        {() => <ScreenWithChrome Screen={CommunityFeedScreen} />}
       </Drawer.Screen>
       <Drawer.Screen name="MyPosts">
         {() => <ScreenWithChrome Screen={MyPostsScreen} />}

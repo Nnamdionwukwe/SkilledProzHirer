@@ -103,7 +103,7 @@ export default function MyPostsScreen() {
           <AppText
             weight="displayBlack"
             style={{
-              fontSize: 24,
+              fontSize: 15,
               lineHeight: 30,
               color: c.text,
               letterSpacing: -0.4,
