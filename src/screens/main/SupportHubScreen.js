@@ -2,21 +2,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Support Hub — mobile port of the website's src/pages/support/SupportHub.jsx.
 //
-// Layout (matches the web page 1:1):
-//   • Header (title + subtitle + "New Ticket" button)
-//   • Ticket list (skeleton → empty state → list)
-//   • Create Ticket modal (category select, subject, description, upload box)
-//
 // API:
 //   GET  /support/tickets                 → supportApi.getMyTickets()
 //   POST /support/tickets (multipart)     → supportApi.createTicket()
-//
-// Status badge colors match SupportHub.module.css exactly:
-//   OPEN         blue    (#3b82f6)
-//   IN_PROGRESS  yellow  (#eab308)
-//   WAITING_USER orange  (#f97316)
-//   RESOLVED     green   (#22c55e)
-//   CLOSED       muted
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -46,46 +34,46 @@ import { useSupportStore } from "../../store/supportStore";
 import { getMyTickets, createTicket, getTicket } from "../../api/support";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
-const CATEGORIES = [
-  { value: "ACCOUNT", label: "Account & Login" },
-  { value: "PAYMENT", label: "Payments & Billing" },
-  { value: "BOOKING", label: "Bookings & Jobs" },
-  { value: "TECHNICAL", label: "Technical Bug" },
-  { value: "VERIFICATION", label: "Verification" },
-  { value: "WITHDRAWAL", label: "Withdrawals" },
-  { value: "OTHER", label: "Other" },
+const CATEGORY_KEYS = [
+  { value: "ACCOUNT", tKey: "ACCOUNT" },
+  { value: "PAYMENT", tKey: "PAYMENT" },
+  { value: "BOOKING", tKey: "BOOKING" },
+  { value: "TECHNICAL", tKey: "TECHNICAL" },
+  { value: "VERIFICATION", tKey: "VERIFICATION" },
+  { value: "WITHDRAWAL", tKey: "WITHDRAWAL" },
+  { value: "OTHER", tKey: "OTHER" },
 ];
 
-const STATUS_COLORS = {
+const STATUS_META = {
   OPEN: {
     fg: "#3b82f6",
     bg: "rgba(59,130,246,0.12)",
     border: "rgba(59,130,246,0.25)",
-    label: "Open",
+    tKey: "statusOpen",
   },
   IN_PROGRESS: {
     fg: "#eab308",
     bg: "rgba(234,179,8,0.12)",
     border: "rgba(234,179,8,0.25)",
-    label: "In Progress",
+    tKey: "statusInProgress",
   },
   WAITING_USER: {
     fg: "#f97316",
     bg: "rgba(249,115,22,0.12)",
     border: "rgba(249,115,22,0.25)",
-    label: "Action Needed",
+    tKey: "statusWaiting",
   },
   RESOLVED: {
     fg: "#22c55e",
     bg: "rgba(34,197,94,0.12)",
     border: "rgba(34,197,94,0.25)",
-    label: "Resolved",
+    tKey: "statusResolved",
   },
   CLOSED: {
     fg: "#888888",
     bg: "rgba(136,136,136,0.12)",
     border: "rgba(136,136,136,0.25)",
-    label: "Closed",
+    tKey: "statusClosed",
   },
 };
 
@@ -106,7 +94,7 @@ function humanizeCategory(c) {
   return String(c).replace(/_/g, " ");
 }
 
-// ─── Skeleton card (matches .skeletonCard from CSS) ───────────────────────
+// ─── Skeleton card ────────────────────────────────────────────────────────
 function SkeletonCard({ c }) {
   const shimmer = useRef(new Animated.Value(0.35)).current;
 
@@ -143,14 +131,15 @@ function SkeletonCard({ c }) {
   );
 }
 
-// ─── Status badge (matches .badge classes) ────────────────────────────────
-function StatusBadge({ status, c }) {
-  const meta = STATUS_COLORS[status] ?? {
+// ─── Status badge ─────────────────────────────────────────────────────────
+function StatusBadge({ status, c, t }) {
+  const meta = STATUS_META[status] ?? {
     fg: c.textMuted,
     bg: c.bgCard,
     border: c.border,
-    label: status || "",
+    tKey: null,
   };
+  const label = meta.tKey ? t(`support.hub.${meta.tKey}`) : status || "";
   return (
     <View
       style={{
@@ -170,14 +159,14 @@ function StatusBadge({ status, c }) {
           textTransform: "uppercase",
         }}
       >
-        {meta.label}
+        {label}
       </AppText>
     </View>
   );
 }
 
-// ─── Ticket card (matches .ticketCard) ────────────────────────────────────
-function TicketCard({ ticket, onPress, c }) {
+// ─── Ticket card ──────────────────────────────────────────────────────────
+function TicketCard({ ticket, onPress, c, t }) {
   return (
     <Pressable
       onPress={onPress}
@@ -230,7 +219,7 @@ function TicketCard({ ticket, onPress, c }) {
           >
             {ticket.ticketNumber}
           </AppText>
-          <StatusBadge status={ticket.status} c={c} />
+          <StatusBadge status={ticket.status} c={c} t={t} />
         </View>
 
         <AppText
@@ -284,7 +273,7 @@ function TicketCard({ ticket, onPress, c }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Create Ticket Modal
 // ─────────────────────────────────────────────────────────────────────────────
-function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
+function CreateTicketModal({ visible, onClose, onCreated, c, toast, t }) {
   const [category, setCategory] = useState("TECHNICAL");
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
@@ -326,7 +315,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
       const next = [...files];
       for (const a of res.assets) {
         if (a.size && a.size > MAX_FILE_BYTES) {
-          toast.error(`${a.name} exceeds the 25 MB limit.`);
+          toast.error(t("support.hub.errors.fileTooLarge", { name: a.name }));
           continue;
         }
         next.push({
@@ -338,7 +327,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
       }
       setFiles(next);
     } catch {
-      toast.error("Could not open file picker.");
+      toast.error(t("support.hub.errors.pickFailed"));
     }
   };
 
@@ -349,18 +338,16 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
   const handleSubmit = async () => {
     setError("");
     if (!subject.trim() || subject.trim().length < 4) {
-      setError("Subject must be at least 4 characters.");
+      setError(t("support.hub.errors.subjectTooShort"));
       return;
     }
     if (!description.trim() || description.trim().length < 10) {
-      setError("Description must be at least 10 characters.");
+      setError(t("support.hub.errors.descriptionTooShort"));
       return;
     }
     setSubmitting(true);
 
     try {
-      // Website uses FormData with field names: category, subject, description,
-      // attachments (multiple).
       const form = new FormData();
       form.append("category", category);
       form.append("subject", subject.trim());
@@ -377,16 +364,19 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
       reset();
       onCreated();
       onClose();
-      toast.success("Ticket created.");
+      toast.success(t("support.hub.success.created"));
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to create ticket.");
+      setError(
+        err?.response?.data?.message || t("support.hub.errors.createFailed"),
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const selectedCategory =
-    CATEGORIES.find((cat) => cat.value === category)?.label ?? category;
+  const selectedCategoryLabel = t(`support.hub.categories.${category}`, {
+    defaultValue: category,
+  });
 
   if (!visible) return null;
 
@@ -412,7 +402,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
               weight="displayBlack"
               style={{ fontSize: 17, color: c.text }}
             >
-              Create Support Ticket
+              {t("support.hub.createTicketTitle")}
             </AppText>
             <Pressable onPress={handleClose} hitSlop={10}>
               <Ionicons name="close" size={20} color={c.textMuted} />
@@ -446,7 +436,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
               <AppText
                 style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
               >
-                Category
+                {t("support.hub.category")}
               </AppText>
               <Pressable
                 onPress={() => setShowCategoryPicker((v) => !v)}
@@ -456,7 +446,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
                 ]}
               >
                 <AppText style={{ color: c.text, fontSize: 13 }}>
-                  {selectedCategory}
+                  {selectedCategoryLabel}
                 </AppText>
                 <Ionicons
                   name={showCategoryPicker ? "chevron-up" : "chevron-down"}
@@ -471,7 +461,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
                     { backgroundColor: c.bgPanel, borderColor: c.border },
                   ]}
                 >
-                  {CATEGORIES.map((cat) => {
+                  {CATEGORY_KEYS.map((cat) => {
                     const active = cat.value === category;
                     return (
                       <Pressable
@@ -497,7 +487,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
                             fontWeight: active ? "600" : "400",
                           }}
                         >
-                          {cat.label}
+                          {t(`support.hub.categories.${cat.tKey}`)}
                         </AppText>
                         {active && (
                           <Ionicons
@@ -518,12 +508,12 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
               <AppText
                 style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
               >
-                Subject
+                {t("support.hub.subject")}
               </AppText>
               <TextInput
                 value={subject}
                 onChangeText={setSubject}
-                placeholder="Brief summary of the issue"
+                placeholder={t("support.hub.subjectPlaceholder")}
                 placeholderTextColor={c.textMuted}
                 maxLength={120}
                 style={[
@@ -542,12 +532,12 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
               <AppText
                 style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
               >
-                Description
+                {t("support.hub.description")}
               </AppText>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Please provide as much detail as possible..."
+                placeholder={t("support.hub.descriptionPlaceholder")}
                 placeholderTextColor={c.textMuted}
                 multiline
                 numberOfLines={5}
@@ -568,7 +558,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
               <AppText
                 style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
               >
-                Attachments (Images, PDFs, Videos)
+                {t("support.hub.attachments")}
               </AppText>
               <Pressable
                 onPress={pickFiles}
@@ -583,7 +573,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
                   color={c.textMuted}
                 />
                 <AppText style={{ fontSize: 12, color: c.textMuted }}>
-                  Tap to upload files
+                  {t("support.hub.uploadHint")}
                 </AppText>
               </Pressable>
               {files.length > 0 && (
@@ -624,7 +614,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
                 ]}
               >
                 <AppText style={{ color: c.text, fontWeight: "600" }}>
-                  Cancel
+                  {t("support.hub.cancel")}
                 </AppText>
               </Pressable>
               <Pressable
@@ -639,7 +629,7 @@ function CreateTicketModal({ visible, onClose, onCreated, c, toast }) {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <AppText style={{ color: "#fff", fontWeight: "600" }}>
-                    Submit Ticket
+                    {t("support.hub.submit")}
                   </AppText>
                 )}
               </Pressable>
@@ -670,7 +660,6 @@ export default function SupportHubScreen() {
   const loadTickets = useCallback(async () => {
     try {
       const data = await getMyTickets();
-      // Web does: res.data.tickets → data is already-unwrapped by api wrapper
       const list = data?.tickets ?? data?.data?.tickets ?? [];
       setTickets(Array.isArray(list) ? list : []);
     } catch {
@@ -712,14 +701,14 @@ export default function SupportHubScreen() {
             weight="displayBlack"
             style={{ fontSize: 15, color: c.text, lineHeight: 30 }}
           >
-            Support Hub
+            {t("support.hub.title")}
           </AppText>
           <AppText
             variant="small"
             tone="dim"
             style={{ marginTop: 4, lineHeight: 18, fontSize: 12 }}
           >
-            View your past tickets or open a new one for detailed issues.
+            {t("support.hub.subtitle")}
           </AppText>
         </View>
         <Pressable
@@ -728,7 +717,7 @@ export default function SupportHubScreen() {
         >
           <Ionicons name="add" size={16} color="#fff" />
           <AppText style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>
-            New Ticket
+            {t("support.hub.newTicket")}
           </AppText>
         </Pressable>
       </View>
@@ -757,15 +746,14 @@ export default function SupportHubScreen() {
             weight="semibold"
             style={{ fontSize: 16, color: c.text, marginTop: 4 }}
           >
-            No tickets yet
+            {t("support.hub.noTickets")}
           </AppText>
           <AppText
             variant="small"
             tone="dim"
             style={{ textAlign: "center", lineHeight: 20, marginTop: 4 }}
           >
-            Need help with something? Open a ticket and our team will get back
-            to you.
+            {t("support.hub.noTicketsSub")}
           </AppText>
         </View>
       ) : (
@@ -779,6 +767,7 @@ export default function SupportHubScreen() {
               ticket={item}
               onPress={() => openTicket(item.id)}
               c={c}
+              t={t}
             />
           )}
         />
@@ -791,6 +780,7 @@ export default function SupportHubScreen() {
         onCreated={loadTickets}
         c={c}
         toast={toast}
+        t={t}
       />
     </AppScreen>
   );
