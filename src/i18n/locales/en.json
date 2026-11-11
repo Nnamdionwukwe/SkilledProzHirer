@@ -4614,6 +4614,23 @@
       "pageOf": "{{page}} of {{pages}}"
     }
   },
+  "workerRetainedEmployers": {
+    "header": {
+      "title": "My Employers",
+      "subtitle": "Companies you are currently retained by"
+    },
+    "card": {
+      "payRate": "Pay Rate",
+      "lifetimeEarned": "Lifetime Earned"
+    },
+    "empty": {
+      "title": "No active employers",
+      "body": "You are not currently on any employer's payroll. When a hirer adds you to their retained staff, they will appear here."
+    },
+    "errorTitle": "Could not load employers",
+    "loadFailed": "Could not load your employers.",
+    "tryAgain": "Try again"
+  },
   "yearsExperience": "Years Experience",
   "booking.release.title": "Payment Fully Released",
   "booking.release.details": "Release Details",
