@@ -543,6 +543,122 @@
       "address": "Address"
     }
   },
+  "refundHistory": {
+    "header": {
+      "eyebrow": "Refunds",
+      "title": "Refund History",
+      "subtitle": "Every refund that has affected your earnings"
+    },
+    "summary": {
+      "lifetimeRefunds": "Lifetime Refunds",
+      "noRefunds": "No refunds on your account",
+      "acrossTransactions": "Across {{count}} transaction",
+      "acrossTransactions_plural": "Across {{count}} transactions",
+      "deductedFromEarnings": "Deducted From Earnings",
+      "deductedSub": "Total clawed back from completed jobs",
+      "outstandingBalance": "Outstanding Balance",
+      "outstandingSub": "Will be deducted from your next withdrawal",
+      "settledUp": "You're all settled up"
+    },
+    "filters": {
+      "statusLabel": "Status",
+      "typeLabel": "Type",
+      "all": "All"
+    },
+    "types": {
+      "ALL": "All types",
+      "FULL": "Full",
+      "PARTIAL": "Partial",
+      "CUSTOM_AMOUNT": "Custom",
+      "DISPUTE": "Dispute"
+    },
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "processing": "Processing",
+      "completed": "Completed",
+      "failed": "Failed",
+      "rejected": "Rejected",
+      "reversed": "Reversed",
+      "disputed": "Disputed"
+    },
+    "list": {
+      "loadFailed": "Could not load your refunds.",
+      "errorTitle": "Could not load refunds",
+      "tryAgain": "Try again"
+    },
+    "empty": {
+      "filteredTitle": "No refunds match these filters",
+      "filteredSub": "Try clearing the filters to see everything.",
+      "noneTitle": "No refunds on your account",
+      "noneSub": "When a booking is refunded to a hirer, it will appear here with full details."
+    },
+    "card": {
+      "booking": "Booking",
+      "noDeduction": "No deduction",
+      "deducted": "Deducted"
+    },
+    "pagination": {
+      "prev": "Prev",
+      "next": "Next",
+      "pageOf": "{{page}} of {{pages}}"
+    },
+    "detail": {
+      "back": "Back",
+      "title": "Refund Detail",
+      "notFoundTitle": "Refund not found",
+      "loadFailed": "Could not load this refund.",
+      "dash": "—",
+      "theBooking": "the booking",
+      "heroEyebrow": "Deducted from your earnings",
+      "noDeduction": "No deduction",
+      "noDeductionBody": "This refund did not affect your earnings.",
+      "deductionBody": "This refund resulted in {{amount}} being deducted from your account for booking \"{{booking}}\".",
+      "debtNoticeTitle": "Outstanding balance recorded",
+      "debtNoticeBodyPrefix": "Because you had already withdrawn this booking's earnings, this refund created a debt of",
+      "debtCleared": "It has since been fully recovered from your withdrawals.",
+      "debtForgiven": "This debt has since been forgiven by the platform.",
+      "debtOutstanding": "It will be deducted from your next withdrawal.",
+      "debtCollection": "It is currently being followed up by our team.",
+      "sections": {
+        "refundDetails": "Refund Details",
+        "booking": "Booking",
+        "dispute": "Dispute Context",
+        "hirer": "Hirer",
+        "outstandingBalance": "Outstanding Balance"
+      },
+      "rows": {
+        "reference": "Reference",
+        "status": "Status",
+        "type": "Type",
+        "percentage": "Percentage",
+        "totalRefunded": "Total refunded to hirer",
+        "platformFeeRefunded": "Platform fee refunded",
+        "deductedFromYou": "Deducted from you",
+        "reason": "Reason",
+        "initiated": "Initiated",
+        "processed": "Processed",
+        "title": "Title",
+        "category": "Category",
+        "location": "Location",
+        "scheduled": "Scheduled",
+        "completed": "Completed",
+        "agreedRate": "Agreed rate",
+        "raisedBy": "Raised by",
+        "description": "Description",
+        "resolution": "Resolution",
+        "resolvedBy": "Resolved by",
+        "resolvedAt": "Resolved at",
+        "name": "Name",
+        "email": "Email",
+        "originalAmount": "Original amount",
+        "recovered": "Recovered",
+        "forgiven": "Forgiven",
+        "clearedAt": "Cleared at",
+        "forgivenAt": "Forgiven at"
+      }
+    }
+  },
   "payment": {
     "options": {
       "labels": {
@@ -4747,7 +4863,6 @@
   "booking.emergency.update": "Update Contact",
   "booking.emergency.saving": "Saving...",
   "booking.emergency.saveFailed": "Save failed. Try again.",
-  "refundHistory": "Refund History",
   "auth.accountRecovery": "Account recovery",
   "auth.accountSuspended": "Account suspended",
   "auth.accountSuspendedBody": "Your account has been suspended by an administrator. Contact support if you believe this is a mistake.",

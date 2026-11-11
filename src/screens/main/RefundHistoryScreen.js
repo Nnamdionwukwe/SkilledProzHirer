@@ -127,24 +127,23 @@ const STATUS_TABS = [
   "REVERSED",
 ];
 const TYPE_TABS = ["ALL", "FULL", "PARTIAL", "CUSTOM_AMOUNT", "DISPUTE"];
-const TYPE_LABEL = {
-  ALL: "All types",
-  FULL: "Full",
-  PARTIAL: "Partial",
-  CUSTOM_AMOUNT: "Custom",
-  DISPUTE: "Dispute",
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ATOMS
 // ─────────────────────────────────────────────────────────────────────────────
 function StatusPill({ status }) {
+  const { t } = useTranslation();
   const s = String(status || "PENDING").toUpperCase();
   const meta = STATUS_META[s] || {
     label: s,
     color: "#9ca3af",
     bg: "rgba(156,163,175,0.12)",
   };
+  // Translate the label by lowercasing the canonical key
+  const labelKey = s.toLowerCase();
+  const translated = t(`refundHistory.status.${labelKey}`, {
+    defaultValue: meta.label,
+  });
   return (
     <View
       style={[
@@ -160,7 +159,7 @@ function StatusPill({ status }) {
           letterSpacing: 0.6,
         }}
       >
-        {meta.label.toUpperCase()}
+        {translated.toUpperCase()}
       </AppText>
     </View>
   );
@@ -226,6 +225,7 @@ function StatCard({ label, value, sub, accent, c }) {
 // DETAIL MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 function RefundDetailModal({ refundId, onClose, c, modalBg }) {
+  const { t } = useTranslation();
   const [refund, setRefund] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -238,10 +238,12 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
       .get(`/worker/refunds/${refundId}`)
       .then((res) => setRefund(res.data.data.refund))
       .catch((err) =>
-        setError(err?.response?.data?.message || "Could not load this refund."),
+        setError(
+          err?.response?.data?.message || t("refundHistory.detail.loadFailed"),
+        ),
       )
       .finally(() => setLoading(false));
-  }, [refundId]);
+  }, [refundId, t]);
 
   if (!refundId) return null;
 
@@ -290,11 +292,11 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
               <AppText
                 style={{ fontSize: 13, fontWeight: "600", color: c.text }}
               >
-                Back
+                {t("refundHistory.detail.back")}
               </AppText>
             </Pressable>
             <AppText style={{ fontSize: 14, fontWeight: "800", color: c.text }}>
-              Refund Detail
+              {t("refundHistory.detail.title")}
             </AppText>
             <View style={{ width: 40 }} />
           </View>
@@ -311,7 +313,7 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
               <AppText
                 style={{ fontSize: 15, fontWeight: "700", color: c.text }}
               >
-                Refund not found
+                {t("refundHistory.detail.notFoundTitle")}
               </AppText>
               <AppText
                 style={{ fontSize: 13, color: c.textDim, textAlign: "center" }}
@@ -357,7 +359,7 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
                     letterSpacing: 1.2,
                   }}
                 >
-                  DEDUCTED FROM YOUR EARNINGS
+                  {t("refundHistory.detail.heroEyebrow")}
                 </AppText>
                 <AppText
                   weight="displayBlack"
@@ -369,7 +371,7 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
                   }}
                 >
                   {deducted === 0
-                    ? "No deduction"
+                    ? t("refundHistory.detail.noDeduction")
                     : fmtMoney(deducted, currency)}
                 </AppText>
                 <AppText
@@ -381,8 +383,13 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
                   }}
                 >
                   {deducted === 0
-                    ? "This refund did not affect your earnings."
-                    : `This refund resulted in ${fmtMoney(deducted, currency)} being deducted from your account for booking "${refund.booking?.title || "the booking"}".`}
+                    ? t("refundHistory.detail.noDeductionBody")
+                    : t("refundHistory.detail.deductionBody", {
+                        amount: fmtMoney(deducted, currency),
+                        booking:
+                          refund.booking?.title ||
+                          t("refundHistory.detail.theBooking"),
+                      })}
                 </AppText>
                 <View
                   style={{
@@ -444,76 +451,91 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
                         color: "#facc15",
                       }}
                     >
-                      Outstanding balance recorded
+                      {t("refundHistory.detail.debtNoticeTitle")}
                     </AppText>
                   </View>
                   <AppText
                     style={{ fontSize: 10, color: c.textDim, lineHeight: 18 }}
                   >
-                    Because you had already withdrawn this booking's earnings,
-                    this refund created a debt of{" "}
+                    {t("refundHistory.detail.debtNoticeBodyPrefix")}{" "}
                     <AppText
                       style={{ fontWeight: "700", color: c.text, fontSize: 10 }}
                     >
                       {fmtMoney(wd.amount, wd.currency || currency)}
                     </AppText>
-                    .{" "}
+                    {". "}
                     {wd.status === "CLEARED" &&
-                      "It has since been fully recovered from your withdrawals."}
+                      t("refundHistory.detail.debtCleared")}
                     {wd.status === "FORGIVEN" &&
-                      "This debt has since been forgiven by the platform."}
+                      t("refundHistory.detail.debtForgiven")}
                     {wd.status === "OUTSTANDING" &&
-                      "It will be deducted from your next withdrawal."}
+                      t("refundHistory.detail.debtOutstanding")}
                     {wd.status === "COLLECTION" &&
-                      "It is currently being followed up by our team."}
+                      t("refundHistory.detail.debtCollection")}
                   </AppText>
                 </View>
               )}
 
-              <Section title="Refund Details" icon="information-circle" c={c}>
-                <Row label="Reference" value={refund.reference} mono c={c} />
+              <Section
+                title={t("refundHistory.detail.sections.refundDetails")}
+                icon="information-circle"
+                c={c}
+              >
                 <Row
-                  label="Status"
+                  label={t("refundHistory.detail.rows.reference")}
+                  value={refund.reference}
+                  mono
+                  c={c}
+                />
+                <Row
+                  label={t("refundHistory.detail.rows.status")}
                   value={<StatusPill status={refund.status} />}
                   c={c}
                 />
                 <Row
-                  label="Type"
-                  value={refund.refundType?.replace(/_/g, " ") || "—"}
+                  label={t("refundHistory.detail.rows.type")}
+                  value={
+                    refund.refundType?.replace(/_/g, " ") ||
+                    t("refundHistory.detail.dash")
+                  }
                   c={c}
                 />
                 {refund.percentage != null && (
                   <Row
-                    label="Percentage"
+                    label={t("refundHistory.detail.rows.percentage")}
                     value={`${Number(refund.percentage).toFixed(0)}%`}
                     c={c}
                   />
                 )}
                 <Row
-                  label="Total refunded to hirer"
+                  label={t("refundHistory.detail.rows.totalRefunded")}
                   value={fmtMoney(refund.amount, currency)}
                   c={c}
                 />
                 <Row
-                  label="Platform fee refunded"
+                  label={t("refundHistory.detail.rows.platformFeeRefunded")}
                   value={fmtMoney(refund.platformFeeRefunded || 0, currency)}
                   c={c}
                 />
                 <Row
-                  label="Deducted from you"
+                  label={t("refundHistory.detail.rows.deductedFromYou")}
                   value={fmtMoney(deducted, currency)}
                   valueColor={deducted > 0 ? c.red : c.textMuted}
                   c={c}
                 />
-                <Row label="Reason" value={refund.reason || "—"} c={c} />
                 <Row
-                  label="Initiated"
+                  label={t("refundHistory.detail.rows.reason")}
+                  value={refund.reason || t("refundHistory.detail.dash")}
+                  c={c}
+                />
+                <Row
+                  label={t("refundHistory.detail.rows.initiated")}
                   value={formatDateTime(refund.createdAt)}
                   c={c}
                 />
                 {refund.processedAt && (
                   <Row
-                    label="Processed"
+                    label={t("refundHistory.detail.rows.processed")}
                     value={formatDateTime(refund.processedAt)}
                     c={c}
                   />
@@ -521,39 +543,47 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
               </Section>
 
               {refund.booking && (
-                <Section title="Booking" icon="calendar" c={c}>
-                  <Row label="Title" value={refund.booking.title} c={c} />
+                <Section
+                  title={t("refundHistory.detail.sections.booking")}
+                  icon="calendar"
+                  c={c}
+                >
+                  <Row
+                    label={t("refundHistory.detail.rows.title")}
+                    value={refund.booking.title}
+                    c={c}
+                  />
                   {refund.booking.category && (
                     <Row
-                      label="Category"
+                      label={t("refundHistory.detail.rows.category")}
                       value={`${refund.booking.category.icon || ""} ${refund.booking.category.name}`}
                       c={c}
                     />
                   )}
                   {refund.booking.address && (
                     <Row
-                      label="Location"
+                      label={t("refundHistory.detail.rows.location")}
                       value={refund.booking.address}
                       c={c}
                     />
                   )}
                   {refund.booking.scheduledAt && (
                     <Row
-                      label="Scheduled"
+                      label={t("refundHistory.detail.rows.scheduled")}
                       value={formatDate(refund.booking.scheduledAt)}
                       c={c}
                     />
                   )}
                   {refund.booking.completedAt && (
                     <Row
-                      label="Completed"
+                      label={t("refundHistory.detail.rows.completed")}
                       value={formatDate(refund.booking.completedAt)}
                       c={c}
                     />
                   )}
                   {refund.booking.agreedRate != null && (
                     <Row
-                      label="Agreed rate"
+                      label={t("refundHistory.detail.rows.agreedRate")}
                       value={fmtMoney(
                         refund.booking.agreedRate,
                         refund.booking.currency || currency,
@@ -565,39 +595,50 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
               )}
 
               {refund.dispute && (
-                <Section title="Dispute Context" icon="chatbubbles" c={c}>
+                <Section
+                  title={t("refundHistory.detail.sections.dispute")}
+                  icon="chatbubbles"
+                  c={c}
+                >
                   <Row
-                    label="Raised by"
+                    label={t("refundHistory.detail.rows.raisedBy")}
                     value={
                       refund.dispute.raisedBy
                         ? `${refund.dispute.raisedBy.firstName} ${refund.dispute.raisedBy.lastName} (${refund.dispute.raisedBy.role})`
-                        : "—"
+                        : t("refundHistory.detail.dash")
                     }
                     c={c}
                   />
-                  <Row label="Reason" value={refund.dispute.reason} c={c} />
+                  <Row
+                    label={t("refundHistory.detail.rows.reason")}
+                    value={refund.dispute.reason}
+                    c={c}
+                  />
                   {refund.dispute.description && (
                     <Row
-                      label="Description"
+                      label={t("refundHistory.detail.rows.description")}
                       value={refund.dispute.description}
                       c={c}
                     />
                   )}
                   <Row
-                    label="Resolution"
-                    value={refund.dispute.resolution || "—"}
+                    label={t("refundHistory.detail.rows.resolution")}
+                    value={
+                      refund.dispute.resolution ||
+                      t("refundHistory.detail.dash")
+                    }
                     c={c}
                   />
                   {refund.dispute.resolvedBy && (
                     <Row
-                      label="Resolved by"
+                      label={t("refundHistory.detail.rows.resolvedBy")}
                       value={`${refund.dispute.resolvedBy.firstName} ${refund.dispute.resolvedBy.lastName}`}
                       c={c}
                     />
                   )}
                   {refund.dispute.resolvedAt && (
                     <Row
-                      label="Resolved at"
+                      label={t("refundHistory.detail.rows.resolvedAt")}
                       value={formatDateTime(refund.dispute.resolvedAt)}
                       c={c}
                     />
@@ -606,28 +647,44 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
               )}
 
               {refund.hirer && (
-                <Section title="Hirer" icon="person" c={c}>
+                <Section
+                  title={t("refundHistory.detail.sections.hirer")}
+                  icon="person"
+                  c={c}
+                >
                   <Row
-                    label="Name"
+                    label={t("refundHistory.detail.rows.name")}
                     value={`${refund.hirer.firstName} ${refund.hirer.lastName}`}
                     c={c}
                   />
                   {refund.hirer.email && (
-                    <Row label="Email" value={refund.hirer.email} c={c} />
+                    <Row
+                      label={t("refundHistory.detail.rows.email")}
+                      value={refund.hirer.email}
+                      c={c}
+                    />
                   )}
                 </Section>
               )}
 
               {wd && (
-                <Section title="Outstanding Balance" icon="document-text" c={c}>
-                  <Row label="Status" value={wd.status} c={c} />
+                <Section
+                  title={t("refundHistory.detail.sections.outstandingBalance")}
+                  icon="document-text"
+                  c={c}
+                >
                   <Row
-                    label="Original amount"
+                    label={t("refundHistory.detail.rows.status")}
+                    value={wd.status}
+                    c={c}
+                  />
+                  <Row
+                    label={t("refundHistory.detail.rows.originalAmount")}
                     value={fmtMoney(wd.amount, wd.currency || currency)}
                     c={c}
                   />
                   <Row
-                    label="Recovered"
+                    label={t("refundHistory.detail.rows.recovered")}
                     value={fmtMoney(
                       wd.amountPaid || 0,
                       wd.currency || currency,
@@ -635,7 +692,7 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
                     c={c}
                   />
                   <Row
-                    label="Forgiven"
+                    label={t("refundHistory.detail.rows.forgiven")}
                     value={fmtMoney(
                       wd.amountForgiven || 0,
                       wd.currency || currency,
@@ -644,14 +701,14 @@ function RefundDetailModal({ refundId, onClose, c, modalBg }) {
                   />
                   {wd.clearedAt && (
                     <Row
-                      label="Cleared at"
+                      label={t("refundHistory.detail.rows.clearedAt")}
                       value={formatDateTime(wd.clearedAt)}
                       c={c}
                     />
                   )}
                   {wd.forgivenAt && (
                     <Row
-                      label="Forgiven at"
+                      label={t("refundHistory.detail.rows.forgivenAt")}
                       value={formatDateTime(wd.forgivenAt)}
                       c={c}
                     />
@@ -783,12 +840,14 @@ export default function RefundHistoryScreen() {
       setRefunds(res.data.data?.refunds || []);
       setTotal(res.data.data?.total || 0);
     } catch (err) {
-      setError(err?.response?.data?.message || "Could not load your refunds.");
+      setError(
+        err?.response?.data?.message || t("refundHistory.list.loadFailed"),
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [page, status, refundType]);
+  }, [page, status, refundType, t]);
 
   useEffect(() => {
     fetchSummary();
@@ -840,7 +899,7 @@ export default function RefundHistoryScreen() {
               letterSpacing: 1,
             }}
           >
-            REFUNDS
+            {t("refundHistory.header.eyebrow")}
           </AppText>
           <AppText
             weight="displayBlack"
@@ -851,10 +910,10 @@ export default function RefundHistoryScreen() {
               marginTop: 2,
             }}
           >
-            Refund History
+            {t("refundHistory.header.title")}
           </AppText>
           <AppText style={{ fontSize: 12, color: c.textDim, marginTop: 2 }}>
-            Every refund that has affected your earnings
+            {t("refundHistory.header.subtitle")}
           </AppText>
         </View>
         <Pressable
@@ -881,39 +940,41 @@ export default function RefundHistoryScreen() {
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <View style={{ width: "48%" }}>
             <StatCard
-              label="Lifetime Refunds"
+              label={t("refundHistory.summary.lifetimeRefunds")}
               value={String(summary.lifetimeRefunds ?? 0)}
               sub={
                 (summary.lifetimeRefunds ?? 0) === 0
-                  ? "No refunds on your account"
-                  : `Across ${summary.lifetimeRefunds} transaction${summary.lifetimeRefunds === 1 ? "" : "s"}`
+                  ? t("refundHistory.summary.noRefunds")
+                  : t("refundHistory.summary.acrossTransactions", {
+                      count: summary.lifetimeRefunds,
+                    })
               }
               c={c}
             />
           </View>
           <View style={{ width: "48%" }}>
             <StatCard
-              label="Deducted From Earnings"
+              label={t("refundHistory.summary.deductedFromEarnings")}
               value={fmtMoney(
                 summary.lifetimeDeductedFromEarnings ?? 0,
                 summary.primaryCurrency || "NGN",
               )}
-              sub="Total clawed back from completed jobs"
+              sub={t("refundHistory.summary.deductedSub")}
               accent="red"
               c={c}
             />
           </View>
           <View style={{ width: "100%" }}>
             <StatCard
-              label="Outstanding Balance"
+              label={t("refundHistory.summary.outstandingBalance")}
               value={fmtMoney(
                 summary.debtBalance ?? 0,
                 summary.primaryCurrency || "NGN",
               )}
               sub={
                 (summary.debtBalance ?? 0) > 0
-                  ? "Will be deducted from your next withdrawal"
-                  : "You're all settled up"
+                  ? t("refundHistory.summary.outstandingSub")
+                  : t("refundHistory.summary.settledUp")
               }
               accent={(summary.debtBalance ?? 0) > 0 ? "red" : "green"}
               c={c}
@@ -933,7 +994,7 @@ export default function RefundHistoryScreen() {
             marginBottom: 8,
           }}
         >
-          STATUS
+          {t("refundHistory.filters.statusLabel")}
         </AppText>
         <ScrollView
           horizontal
@@ -965,7 +1026,9 @@ export default function RefundHistoryScreen() {
                     color: active ? c.orange : c.textDim,
                   }}
                 >
-                  {s === "ALL" ? "All" : s.charAt(0) + s.slice(1).toLowerCase()}
+                  {s === "ALL"
+                    ? t("refundHistory.filters.all")
+                    : t(`refundHistory.status.${s.toLowerCase()}`)}
                 </AppText>
               </Pressable>
             );
@@ -984,7 +1047,7 @@ export default function RefundHistoryScreen() {
             marginBottom: 8,
           }}
         >
-          TYPE
+          {t("refundHistory.filters.typeLabel")}
         </AppText>
         <ScrollView
           horizontal
@@ -1016,7 +1079,7 @@ export default function RefundHistoryScreen() {
                     color: active ? c.orange : c.textDim,
                   }}
                 >
-                  {TYPE_LABEL[tp]}
+                  {t(`refundHistory.types.${tp}`)}
                 </AppText>
               </Pressable>
             );
@@ -1045,7 +1108,7 @@ export default function RefundHistoryScreen() {
         >
           <Ionicons name="warning" size={36} color={c.red} />
           <AppText style={{ fontSize: 14, fontWeight: "700", color: c.text }}>
-            Could not load refunds
+            {t("refundHistory.list.errorTitle")}
           </AppText>
           <AppText
             style={{ fontSize: 12, color: c.textDim, textAlign: "center" }}
@@ -1065,7 +1128,7 @@ export default function RefundHistoryScreen() {
             }}
           >
             <AppText style={{ fontSize: 12, fontWeight: "600", color: c.text }}>
-              Try again
+              {t("refundHistory.list.tryAgain")}
             </AppText>
           </Pressable>
         </View>
@@ -1103,8 +1166,8 @@ export default function RefundHistoryScreen() {
             }}
           >
             {status !== "ALL" || refundType !== "ALL"
-              ? "No refunds match these filters"
-              : "No refunds on your account"}
+              ? t("refundHistory.empty.filteredTitle")
+              : t("refundHistory.empty.noneTitle")}
           </AppText>
           <AppText
             style={{
@@ -1115,8 +1178,8 @@ export default function RefundHistoryScreen() {
             }}
           >
             {status !== "ALL" || refundType !== "ALL"
-              ? "Try clearing the filters to see everything."
-              : "When a booking is refunded to a hirer, it will appear here with full details."}
+              ? t("refundHistory.empty.filteredSub")
+              : t("refundHistory.empty.noneSub")}
           </AppText>
         </View>
       ) : (
@@ -1165,7 +1228,7 @@ export default function RefundHistoryScreen() {
                       style={{ fontSize: 13, fontWeight: "700", color: c.text }}
                       numberOfLines={1}
                     >
-                      {r.booking?.title || "Booking"}
+                      {r.booking?.title || t("refundHistory.card.booking")}
                     </AppText>
                     <View
                       style={{
@@ -1224,7 +1287,9 @@ export default function RefundHistoryScreen() {
                         marginTop: 2,
                       }}
                     >
-                      {deducted === 0 ? "NO DEDUCTION" : "DEDUCTED"}
+                      {deducted === 0
+                        ? t("refundHistory.card.noDeduction")
+                        : t("refundHistory.card.deducted")}
                     </AppText>
                   </View>
                 </Pressable>
@@ -1269,11 +1334,11 @@ export default function RefundHistoryScreen() {
                     color: page === 1 ? c.textMuted : c.orange,
                   }}
                 >
-                  Prev
+                  {t("refundHistory.pagination.prev")}
                 </AppText>
               </Pressable>
               <AppText style={{ fontSize: 12, color: c.textDim }}>
-                {page} of {pages}
+                {t("refundHistory.pagination.pageOf", { page, pages })}
               </AppText>
               <Pressable
                 disabled={page === pages}
@@ -1297,7 +1362,7 @@ export default function RefundHistoryScreen() {
                     color: page === pages ? c.textMuted : c.orange,
                   }}
                 >
-                  Next
+                  {t("refundHistory.pagination.next")}
                 </AppText>
                 <Ionicons
                   name="chevron-forward"
