@@ -1055,7 +1055,7 @@ const s = StyleSheet.create({
     color: "#9ca3af",
   },
   priceAmount: {
-    fontSize: 28,
+    fontSize: 20,
     letterSpacing: -0.6,
   },
   pricePer: {

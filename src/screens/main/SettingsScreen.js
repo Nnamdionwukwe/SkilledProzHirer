@@ -738,11 +738,12 @@ export default function SettingsScreen() {
         {/* Header */}
         <View style={{ marginBottom: 16 }}>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: "Syne_800ExtraBold",
-              fontSize: 24,
-              fontWeight: "800",
+              fontSize: 15,
               color: c.text,
+              letterSpacing: -0.5,
+              marginBottom: 4,
             }}
           >
             {t("settings.title")}
