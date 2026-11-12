@@ -5,6 +5,7 @@
 // DateTimePicker dialogs via onOpenDatePicker / onOpenTimePicker.
 
 import { Pressable, TextInput, View } from "react-native";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -25,55 +26,114 @@ import {
 } from "../../icons/fa";
 
 const JOB_TYPES = [
-  { value: "FULL_TIME", label: "Full-time", Icon: FaBriefcase },
-  { value: "PART_TIME", label: "Part-time", Icon: FaClock },
-  { value: "CONTRACT", label: "Contract", Icon: FaFileText },
-  { value: "TEMPORARY", label: "Temporary", Icon: FaHourglassHalf },
+  {
+    value: "FULL_TIME",
+    label: "createBooking.jobType.fullTime",
+    Icon: FaBriefcase,
+  },
+  {
+    value: "PART_TIME",
+    label: "createBooking.jobType.partTime",
+    Icon: FaClock,
+  },
+  {
+    value: "CONTRACT",
+    label: "createBooking.jobType.contract",
+    Icon: FaFileText,
+  },
+  {
+    value: "TEMPORARY",
+    label: "createBooking.jobType.temporary",
+    Icon: FaHourglassHalf,
+  },
 ];
 
 const LOCATION_TYPES = [
-  { value: "REMOTE", label: "Remote", Icon: FaGlobe },
-  { value: "ON_SITE", label: "On-site", Icon: FaMapPin },
-  { value: "HYBRID", label: "Hybrid", Icon: FaRightLeft },
+  {
+    value: "REMOTE",
+    label: "createBooking.locationType.remote",
+    Icon: FaGlobe,
+  },
+  {
+    value: "ON_SITE",
+    label: "createBooking.locationType.onSite",
+    Icon: FaMapPin,
+  },
+  {
+    value: "HYBRID",
+    label: "createBooking.locationType.hybrid",
+    Icon: FaRightLeft,
+  },
 ];
 
 const BUDGET_TYPES = [
   {
     value: "FIXED",
-    label: "Fixed Price",
-    sub: "Pay a set total",
+    label: "createBooking.paymentType.fixed",
+    sub: "createBooking.paymentType.fixedSub",
     Icon: FaDollarSign,
   },
-  { value: "HOURLY", label: "Per Hour", sub: "Billed hourly", Icon: FaClock },
-  { value: "DAILY", label: "Per Day", sub: "Billed daily", Icon: FaSun },
+  {
+    value: "HOURLY",
+    label: "createBooking.paymentType.hourly",
+    sub: "createBooking.paymentType.hourlySub",
+    Icon: FaClock,
+  },
+  {
+    value: "DAILY",
+    label: "createBooking.paymentType.daily",
+    sub: "createBooking.paymentType.dailySub",
+    Icon: FaSun,
+  },
   {
     value: "WEEKLY",
-    label: "Per Week",
-    sub: "Billed weekly",
+    label: "createBooking.paymentType.weekly",
+    sub: "createBooking.paymentType.weeklySub",
     Icon: FaCalendarAlt,
   },
   {
     value: "MONTHLY",
-    label: "Per Month",
-    sub: "Billed monthly",
+    label: "createBooking.paymentType.monthly",
+    sub: "createBooking.paymentType.monthlySub",
     Icon: FaCalendarAlt,
   },
   {
     value: "YEARLY",
-    label: "Per Year",
-    sub: "Billed yearly",
+    label: "createBooking.paymentType.yearly",
+    sub: "createBooking.paymentType.yearlySub",
     Icon: FaCalendarAlt,
   },
-  { value: "CUSTOM", label: "Custom", sub: "Define your own", Icon: FaPencil },
+  {
+    value: "CUSTOM",
+    label: "createBooking.paymentType.custom",
+    sub: "createBooking.paymentType.customSub",
+    Icon: FaPencil,
+  },
 ];
 
 const DURATION_TYPES_LIST = [
-  { value: "HOURS", label: "Hours", Icon: FaClock },
-  { value: "DAYS", label: "Days", Icon: FaSun },
-  { value: "WEEKS", label: "Weeks", Icon: FaCalendarAlt },
-  { value: "MONTHS", label: "Months", Icon: FaCalendarAlt },
-  { value: "YEARLY", label: "Yearly", Icon: FaCalendarAlt },
-  { value: "CUSTOM", label: "Custom", Icon: FaPencil },
+  { value: "HOURS", label: "createBooking.durationUnit.hours", Icon: FaClock },
+  { value: "DAYS", label: "createBooking.durationUnit.days", Icon: FaSun },
+  {
+    value: "WEEKS",
+    label: "createBooking.durationUnit.weeks",
+    Icon: FaCalendarAlt,
+  },
+  {
+    value: "MONTHS",
+    label: "createBooking.durationUnit.months",
+    Icon: FaCalendarAlt,
+  },
+  {
+    value: "YEARLY",
+    label: "createBooking.durationUnit.years",
+    Icon: FaCalendarAlt,
+  },
+  {
+    value: "CUSTOM",
+    label: "createBooking.durationUnit.custom",
+    Icon: FaPencil,
+  },
 ];
 
 const UNIT_TO_TYPES = {
@@ -104,6 +164,7 @@ export default function BookingFormFields({
   onOpenDatePicker,
   onOpenTimePicker,
 }) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const c = theme.colors;
 
@@ -124,7 +185,9 @@ export default function BookingFormFields({
         <>
           {/* Job Type */}
           <View style={fieldset(c)}>
-            <AppText style={legend(c)}>JOB TYPE</AppText>
+            <AppText style={legend(c)}>
+              {t("createBooking.section.jobType")}
+            </AppText>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {JOB_TYPES.map((jt) => {
                 const Icon = jt.Icon;
@@ -159,7 +222,7 @@ export default function BookingFormFields({
                         color: active ? c.orange : c.textDim,
                       }}
                     >
-                      {jt.label}
+                      {t(jt.label)}
                     </AppText>
                   </Pressable>
                 );
@@ -169,7 +232,9 @@ export default function BookingFormFields({
 
           {/* Location Type */}
           <View style={fieldset(c)}>
-            <AppText style={legend(c)}>LOCATION TYPE</AppText>
+            <AppText style={legend(c)}>
+              {t("createBooking.section.locationType")}
+            </AppText>
             <View style={{ flexDirection: "row", gap: 8 }}>
               {LOCATION_TYPES.map((lt) => {
                 const Icon = lt.Icon;
@@ -203,7 +268,7 @@ export default function BookingFormFields({
                         color: active ? c.orange : c.textDim,
                       }}
                     >
-                      {lt.label}
+                      {t(lt.label)}
                     </AppText>
                   </Pressable>
                 );
@@ -216,7 +281,9 @@ export default function BookingFormFields({
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
             >
-              <AppText style={legend(c)}>PAYMENT TYPE</AppText>
+              <AppText style={legend(c)}>
+                {t("createBooking.section.paymentType")}
+              </AppText>
               {isLocked || isNegotiatedLocked ? (
                 <View
                   style={{
@@ -233,7 +300,7 @@ export default function BookingFormFields({
                 >
                   <FaLock size={10} color={c.textMuted} />
                   <AppText style={{ fontSize: 9, color: c.textMuted }}>
-                    Locked
+                    {t("createBooking.lockedBadge")}
                   </AppText>
                 </View>
               ) : null}
@@ -301,10 +368,10 @@ export default function BookingFormFields({
                           color: active ? c.orange : c.text,
                         }}
                       >
-                        {bt.label}
+                        {t(bt.label)}
                       </AppText>
                       <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                        {bt.sub}
+                        {t(bt.sub)}
                       </AppText>
                     </View>
                     {active ? (
@@ -322,7 +389,7 @@ export default function BookingFormFields({
               >
                 <FaLock size={11} color={c.textMuted} />
                 <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                  Payment type is locked to match the worker's selected rate.
+                  {t("createBooking.paymentLockedRateHint")}
                 </AppText>
               </View>
             ) : null}
@@ -332,8 +399,7 @@ export default function BookingFormFields({
               >
                 <FaLock size={11} color={c.textMuted} />
                 <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                  Payment type is locked to "Fixed Price" for negotiated
-                  bookings.
+                  {t("createBooking.paymentLockedNegotiatedHint")}
                 </AppText>
               </View>
             ) : null}
@@ -344,7 +410,9 @@ export default function BookingFormFields({
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
             >
-              <AppText style={legend(c)}>JOB DURATION</AppText>
+              <AppText style={legend(c)}>
+                {t("createBooking.section.jobDuration")}
+              </AppText>
               {isLocked || isNegotiatedLocked ? (
                 <View
                   style={{
@@ -361,7 +429,7 @@ export default function BookingFormFields({
                 >
                   <FaLock size={10} color={c.textMuted} />
                   <AppText style={{ fontSize: 9, color: c.textMuted }}>
-                    Locked
+                    {t("createBooking.lockedBadge")}
                   </AppText>
                 </View>
               ) : null}
@@ -429,7 +497,7 @@ export default function BookingFormFields({
                         color: active ? c.orange : c.text,
                       }}
                     >
-                      {dt.label}
+                      {t(dt.label)}
                     </AppText>
                     {active ? (
                       <FaCheck size={16} color={c.orange} />
@@ -444,10 +512,14 @@ export default function BookingFormFields({
 
           {/* Category */}
           <View style={fieldset(c)}>
-            <AppText style={legend(c)}>CATEGORY</AppText>
-            <AppText style={label(c)}>Service Category</AppText>
+            <AppText style={legend(c)}>
+              {t("createBooking.section.category")}
+            </AppText>
+            <AppText style={label(c)}>
+              {t("createBooking.field.serviceCategory")}
+            </AppText>
             <AppText style={{ fontSize: 11, color: c.textMuted }}>
-              Auto-filled from the worker's registered categories.
+              {t("createBooking.categoryHint")}
             </AppText>
             {worker.categories?.length === 1 ? (
               <View
@@ -483,7 +555,7 @@ export default function BookingFormFields({
                 >
                   <FaLock size={10} color={c.textMuted} />
                   <AppText style={{ fontSize: 10, color: c.textMuted }}>
-                    Locked
+                    {t("createBooking.lockedBadge")}
                   </AppText>
                 </View>
               </View>
@@ -514,11 +586,11 @@ export default function BookingFormFields({
                       ? `${found.category.icon || ""} ${
                           found.category.name || ""
                         }`.trim()
-                      : "Select category";
+                      : t("createBooking.selectCategory");
                   })()}
                 </AppText>
                 <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                  Tap to change
+                  {t("createBooking.tapToChange")}
                 </AppText>
               </Pressable>
             )}
@@ -528,16 +600,19 @@ export default function BookingFormFields({
 
       {/* Job Information */}
       <View style={fieldset(c)}>
-        <AppText style={legend(c)}>JOB INFORMATION</AppText>
+        <AppText style={legend(c)}>
+          {t("createBooking.section.jobInformation")}
+        </AppText>
 
         <View style={{ gap: 6 }}>
           <AppText style={label(c)}>
-            Job Title <AppText style={{ color: c.orange }}>*</AppText>
+            {t("createBooking.field.jobTitle")}{" "}
+            <AppText style={{ color: c.orange }}>*</AppText>
           </AppText>
           <TextInput
             value={form.title}
             onChangeText={(t) => set("title", t)}
-            placeholder="e.g. Fix leaking kitchen pipe"
+            placeholder={t("createBooking.field.jobTitlePlaceholder")}
             placeholderTextColor={c.textMuted}
             maxLength={120}
             style={input(c)}
@@ -546,12 +621,13 @@ export default function BookingFormFields({
 
         <View style={{ gap: 6 }}>
           <AppText style={label(c)}>
-            Description <AppText style={{ color: c.orange }}>*</AppText>
+            {t("createBooking.field.description")}{" "}
+            <AppText style={{ color: c.orange }}>*</AppText>
           </AppText>
           <TextInput
             value={form.description}
             onChangeText={(t) => set("description", t)}
-            placeholder="Describe exactly what needs to be done..."
+            placeholder={t("createBooking.field.descriptionPlaceholder")}
             placeholderTextColor={c.textMuted}
             multiline
             numberOfLines={4}
@@ -560,11 +636,13 @@ export default function BookingFormFields({
         </View>
 
         <View style={{ gap: 6 }}>
-          <AppText style={label(c)}>Requirements (optional)</AppText>
+          <AppText style={label(c)}>
+            {t("createBooking.field.requirements")}
+          </AppText>
           <TextInput
             value={form.requirements}
             onChangeText={(t) => set("requirements", t)}
-            placeholder="e.g. Must have 3+ years of React experience"
+            placeholder={t("createBooking.field.requirementsPlaceholder")}
             placeholderTextColor={c.textMuted}
             multiline
             numberOfLines={2}
@@ -573,11 +651,13 @@ export default function BookingFormFields({
         </View>
 
         <View style={{ gap: 6 }}>
-          <AppText style={label(c)}>Responsibilities (optional)</AppText>
+          <AppText style={label(c)}>
+            {t("createBooking.field.responsibilities")}
+          </AppText>
           <TextInput
             value={form.responsibilities}
             onChangeText={(t) => set("responsibilities", t)}
-            placeholder="e.g. Design UI mockups, conduct user tests"
+            placeholder={t("createBooking.field.responsibilitiesPlaceholder")}
             placeholderTextColor={c.textMuted}
             multiline
             numberOfLines={2}
@@ -588,12 +668,13 @@ export default function BookingFormFields({
         {locationType !== "REMOTE" ? (
           <View style={{ gap: 6 }}>
             <AppText style={label(c)}>
-              Service Address <AppText style={{ color: c.orange }}>*</AppText>
+              {t("createBooking.field.serviceAddress")}{" "}
+              <AppText style={{ color: c.orange }}>*</AppText>
             </AppText>
             <TextInput
               value={form.address}
               onChangeText={(t) => set("address", t)}
-              placeholder="Full address where the job will take place"
+              placeholder={t("createBooking.field.addressPlaceholder")}
               placeholderTextColor={c.textMuted}
               style={input(c)}
             />
@@ -601,11 +682,13 @@ export default function BookingFormFields({
         ) : null}
 
         <View style={{ gap: 6 }}>
-          <AppText style={label(c)}>Additional Notes</AppText>
+          <AppText style={label(c)}>
+            {t("createBooking.field.additionalNotes")}
+          </AppText>
           <TextInput
             value={form.notes}
             onChangeText={(t) => set("notes", t)}
-            placeholder="Access instructions, parking, tools to bring..."
+            placeholder={t("createBooking.field.notesPlaceholder")}
             placeholderTextColor={c.textMuted}
             multiline
             numberOfLines={2}
@@ -616,10 +699,13 @@ export default function BookingFormFields({
 
       {/* Schedule */}
       <View style={fieldset(c)}>
-        <AppText style={legend(c)}>SCHEDULE</AppText>
+        <AppText style={legend(c)}>
+          {t("createBooking.section.schedule")}
+        </AppText>
         <View style={{ gap: 6 }}>
           <AppText style={label(c)}>
-            Date & Time <AppText style={{ color: c.orange }}>*</AppText>
+            {t("createBooking.field.dateTime")}{" "}
+            <AppText style={{ color: c.orange }}>*</AppText>
           </AppText>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable
@@ -648,7 +734,7 @@ export default function BookingFormFields({
                       month: "short",
                       year: "numeric",
                     })
-                  : "Select date"}
+                  : t("createBooking.field.selectDate")}
               </AppText>
             </Pressable>
             <Pressable
@@ -676,12 +762,14 @@ export default function BookingFormFields({
                       hour: "2-digit",
                       minute: "2-digit",
                     })
-                  : "Select time"}
+                  : t("createBooking.field.selectTime")}
               </AppText>
             </Pressable>
           </View>
           <AppText style={{ fontSize: 11, color: c.textMuted }}>
-            Min: {minDate.replace("T", " ")}
+            {t("createBooking.field.minDatePrefix", {
+              date: minDate.replace("T", " "),
+            })}
           </AppText>
         </View>
       </View>

@@ -21,6 +21,7 @@ import {
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../components/AppText";
 import Skeleton from "../../components/Skeleton";
@@ -41,55 +42,55 @@ import {
 const DURATION_OPTIONS = [
   {
     unit: "hours",
-    label: "Hourly",
+    label: "createBooking.durationLabel.hourly",
     rateKey: "hourlyRate",
     suffix: "/hr",
-    inputLabel: "Hours",
+    inputLabel: "createBooking.durationUnit.hours",
     inputType: "number",
     step: 0.5,
   },
   {
     unit: "days",
-    label: "Daily",
+    label: "createBooking.durationLabel.daily",
     rateKey: "dailyRate",
     suffix: "/day",
-    inputLabel: "Days",
+    inputLabel: "createBooking.durationUnit.days",
     inputType: "number",
     step: 1,
   },
   {
     unit: "weeks",
-    label: "Weekly",
+    label: "createBooking.durationLabel.weekly",
     rateKey: "weeklyRate",
     suffix: "/wk",
-    inputLabel: "Weeks",
+    inputLabel: "createBooking.durationUnit.weeks",
     inputType: "number",
     step: 1,
   },
   {
     unit: "months",
-    label: "Monthly",
+    label: "createBooking.durationLabel.monthly",
     rateKey: "monthlyRate",
     suffix: "/mo",
-    inputLabel: "Months",
+    inputLabel: "createBooking.durationUnit.months",
     inputType: "number",
     step: 1,
   },
   {
     unit: "years",
-    label: "Yearly",
+    label: "createBooking.durationLabel.yearly",
     rateKey: "yearlyRate",
     suffix: "/yr",
-    inputLabel: "Years",
+    inputLabel: "createBooking.durationUnit.years",
     inputType: "number",
     step: 1,
   },
   {
     unit: "custom",
-    label: "Custom",
+    label: "createBooking.durationLabel.custom",
     rateKey: "customRate",
     suffix: "",
-    inputLabel: "Description",
+    inputLabel: "createBooking.durationUnit.description",
     inputType: "text",
     step: null,
   },
@@ -113,6 +114,7 @@ function computeFees(agreedRate, qty = 1, currency = "NGN") {
 }
 
 export default function CreateBookingScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
   const { theme } = useTheme();
@@ -151,6 +153,23 @@ export default function CreateBookingScreen() {
     customLabel: "",
     quantity: 1,
   });
+
+  // ── Sync incoming route.params.workerId into form.workerId ──────
+  // `useState` seeds form.workerId only once, on first mount. When
+  // Navigation reuses the existing CreateBooking route entry (e.g. the
+  // user books a different worker from BrowseWorkers without going
+  // through the worker's public profile first), `route.params.workerId`
+  // changes but `form.workerId` does not — so `setWorker` stays `null`
+  // and the worker details never load. This effect keeps them in sync
+  // on every re-entry.
+  useEffect(() => {
+    const incoming = (route.params?.workerId || "").trim();
+    if (!incoming) return;
+    setForm((prev) =>
+      prev.workerId === incoming ? prev : { ...prev, workerId: incoming },
+    );
+  }, [route.params?.workerId]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
@@ -200,7 +219,7 @@ export default function CreateBookingScreen() {
           setForm((f) => ({ ...f, categoryId: primaryCat.category.id }));
       })
       .catch(() => {
-        setWorkerError("Worker not found. Check the ID and try again.");
+        setWorkerError(t("createBooking.errors.workerNotFound"));
       })
       .finally(() => setWorkerLoading(false));
   }, [form.workerId]);
@@ -313,7 +332,7 @@ export default function CreateBookingScreen() {
 
   const handleSubmit = async () => {
     if (!worker) {
-      setError("Please enter a valid Worker ID first.");
+      setError(t("createBooking.errors.workerRequired"));
       return;
     }
     const required = [
@@ -327,17 +346,22 @@ export default function CreateBookingScreen() {
     for (const k of required) {
       if (!form[k]) {
         setError(
-          `Please fill in: ${k.replace(/([A-Z])/g, " $1").toLowerCase()}`,
+          t("createBooking.errors.fillRequiredField", {
+            field: t(
+              `createBooking.fieldLabels.${k}`,
+              k.replace(/([A-Z])/g, " $1").toLowerCase(),
+            ),
+          }),
         );
         return;
       }
     }
     if (lockedRate <= 0 && currentOption?.unit !== "custom" && !isNegotiated) {
-      setError("This worker has not set a rate for the selected duration.");
+      setError(t("createBooking.errors.noRateForDuration"));
       return;
     }
     if (isNegotiated && !negotiatedRate) {
-      setError("Please enter the agreed total amount.");
+      setError(t("createBooking.errors.negotiatedRequired"));
       return;
     }
 
@@ -413,8 +437,7 @@ export default function CreateBookingScreen() {
       navigation.navigate("BookingDetail", { bookingId: booking.id });
     } catch (e) {
       setError(
-        e.response?.data?.message ||
-          "Failed to create booking. Please try again.",
+        e.response?.data?.message || t("createBooking.errors.submitFailed"),
       );
     } finally {
       setLoading(false);
@@ -447,12 +470,12 @@ export default function CreateBookingScreen() {
               textAlign: "center",
             }}
           >
-            Only Hirers Can Post Jobs
+            {t("createBooking.restricted.title")}
           </AppText>
           <AppText
             style={{ fontSize: 13, color: c.textDim, textAlign: "center" }}
           >
-            Workers can accept and complete jobs, but only Hirers can post them.
+            {t("createBooking.restricted.body")}
           </AppText>
           <Pressable
             onPress={handleBack}
@@ -475,7 +498,7 @@ export default function CreateBookingScreen() {
                 color: "#000",
               }}
             >
-              Back to Bookings
+              {t("createBooking.restricted.backToBookings")}
             </AppText>
           </Pressable>
         </View>
@@ -518,7 +541,7 @@ export default function CreateBookingScreen() {
             <AppText
               style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
             >
-              Back to Bookings
+              {t("createBooking.backToBookings")}
             </AppText>
           </Pressable>
 
@@ -535,18 +558,17 @@ export default function CreateBookingScreen() {
                 marginBottom: 4,
               }}
             >
-              New Job
+              {t("createBooking.eyebrow")}
             </AppText>
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: "Syne_800ExtraBold",
-                fontSize: 24,
-                fontWeight: "800",
-                color: c.text,
-                letterSpacing: -0.3,
+                fontSize: 15,
+                letterSpacing: -0.5,
+                marginBottom: 4,
               }}
             >
-              Create Booking
+              {t("createBooking.title")}
             </AppText>
             <AppText
               style={{
@@ -556,7 +578,7 @@ export default function CreateBookingScreen() {
                 lineHeight: 18,
               }}
             >
-              Fill in the details and the worker will be notified immediately.
+              {t("createBooking.subtitle")}
             </AppText>
           </View>
 
@@ -656,7 +678,7 @@ export default function CreateBookingScreen() {
                     color: "#000",
                   }}
                 >
-                  Creating booking…
+                  {t("createBooking.creating")}
                 </AppText>
               </>
             ) : (
@@ -682,7 +704,7 @@ export default function CreateBookingScreen() {
                     color: "#000",
                   }}
                 >
-                  Create Booking
+                  {t("createBooking.submit")}
                 </AppText>
               </>
             )}
@@ -697,8 +719,7 @@ export default function CreateBookingScreen() {
               paddingHorizontal: 8,
             }}
           >
-            The worker will be notified immediately. Payment is only charged
-            after the worker accepts and you approve it.
+            {t("createBooking.disclaimer")}
           </AppText>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -764,7 +785,9 @@ export default function CreateBookingScreen() {
                       }}
                     >
                       {`${wc.category.icon || ""} ${wc.category.name || ""}${
-                        wc.isPrimary ? " (Primary)" : ""
+                        wc.isPrimary
+                          ? ` ${t("createBooking.primaryBadge")}`
+                          : ""
                       }`.trim()}
                     </AppText>
                     {active ? <FaCheck size={14} color={c.orange} /> : null}

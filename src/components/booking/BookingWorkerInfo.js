@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { Image, Pressable, TextInput, View } from "react-native";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../AppText";
 import Skeleton from "../Skeleton";
@@ -41,45 +42,45 @@ function formatPrice(amount, currency = "NGN") {
 const DURATION_OPTIONS = [
   {
     unit: "hours",
-    label: "Hourly",
+    label: "createBooking.durationLabel.hourly",
     rateKey: "hourlyRate",
     suffix: "/hr",
-    inputLabel: "Hours",
+    inputLabel: "createBooking.durationUnit.hours",
   },
   {
     unit: "days",
-    label: "Daily",
+    label: "createBooking.durationLabel.daily",
     rateKey: "dailyRate",
     suffix: "/day",
-    inputLabel: "Days",
+    inputLabel: "createBooking.durationUnit.days",
   },
   {
     unit: "weeks",
-    label: "Weekly",
+    label: "createBooking.durationLabel.weekly",
     rateKey: "weeklyRate",
     suffix: "/wk",
-    inputLabel: "Weeks",
+    inputLabel: "createBooking.durationUnit.weeks",
   },
   {
     unit: "months",
-    label: "Monthly",
+    label: "createBooking.durationLabel.monthly",
     rateKey: "monthlyRate",
     suffix: "/mo",
-    inputLabel: "Months",
+    inputLabel: "createBooking.durationUnit.months",
   },
   {
     unit: "years",
-    label: "Yearly",
+    label: "createBooking.durationLabel.yearly",
     rateKey: "yearlyRate",
     suffix: "/yr",
-    inputLabel: "Years",
+    inputLabel: "createBooking.durationUnit.years",
   },
   {
     unit: "custom",
-    label: "Custom",
+    label: "createBooking.durationLabel.custom",
     rateKey: "customRate",
     suffix: "",
-    inputLabel: "Description",
+    inputLabel: "createBooking.durationUnit.description",
   },
 ];
 
@@ -106,6 +107,7 @@ export default function BookingWorkerInfo({
   set,
   onBrowseWorkers,
 }) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const c = theme.colors;
 
@@ -138,25 +140,28 @@ export default function BookingWorkerInfo({
       {/* Worker ID input */}
       {!propWorkerId ? (
         <View style={fieldset(c)}>
-          <AppText style={legend(c)}>WORKER</AppText>
+          <AppText style={legend(c)}>
+            {t("createBooking.section.worker")}
+          </AppText>
           <View style={{ gap: 6 }}>
             <AppText style={label(c)}>
-              Worker ID <AppText style={{ color: c.orange }}>*</AppText>
+              {t("createBooking.field.workerId")}{" "}
+              <AppText style={{ color: c.orange }}>*</AppText>
             </AppText>
             <TextInput
               value={form.workerId}
               onChangeText={(t) => set("workerId", t)}
-              placeholder="Paste the worker's user ID"
+              placeholder={t("createBooking.field.workerIdPlaceholder")}
               placeholderTextColor={c.textMuted}
               style={input(c)}
             />
             <AppText style={{ fontSize: 11, color: c.textMuted }}>
-              Browse workers and copy their ID.{" "}
+              {t("createBooking.field.workerIdHint")}{" "}
               <AppText
                 onPress={onBrowseWorkers}
                 style={{ color: c.orange, textDecorationLine: "underline" }}
               >
-                Browse Workers →
+                {t("createBooking.field.browseWorkersLink")}
               </AppText>
             </AppText>
           </View>
@@ -273,7 +278,7 @@ export default function BookingWorkerInfo({
               >
                 {`${worker.user?.firstName || ""} ${
                   worker.user?.lastName || ""
-                }`.trim() || "Worker"}
+                }`.trim() || t("createBooking.workerFallbackName")}
               </AppText>
               {worker.verificationStatus === "VERIFIED" ? (
                 <FaShieldCheck size={14} color={c.green} />
@@ -330,7 +335,9 @@ export default function BookingWorkerInfo({
               >
                 <FaCheck size={11} color={c.textMuted} />
                 <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                  {worker.completedJobs || 0} jobs done
+                  {t("createBooking.jobsDoneCount", {
+                    count: worker.completedJobs || 0,
+                  })}
                 </AppText>
               </View>
             </View>
@@ -377,17 +384,22 @@ export default function BookingWorkerInfo({
       {/* Pricing & Duration */}
       {worker ? (
         <View style={fieldset(c)}>
-          <AppText style={legend(c)}>PRICING & DURATION</AppText>
+          <AppText style={legend(c)}>
+            {t("createBooking.section.pricingDuration")}
+          </AppText>
 
           {isFromJob ? (
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
-                <RateBox label="Agreed Budget (from job)" c={c}>
+                <RateBox
+                  label={t("createBooking.rateBox.agreedBudgetFromJob")}
+                  c={c}
+                >
                   {format(lockedRate)}
                 </RateBox>
               </View>
               <View style={{ flex: 1 }}>
-                <RateBox label="Currency" c={c}>
+                <RateBox label={t("createBooking.rateBox.currency")} c={c}>
                   {lockedCurrency}
                 </RateBox>
               </View>
@@ -396,14 +408,13 @@ export default function BookingWorkerInfo({
             <>
               <View style={{ gap: 8 }}>
                 <AppText style={label(c)}>
-                  Engagement Type{" "}
+                  {t("createBooking.field.engagementType")}{" "}
                   <AppText style={{ color: c.orange }}>*</AppText>
                 </AppText>
                 <AppText
                   style={{ fontSize: 11, color: c.textMuted, lineHeight: 15 }}
                 >
-                  Select how you want to engage this worker. The rate is set by
-                  the worker and cannot be modified.
+                  {t("createBooking.field.engagementHint")}
                 </AppText>
                 <View
                   style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
@@ -443,7 +454,7 @@ export default function BookingWorkerInfo({
                             color: active ? c.orange : c.textDim,
                           }}
                         >
-                          {opt.label}
+                          {t(opt.label)}
                         </AppText>
                         {hasRate ? (
                           <AppText
@@ -457,7 +468,7 @@ export default function BookingWorkerInfo({
                           </AppText>
                         ) : (
                           <AppText style={{ fontSize: 10, color: c.textMuted }}>
-                            Not offered
+                            {t("createBooking.notOffered")}
                           </AppText>
                         )}
                       </Pressable>
@@ -468,14 +479,16 @@ export default function BookingWorkerInfo({
 
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <View style={{ flex: 1 }}>
-                  <RateBox label="Agreed Rate" c={c}>
+                  <RateBox label={t("createBooking.rateBox.agreedRate")} c={c}>
                     {isNegotiated && negotiatedRate
-                      ? `${format(parseFloat(negotiatedRate))} · Negotiated`
+                      ? t("createBooking.negotiatedRateSummary", {
+                          amount: format(parseFloat(negotiatedRate)),
+                        })
                       : `${format(lockedRate)}${currentOption?.suffix || ""}`}
                   </RateBox>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <RateBox label="Currency" c={c}>
+                  <RateBox label={t("createBooking.rateBox.currency")} c={c}>
                     {lockedCurrency}
                   </RateBox>
                 </View>
@@ -485,7 +498,9 @@ export default function BookingWorkerInfo({
                 <View style={{ gap: 12 }}>
                   <View style={{ gap: 6 }}>
                     <AppText style={label(c)}>
-                      Rate per {currentOption?.label?.toLowerCase()}{" "}
+                      {t("createBooking.field.ratePerLabel", {
+                        unit: t(currentOption?.label || "").toLowerCase(),
+                      })}{" "}
                       <AppText style={{ color: c.orange }}>*</AppText>
                     </AppText>
                     <View style={inputWrap(c)}>
@@ -500,12 +515,14 @@ export default function BookingWorkerInfo({
                       <FaLock size={12} color={c.textMuted} />
                     </View>
                     <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                      Rate set by worker — cannot be modified
+                      {t("createBooking.field.rateLockedHint")}
                     </AppText>
                   </View>
 
                   <View style={{ gap: 6 }}>
-                    <AppText style={label(c)}>Custom Label</AppText>
+                    <AppText style={label(c)}>
+                      {t("createBooking.field.customLabel")}
+                    </AppText>
                     <View
                       style={{
                         backgroundColor: c.bgInput || c.bgCard,
@@ -520,17 +537,19 @@ export default function BookingWorkerInfo({
                       <AppText style={{ fontSize: 13, color: c.text }}>
                         {form.customLabel ||
                           worker.customRateLabel ||
-                          "No custom label provided"}
+                          t("createBooking.field.noCustomLabel")}
                       </AppText>
                     </View>
                     <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                      Label provided by the worker
+                      {t("createBooking.field.customLabelHint")}
                     </AppText>
                   </View>
 
                   <View style={{ gap: 6 }}>
                     <AppText style={label(c)}>
-                      Number of {currentOption?.label?.toLowerCase()}{" "}
+                      {t("createBooking.field.numberOfUnit", {
+                        unit: t(currentOption?.label || "").toLowerCase(),
+                      })}{" "}
                       <AppText style={{ color: c.orange }}>*</AppText>
                     </AppText>
                     <TextInput
@@ -560,7 +579,9 @@ export default function BookingWorkerInfo({
               ) : currentOption ? (
                 <View style={{ gap: 6 }}>
                   <AppText style={label(c)}>
-                    Number of {currentOption.inputLabel}{" "}
+                    {t("createBooking.field.numberOfUnit", {
+                      unit: t(currentOption.inputLabel),
+                    })}{" "}
                     <AppText style={{ color: c.orange }}>*</AppText>
                   </AppText>
                   <View style={inputWrap(c)}>
@@ -569,7 +590,9 @@ export default function BookingWorkerInfo({
                       value={form.estimatedValue}
                       onChangeText={(t) => set("estimatedValue", t)}
                       keyboardType="numeric"
-                      placeholder="e.g. 4"
+                      placeholder={t(
+                        "createBooking.field.estimatedValuePlaceholder",
+                      )}
                       placeholderTextColor={c.textMuted}
                       style={{ flex: 1, fontSize: 14, color: c.text }}
                     />
@@ -586,17 +609,28 @@ export default function BookingWorkerInfo({
                       <FaCalendarAlt size={11} color={c.textDim} />
                       <AppText style={{ fontSize: 11, color: c.textDim }}>
                         {form.estimatedValue}{" "}
-                        {currentOption.inputLabel.toLowerCase()}
+                        {t(currentOption.inputLabel).toLowerCase()}
                         {currentOption.unit !== "hours" ? (
                           <AppText style={{ color: c.textMuted }}>
                             {currentOption.unit === "days"
-                              ? ` ≈ ${parseFloat(form.estimatedValue) * 8}h`
+                              ? ` ${t("createBooking.approxHours", {
+                                  count: parseFloat(form.estimatedValue) * 8,
+                                })}`
                               : currentOption.unit === "weeks"
-                                ? ` ≈ ${parseFloat(form.estimatedValue) * 40}h`
+                                ? ` ${t("createBooking.approxHours", {
+                                    count: parseFloat(form.estimatedValue) * 40,
+                                  })}`
                                 : currentOption.unit === "months"
-                                  ? ` ≈ ${parseFloat(form.estimatedValue) * 160}h`
+                                  ? ` ${t("createBooking.approxHours", {
+                                      count:
+                                        parseFloat(form.estimatedValue) * 160,
+                                    })}`
                                   : currentOption.unit === "years"
-                                    ? ` ≈ ${parseFloat(form.estimatedValue) * 1920}h`
+                                    ? ` ${t("createBooking.approxHours", {
+                                        count:
+                                          parseFloat(form.estimatedValue) *
+                                          1920,
+                                      })}`
                                     : ""}
                           </AppText>
                         ) : null}
@@ -661,15 +695,15 @@ export default function BookingWorkerInfo({
                   }}
                 >
                   {isNegotiated
-                    ? "Using negotiated rate"
-                    : "We agreed on a different rate"}
+                    ? t("createBooking.negotiation.activeTitle")
+                    : t("createBooking.negotiation.inactiveTitle")}
                 </AppText>
                 <AppText
                   style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}
                 >
                   {isNegotiated
-                    ? "Tap to go back to worker's listed rate"
-                    : "Override the worker's listed price with your agreed total amount"}
+                    ? t("createBooking.negotiation.activeHint")
+                    : t("createBooking.negotiation.inactiveHint")}
                 </AppText>
               </View>
               <View
@@ -698,7 +732,7 @@ export default function BookingWorkerInfo({
               >
                 <View style={{ gap: 6 }}>
                   <AppText style={label(c)}>
-                    Agreed Total Amount{" "}
+                    {t("createBooking.negotiation.agreedTotalLabel")}{" "}
                     <AppText style={{ color: c.orange }}>*</AppText>
                   </AppText>
                   <View style={inputWrap(c)}>
@@ -716,7 +750,7 @@ export default function BookingWorkerInfo({
                     </AppText>
                   </View>
                   <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                    Enter the total agreed amount for the entire job
+                    {t("createBooking.negotiation.agreedTotalHint")}
                   </AppText>
                   {lockedRate > 0 && negotiatedRate ? (
                     <AppText
@@ -727,28 +761,32 @@ export default function BookingWorkerInfo({
                       }}
                     >
                       {parseFloat(negotiatedRate) < lockedRate
-                        ? `🟢 ${format(
-                            lockedRate - parseFloat(negotiatedRate),
-                          )} below listed rate`
+                        ? `🟢 ${t("createBooking.negotiation.belowListed", {
+                            amount: format(
+                              lockedRate - parseFloat(negotiatedRate),
+                            ),
+                          })}`
                         : parseFloat(negotiatedRate) > lockedRate
-                          ? `🟡 ${format(
-                              parseFloat(negotiatedRate) - lockedRate,
-                            )} above listed rate`
-                          : "✅ Same as listed rate"}
+                          ? `🟡 ${t("createBooking.negotiation.aboveListed", {
+                              amount: format(
+                                parseFloat(negotiatedRate) - lockedRate,
+                              ),
+                            })}`
+                          : `✅ ${t("createBooking.negotiation.sameAsListed")}`}
                     </AppText>
                   ) : null}
                 </View>
 
                 <View style={{ gap: 6 }}>
                   <AppText style={label(c)}>
-                    Negotiation Note (optional)
+                    {t("createBooking.negotiation.noteLabel")}
                   </AppText>
                   <TextInput
                     value={negotiationNote}
                     onChangeText={setNegotiationNote}
                     multiline
                     numberOfLines={2}
-                    placeholder="e.g. Agreed 10% discount for repeat booking"
+                    placeholder={t("createBooking.negotiation.notePlaceholder")}
                     placeholderTextColor={c.textMuted}
                     style={{
                       backgroundColor: c.bgInput || c.bgCard,
@@ -786,15 +824,13 @@ export default function BookingWorkerInfo({
                       lineHeight: 16,
                     }}
                   >
-                    Make sure the worker agreed to this price in the platform
-                    Chat before booking. This replaces all duration calculations
-                    with a fixed total of{" "}
+                    {t("createBooking.negotiation.disclaimerPrefix")}{" "}
                     <AppText style={{ color: c.orange, fontWeight: "700" }}>
                       {negotiatedRate
                         ? format(parseFloat(negotiatedRate))
                         : format(lockedRate)}
                     </AppText>{" "}
-                    for this booking.
+                    {t("createBooking.negotiation.disclaimerSuffix")}
                   </AppText>
                 </View>
               </View>
@@ -822,8 +858,8 @@ export default function BookingWorkerInfo({
                 }}
               >
                 {isNegotiated && negotiatedRate
-                  ? "Agreed Total"
-                  : "Estimated Total"}
+                  ? t("createBooking.totals.agreedTotal")
+                  : t("createBooking.totals.estimatedTotal")}
               </AppText>
               {isNegotiated && negotiatedRate ? (
                 <View
@@ -847,7 +883,7 @@ export default function BookingWorkerInfo({
                       letterSpacing: 0.5,
                     }}
                   >
-                    Negotiated
+                    {t("createBooking.negotiatedBadge")}
                   </AppText>
                 </View>
               ) : null}
@@ -877,9 +913,15 @@ export default function BookingWorkerInfo({
                 gap: 6,
               }}
             >
-              <FeeRow label="Subtotal" value={format(estFees.subtotal)} c={c} />
               <FeeRow
-                label={`Platform Fee (${feePercent}%)`}
+                label={t("createBooking.breakdown.subtotal")}
+                value={format(estFees.subtotal)}
+                c={c}
+              />
+              <FeeRow
+                label={t("createBooking.breakdown.platformFee", {
+                  percent: feePercent,
+                })}
                 value={format(estFees.hirerFee)}
                 c={c}
               />
@@ -896,7 +938,7 @@ export default function BookingWorkerInfo({
                 <AppText
                   style={{ fontSize: 12, fontWeight: "700", color: c.text }}
                 >
-                  Total to Pay
+                  {t("createBooking.breakdown.totalToPay")}
                 </AppText>
                 <AppText
                   style={{ fontSize: 12, fontWeight: "700", color: c.green }}
@@ -920,12 +962,14 @@ export default function BookingWorkerInfo({
               }}
             >
               <FeeRow
-                label="Agreed Amount"
+                label={t("createBooking.breakdown.agreedAmount")}
                 value={format(parseFloat(negotiatedRate))}
                 c={c}
               />
               <FeeRow
-                label={`Platform Fee (${feePercent}%)`}
+                label={t("createBooking.breakdown.platformFee", {
+                  percent: feePercent,
+                })}
                 value={format(parseFloat(negotiatedRate) * feeRate)}
                 c={c}
               />
@@ -942,7 +986,7 @@ export default function BookingWorkerInfo({
                 <AppText
                   style={{ fontSize: 12, fontWeight: "700", color: c.text }}
                 >
-                  Total to Pay
+                  {t("createBooking.breakdown.totalToPay")}
                 </AppText>
                 <AppText
                   style={{ fontSize: 12, fontWeight: "700", color: c.green }}
@@ -974,7 +1018,7 @@ export default function BookingWorkerInfo({
                   lineHeight: 16,
                 }}
               >
-                Worker's pricing note:{" "}
+                {t("createBooking.workerPricingNotePrefix")}{" "}
                 <AppText style={{ fontStyle: "italic" }}>
                   {worker.pricingNote}
                 </AppText>

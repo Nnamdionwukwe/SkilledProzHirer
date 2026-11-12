@@ -914,8 +914,6 @@
     "categoryRequired": "Please select a category",
     "completed": "Completed",
     "confirmCancel": "Yes, Cancel",
-    "createBooking": "Create Booking",
-    "createBookingBtn": "Create Booking",
     "createSubtitle": "Fill in the details and the worker will be notified immediately.",
     "created": "Booking created successfully!",
     "cryptoNote": "Pay with cryptocurrency. Funds held in escrow until job is complete.",
@@ -1187,135 +1185,6 @@
   "confirm": "Confirm",
   "consoleStatements": "Console Statements",
   "country": "Country",
-  "createBooking": {
-    "address": "Address",
-    "addressPlaceholder": "Full address where the job will take place",
-    "agreedRate": "Agreed Rate",
-    "currency": "Currency",
-    "description": "Description",
-    "jobTitle": "Job Title",
-    "notOffered": "Not offered",
-    "notes": "Additional Notes",
-    "scheduledDate": "Scheduled Date",
-    "step1": "Job Details",
-    "step2": "Schedule",
-    "step3": "Budget",
-    "submit": "Create Booking",
-    "success": "Booking created successfully!",
-    "title": "Create Booking"
-  },
-  "createBooking.addressRequired": "Address is required",
-  "createBooking.browseHint": "Create Booking Browse Hint",
-  "createBooking.browseHintEnd": "Create Booking Browse Hint End",
-  "createBooking.browseLink": "Create Booking Browse Link",
-  "createBooking.button.browseWorkers": "Browse Workers",
-  "createBooking.button.createBooking": "Create Booking",
-  "createBooking.button.done": "Done",
-  "createBooking.categoryRequired": "Please select a category",
-  "createBooking.created": "Booking created successfully!",
-  "createBooking.currencyLocked": "🔒 Worker's currency",
-  "createBooking.datePicker.done": "Done",
-  "createBooking.datePicker.title": "Select Date & Time",
-  "createBooking.dateRequired": "Please select a date and time",
-  "createBooking.descriptionRequired": "Description is required",
-  "createBooking.detailsLocked": "Create Booking Details Locked",
-  "createBooking.disclaimer": "By creating this booking, you agree to SkilledProz terms and conditions.",
-  "createBooking.durationUnit.custom": "Custom",
-  "createBooking.durationUnit.days": "Days",
-  "createBooking.durationUnit.hours": "Hours",
-  "createBooking.durationUnit.months": "Months",
-  "createBooking.durationUnit.weeks": "Weeks",
-  "createBooking.empty.button": "Browse Workers",
-  "createBooking.empty.subtitle": "Browse available workers, view their profiles and rates, then come back to book them directly.",
-  "createBooking.empty.title": "Find a Worker First",
-  "createBooking.engagement.custom": "Custom",
-  "createBooking.engagement.daily": "Daily",
-  "createBooking.engagement.hourly": "Hourly",
-  "createBooking.engagement.monthly": "Monthly",
-  "createBooking.engagement.weekly": "Weekly",
-  "createBooking.estimatedTotal": "Estimated Total",
-  "createBooking.field.additionalNotes": "ADDITIONAL NOTES",
-  "createBooking.field.addressPlaceholder": "Enter full address...",
-  "createBooking.field.agreedRate": "AGREED RATE",
-  "createBooking.field.categoryHint": "Auto-filled from the worker's registered categories. Select if multiple are available.",
-  "createBooking.field.currency": "CURRENCY",
-  "createBooking.field.dateTime": "DATE & TIME *",
-  "createBooking.field.describeDuration": "DESCRIBE DURATION",
-  "createBooking.field.describeDurationPlaceholder": "e.g. Until launch, ongoing retainer",
-  "createBooking.field.describeEngagement": "DESCRIBE ENGAGEMENT",
-  "createBooking.field.describeEngagementPlaceholder": "e.g. Full build, until project complete",
-  "createBooking.field.description": "DESCRIPTION *",
-  "createBooking.field.descriptionPlaceholder": "Describe exactly what needs to be done…",
-  "createBooking.field.engagementHint": "Select how you want to engage this worker. The rate is set by the worker and cannot be modified.",
-  "createBooking.field.engagementType": "Engagement Type",
-  "createBooking.field.jobTitle": "JOB TITLE *",
-  "createBooking.field.jobTitlePlaceholder": "e.g. Fix leaking kitchen pipe",
-  "createBooking.field.notesPlaceholder": "Access instructions, parking, tools to bring…",
-  "createBooking.field.numberOfDuration": "NUMBER OF {{duration}}",
-  "createBooking.field.numberOfUnits": "NUMBER OF {{unit}} *",
-  "createBooking.field.numberPlaceholder": "Create Booking Field Number Placeholder",
-  "createBooking.field.selectCategory": "Select category",
-  "createBooking.field.selectDateTime": "Select date & time",
-  "createBooking.field.serviceAddress": "Service Address",
-  "createBooking.field.serviceCategory": "SERVICE CATEGORY",
-  "createBooking.field.workerId": "Worker ID",
-  "createBooking.field.workerIdPlaceholder": "Enter worker ID...",
-  "createBooking.field.workersCurrency": "Worker's currency",
-  "createBooking.field.workersRate": "Worker's rate",
-  "createBooking.jobType.contract": "Contract",
-  "createBooking.jobType.fullTime": "Full-time",
-  "createBooking.jobType.partTime": "Part-time",
-  "createBooking.jobType.temporary": "Temporary",
-  "createBooking.jobsDone": "Create Booking Jobs Done",
-  "createBooking.loadingWorker": "Loading worker...",
-  "createBooking.locationType.hybrid": "Hybrid",
-  "createBooking.locationType.onSite": "On-site",
-  "createBooking.locationType.remote": "Remote",
-  "createBooking.notOffered": "Create Booking Not Offered",
-  "createBooking.paymentType.custom": "Custom",
-  "createBooking.paymentType.customSub": "Define your own",
-  "createBooking.paymentType.daily": "Per Day",
-  "createBooking.paymentType.dailySub": "Billed daily",
-  "createBooking.paymentType.fixed": "Fixed Price",
-  "createBooking.paymentType.fixedSub": "Pay a set total",
-  "createBooking.paymentType.hourly": "Per Hour",
-  "createBooking.paymentType.hourlySub": "Billed hourly",
-  "createBooking.paymentType.monthly": "Per Month",
-  "createBooking.paymentType.monthlySub": "Billed monthly",
-  "createBooking.paymentType.weekly": "Per Week",
-  "createBooking.paymentType.weeklySub": "Billed weekly",
-  "createBooking.placeholder.address": "Enter full address...",
-  "createBooking.placeholder.date": "Select date & time",
-  "createBooking.placeholder.description": "Describe exactly what needs to be done…",
-  "createBooking.placeholder.duration": "e.g. Until launch, ongoing retainer",
-  "createBooking.placeholder.engagement": "e.g. Full build, until project complete",
-  "createBooking.placeholder.notes": "Access instructions, parking, tools to bring…",
-  "createBooking.placeholder.title": "e.g. Fix leaking kitchen pipe",
-  "createBooking.placeholder.workerId": "Enter worker ID...",
-  "createBooking.pricingNote": "Create Booking Pricing Note",
-  "createBooking.primary": "Create Booking Primary",
-  "createBooking.rateLocked": "🔒 Worker's rate",
-  "createBooking.reviews": "Create Booking Reviews",
-  "createBooking.section.category": "Category",
-  "createBooking.section.jobDuration": "Job Duration",
-  "createBooking.section.jobInformation": "Job Information",
-  "createBooking.section.jobType": "Job Type",
-  "createBooking.section.location": "Location",
-  "createBooking.section.locationType": "Location Type",
-  "createBooking.section.paymentType": "Payment Type",
-  "createBooking.section.pricingDuration": "Pricing & Duration",
-  "createBooking.section.schedule": "Schedule",
-  "createBooking.section.worker": "Worker",
-  "createBooking.summary.agreedRate": "Agreed Rate",
-  "createBooking.summary.estimatedTotal": "Estimated Total",
-  "createBooking.summary.jobType": "Job Type",
-  "createBooking.summary.location": "Location",
-  "createBooking.summary.note": "⚠️ Review all details before confirming. The worker will be notified upon booking creation.",
-  "createBooking.summary.title": "📋 BOOKING SUMMARY",
-  "createBooking.summary.worker": "Worker",
-  "createBooking.titleRequired": "Job title is required",
-  "createBooking.workerNotFound": "Worker not found",
-  "createBooking.workerRequired": "Please select a worker",
   "currency": "Currency",
   "customRate": "Custom Rate",
   "customRateLabel": "Custom Rate Label",
@@ -2048,12 +1917,51 @@
       "reconsidered": "Application moved back to Pending Review. You can accept, decline, or interview the worker again."
     }
   },
+
+  "cryptoConverter": {
+    "title": "Live Crypto Rates",
+    "loading": "Loading live exchange rates…",
+    "error": "Could not load rates",
+    "retry": "Retry",
+    "updated": "Updated",
+    "youPay": "You pay",
+    "noRate": "No rate",
+    "needToSend": "You need to send",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "note": "Rates are live and may change. The exact amount may vary slightly when you complete the transfer."
+  },
+
   "createBooking": {
     "backToApplications": "Back to Applications",
     "eyebrow": "Create Booking",
     "title": "From job post",
-    "subtitle": "Booking \"{{jobTitle}}\" with {{workerName}}{{workerTitle}}",
+    "subtitle": "Fill in the details and the worker will be notified immediately.",
     "lockedBanner": "From the job post — not editable",
+    "backToBookings": "Back to Bookings",
+    "creating": "Creating booking…",
+    "disclaimer": "The worker will be notified immediately. Payment is only charged after the worker accepts and you approve it.",
+    "primaryBadge": "(Primary)",
+
+    "restricted": {
+      "title": "Only Hirers Can Post Jobs",
+      "body": "Workers can accept and complete jobs, but only Hirers can post them.",
+      "backToBookings": "Back to Bookings"
+    },
+
+    "lockedBadge": "Locked",
+    "paymentLockedRateHint": "Payment type is locked to match the worker's selected rate.",
+    "paymentLockedNegotiatedHint": "Payment type is locked to \"Fixed Price\" for negotiated bookings.",
+    "selectCategory": "Select category",
+    "tapToChange": "Tap to change",
+    "categoryHint": "Auto-filled from the worker's registered categories.",
+    "workerFallbackName": "Worker",
+    "notOffered": "Not offered",
+    "negotiatedRateSummary": "{{amount}} · Negotiated",
+    "negotiatedBadge": "Negotiated",
+    "workerPricingNotePrefix": "Worker's pricing note:",
+    "jobsDoneCount": "{{count}} jobs done",
+    "approxHours": "≈ {{count}}h",
 
     "locked": {
       "category": "Category",
@@ -2083,7 +1991,16 @@
       "responsibilities": "Responsibilities"
     },
 
-    "sections": {
+    "section": {
+      "jobType": "JOB TYPE",
+      "locationType": "LOCATION TYPE",
+      "paymentType": "PAYMENT TYPE",
+      "jobDuration": "JOB DURATION",
+      "category": "CATEGORY",
+      "jobInformation": "JOB INFORMATION",
+      "schedule": "SCHEDULE",
+      "pricingDuration": "PRICING & DURATION",
+      "worker": "WORKER",
       "payment": "Payment"
     },
 
@@ -2100,6 +2017,23 @@
       "hybrid": "Hybrid"
     },
 
+    "paymentType": {
+      "fixed": "Fixed Price",
+      "fixedSub": "Pay a set total",
+      "hourly": "Per Hour",
+      "hourlySub": "Billed hourly",
+      "daily": "Per Day",
+      "dailySub": "Billed daily",
+      "weekly": "Per Week",
+      "weeklySub": "Billed weekly",
+      "monthly": "Per Month",
+      "monthlySub": "Billed monthly",
+      "yearly": "Per Year",
+      "yearlySub": "Billed yearly",
+      "custom": "Custom",
+      "customSub": "Define your own"
+    },
+
     "budgetType": {
       "fixed": "Fixed Price",
       "hourly": "Per Hour",
@@ -2108,6 +2042,25 @@
       "monthly": "Per Month",
       "yearly": "Per Year",
       "custom": "Custom"
+    },
+
+    "durationLabel": {
+      "hourly": "Hourly",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "yearly": "Yearly",
+      "custom": "Custom"
+    },
+
+    "durationUnit": {
+      "hours": "Hours",
+      "days": "Days",
+      "weeks": "Weeks",
+      "months": "Months",
+      "years": "Years",
+      "custom": "Custom",
+      "description": "Description"
     },
 
     "budgetPeriod": {
@@ -2185,6 +2138,100 @@
       "so": "Somali"
     },
 
+    "field": {
+      "jobTitle": "Job Title",
+      "jobTitlePlaceholder": "e.g. Fix leaking kitchen pipe",
+      "description": "Description",
+      "descriptionPlaceholder": "Describe exactly what needs to be done...",
+      "serviceCategory": "Service Category",
+      "requirements": "Requirements (optional)",
+      "requirementsPlaceholder": "e.g. Must have 3+ years of React experience",
+      "responsibilities": "Responsibilities (optional)",
+      "responsibilitiesPlaceholder": "e.g. Design UI mockups, conduct user tests",
+      "additionalNotes": "Additional Notes",
+      "notesPlaceholder": "Access instructions, parking, tools to bring...",
+      "serviceAddress": "Service Address",
+      "addressPlaceholder": "Full address where the job will take place",
+      "dateTime": "Date & Time",
+      "selectDate": "Select date",
+      "selectTime": "Select time",
+      "minDatePrefix": "Min: {{date}}",
+      "workerId": "Worker ID",
+      "workerIdPlaceholder": "Paste the worker's user ID",
+      "workerIdHint": "Browse workers and copy their ID.",
+      "browseWorkersLink": "Browse Workers →",
+      "engagementType": "Engagement Type",
+      "engagementHint": "Select how you want to engage this worker. The rate is set by the worker and cannot be modified.",
+      "ratePerLabel": "Rate per {{unit}}",
+      "rateLockedHint": "Rate set by worker — cannot be modified",
+      "customLabel": "Custom Label",
+      "noCustomLabel": "No custom label provided",
+      "customLabelHint": "Label provided by the worker",
+      "numberOfUnit": "Number of {{unit}}",
+      "estimatedValuePlaceholder": "e.g. 4"
+    },
+
+    "fieldLabels": {
+      "workerId": "Worker ID",
+      "categoryId": "Category",
+      "title": "Title",
+      "description": "Description",
+      "address": "Address",
+      "scheduledAt": "Scheduled date & time"
+    },
+
+    "rateBox": {
+      "agreedBudgetFromJob": "Agreed Budget (from job)",
+      "agreedRate": "Agreed Rate",
+      "currency": "Currency"
+    },
+
+    "negotiation": {
+      "activeTitle": "Using negotiated rate",
+      "inactiveTitle": "We agreed on a different rate",
+      "activeHint": "Tap to go back to worker's listed rate",
+      "inactiveHint": "Override the worker's listed price with your agreed total amount",
+      "agreedTotalLabel": "Agreed Total Amount",
+      "agreedTotalHint": "Enter the total agreed amount for the entire job",
+      "belowListed": "{{amount}} below listed rate",
+      "aboveListed": "{{amount}} above listed rate",
+      "sameAsListed": "Same as listed rate",
+      "noteLabel": "Negotiation Note (optional)",
+      "notePlaceholder": "e.g. Agreed 10% discount for repeat booking",
+      "disclaimerPrefix": "Make sure the worker agreed to this price in the platform Chat before booking. This replaces all duration calculations with a fixed total of",
+      "disclaimerSuffix": "for this booking."
+    },
+
+    "negotiated": {
+      "title": "Negotiated amount (optional)",
+      "description": "If you and the worker agreed on a different amount after discussion, enter it here. It will override the calculated total and is required for options marked above.",
+      "placeholder": "e.g. 85000",
+      "notePlaceholder": "Reason / note about the negotiation (optional)",
+      "summary": "✓ Final amount: {{amount}} · overrides the selected option"
+    },
+
+    "totals": {
+      "agreedTotal": "Agreed Total",
+      "estimatedTotal": "Estimated Total"
+    },
+
+    "breakdown": {
+      "title": "Payment Breakdown",
+      "negotiatedBadge": "Negotiated",
+      "fixedPrice": "Fixed Price",
+      "rate": "Rate",
+      "durationLabel": "Duration ({{type}})",
+      "approx": "≈ {{multiplier}}",
+      "duration": "Duration",
+      "subtotal": "Subtotal",
+      "platformFee": "Platform fee ({{percent}}%)",
+      "platformFeeNote": "— escrow, support, payment processing",
+      "negotiatedTotal": "Negotiated Total",
+      "youPay": "You Pay",
+      "totalToPay": "Total to Pay",
+      "agreedAmount": "Agreed Amount"
+    },
+
     "payment": {
       "selectOption": "Select Payment Option *",
       "selectOptionHint": "Pick the price that matches what you and the worker agreed. The full breakdown updates live below.",
@@ -2207,21 +2254,6 @@
       "estimatedTotal": "Estimated total: {{amount}}"
     },
 
-    "breakdown": {
-      "title": "Payment Breakdown",
-      "negotiatedBadge": "Negotiated",
-      "fixedPrice": "Fixed Price",
-      "rate": "Rate",
-      "durationLabel": "Duration ({{type}})",
-      "approx": "≈ {{multiplier}}",
-      "duration": "Duration",
-      "subtotal": "Subtotal",
-      "platformFee": "Platform fee ({{percent}}%)",
-      "platformFeeNote": "— escrow, support, payment processing",
-      "negotiatedTotal": "Negotiated Total",
-      "youPay": "You Pay"
-    },
-
     "notes": {
       "fixed": "Fixed-price booking. The agreed amount is the total, plus the platform fee.",
       "recurring": "{{rate}} {{period}} × {{multiplier}}. The worker is paid per {{budgetType}} for the full {{duration}} engagement.",
@@ -2230,20 +2262,6 @@
       "referral": "Referral bonuses from your wallet can be applied at the payment step to reduce the total.",
       "bookingNotesLabel": "Booking Notes (optional)",
       "bookingNotesPlaceholder": "Access instructions, tools needed, or any notes specific to this booking..."
-    },
-
-    "negotiated": {
-      "title": "Negotiated amount (optional)",
-      "description": "If you and the worker agreed on a different amount after discussion, enter it here. It will override the calculated total and is required for options marked above.",
-      "placeholder": "e.g. 85000",
-      "notePlaceholder": "Reason / note about the negotiation (optional)",
-      "summary": "✓ Final amount: {{amount}} · overrides the selected option"
-    },
-
-    "submit": {
-      "creating": "Creating…",
-      "plain": "Book",
-      "withTotal": "Book · {{amount}}"
     },
 
     "success": {
@@ -2263,22 +2281,13 @@
       "selectOption": "Please select a payment option.",
       "needsNegotiated": "This option has no automatic total. Please enter a negotiated amount.",
       "submitFailed": "Failed to create booking. Try again.",
-      "draftNotFound": "Booking draft not found"
+      "draftNotFound": "Booking draft not found",
+      "workerNotFound": "Worker not found. Check the ID and try again.",
+      "workerRequired": "Please enter a valid Worker ID first.",
+      "noRateForDuration": "This worker has not set a rate for the selected duration.",
+      "negotiatedRequired": "Please enter the agreed total amount.",
+      "fillRequiredField": "Please fill in: {{field}}"
     }
-  },
-
-  "cryptoConverter": {
-    "title": "Live Crypto Rates",
-    "loading": "Loading live exchange rates…",
-    "error": "Could not load rates",
-    "retry": "Retry",
-    "updated": "Updated",
-    "youPay": "You pay",
-    "noRate": "No rate",
-    "needToSend": "You need to send",
-    "copy": "Copy",
-    "copied": "Copied!",
-    "note": "Rates are live and may change. The exact amount may vary slightly when you complete the transfer."
   },
   "payment": {
     "initiate": {
