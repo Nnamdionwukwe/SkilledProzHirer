@@ -40,6 +40,7 @@ import WorkerPaymentPreview from "../../components/booking/WorkerPaymentPreview"
 import RaiseDisputeSheet from "../../components/booking/RaiseDisputeSheet";
 import { FaArrowLeft, FaExclamationCircle, FaTimes } from "../../icons/fa";
 import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
+import { safeNavigate } from "../../navigation/navigationRef";
 
 // ═══════════════════════════════════════════════════════════════════════
 // Inline stub — RefundRequest
@@ -765,31 +766,21 @@ export default function BookingDetailScreen() {
   // Back to Bookings list — route differs by role
   const handleBack = () => {
     if (user?.role === "WORKER") {
-      try {
-        // Navigate into the nested drawer's WorkerBookings screen
-        navigation.navigate("WorkerHome", { screen: "WorkerBookings" });
+      if (
+        safeNavigate(
+          navigation,
+          "WorkerHome",
+          { screen: "WorkerBookings" },
+          "Bookings",
+        )
+      ) {
         return;
-      } catch {
-        try {
-          navigation.navigate("WorkerHome", { screen: "Dashboard" });
-          return;
-        } catch {}
       }
     }
-
-    // Hirer path — Bookings lives inside the Hirer drawer
-    try {
-      navigation.navigate("Bookings");
+    if (safeNavigate(navigation, "Bookings", null, "Dashboard")) {
       return;
-    } catch {
-      try {
-        navigation.navigate("Dashboard");
-        return;
-      } catch {}
     }
-
-    // Final fallback
-    navigation.goBack();
+    if (navigation.canGoBack?.()) navigation.goBack();
   };
 
   // ── Loading — SKELETON ─────────────────────────────────────────

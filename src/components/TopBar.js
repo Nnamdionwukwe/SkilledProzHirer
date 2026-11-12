@@ -2,11 +2,7 @@
 import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useNavigation,
-  useNavigationState,
-  CommonActions,
-} from "@react-navigation/native";
+import { useNavigation, useNavigationState } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AppText from "./AppText";
@@ -15,7 +11,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAuthStore } from "../store/authStore";
 import { FaCommentDots } from "../icons/fa";
 import { rem } from "../constants/theme";
-import { navigationRef } from "../navigation/navigationRef";
+import { navigationRef, hasRoute } from "../navigation/navigationRef";
 import { useUnread } from "../navigation/WorkerNavigator";
 
 const SCREEN_FALLBACK = {
@@ -121,7 +117,11 @@ export default function TopBar({
   const resolvedSub = subtitleProp ?? fallback.subtitle ?? null;
 
   // ── Smart hamburger ─────────────────────────────────────────────
+  // Try the direct parent first (drawer-based screens). Only when the
+  // parent cannot open a drawer do we fall back to the WorkerHome route —
+  // and only if that route actually exists in the current navigator tree.
   const handleMenu = () => {
+    // 1. Try the direct parent drawer (works for drawer-hosted screens).
     const parent = navigation.getParent();
     if (parent) {
       try {
@@ -129,13 +129,27 @@ export default function TopBar({
         return;
       } catch (e) {}
     }
+
+    // 2. Descend into WorkerHome only if the navigator chain actually
+    //    contains that route — hasRoute now walks UP the parent chain
+    //    so this returns true even when the current state is the Drawer.
+    if (hasRoute(navigation, "WorkerHome")) {
+      try {
+        navigation.navigate("WorkerHome", { screen: "Dashboard" });
+        setTimeout(() => {
+          try {
+            navigationRef.dispatch({ type: "OPEN_DRAWER" });
+          } catch (e3) {}
+        }, 80);
+        return;
+      } catch (e) {}
+    }
+
+    // 3. Root ref fallback — bubble-up via the global ref.
     try {
-      navigation.dispatch(CommonActions.navigate({ name: "WorkerHome" }));
-      setTimeout(() => {
-        try {
-          navigationRef.dispatch({ type: "OPEN_DRAWER" });
-        } catch (e3) {}
-      }, 80);
+      if (navigationRef.isReady?.()) {
+        navigationRef.dispatch({ type: "OPEN_DRAWER" });
+      }
     } catch (e) {}
   };
 
@@ -144,19 +158,34 @@ export default function TopBar({
   // nested inside WorkerHome. From a Stack screen we must go through
   // WorkerHome with the `screen` param so React Navigation can resolve
   // the child drawer's routes.
-  const safeNavigate = (screen) => {
-    if (user?.role === "WORKER") {
+  //
+  // Guarded by hasRoute so we never call navigate("WorkerHome") when the
+  // current navigator doesn't contain that route (e.g. Hirer app).
+  const navToWorkerScreen = (screen) => {
+    if (user?.role === "WORKER" && hasRoute(navigation, "WorkerHome")) {
       try {
         navigation.navigate("WorkerHome", { screen });
-        return;
+        return true;
       } catch (e1) {}
     }
+    return false;
+  };
+
+  const safeNavigate = (screen) => {
+    // 1. Worker-app: route through WorkerHome if it's in this navigator
+    if (navToWorkerScreen(screen)) return;
+    // 2. Direct navigate — works when `screen` is a top-level route
     try {
-      navigation.navigate(screen);
-      return;
+      if (hasRoute(navigation, screen)) {
+        navigation.navigate(screen);
+        return;
+      }
     } catch (e2) {}
+    // 3. Root ref — last resort
     try {
-      navigationRef.navigate(screen);
+      if (hasRoute(null, screen)) {
+        navigationRef.navigate(screen);
+      }
     } catch (e3) {}
   };
 

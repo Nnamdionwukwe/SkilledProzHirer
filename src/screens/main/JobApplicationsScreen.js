@@ -46,6 +46,7 @@ import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
+import { safeNavigate } from "../../navigation/navigationRef";
 import {
   FaArrowLeft,
   FaMapMarkerAlt,
@@ -539,17 +540,19 @@ export default function JobApplicationsScreen() {
         onPress={() => {
           const isWorker = user?.role === "WORKER";
           const targetScreen = isWorker ? "WorkerJobDetail" : "JobDetail";
+
           if (jobId) {
             navigation.navigate(targetScreen, { jobId });
           } else {
-            try {
-              if (isWorker) {
-                navigation.navigate("WorkerHome", { screen: "WorkerJobs" });
-              } else {
-                navigation.navigate("JobsManagement");
-              }
-            } catch {
-              navigation.goBack();
+            if (isWorker) {
+              safeNavigate(
+                navigation,
+                "WorkerHome",
+                { screen: "WorkerJobs" },
+                "JobsManagement",
+              );
+            } else {
+              safeNavigate(navigation, "JobsManagement", null, "JobDetail");
             }
           }
         }}

@@ -37,6 +37,7 @@ import client from "../../api/client";
 import { CURRENCY_META } from "../../contexts/CurrencyContext";
 import { getHirerFeeRate } from "../../utils/pricing";
 import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
+import { safeNavigate } from "../../navigation/navigationRef";
 import {
   FaBriefcase,
   FaClock,
@@ -403,23 +404,23 @@ export default function JobDetailScreen() {
   const handleBack = () => {
     if (isWorker) {
       // WorkerJobs lives inside the WorkerHome drawer.
-      // Navigate into WorkerHome first, then into WorkerJobs.
-      try {
-        navigation.navigate("WorkerHome", { screen: "WorkerJobs" });
+      // safeNavigate falls back to the Hirer equivalent if the worker
+      // account is running inside the Hirer navigator (rare but possible).
+      if (
+        safeNavigate(
+          navigation,
+          "WorkerHome",
+          { screen: "WorkerJobs" },
+          backDestination,
+        )
+      ) {
         return;
-      } catch {
-        try {
-          navigation.navigate("WorkerHome", { screen: "Dashboard" });
-          return;
-        } catch {}
       }
     }
-    // Hirer navigator is a flat drawer — plain navigate works
-    try {
-      navigation.navigate(backDestination);
-    } catch {
-      navigation.goBack();
+    if (safeNavigate(navigation, backDestination, null, "Dashboard")) {
+      return;
     }
+    if (navigation.canGoBack?.()) navigation.goBack();
   };
 
   // ── Fetch ─────────────────────────────────────────────────────
