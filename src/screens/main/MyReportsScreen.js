@@ -36,6 +36,7 @@ import AppScreen from "../../components/AppScreen";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
+import { hasRoute, safeNavigate } from "../../navigation/navigationRef";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PLATFORM MODAL HELPER
@@ -1043,23 +1044,19 @@ export default function MyReportsScreen() {
   }
 
   function openSupportHub() {
-    // Support hub screens are nested inside the drawer/stack, so routeNames
-    // at the root level won't contain them. Try the known candidates first;
-    // React Navigation will simply be a no-op if the route doesn't exist,
-    // so we guard with `canNavigate`-style usage via a try/catch on navigate.
+    // Try each known support route ONLY if the current navigator tree
+    // actually has it. `navigation.navigate(name)` does NOT throw on an
+    // unknown route — React Navigation logs an error and returns. So the
+    // previous `try/catch` never caught anything and the loop just kept
+    // firing errors. hasRoute() checks the navigator state directly.
     const candidates = ["WorkerSupportHub", "SupportHub", "Support", "Help"];
-
     for (const name of candidates) {
-      try {
-        // `navigate` throws if the action can't be handled anywhere in the tree.
+      if (hasRoute(navigation, name)) {
         navigation.navigate(name);
         return;
-      } catch {
-        // try next candidate
       }
     }
-
-    // Nothing matched — show a toast instead of dumping to the website.
+    // Nothing matched — show a toast instead of silently doing nothing.
     toast.error(t("reports.supportUnavailable"));
   }
 
