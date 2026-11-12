@@ -26,6 +26,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -313,6 +315,7 @@ export default function PostJobScreen() {
     useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
   const [form, setForm] = useState({
     categoryId: "",
@@ -926,59 +929,37 @@ export default function PostJobScreen() {
           </View>
         ) : (
           <>
-            <TextInput
-              value={catSearch}
-              onChangeText={setCatSearch}
-              placeholder={t("postJob.searchCategories")}
-              placeholderTextColor={c.textMuted}
-              style={[
+            {/* Picker button — opens the full-screen category modal.
+                All 1000+ categories + custom ones are shown there. */}
+            <Pressable
+              onPress={() => setShowCategoryPicker(true)}
+              style={({ pressed }) => [
                 styles.input,
                 {
-                  color: c.text,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   borderColor: c.border,
                   backgroundColor: c.bgInput,
-                  marginBottom: 6,
+                  opacity: pressed ? 0.85 : 1,
                 },
               ]}
-            />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 6, paddingRight: 8 }}
             >
-              {filteredCats.slice(0, 20).map((cat) => (
-                <Pressable
-                  key={cat.id}
-                  onPress={() => {
-                    setForm((f) => ({ ...f, categoryId: cat.id }));
-                    setCatSearch("");
-                  }}
-                  style={({ pressed }) => [
-                    styles.categoryPill,
-                    {
-                      backgroundColor: c.bgCard,
-                      borderColor: c.border,
-                      opacity: pressed ? 0.85 : 1,
-                    },
-                  ]}
-                >
-                  <AppText
-                    style={{ fontSize: 11, color: c.text }}
-                    numberOfLines={1}
-                  >
-                    {cat.icon ? `${cat.icon} ` : ""}
-                    {cat.name}
-                  </AppText>
-                </Pressable>
-              ))}
-            </ScrollView>
-            {showSearchResults && filteredCats.length === 0 ? (
               <AppText
-                style={{ fontSize: 11, color: c.textMuted, marginTop: 6 }}
+                style={{ fontSize: 13, color: c.textMuted }}
+                numberOfLines={1}
               >
-                {t("postJob.noMatch", { query: catSearch.trim() })}
+                {catSearch.trim() || t("postJob.selectCategory")}
               </AppText>
-            ) : null}
+              <FaChevronDown size={10} color={c.textDim} />
+            </Pressable>
+
+            {/* Count line */}
+            <AppText style={{ fontSize: 10, color: c.textMuted, marginTop: 6 }}>
+              {t("postJob.categoriesTotalCount", {
+                count: categories.length,
+              })}
+            </AppText>
           </>
         )}
 
@@ -2022,6 +2003,133 @@ export default function PostJobScreen() {
           </View>
         )}
       </Pressable>
+
+      {/* ── Category picker modal ─────────────────────────────── */}
+      <Modal
+        visible={showCategoryPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCategoryPicker(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: c.bg,
+            paddingTop: 12,
+          }}
+        >
+          {/* Header */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: c.border,
+            }}
+          >
+            <AppText
+              style={{
+                fontFamily: "Syne_700Bold",
+                fontSize: 16,
+                fontWeight: "700",
+                color: c.text,
+                flex: 1,
+              }}
+            >
+              {t("postJob.category")}
+            </AppText>
+            <Pressable
+              onPress={() => setShowCategoryPicker(false)}
+              hitSlop={10}
+              style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+            >
+              <FaX size={18} color={c.textDim} />
+            </Pressable>
+          </View>
+
+          {/* Search */}
+          <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+            <TextInput
+              value={catSearch}
+              onChangeText={setCatSearch}
+              placeholder={t("postJob.searchCategories")}
+              placeholderTextColor={c.textMuted}
+              autoFocus={false}
+              style={[
+                styles.input,
+                {
+                  color: c.text,
+                  borderColor: c.border,
+                  backgroundColor: c.bgInput,
+                },
+              ]}
+            />
+            <AppText style={{ fontSize: 10, color: c.textMuted, marginTop: 6 }}>
+              {normalizedSearch
+                ? t("postJob.categoriesFilteredCount", {
+                    count: filteredCats.length,
+                  })
+                : t("postJob.categoriesTotalCount", {
+                    count: categories.length,
+                  })}
+            </AppText>
+          </View>
+
+          {/* Full list — 1000+ items, virtualized */}
+          <FlatList
+            data={filteredCats}
+            keyExtractor={(item) => String(item.id)}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={30}
+            maxToRenderPerBatch={50}
+            windowSize={15}
+            removeClippedSubviews
+            ListEmptyComponent={
+              <View style={{ padding: 20, alignItems: "center" }}>
+                <AppText
+                  style={{
+                    fontSize: 12,
+                    color: c.textMuted,
+                    textAlign: "center",
+                  }}
+                >
+                  {t("postJob.noMatch", { query: catSearch.trim() })}
+                </AppText>
+              </View>
+            }
+            renderItem={({ item: cat }) => (
+              <Pressable
+                onPress={() => {
+                  setForm((f) => ({ ...f, categoryId: cat.id }));
+                  setCatSearch("");
+                  setShowCategoryPicker(false);
+                }}
+                style={({ pressed }) => [
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 14,
+                    paddingHorizontal: 16,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: c.border,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{ fontSize: 13, color: c.text, flex: 1 }}
+                  numberOfLines={1}
+                >
+                  {cat.icon ? `${cat.icon} ` : ""}
+                  {cat.name}
+                </AppText>
+              </Pressable>
+            )}
+          />
+        </View>
+      </Modal>
     </AppScreen>
   );
 }

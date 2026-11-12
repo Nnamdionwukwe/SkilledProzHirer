@@ -2725,7 +2725,10 @@
     "skillsCount": "{{count}} skill required",
     "viewMyJobs": "View My Jobs",
     "postAnotherJob": "Post Another Job",
-    "locationRequired": "Please enter a service address for on-site or hybrid jobs."
+    "locationRequired": "Please enter a service address for on-site or hybrid jobs.",
+    "selectCategory": "Select a category…",
+    "categoriesTotalCount": "{{count}} categories",
+    "categoriesFilteredCount": "{{count}} results"
   },
   "workers": {
     "publicProfile": {
