@@ -34,15 +34,61 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { retainedStaffApi } from "../../api/retainedStaff";
 
+const CURRENCY_SYMBOLS = {
+  NGN: "₦",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  GHS: "GH₵",
+  KES: "KSh",
+  ZAR: "R",
+  CAD: "C$",
+  AUD: "A$",
+  JPY: "¥",
+  CNY: "¥",
+  INR: "₹",
+  BRL: "R$",
+  AED: "د.إ",
+  SAR: "ر.س",
+  QAR: "ر.ق",
+  EGP: "E£",
+  TZS: "TSh",
+  UGX: "USh",
+  RWF: "FRw",
+  XOF: "CFA",
+  MAD: "DH",
+  PHP: "₱",
+  IDR: "Rp",
+  VND: "₫",
+  THB: "฿",
+  BDT: "৳",
+  PKR: "₨",
+  MYR: "RM",
+  SGD: "S$",
+  HKD: "HK$",
+  USDC: "USDC",
+  USDT: "USDT",
+};
+
+function getCurrencySymbol(currency) {
+  return CURRENCY_SYMBOLS[currency] || currency || "";
+}
+
+// Symbol-prefixed money formatter — no Intl (renders the ISO code on
+// Hermes/Android). Uses CURRENCY_SYMBOLS for the prefix and
+// toLocaleString for the numeric portion.
 function formatMoney(amount, currency = "NGN") {
   if (amount == null) return "—";
+  const sym = getCurrencySymbol(currency || "NGN");
+  const isCrypto = ["USDC", "USDT"].includes(currency);
   try {
-    return `${currency} ${Number(amount).toLocaleString(undefined, {
+    const formatted = Number(amount).toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
-    })}`;
+    });
+    return isCrypto ? `${sym} ${formatted}` : `${sym}${formatted}`;
   } catch {
-    return `${currency} ${amount}`;
+    return isCrypto ? `${sym} ${amount}` : `${sym}${amount}`;
   }
 }
 
@@ -195,6 +241,26 @@ export default function RetainedStaffScreen() {
     );
   }
 
+  // ── Figure styling ─────────────────────────────────────────
+  // Reduced-size display-black style for numeric figures inside the
+  // sub-components (StatCard, SummaryItem, UpcomingItem). Matches the
+  // web's .statValue / .summaryValue / .upcomingAmount rules:
+  //   font-family: var(--font-display); font-weight: 800;
+  //   letter-spacing: -0.02em;
+  // The sub-components must accept and apply `valueStyle` — see notes
+  // at the bottom for the one-line addition in each of those files.
+  const figureStyle = {
+    fontSize: 13,
+    letterSpacing: -0.5,
+    fontWeight: "800",
+  };
+  const labelStyle = {
+    fontSize: 9,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  };
+
   return (
     <AppScreen
       contentContainerStyle={{ paddingBottom: 40 }}
@@ -324,6 +390,8 @@ export default function RetainedStaffScreen() {
               label={c.label}
               value={c.value}
               accent={c.accent}
+              valueStyle={figureStyle}
+              labelStyle={labelStyle}
             />
           </View>
         ))}
@@ -345,13 +413,10 @@ export default function RetainedStaffScreen() {
         >
           <View style={styles.panelHeader}>
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: theme.fonts?.display || "Syne_700Bold",
-                fontSize: rem(1.125),
-                lineHeight: rem(1.125) * 1.2,
-                fontWeight: "700",
-                letterSpacing: -0.01 * rem(1.125),
-                color: theme.colors.text,
+                fontSize: 10,
+                letterSpacing: -0.5,
                 flex: 1,
               }}
             >
@@ -365,7 +430,7 @@ export default function RetainedStaffScreen() {
               <AppText
                 style={{
                   fontFamily: theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
-                  fontSize: rem(0.8),
+                  fontSize: rem(0.6),
                   fontWeight: "600",
                   color: theme.colors.textDim,
                 }}
@@ -395,6 +460,7 @@ export default function RetainedStaffScreen() {
                   key={c.memberId}
                   cycle={c}
                   onPress={() => goStaffDetail(c.memberId)}
+                  valueStyle={figureStyle}
                 />
               ))}
             </View>
@@ -414,14 +480,10 @@ export default function RetainedStaffScreen() {
           ]}
         >
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: theme.fonts?.display || "Syne_700Bold",
-              fontSize: rem(1.125),
-              lineHeight: rem(1.125) * 1.2,
-              fontWeight: "700",
-              letterSpacing: -0.01 * rem(1.125),
-              color: theme.colors.text,
-              marginBottom: 20,
+              fontSize: 13,
+              letterSpacing: -0.5,
             }}
           >
             {t("retainedStaff.payrollSummary", { currency })}
@@ -430,15 +492,21 @@ export default function RetainedStaffScreen() {
           <SummaryItem
             label={t("retainedStaff.heldInEscrow")}
             value={formatMoney(heldInEscrow, currency)}
+            valueStyle={figureStyle}
+            labelStyle={labelStyle}
           />
           <SummaryItem
             label={t("retainedStaff.releasedThisMonth")}
             value={formatMoney(releasedThisMonth, currency)}
+            valueStyle={figureStyle}
+            labelStyle={labelStyle}
           />
           <SummaryItem
             label={t("retainedStaff.monthlyBurn")}
             value={formatMoney(burn, currency)}
             isLast
+            valueStyle={figureStyle}
+            labelStyle={labelStyle}
           />
 
           <Pressable
@@ -493,12 +561,10 @@ export default function RetainedStaffScreen() {
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: theme.fonts?.display || "Syne_700Bold",
-                fontSize: rem(1),
-                lineHeight: rem(1) * 1.25,
-                fontWeight: "700",
-                color: theme.colors.text,
+                fontSize: 15,
+                letterSpacing: -0.5,
                 marginBottom: 8,
                 textAlign: isWide ? "left" : "center",
               }}

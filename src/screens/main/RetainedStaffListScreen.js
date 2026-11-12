@@ -168,11 +168,10 @@ export default function RetainedStaffListScreen() {
             {t("retainedStaff.eyebrow")}
           </AppText>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: theme.fonts?.displayBlack || "Syne_800ExtraBold",
-              fontSize: Math.min(rem(1.5), Math.max(rem(1.25), width * 0.04)),
-              fontWeight: "800",
-              color: c.text,
+              fontSize: 15,
+              letterSpacing: -0.5,
             }}
           >
             {t("retainedStaff.listTitle")}

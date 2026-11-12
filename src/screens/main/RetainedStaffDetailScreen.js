@@ -36,12 +36,59 @@ const resolveAvatar = (raw) => {
   return `${API_BASE}${raw.startsWith("/") ? "" : "/"}${raw}`;
 };
 
+const CURRENCY_SYMBOLS = {
+  NGN: "₦",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  GHS: "GH₵",
+  KES: "KSh",
+  ZAR: "R",
+  CAD: "C$",
+  AUD: "A$",
+  JPY: "¥",
+  CNY: "¥",
+  INR: "₹",
+  BRL: "R$",
+  AED: "د.إ",
+  SAR: "ر.س",
+  QAR: "ر.ق",
+  EGP: "E£",
+  TZS: "TSh",
+  UGX: "USh",
+  RWF: "FRw",
+  XOF: "CFA",
+  MAD: "DH",
+  PHP: "₱",
+  IDR: "Rp",
+  VND: "₫",
+  THB: "฿",
+  BDT: "৳",
+  PKR: "₨",
+  MYR: "RM",
+  SGD: "S$",
+  HKD: "HK$",
+  USDC: "USDC",
+  USDT: "USDT",
+};
+
+function getCurrencySymbol(currency) {
+  return CURRENCY_SYMBOLS[currency] || currency || "";
+}
+
 function formatMoney(amount, currency = "NGN") {
   if (amount == null) return "—";
-  return `${currency} ${Number(amount).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
+  const sym = getCurrencySymbol(currency || "NGN");
+  const isCrypto = ["USDC", "USDT"].includes(currency);
+  try {
+    const formatted = Number(amount).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+    return isCrypto ? `${sym} ${formatted}` : `${sym}${formatted}`;
+  } catch {
+    return isCrypto ? `${sym} ${amount}` : `${sym}${amount}`;
+  }
 }
 
 function formatDate(d) {
@@ -204,6 +251,19 @@ export default function RetainedStaffDetailScreen() {
       cycleId,
     });
 
+  // ── Shared display styles for figures / labels ───────────────
+  const figureStyle = {
+    fontSize: 13,
+    letterSpacing: -0.5,
+    fontWeight: "800",
+  };
+  const labelStyle = {
+    fontSize: 9,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  };
+
   if (loading) {
     return (
       <AppScreen scroll={false} contentContainerStyle={{ padding: 20 }}>
@@ -306,12 +366,11 @@ export default function RetainedStaffDetailScreen() {
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <AppText
+            weight="displayBlack"
             numberOfLines={2}
             style={{
-              fontFamily: theme.fonts?.displayBlack || "Syne_800ExtraBold",
-              fontSize: rem(1.35),
-              fontWeight: "800",
-              color: c.text,
+              fontSize: 15,
+              letterSpacing: -0.5,
             }}
           >
             {member?.worker?.firstName} {member?.worker?.lastName}
@@ -460,6 +519,8 @@ export default function RetainedStaffDetailScreen() {
               label={kpi.label}
               value={kpi.value}
               accent={kpi.accent}
+              valueStyle={figureStyle}
+              labelStyle={labelStyle}
             />
           </View>
         ))}
@@ -528,11 +589,10 @@ export default function RetainedStaffDetailScreen() {
         <View style={{ marginTop: 16 }}>
           <View style={styles.panelHeader}>
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: theme.fonts?.display || "Syne_700Bold",
-                fontSize: rem(1.125),
-                fontWeight: "700",
-                color: c.text,
+                fontSize: 15,
+                letterSpacing: -0.5,
                 flex: 1,
               }}
             >
@@ -616,12 +676,10 @@ export default function RetainedStaffDetailScreen() {
                         {cycle.label ? ` · ${cycle.label}` : ""}
                       </AppText>
                       <AppText
+                        weight="displayBlack"
                         style={{
-                          fontFamily:
-                            theme.fonts?.displayBlack || "Syne_800ExtraBold",
-                          fontSize: rem(0.95),
-                          fontWeight: "800",
-                          color: c.text,
+                          fontSize: 13,
+                          letterSpacing: -0.5,
                           marginTop: 4,
                         }}
                       >
@@ -678,11 +736,10 @@ export default function RetainedStaffDetailScreen() {
       {tab === "documents" ? (
         <View style={{ marginTop: 16 }}>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: theme.fonts?.display || "Syne_700Bold",
-              fontSize: rem(1.125),
-              fontWeight: "700",
-              color: c.text,
+              fontSize: 15,
+              letterSpacing: -0.5,
               marginBottom: 12,
             }}
           >
@@ -759,11 +816,10 @@ export default function RetainedStaffDetailScreen() {
       {tab === "notes" ? (
         <View style={{ marginTop: 16 }}>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: theme.fonts?.display || "Syne_700Bold",
-              fontSize: rem(1.125),
-              fontWeight: "700",
-              color: c.text,
+              fontSize: 15,
+              letterSpacing: -0.5,
               marginBottom: 12,
             }}
           >

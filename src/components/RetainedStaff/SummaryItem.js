@@ -35,15 +35,11 @@ export default function SummaryItem({ label, value, isLast = false }) {
         {label}
       </AppText>
       <AppText
-        numberOfLines={1}
+        weight="displayBlack"
         style={{
-          fontFamily: theme.fonts?.displayBlack || "Syne_800ExtraBold",
-          fontSize: valueFs,
-          lineHeight: valueFs * 1.2,
-          fontWeight: "800",
-          letterSpacing: -0.01 * valueFs,
-          color: theme.colors.text,
-          marginLeft: 12,
+          fontSize: 13,
+          letterSpacing: -0.5,
+          marginBottom: 4,
         }}
       >
         {value}

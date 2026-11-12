@@ -187,13 +187,11 @@ export default function UpcomingItem({ cycle, onPress }) {
       <View style={[styles.meta, isCompact && styles.metaStacked]}>
         <AppText
           numberOfLines={1}
+          weight="displayBlack"
           style={{
-            fontFamily: theme.fonts?.displayBlack || "Syne_800ExtraBold",
-            fontSize: amountFs,
-            lineHeight: amountFs * 1.2,
-            fontWeight: "800",
+            fontSize: 13,
+            letterSpacing: -0.5,
             color: theme.colors.orange,
-            textAlign: isCompact ? "left" : "right",
           }}
         >
           {formatMoney(cycle?.amount, cycle?.currency)}
