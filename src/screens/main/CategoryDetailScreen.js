@@ -416,17 +416,16 @@ export default function CategoryDetailScreen() {
           ) : (
             <>
               {category.icon ? (
-                <AppText style={{ fontSize: 44, marginBottom: 6 }}>
+                <AppText style={{ fontSize: 20, marginBottom: 6 }}>
                   {category.icon}
                 </AppText>
               ) : null}
               <AppText
+                weight="displayBlack"
                 style={{
-                  fontFamily: "Syne_800ExtraBold",
-                  fontSize: 24,
-                  fontWeight: "700",
-                  color: c.text,
-                  textAlign: "center",
+                  fontSize: 13,
+                  letterSpacing: -0.5,
+                  marginBottom: 4,
                 }}
               >
                 {category.name}

@@ -283,12 +283,11 @@ export default function CategoriesBrowseScreen() {
       {/* Title */}
       <View style={{ alignItems: "center" }}>
         <AppText
+          weight="displayBlack"
           style={{
-            fontFamily: "Syne_800ExtraBold",
-            fontSize: 28,
-            fontWeight: "700",
-            color: c.text,
-            textAlign: "center",
+            fontSize: 15,
+            letterSpacing: -0.5,
+            marginBottom: 4,
           }}
         >
           Browse Categories
@@ -555,7 +554,7 @@ export default function CategoriesBrowseScreen() {
       ]}
     >
       {item.icon ? (
-        <AppText style={{ fontSize: 34 }}>{item.icon}</AppText>
+        <AppText style={{ fontSize: 20 }}>{item.icon}</AppText>
       ) : null}
       <AppText
         style={{
