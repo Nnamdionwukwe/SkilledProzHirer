@@ -41,6 +41,7 @@ import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
+import { useAuthStore } from "../../store/authStore";
 import {
   FaArrowLeft,
   FaMapMarkerAlt,
@@ -318,6 +319,7 @@ export default function JobApplicationsScreen() {
   const { theme } = useTheme();
   const { toast } = useToast();
   const c = theme.colors;
+  const { user } = useAuthStore();
 
   const jobId = route.params?.jobId;
 
@@ -488,7 +490,27 @@ export default function JobApplicationsScreen() {
     >
       {/* Back */}
       <Pressable
-        onPress={() => navigation.navigate("JobsManagement")}
+        onPress={() => {
+          const isWorker = user?.role === "WORKER";
+          const targetScreen = isWorker ? "WorkerJobDetail" : "JobDetail";
+
+          // Re-push the job's detail screen so the user lands on it regardless
+          // of what the back stack looked like when this screen was opened.
+          if (jobId) {
+            navigation.navigate(targetScreen, { jobId });
+          } else {
+            // No jobId — fall back to the job-management screen for this role
+            try {
+              if (isWorker) {
+                navigation.navigate("WorkerHome", { screen: "WorkerJobs" });
+              } else {
+                navigation.navigate("JobsManagement");
+              }
+            } catch {
+              navigation.goBack();
+            }
+          }
+        }}
         style={({ pressed }) => [
           styles.backBtn,
           { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
@@ -496,7 +518,7 @@ export default function JobApplicationsScreen() {
       >
         <FaArrowLeft size={11} color={c.textDim} />
         <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>
-          Back to Jobs
+          Back to Job
         </AppText>
       </Pressable>
 
@@ -523,11 +545,10 @@ export default function JobApplicationsScreen() {
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <AppText
+                weight="displayBlack"
                 style={{
-                  fontFamily: "Syne_700Bold",
-                  fontSize: 15,
-                  fontWeight: "700",
-                  color: c.text,
+                  fontSize: 10,
+                  letterSpacing: -0.5,
                 }}
                 numberOfLines={2}
               >
