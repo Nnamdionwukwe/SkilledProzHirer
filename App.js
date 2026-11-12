@@ -22,6 +22,7 @@ import { CurrencyProvider } from "./src/contexts/CurrencyContext";
 import { ToastProvider } from "./src/contexts/ToastContext";
 import { SubscriptionProvider } from "./src/contexts/SubscriptionContext";
 import { VoiceCallProvider } from "./src/contexts/VoiceCallContext";
+import { PlatformPollerProvider } from "./src/contexts/PlatformPollerContext";
 import VoiceCallProviderUI from "./src/components/video/VoiceCallProvider";
 import VoiceCallBanner from "./src/components/video/VoiceCallBanner";
 import LoadingScreen from "./src/components/LoadingScreen";
@@ -82,12 +83,14 @@ export default function App() {
               <ToastProvider>
                 <SubscriptionProvider>
                   <VoiceCallProvider>
-                    <FirstRunGate>
-                      <RootNavigator key={langKey} />
-                    </FirstRunGate>
-                    <VoiceCallProviderUI />
-                    {/* ✅ Root-level incoming-call banner */}
-                    <VoiceCallBanner />
+                    <PlatformPollerProvider>
+                      <FirstRunGate>
+                        <RootNavigator key={langKey} />
+                      </FirstRunGate>
+                      <VoiceCallProviderUI />
+                      {/* ✅ Root-level incoming-call banner */}
+                      <VoiceCallBanner />
+                    </PlatformPollerProvider>
                   </VoiceCallProvider>
                 </SubscriptionProvider>
               </ToastProvider>
