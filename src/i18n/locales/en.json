@@ -2081,6 +2081,309 @@
       "statusUpdated": "Job marked as {{status}}."
     }
   },
+  "jobApplications": {
+    "backToJob": "Back to Job",
+
+    "status": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "rejected": "Rejected"
+    },
+
+    "summary": {
+      "total": "Total",
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "declined": "Declined"
+    },
+
+    "section": {
+      "pending": "Pending Review",
+      "reviewed": "Reviewed"
+    },
+
+    "empty": {
+      "title": "No applications yet",
+      "subtitle": "Workers haven't applied to this job yet. Share it to get more visibility."
+    },
+
+    "card": {
+      "defaultWorkerTitle": "Worker",
+      "jobsCount": "{{count}} job",
+      "jobsCount_plural": "{{count}} jobs",
+      "perHourShort": "/hr",
+      "yearsExp": "{{count}} yr exp",
+      "coverNote": "Cover note",
+      "applied": "Applied {{date}} at {{time}}",
+      "viewProfile": "View Profile",
+      "accept": "Accept",
+      "decline": "Decline",
+      "interviewTitle": "Interview this worker",
+      "interviewSubtitle": "Start a quick face-to-face video call before you decide. You can also send the room link as a message.",
+      "viewLatestBooking": "View Latest Booking",
+      "createBooking": "Create Booking",
+      "createAnotherBooking": "Create Another Booking",
+      "undoAcceptance": "Undo Acceptance",
+      "reconsider": "Reconsider"
+    },
+
+    "undo": {
+      "title": "Undo this acceptance?",
+      "theWorker": "the worker",
+      "bodyPrefix": "This will return {{workerName}}'s application to Pending Review and set the job back to Open. You can accept a different applicant, or accept this worker again afterwards.",
+      "bodyBookingSuffix": " The existing booking with this worker will not be affected — you can still view, cancel, or manage it from the booking detail page.",
+      "keep": "Keep it",
+      "confirm": "Undo Acceptance"
+    },
+
+    "interview": {
+      "startCta": "Start Interview",
+      "messageLinkCta": "Message Link",
+      "chatSeed": "📞 Interview call for \"{{jobTitle}}\"",
+      "theRole": "the role",
+      "there": "there",
+      "initiateFailed": "Call could not be initiated",
+      "missingWorker": "Missing worker info",
+      "noConversation": "Could not establish conversation",
+      "startFailed": "Failed to start interview",
+      "chatFailed": "Could not open chat.",
+      "messageBody": "Hi {{workerName}}, here's the interview link for \"{{jobTitle}}\": {{url}}\n\nLooking forward to speaking with you!",
+      "messageBodyNoUrl": "Hi {{workerName}}, let's schedule a quick interview for \"{{jobTitle}}\"."
+    },
+
+    "errors": {
+      "loadFailed": "Failed to load applications.",
+      "updateFailed": "Failed to update application.",
+      "unacceptFailed": "Failed to undo. Please try again or contact support.",
+      "reconsiderFailed": "Failed to reconsider. Please try again."
+    },
+
+    "success": {
+      "accepted": "Application accepted! You can now create a booking for this worker. The job stays open for more hires.",
+      "rejected": "Application rejected.",
+      "unaccepted": "Acceptance undone. The application is back in Pending Review and the job is open again.",
+      "unacceptedWithBooking": "Acceptance undone. The application is back in Pending Review and the job is open again. The existing booking was not affected.",
+      "reconsidered": "Application moved back to Pending Review. You can accept, decline, or interview the worker again."
+    }
+  },
+  "createBooking": {
+    "backToApplications": "Back to Applications",
+    "eyebrow": "Create Booking",
+    "title": "From job post",
+    "subtitle": "Booking \"{{jobTitle}}\" with {{workerName}}{{workerTitle}}",
+    "lockedBanner": "From the job post — not editable",
+
+    "locked": {
+      "category": "Category",
+      "jobType": "Job Type",
+      "workStyle": "Work Style",
+      "scheduled": "Scheduled",
+      "estimatedDuration": "Estimated Duration",
+      "durationApprox": "≈ {{hours}}h of work",
+      "recurringSchedule": "Recurring Schedule",
+      "address": "Address",
+      "minQualification": "Minimum Qualification",
+      "experienceLevel": "Experience Level",
+      "educationLevel": "Education Level",
+      "language": "Language",
+      "workingHours": "Working Hours",
+      "applicantLocation": "Preferred Applicant Location"
+    },
+
+    "fields": {
+      "jobTitle": "Job Title",
+      "description": "Description",
+      "workConditions": "Work Conditions",
+      "requiredSkills": "Required Skills",
+      "requiredQualifications": "Required Qualifications",
+      "additionalRequirements": "Additional Requirements",
+      "requirements": "Requirements",
+      "responsibilities": "Responsibilities"
+    },
+
+    "sections": {
+      "payment": "Payment"
+    },
+
+    "jobType": {
+      "fullTime": "Full-time",
+      "partTime": "Part-time",
+      "contract": "Contract",
+      "temporary": "Temporary"
+    },
+
+    "locationType": {
+      "remote": "Remote",
+      "onSite": "On-site",
+      "hybrid": "Hybrid"
+    },
+
+    "budgetType": {
+      "fixed": "Fixed Price",
+      "hourly": "Per Hour",
+      "daily": "Per Day",
+      "weekly": "Per Week",
+      "monthly": "Per Month",
+      "yearly": "Per Year",
+      "custom": "Custom"
+    },
+
+    "budgetPeriod": {
+      "perHour": "per hour",
+      "perDay": "per day",
+      "perWeek": "per week",
+      "perMonth": "per month",
+      "perYear": "per year"
+    },
+
+    "duration": {
+      "hour": "hour",
+      "hours": "hours",
+      "day": "day",
+      "days": "days",
+      "week": "week",
+      "weeks": "weeks",
+      "month": "month",
+      "months": "months",
+      "year": "year",
+      "years": "years"
+    },
+
+    "rateOptions": {
+      "budget": "Job Budget",
+      "salaryAmount": "Salary Amount",
+      "salaryMin": "Salary (Minimum)",
+      "salaryMax": "Salary (Maximum)",
+      "salaryText": "Salary Headline"
+    },
+
+    "educationLevel": {
+      "highSchool": "High School",
+      "diploma": "Diploma",
+      "bachelor": "Bachelor's Degree",
+      "master": "Master's Degree",
+      "doctorate": "Doctorate",
+      "certification": "Certification",
+      "other": "Other"
+    },
+
+    "workConditions": {
+      "accommodation": "Accommodation",
+      "meals": "Meals"
+    },
+
+    "languages": {
+      "en": "English",
+      "fr": "French",
+      "ar": "Arabic",
+      "yo": "Yoruba",
+      "ha": "Hausa",
+      "ig": "Igbo",
+      "sw": "Swahili",
+      "pt": "Portuguese",
+      "es": "Spanish",
+      "de": "German",
+      "zh": "Chinese",
+      "hi": "Hindi",
+      "bn": "Bengali",
+      "ur": "Urdu",
+      "tr": "Turkish",
+      "ko": "Korean",
+      "ja": "Japanese",
+      "ru": "Russian",
+      "id": "Indonesian",
+      "vi": "Vietnamese",
+      "it": "Italian",
+      "nl": "Dutch",
+      "pl": "Polish",
+      "fa": "Persian",
+      "am": "Amharic",
+      "zu": "Zulu",
+      "af": "Afrikaans",
+      "so": "Somali"
+    },
+
+    "payment": {
+      "selectOption": "Select Payment Option *",
+      "selectOptionHint": "Pick the price that matches what you and the worker agreed. The full breakdown updates live below.",
+      "rateAndTotal": "Rate: {{rate}} {{period}} · Total: {{total}}",
+      "totalOnly": "Total: {{total}}"
+    },
+
+    "optionErrors": {
+      "missingRate": "No amount set for this option",
+      "missingDuration": "This rate needs a duration — enter a negotiated total below",
+      "customUnsupported": "Custom rate — enter the agreed total as a negotiated amount below",
+      "salaryTextUnsupported": "Salary headline only — enter a negotiated amount below",
+      "fallback": "Enter a negotiated amount below"
+    },
+
+    "calc": {
+      "fixedPrice": "Fixed price · {{amount}}",
+      "customRate": "Custom rate · {{amount}}",
+      "recurring": "{{rate}} {{period}} × {{multiplier}} = {{total}}",
+      "estimatedTotal": "Estimated total: {{amount}}"
+    },
+
+    "breakdown": {
+      "title": "Payment Breakdown",
+      "negotiatedBadge": "Negotiated",
+      "fixedPrice": "Fixed Price",
+      "rate": "Rate",
+      "durationLabel": "Duration ({{type}})",
+      "approx": "≈ {{multiplier}}",
+      "duration": "Duration",
+      "subtotal": "Subtotal",
+      "platformFee": "Platform fee ({{percent}}%)",
+      "platformFeeNote": "— escrow, support, payment processing",
+      "negotiatedTotal": "Negotiated Total",
+      "youPay": "You Pay"
+    },
+
+    "notes": {
+      "fixed": "Fixed-price booking. The agreed amount is the total, plus the platform fee.",
+      "recurring": "{{rate}} {{period}} × {{multiplier}}. The worker is paid per {{budgetType}} for the full {{duration}} engagement.",
+      "custom": "Custom rate — the total was estimated from the duration you described.",
+      "negotiated": "You and the worker agreed on a custom amount. This overrides the job post's rate.",
+      "referral": "Referral bonuses from your wallet can be applied at the payment step to reduce the total.",
+      "bookingNotesLabel": "Booking Notes (optional)",
+      "bookingNotesPlaceholder": "Access instructions, tools needed, or any notes specific to this booking..."
+    },
+
+    "negotiated": {
+      "title": "Negotiated amount (optional)",
+      "description": "If you and the worker agreed on a different amount after discussion, enter it here. It will override the calculated total and is required for options marked above.",
+      "placeholder": "e.g. 85000",
+      "notePlaceholder": "Reason / note about the negotiation (optional)",
+      "summary": "✓ Final amount: {{amount}} · overrides the selected option"
+    },
+
+    "submit": {
+      "creating": "Creating…",
+      "plain": "Book",
+      "withTotal": "Book · {{amount}}"
+    },
+
+    "success": {
+      "title": "Booking Created!",
+      "subtitle": "A booking request has been sent to {{name}}. They'll be notified by email.",
+      "categoryFallback": "Category",
+      "remote": "Remote",
+      "negotiated": "Negotiated",
+      "viewBooking": "View Booking",
+      "allBookings": "All Bookings"
+    },
+
+    "errors": {
+      "missingJobPost": "Missing job post.",
+      "loadFailed": "Failed to load the job post. Try again.",
+      "missingWorker": "Missing worker. Reload the screen and try again.",
+      "selectOption": "Please select a payment option.",
+      "needsNegotiated": "This option has no automatic total. Please enter a negotiated amount.",
+      "submitFailed": "Failed to create booking. Try again.",
+      "draftNotFound": "Booking draft not found"
+    }
+  },
   "postJob.addedCategory": "Added category \"{{name}}\"",
   "postJob.additionalNotes": "Additional Notes",
   "postJob.agreedAmount": "Agreed Amount",

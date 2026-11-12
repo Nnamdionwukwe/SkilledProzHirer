@@ -1,24 +1,24 @@
 // src/screens/main/JobApplicationsScreen.js
 //
-// Verbatim port of pages/hirer/JobApplications.jsx.
+// Verbatim port of pages/hirer/JobApplications.jsx — now fully i18n'd.
 //
-// Endpoints:
+// Endpoints (unchanged):
 //   GET   /jobs/:id
 //   GET   /jobs/:id/applications
-//   PATCH /jobs/:id/applications/:appId/status     (accept / reject)
-//   PATCH /jobs/:id/applications/:appId/unaccept   (undo accept)
-//   PATCH /jobs/:id/applications/:appId/reconsider (reject → pending)
-//   POST  /interviews                              (create video room)
+//   PATCH /jobs/:id/applications/:appId/status
+//   PATCH /jobs/:id/applications/:appId/unaccept
+//   PATCH /jobs/:id/applications/:appId/reconsider
 //
-// Job stays OPEN after accepting an application — bookings are the
-// formal contract. This matches web behaviour exactly.
-//
-// InterviewCallButton:
-//   · If ../video/InterviewCallButton exists, uses it.
-//   · Otherwise, renders an inline fallback with the SAME three buttons
-//     as the web component: Start Interview, Message Link, Copy Link.
+// Job stays OPEN after accepting an application — bookings are the formal
+// contract. This matches web behaviour exactly.
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import {
   ActivityIndicator,
   Image,
@@ -31,9 +31,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  useNavigation,
+  useFocusEffect,
+  useRoute,
+} from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
-import * as Clipboard from "expo-clipboard";
 
 import AppScreen from "../../components/AppScreen";
 import AppText from "../../components/AppText";
@@ -62,7 +65,6 @@ import {
   FaUndo,
   FaVideo,
   FaCommentDots,
-  FaCopy,
 } from "../../icons/fa";
 
 // ── Try to use the real InterviewCallButton; fall back to inline ───
@@ -90,42 +92,37 @@ function Stars({ rating = 0, total = 5, c }) {
   );
 }
 
-const APP_STATUS = {
-  PENDING: {
-    label: "Pending",
-    color: "#fbbf24",
-    bg: "rgba(251,191,36,0.12)",
-    icon: FaClock,
-  },
-  ACCEPTED: {
-    label: "Accepted",
-    color: "#22c55e",
-    bg: "rgba(34,197,94,0.12)",
-    icon: FaCheckCircle,
-  },
-  REJECTED: {
-    label: "Rejected",
-    color: "#ef4444",
-    bg: "rgba(239,68,68,0.12)",
-    icon: FaTimesCircle,
-  },
-};
+function statusMeta(status, t) {
+  switch (status) {
+    case "ACCEPTED":
+      return {
+        labelKey: "jobApplications.status.accepted",
+        label: t("jobApplications.status.accepted"),
+        color: "#22c55e",
+        bg: "rgba(34,197,94,0.12)",
+        icon: FaCheckCircle,
+      };
+    case "REJECTED":
+      return {
+        labelKey: "jobApplications.status.rejected",
+        label: t("jobApplications.status.rejected"),
+        color: "#ef4444",
+        bg: "rgba(239,68,68,0.12)",
+        icon: FaTimesCircle,
+      };
+    default:
+      return {
+        labelKey: "jobApplications.status.pending",
+        label: t("jobApplications.status.pending"),
+        color: "#fbbf24",
+        bg: "rgba(251,191,36,0.12)",
+        icon: FaClock,
+      };
+  }
+}
 
 // ═════════════════════════════════════════════════════════════════
-// Inline InterviewCallButton (verbatim web behaviour)
-// Renders:
-//   · Start Interview    → POST /interviews → open Jitsi
-//   · Message Link       → copy invite text + open Chat with prefilled
-//   · Copy Link          → clipboard + toast
-// Once a room exists, all three stay visible AND a "Room ready" pill
-// is shown beneath them.
-// ═════════════════════════════════════════════════════════════════
-// ═════════════════════════════════════════════════════════════════
-// Inline InterviewCallButton — uses the WORKING video call pipeline
-//   · Finds/creates the conversation with the worker
-//   · POSTs /voice-calls/:conversationId/initiate
-//   · Navigates to the in-app VideoCall screen
-//   · Returns to JobApplications when the call ends
+// Inline InterviewCallButton — in-app video call pipeline
 // ═════════════════════════════════════════════════════════════════
 function InlineInterviewCallButton({
   jobPostId,
@@ -135,14 +132,13 @@ function InlineInterviewCallButton({
   navigation,
   c,
 }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [creating, setCreating] = useState(false);
   const [messageing, setMessageing] = useState(false);
   const [error, setError] = useState("");
 
-  // ── Find or create the conversation with this worker ─────────────
   async function resolveConversationId() {
-    // 1) Try to find an existing conversation
     try {
       const res = await client.get("/messages/conversations", {
         params: { page: 1, limit: 100, _t: Date.now() },
@@ -158,17 +154,15 @@ function InlineInterviewCallButton({
       if (found?.id) return found.id;
     } catch {}
 
-    // 2) No conversation — create one
     const res = await client.post("/messages", {
       receiverId: workerId,
-      content: `📞 Interview call for "${jobTitle || "the role"}"`,
+      content: t("jobApplications.interview.chatSeed", {
+        jobTitle: jobTitle || t("jobApplications.interview.theRole"),
+      }),
     });
     return res.data?.data?.conversationId;
   }
 
-  // ── Initiate a video call room and return the room URL ───────────
-  // The backend exposes the room on `call.roomUrl` / `call.url` /
-  // `call.meetingUrl` depending on version — pick the first that exists.
   async function resolveInterviewUrl(conversationId) {
     const callRes = await client.post(
       `/voice-calls/${conversationId}/initiate`,
@@ -179,7 +173,7 @@ function InlineInterviewCallButton({
       },
     );
     const call = callRes?.data?.data?.call;
-    if (!call) throw new Error("Call could not be initiated");
+    if (!call) throw new Error(t("jobApplications.interview.initiateFailed"));
     const url =
       call.roomUrl ||
       call.url ||
@@ -189,17 +183,17 @@ function InlineInterviewCallButton({
     return url;
   }
 
-  // ── Start Interview (unchanged — opens the in-app VideoCall) ─────
   async function handleStartInterview() {
     if (!workerId) {
-      setError("Missing worker info");
+      setError(t("jobApplications.interview.missingWorker"));
       return;
     }
     setCreating(true);
     setError("");
     try {
       const conversationId = await resolveConversationId();
-      if (!conversationId) throw new Error("Could not establish conversation");
+      if (!conversationId)
+        throw new Error(t("jobApplications.interview.noConversation"));
       await resolveInterviewUrl(conversationId);
       navigation.navigate("VideoCall", {
         conversationId,
@@ -210,35 +204,37 @@ function InlineInterviewCallButton({
       setError(
         err.response?.data?.message ||
           err.message ||
-          "Failed to start interview",
+          t("jobApplications.interview.startFailed"),
       );
     } finally {
       setCreating(false);
     }
   }
 
-  // ── Message Link — open Chat with the interview link pre-filled ──
   async function handleMessageLink() {
     if (!workerId) return;
     setMessageing(true);
     setError("");
     try {
       const conversationId = await resolveConversationId();
-      if (!conversationId) throw new Error("Could not establish conversation");
+      if (!conversationId)
+        throw new Error(t("jobApplications.interview.noConversation"));
 
-      // Only initiate a room if one doesn't already exist. If the hirer
-      // pressed "Start Interview" earlier, we can reuse the same room.
       let url = null;
       try {
-        // Cheap probe — if initiate returns the same room, we can just use it.
         url = await resolveInterviewUrl(conversationId);
-      } catch {
-        // If initiating fails, still open chat — user can retype later
-      }
+      } catch {}
 
       const prefill = url
-        ? `Hi ${workerName || "there"}, here's the interview link for "${jobTitle || "the role"}": ${url}\n\nLooking forward to speaking with you!`
-        : `Hi ${workerName || "there"}, let's schedule a quick interview for "${jobTitle || "the role"}".`;
+        ? t("jobApplications.interview.messageBody", {
+            workerName: workerName || t("jobApplications.interview.there"),
+            jobTitle: jobTitle || t("jobApplications.interview.theRole"),
+            url,
+          })
+        : t("jobApplications.interview.messageBodyNoUrl", {
+            workerName: workerName || t("jobApplications.interview.there"),
+            jobTitle: jobTitle || t("jobApplications.interview.theRole"),
+          });
 
       navigation.navigate("Chat", {
         conversationId,
@@ -247,9 +243,11 @@ function InlineInterviewCallButton({
       });
     } catch (err) {
       setError(
-        err.response?.data?.message || err.message || "Failed to open chat",
+        err.response?.data?.message ||
+          err.message ||
+          t("jobApplications.interview.chatFailed"),
       );
-      toast.error("Could not open chat.");
+      toast.error(t("jobApplications.interview.chatFailed"));
     } finally {
       setMessageing(false);
     }
@@ -259,7 +257,6 @@ function InlineInterviewCallButton({
 
   return (
     <View style={styles.interviewButtons}>
-      {/* Start Interview — primary */}
       <Pressable
         onPress={handleStartInterview}
         disabled={busy}
@@ -277,13 +274,12 @@ function InlineInterviewCallButton({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
             <FaVideo size={12} color={c.bg} />
             <AppText style={{ fontSize: 11, fontWeight: "700", color: c.bg }}>
-              Start Interview
+              {t("jobApplications.interview.startCta")}
             </AppText>
           </View>
         )}
       </Pressable>
 
-      {/* Message Link — secondary */}
       <Pressable
         onPress={handleMessageLink}
         disabled={busy}
@@ -309,7 +305,7 @@ function InlineInterviewCallButton({
                 marginLeft: 5,
               }}
             >
-              Message Link
+              {t("jobApplications.interview.messageLinkCta")}
             </AppText>
           </>
         )}
@@ -331,7 +327,6 @@ function InlineInterviewCallButton({
   );
 }
 
-// Wrapper that prefers the real component when available
 function InterviewCallButton(props) {
   if (RealInterviewCallButton) {
     return <RealInterviewCallButton {...props} />;
@@ -342,6 +337,9 @@ function InterviewCallButton(props) {
 // ═════════════════════════════════════════════════════════════════
 // MAIN
 // ═════════════════════════════════════════════════════════════════
+// src/screens/main/JobApplicationsScreen.js
+// … (header comment unchanged) …
+
 export default function JobApplicationsScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
@@ -363,7 +361,6 @@ export default function JobApplicationsScreen() {
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [undoTarget, setUndoTarget] = useState(null);
 
-  // ── Fetch ─────────────────────────────────────────────────────
   const fetchAll = useCallback(
     async (isRefresh = false) => {
       if (!jobId) return;
@@ -376,25 +373,37 @@ export default function JobApplicationsScreen() {
         setJob(jobRes?.data?.data?.jobPost || jobRes?.data?.data);
         setApplications(appsRes?.data?.data?.applications || []);
       } catch (err) {
-        setError("Failed to load applications.");
+        setError(t("jobApplications.errors.loadFailed"));
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [jobId],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [jobId, t],
   );
 
   useEffect(() => {
     fetchAll(false);
   }, [fetchAll]);
 
+  // ── Auto-refresh on focus (returning from CreateBookingFromJob) ──
+  const hasMountedRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasMountedRef.current) {
+        hasMountedRef.current = true;
+        return;
+      }
+      fetchAll(true);
+    }, [fetchAll]),
+  );
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchAll(true);
   };
 
-  // ── Decisions ─────────────────────────────────────────────────
   const handleDecision = async (applicationId, status) => {
     setUpdating(applicationId);
     setError("");
@@ -409,17 +418,19 @@ export default function JobApplicationsScreen() {
       );
       setSuccess(
         status === "ACCEPTED"
-          ? "Application accepted! You can now create a booking for this worker. The job stays open for more hires."
-          : "Application rejected.",
+          ? t("jobApplications.success.accepted")
+          : t("jobApplications.success.rejected"),
       );
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to update application.");
+      setError(
+        err?.response?.data?.message ||
+          t("jobApplications.errors.updateFailed"),
+      );
     } finally {
       setUpdating(null);
     }
   };
 
-  // ── Undo acceptance ──────────────────────────────────────────
   const handleUnaccept = async ({ applicationId, hasBooking }) => {
     setUpdating(applicationId);
     setError("");
@@ -436,21 +447,20 @@ export default function JobApplicationsScreen() {
       setJob((prev) => ({ ...prev, status: "OPEN" }));
       setSuccess(
         hasBooking
-          ? "Acceptance undone. The application is back in Pending Review and the job is open again. The existing booking was not affected."
-          : "Acceptance undone. The application is back in Pending Review and the job is open again.",
+          ? t("jobApplications.success.unacceptedWithBooking")
+          : t("jobApplications.success.unaccepted"),
       );
       setUndoTarget(null);
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "Failed to undo. Please try again or contact support.",
+          t("jobApplications.errors.unacceptFailed"),
       );
     } finally {
       setUpdating(null);
     }
   };
 
-  // ── Reconsider rejection ──────────────────────────────────────
   const handleReconsider = async (applicationId) => {
     setUpdating(applicationId);
     setError("");
@@ -464,20 +474,17 @@ export default function JobApplicationsScreen() {
           a.id === applicationId ? { ...a, status: "PENDING" } : a,
         ),
       );
-      setSuccess(
-        "Application moved back to Pending Review. You can accept, decline, or interview the worker again.",
-      );
+      setSuccess(t("jobApplications.success.reconsidered"));
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "Failed to reconsider. Please try again.",
+          t("jobApplications.errors.reconsiderFailed"),
       );
     } finally {
       setUpdating(null);
     }
   };
 
-  // ── Derived ───────────────────────────────────────────────────
   const pending = useMemo(
     () => applications.filter((a) => a.status === "PENDING"),
     [applications],
@@ -495,7 +502,6 @@ export default function JobApplicationsScreen() {
     [applications],
   );
 
-  // ── Loading ───────────────────────────────────────────────────
   if (loading) {
     return (
       <AppScreen scroll={false}>
@@ -504,9 +510,6 @@ export default function JobApplicationsScreen() {
     );
   }
 
-  // ═════════════════════════════════════════════════════════════════
-  // RENDER
-  // ═════════════════════════════════════════════════════════════════
   return (
     <AppScreen
       refreshControl={
@@ -523,13 +526,9 @@ export default function JobApplicationsScreen() {
         onPress={() => {
           const isWorker = user?.role === "WORKER";
           const targetScreen = isWorker ? "WorkerJobDetail" : "JobDetail";
-
-          // Re-push the job's detail screen so the user lands on it regardless
-          // of what the back stack looked like when this screen was opened.
           if (jobId) {
             navigation.navigate(targetScreen, { jobId });
           } else {
-            // No jobId — fall back to the job-management screen for this role
             try {
               if (isWorker) {
                 navigation.navigate("WorkerHome", { screen: "WorkerJobs" });
@@ -548,11 +547,11 @@ export default function JobApplicationsScreen() {
       >
         <FaArrowLeft size={11} color={c.textDim} />
         <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>
-          Back to Job
+          {t("jobApplications.backToJob")}
         </AppText>
       </Pressable>
 
-      {/* ── Job summary ─────────────────────────────────────────── */}
+      {/* Job summary */}
       {job ? (
         <View
           style={[
@@ -576,10 +575,7 @@ export default function JobApplicationsScreen() {
             <View style={{ flex: 1, minWidth: 0 }}>
               <AppText
                 weight="displayBlack"
-                style={{
-                  fontSize: 10,
-                  letterSpacing: -0.5,
-                }}
+                style={{ fontSize: 10, letterSpacing: -0.5 }}
                 numberOfLines={2}
               >
                 {job.title}
@@ -598,29 +594,28 @@ export default function JobApplicationsScreen() {
             </View>
           </View>
 
-          {/* Stats grid */}
           <View style={styles.summaryStats}>
             <SummaryStat
               value={applications.length}
-              label="Total"
+              label={t("jobApplications.summary.total")}
               color={c.orange}
               c={c}
             />
             <SummaryStat
               value={pending.length}
-              label="Pending"
+              label={t("jobApplications.summary.pending")}
               color={c.orange}
               c={c}
             />
             <SummaryStat
               value={accepted.length}
-              label="Accepted"
+              label={t("jobApplications.summary.accepted")}
               color={c.green}
               c={c}
             />
             <SummaryStat
               value={declined.length}
-              label="Declined"
+              label={t("jobApplications.summary.declined")}
               color={c.red}
               c={c}
             />
@@ -628,7 +623,7 @@ export default function JobApplicationsScreen() {
         </View>
       ) : null}
 
-      {/* ── Alerts ──────────────────────────────────────────────── */}
+      {/* Alerts */}
       {error ? (
         <Pressable
           onPress={() => setError("")}
@@ -664,7 +659,7 @@ export default function JobApplicationsScreen() {
         </Pressable>
       ) : null}
 
-      {/* ── Applications ────────────────────────────────────────── */}
+      {/* Applications */}
       {applications.length === 0 ? (
         <View
           style={[
@@ -680,9 +675,10 @@ export default function JobApplicationsScreen() {
               fontWeight: "800",
               color: c.text,
               marginTop: 12,
+              textAlign: "center",
             }}
           >
-            No applications yet
+            {t("jobApplications.empty.title")}
           </AppText>
           <AppText
             style={{
@@ -694,18 +690,16 @@ export default function JobApplicationsScreen() {
               maxWidth: 320,
             }}
           >
-            Workers haven't applied to this job yet. Share it to get more
-            visibility.
+            {t("jobApplications.empty.subtitle")}
           </AppText>
         </View>
       ) : (
         <>
-          {/* Pending */}
           {pending.length > 0 ? (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-                  Pending Review
+                  {t("jobApplications.section.pending")}
                 </AppText>
                 <View
                   style={[
@@ -755,12 +749,11 @@ export default function JobApplicationsScreen() {
             </View>
           ) : null}
 
-          {/* Decided */}
           {decided.length > 0 ? (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <AppText style={[styles.sectionTitle, { color: c.textDim }]}>
-                  Reviewed
+                  {t("jobApplications.section.reviewed")}
                 </AppText>
                 <View
                   style={[
@@ -798,7 +791,7 @@ export default function JobApplicationsScreen() {
                   }
                   onAvatarClick={setLightboxSrc}
                   onViewProfile={() =>
-                    navigation.navigate("Profile", {
+                    navigation.navigate("WorkerProfile", {
                       userId: app.worker?.id,
                     })
                   }
@@ -811,7 +804,7 @@ export default function JobApplicationsScreen() {
         </>
       )}
 
-      {/* ── Undo confirmation modal ─────────────────────────────── */}
+      {/* Undo confirmation modal */}
       <Modal
         visible={!!undoTarget}
         transparent
@@ -850,7 +843,7 @@ export default function JobApplicationsScreen() {
                 marginBottom: 8,
               }}
             >
-              Undo this acceptance?
+              {t("jobApplications.undo.title")}
             </AppText>
             <AppText
               style={{
@@ -861,23 +854,13 @@ export default function JobApplicationsScreen() {
                 marginBottom: 16,
               }}
             >
-              This will return{" "}
-              <AppText style={{ fontWeight: "700", color: c.text }}>
-                {undoTarget?.workerName || "the worker"}
-              </AppText>
-              's application to Pending Review and set the job back to Open. You
-              can accept a different applicant, or accept this worker again
-              afterwards.
-              {undoTarget?.hasBooking ? (
-                <>
-                  {" "}
-                  <AppText style={{ fontWeight: "700", color: c.text }}>
-                    The existing booking with this worker will not be affected
-                  </AppText>{" "}
-                  — you can still view, cancel, or manage it from the booking
-                  detail page.
-                </>
-              ) : null}
+              {t("jobApplications.undo.bodyPrefix", {
+                workerName:
+                  undoTarget?.workerName || t("jobApplications.undo.theWorker"),
+              })}
+              {undoTarget?.hasBooking
+                ? t("jobApplications.undo.bodyBookingSuffix")
+                : ""}
             </AppText>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <Pressable
@@ -896,7 +879,7 @@ export default function JobApplicationsScreen() {
                 <AppText
                   style={{ fontSize: 12, fontWeight: "700", color: c.textDim }}
                 >
-                  Keep it
+                  {t("jobApplications.undo.keep")}
                 </AppText>
               </Pressable>
               <Pressable
@@ -929,7 +912,7 @@ export default function JobApplicationsScreen() {
                     <AppText
                       style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}
                     >
-                      Undo Acceptance
+                      {t("jobApplications.undo.confirm")}
                     </AppText>
                   </View>
                 )}
@@ -939,7 +922,7 @@ export default function JobApplicationsScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── Full-screen avatar lightbox ─────────────────────────── */}
+      {/* Full-screen avatar lightbox */}
       <Modal
         visible={!!lightboxSrc}
         transparent
@@ -1023,9 +1006,10 @@ function ApplicationCard({
   decided,
   c,
 }) {
+  const { t } = useTranslation();
   const { worker } = app;
   const wp = worker?.workerProfile;
-  const statusInfo = APP_STATUS[app.status] || APP_STATUS.PENDING;
+  const statusInfo = statusMeta(app.status, t);
   const StatusIcon = statusInfo.icon;
   const hasAvatar = !!worker?.avatar;
 
@@ -1080,7 +1064,7 @@ function ApplicationCard({
               {worker?.firstName} {worker?.lastName}
             </AppText>
             <AppText style={{ fontSize: 11, color: c.textDim }}>
-              {wp?.title || "Worker"}
+              {wp?.title || t("jobApplications.card.defaultWorkerTitle")}
             </AppText>
             {worker?.city || worker?.country ? (
               <View
@@ -1161,7 +1145,9 @@ function ApplicationCard({
                 marginLeft: 3,
               }}
             >
-              {wp.completedJobs} jobs
+              {t("jobApplications.card.jobsCount", {
+                count: wp.completedJobs,
+              })}
             </AppText>
           </View>
         ) : null}
@@ -1176,7 +1162,8 @@ function ApplicationCard({
                 marginLeft: 3,
               }}
             >
-              {wp.currency} {wp.hourlyRate.toLocaleString()}/hr
+              {wp.currency} {wp.hourlyRate.toLocaleString()}
+              {t("jobApplications.card.perHourShort")}
             </AppText>
           </View>
         ) : null}
@@ -1191,7 +1178,9 @@ function ApplicationCard({
                 marginLeft: 3,
               }}
             >
-              {wp.yearsExperience} yrs exp
+              {t("jobApplications.card.yearsExp", {
+                count: wp.yearsExperience,
+              })}
             </AppText>
           </View>
         ) : null}
@@ -1216,7 +1205,7 @@ function ApplicationCard({
                 letterSpacing: 0.6,
               }}
             >
-              Cover note
+              {t("jobApplications.card.coverNote")}
             </AppText>
           </View>
           <AppText
@@ -1235,20 +1224,20 @@ function ApplicationCard({
 
       {/* Applied date */}
       <AppText style={{ fontSize: 10, color: c.textMuted, marginTop: 8 }}>
-        Applied{" "}
-        {new Date(app.createdAt).toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })}{" "}
-        at{" "}
-        {new Date(app.createdAt).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
+        {t("jobApplications.card.applied", {
+          date: new Date(app.createdAt).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+          time: new Date(app.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
         })}
       </AppText>
 
-      {/* ── Pending actions ─────────────────────────────────────── */}
+      {/* Pending actions */}
       {!decided ? (
         <>
           <View
@@ -1261,7 +1250,7 @@ function ApplicationCard({
               <AppText
                 style={{ fontSize: 11, fontWeight: "600", color: c.orange }}
               >
-                View Profile →
+                {t("jobApplications.card.viewProfile")} →
               </AppText>
             </Pressable>
             <View style={{ flexDirection: "row", gap: 6 }}>
@@ -1286,7 +1275,7 @@ function ApplicationCard({
                       color: c.textDim,
                     }}
                   >
-                    Decline
+                    {t("jobApplications.card.decline")}
                   </AppText>
                 )}
               </Pressable>
@@ -1307,14 +1296,13 @@ function ApplicationCard({
                   <AppText
                     style={{ fontSize: 11, fontWeight: "700", color: c.bg }}
                   >
-                    Accept
+                    {t("jobApplications.card.accept")}
                   </AppText>
                 )}
               </Pressable>
             </View>
           </View>
 
-          {/* Interview section — 3 buttons */}
           <View style={[styles.interviewSection, { borderTopColor: c.border }]}>
             <AppText
               style={{
@@ -1325,7 +1313,7 @@ function ApplicationCard({
                 letterSpacing: 0.6,
               }}
             >
-              Interview this worker
+              {t("jobApplications.card.interviewTitle")}
             </AppText>
             <AppText
               style={{
@@ -1336,8 +1324,7 @@ function ApplicationCard({
                 lineHeight: 16,
               }}
             >
-              Start a quick face-to-face video call before you decide. You can
-              also send the room link as a message.
+              {t("jobApplications.card.interviewSubtitle")}
             </AppText>
             <InterviewCallButton
               jobPostId={jobId}
@@ -1351,7 +1338,7 @@ function ApplicationCard({
         </>
       ) : null}
 
-      {/* ── Accepted row ────────────────────────────────────────── */}
+      {/* Accepted row */}
       {decided && app.status === "ACCEPTED" ? (
         <View style={[styles.acceptedRow, { borderTopColor: c.border }]}>
           <View
@@ -1369,7 +1356,7 @@ function ApplicationCard({
                 marginLeft: 5,
               }}
             >
-              Accepted
+              {t("jobApplications.status.accepted")}
             </AppText>
           </View>
 
@@ -1377,9 +1364,7 @@ function ApplicationCard({
             {hasBooking ? (
               <Pressable
                 onPress={() =>
-                  navigation.navigate("BookingDetail", {
-                    bookingId,
-                  })
+                  navigation.navigate("BookingDetail", { bookingId })
                 }
                 style={({ pressed }) => [
                   styles.bookLinkSecondary,
@@ -1387,17 +1372,21 @@ function ApplicationCard({
                 ]}
               >
                 <AppText
-                  style={{ fontSize: 11, fontWeight: "600", color: c.textDim }}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "600",
+                    color: c.textDim,
+                  }}
                 >
-                  View Latest Booking →
+                  {t("jobApplications.card.viewLatestBooking")} →
                 </AppText>
               </Pressable>
             ) : null}
             <Pressable
               onPress={() =>
-                navigation.navigate("CreateBooking", {
-                  workerId: worker?.id,
+                navigation.navigate("CreateBookingFromJob", {
                   jobPostId: app.jobPostId,
+                  workerId: worker?.id,
                 })
               }
               style={({ pressed }) => [
@@ -1406,7 +1395,9 @@ function ApplicationCard({
               ]}
             >
               <AppText style={{ fontSize: 11, fontWeight: "700", color: c.bg }}>
-                {hasBooking ? "Create Another Booking →" : "Create Booking →"}
+                {hasBooking
+                  ? `${t("jobApplications.card.createAnotherBooking")} →`
+                  : `${t("jobApplications.card.createBooking")} →`}
               </AppText>
             </Pressable>
             <Pressable
@@ -1434,7 +1425,7 @@ function ApplicationCard({
                       color: c.textDim,
                     }}
                   >
-                    Undo Acceptance
+                    {t("jobApplications.card.undoAcceptance")}
                   </AppText>
                 </View>
               )}
@@ -1443,7 +1434,7 @@ function ApplicationCard({
         </View>
       ) : null}
 
-      {/* ── Rejected row ────────────────────────────────────────── */}
+      {/* Rejected row */}
       {decided && app.status === "REJECTED" ? (
         <View style={[styles.acceptedRow, { borderTopColor: c.border }]}>
           <View style={styles.rejectedNote}>
@@ -1456,7 +1447,7 @@ function ApplicationCard({
                 marginLeft: 5,
               }}
             >
-              Rejected
+              {t("jobApplications.status.rejected")}
             </AppText>
           </View>
           <View style={styles.acceptedActions}>
@@ -1481,7 +1472,7 @@ function ApplicationCard({
                   <AppText
                     style={{ fontSize: 11, fontWeight: "600", color: c.text }}
                   >
-                    Reconsider
+                    {t("jobApplications.card.reconsider")}
                   </AppText>
                 </View>
               )}
@@ -1696,25 +1687,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     minHeight: 36,
-  },
-  interviewBtnTertiary: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderWidth: 1,
-    minHeight: 36,
-  },
-  roomReadyPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    maxWidth: "100%",
   },
   acceptedRow: {
     flexDirection: "row",

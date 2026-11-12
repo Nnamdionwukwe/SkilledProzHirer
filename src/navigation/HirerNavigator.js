@@ -71,6 +71,7 @@ import SupportChatScreen from "../screens/main/SupportChatScreen";
 import SupportHubScreen from "../screens/main/SupportHubScreen";
 import SupportTicketThreadScreen from "../screens/main/SupportTicketThreadScreen";
 import ReleasePaymentScreen from "../screens/main/ReleasePaymentScreen";
+import CreateBookingFromJobScreen from "../screens/main/CreateBookingFromJobScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -328,6 +329,13 @@ export default function HirerNavigator() {
         >
           {() => <ScreenWithChrome Screen={CreateBookingScreen} />}
         </Drawer.Screen>
+        <Drawer.Screen
+          name="CreateBookingFromJob"
+          options={{ drawerItemStyle: { display: "none" } }}
+        >
+          {() => <ScreenWithChrome Screen={CreateBookingFromJobScreen} />}
+        </Drawer.Screen>
+
         <Drawer.Screen
           name="BookingDetail"
           options={{ drawerItemStyle: { display: "none" } }}
