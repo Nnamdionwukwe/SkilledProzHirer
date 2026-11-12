@@ -1788,7 +1788,117 @@
     "transaction": "transaction",
     "transactions": "transactions",
     "workerGets": "Worker gets",
-    "youPaid": "You paid"
+    "youPaid": "You paid",
+    "title": "Payment History",
+    "subtitle": "All transactions and receipts",
+    "searchPlaceholder": "Search by job, worker, or ID…",
+    "statusConfig": {
+      "processing": "Processing",
+      "completed": "Completed",
+      "success": "Success",
+      "reversed": "Reversed",
+      "cancelled": "Cancelled",
+      "initiated": "Initiated"
+    },
+    "status": {
+      "HELD": "In Escrow",
+      "RELEASED": "Released",
+      "PENDING": "Pending",
+      "REFUNDED": "Refunded",
+      "FAILED": "Failed"
+    },
+    "summary": {
+      "totalSpent": "Total Spent",
+      "transactionsCount": "{{count}} transaction",
+      "transactionsCount_plural": "{{count}} transactions",
+      "inEscrow": "In Escrow",
+      "awaitingRelease": "Awaiting release",
+      "refunded": "Refunded",
+      "returnedToYou": "Returned to you"
+    },
+    "tabs": {
+      "all": "All"
+    },
+    "filters": {
+      "currencyLabel": "Currency:",
+      "all": "All"
+    },
+    "errors": {
+      "loadFailed": "Failed to load payment history."
+    },
+    "empty": {
+      "title": "No transactions yet",
+      "subtitle": "Your payment history will appear here once you book a worker."
+    },
+    "pagination": {
+      "prev": "Prev",
+      "next": "Next",
+      "pageOf": "Page {{page}} of {{pages}}"
+    },
+    "card": {
+      "workerGetsPrefix": "Worker gets",
+      "workerGetsPercent": "100%",
+      "workerGetsSuffix": "({{amount}})",
+      "platformFee": "Platform fee: {{percent}}%",
+      "receipt": "Receipt"
+    },
+    "receipt": {
+      "title": "Payment Receipt",
+      "preparing": "Preparing…",
+      "printSave": "Print / Save PDF",
+      "printFailedTitle": "Print failed",
+      "printFailedBody": "Could not open the print dialog.",
+      "footerTagline": "SkilledPro · Global Skills Marketplace",
+      "fundsReleasedOn": "Funds released to worker on {{date}}",
+      "refundedOn": "Refunded on {{date}}",
+      "workerGetsPrefix": "Worker receives",
+      "workerGetsPercent": "100%",
+      "workerGetsSuffix": "of the job amount ({{amount}})",
+      "channels": {
+        "paystackCard": "Card (Paystack)",
+        "cardMobile": "Card / Mobile Money",
+        "payment": "Payment"
+      },
+      "meta": {
+        "receiptId": "Receipt ID",
+        "date": "Date",
+        "provider": "Provider",
+        "ref": "Ref"
+      },
+      "parties": {
+        "fromHirer": "FROM (HIRER)",
+        "toWorker": "TO (WORKER)"
+      },
+      "jobLabel": "JOB",
+      "breakdown": {
+        "workerEarnings": "Worker's earnings",
+        "platformFee": "Platform fee ({{percent}}%)",
+        "totalPaid": "Total you paid"
+      },
+      "html": {
+        "documentTitle": "Receipt - {{id}}",
+        "subtitle": "Transaction Receipt",
+        "amountCharged": "Amount Charged",
+        "transactionSection": "Transaction",
+        "receiptId": "Receipt ID",
+        "type": "Type",
+        "typePayment": "Payment",
+        "date": "Date",
+        "bookingDetailsSection": "Booking Details",
+        "service": "Service",
+        "worker": "Worker",
+        "hirer": "Hirer",
+        "breakdownSection": "Breakdown",
+        "workerEarnings": "Worker's Earnings",
+        "platformFee": "Platform Fee ({{percent}}%)",
+        "totalPaid": "Total Paid",
+        "paymentDetailsSection": "Payment Details",
+        "provider": "Provider",
+        "providerRef": "Provider Ref",
+        "thankYouPrefix": "Thank you for using",
+        "electronicNote": "This is an electronically generated receipt. No signature required."
+      }
+    }
   },
   "phone": "Phone",
   "jobsManagement": {

@@ -29,6 +29,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Print from "expo-print";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../components/AppText";
 import Skeleton from "../../components/Skeleton";
@@ -48,34 +49,34 @@ import {
 
 const LIMIT = 10;
 
-// ── Status config ───────────────────────────────────────────────────────
+// ── Status config — labelKey values are i18n keys, translated at render ─
 const STATUS_META = {
-  HELD: { label: "In Escrow", key: "escrow" },
-  RELEASED: { label: "Released", key: "released" },
-  PENDING: { label: "Pending", key: "pending" },
-  REFUNDED: { label: "Refunded", key: "refunded" },
-  FAILED: { label: "Failed", key: "failed" },
+  HELD: { labelKey: "payments.status.HELD", key: "escrow" },
+  RELEASED: { labelKey: "payments.status.RELEASED", key: "released" },
+  PENDING: { labelKey: "payments.status.PENDING", key: "pending" },
+  REFUNDED: { labelKey: "payments.status.REFUNDED", key: "refunded" },
+  FAILED: { labelKey: "payments.status.FAILED", key: "failed" },
 };
 
 const BOOKING_STATUS_META = {
-  COMPLETED: { label: "Completed", key: "released" },
-  IN_PROGRESS: { label: "In Progress", key: "escrow" },
-  CANCELLED: { label: "Cancelled", key: "failed" },
-  DISPUTED: { label: "Disputed", key: "pending" },
+  COMPLETED: { labelKey: "booking.status.completed", key: "released" },
+  IN_PROGRESS: { labelKey: "booking.status.inProgress", key: "escrow" },
+  CANCELLED: { labelKey: "booking.status.cancelled", key: "failed" },
+  DISPUTED: { labelKey: "booking.status.disputed", key: "pending" },
 };
 
-const STATUS_CONFIG_LABEL = {
-  PENDING: "Pending Review",
-  PROCESSING: "Processing",
-  COMPLETED: "Completed",
-  SUCCESS: "Success",
-  FAILED: "Failed",
-  REVERSED: "Reversed",
-  CANCELLED: "Cancelled",
-  INITIATED: "Initiated",
-  HELD: "In Escrow",
-  RELEASED: "Released",
-  REFUNDED: "Refunded",
+const STATUS_CONFIG_LABEL_KEYS = {
+  PENDING: "payments.status.PENDING",
+  PROCESSING: "payments.statusConfig.processing",
+  COMPLETED: "payments.statusConfig.completed",
+  SUCCESS: "payments.statusConfig.success",
+  FAILED: "payments.status.FAILED",
+  REVERSED: "payments.statusConfig.reversed",
+  CANCELLED: "payments.statusConfig.cancelled",
+  INITIATED: "payments.statusConfig.initiated",
+  HELD: "payments.status.HELD",
+  RELEASED: "payments.status.RELEASED",
+  REFUNDED: "payments.status.REFUNDED",
 };
 
 // ── Utility ─────────────────────────────────────────────────────────────
@@ -128,14 +129,14 @@ function formatDateLong(d) {
   });
 }
 
-function getPaymentChannel(tx) {
+function getPaymentChannel(tx, t) {
   if (tx.provider === "PAYSTACK" || tx.provider?.includes("PAYSTACK")) {
-    return { label: "Card (Paystack)" };
+    return { label: t("payments.receipt.channels.paystackCard") };
   }
   if (tx.provider === "FLUTTERWAVE" || tx.provider?.includes("FLUTTERWAVE")) {
-    return { label: "Card / Mobile Money" };
+    return { label: t("payments.receipt.channels.cardMobile") };
   }
-  return { label: tx.provider || "Payment" };
+  return { label: tx.provider || t("payments.receipt.channels.payment") };
 }
 
 // Rough luminance — used only to pick dark/light receipt colors.
@@ -184,8 +185,10 @@ function statusColors(key, c) {
 }
 
 // ── Receipt HTML — native currency ──────────────────────────────────────
-function generateReceiptHTML(payment, isDark) {
-  const channel = getPaymentChannel(payment);
+// `t` is passed in so all user-facing strings are translatable while the
+// HTML structure (styles, layout) stays identical.
+function generateReceiptHTML(payment, isDark, t) {
+  const channel = getPaymentChannel(payment, t);
   const feeRate = getHirerFeeRate(payment.currency);
   const feePercent = Math.round(feeRate * 100);
 
@@ -197,15 +200,19 @@ function generateReceiptHTML(payment, isDark) {
   const borderDash = isDark ? "rgba(255,255,255,0.15)" : "#e5e7eb";
   const footerBg = isDark ? "#0c0c18" : "#f9fafb";
 
-  const statusLabel =
-    STATUS_CONFIG_LABEL[payment.status] || payment.status || "—";
+  const statusLabelKey = STATUS_CONFIG_LABEL_KEYS[payment.status];
+  const statusLabel = statusLabelKey
+    ? t(statusLabelKey)
+    : payment.status || "—";
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Receipt - ${payment.id}</title>
+  <title>${t("payments.receipt.html.documentTitle", {
+    id: payment.id,
+  })}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${bg}; color: ${text}; display: flex; justify-content: center; align-items: flex-start; padding: 20px; }
@@ -239,40 +246,45 @@ function generateReceiptHTML(payment, isDark) {
   <div class="receipt">
     <div class="receipt-header">
       <h1>SkilledProz</h1>
-      <p class="subtitle">Transaction Receipt</p>
+      <p class="subtitle">${t("payments.receipt.html.subtitle")}</p>
       <div class="receipt-status">${statusLabel}</div>
     </div>
     <div class="receipt-amount">
-      <div class="label">Amount Charged</div>
+      <div class="label">${t("payments.receipt.html.amountCharged")}</div>
       <div class="value debit">- ${fmtMoneyNative(payment.amount, payment.currency)}</div>
       <div class="channel">${channel.label}</div>
     </div>
     <div class="receipt-body">
-      <div class="row section-title"><span class="label">Transaction</span></div>
-      <div class="row"><span class="label">Receipt ID</span><span class="value mono">#${String(payment.id).slice(0, 12).toUpperCase()}</span></div>
-      <div class="row"><span class="label">Type</span><span class="value">Payment</span></div>
-      <div class="row"><span class="label">Date</span><span class="value">${formatDateLong(payment.createdAt)}</span></div>
-      <div class="row section-title"><span class="label">Booking Details</span></div>
-      <div class="row"><span class="label">Service</span><span class="value">${payment.booking?.title || "—"}</span></div>
-      <div class="row"><span class="label">Worker</span><span class="value">${payment.booking?.worker?.firstName || ""} ${payment.booking?.worker?.lastName || ""}</span></div>
-      <div class="row"><span class="label">Hirer</span><span class="value">${payment.booking?.hirer?.firstName || ""} ${payment.booking?.hirer?.lastName || ""}</span></div>
-      <div class="row section-title"><span class="label">Breakdown</span></div>
-      <div class="row"><span class="label">Worker's Earnings</span><span class="value">${fmtMoneyNative(payment.workerPayout || payment.amount * (1 - feeRate), payment.currency)}</span></div>
-      <div class="row fee-row"><span class="label">Platform Fee (${feePercent}%)</span><span class="value">+ ${fmtMoneyNative(payment.platformFee || payment.amount * feeRate, payment.currency)}</span></div>
-      <div class="row net-row"><span class="label">Total Paid</span><span class="value">${fmtMoneyNative(payment.amount, payment.currency)}</span></div>
+      <div class="row section-title"><span class="label">${t("payments.receipt.html.transactionSection")}</span></div>
+      <div class="row"><span class="label">${t("payments.receipt.html.receiptId")}</span><span class="value mono">#${String(payment.id).slice(0, 12).toUpperCase()}</span></div>
+      <div class="row"><span class="label">${t("payments.receipt.html.type")}</span><span class="value">${t("payments.receipt.html.typePayment")}</span></div>
+      <div class="row"><span class="label">${t("payments.receipt.html.date")}</span><span class="value">${formatDateLong(payment.createdAt)}</span></div>
+      <div class="row section-title"><span class="label">${t("payments.receipt.html.bookingDetailsSection")}</span></div>
+      <div class="row"><span class="label">${t("payments.receipt.html.service")}</span><span class="value">${payment.booking?.title || "—"}</span></div>
+      <div class="row"><span class="label">${t("payments.receipt.html.worker")}</span><span class="value">${payment.booking?.worker?.firstName || ""} ${payment.booking?.worker?.lastName || ""}</span></div>
+      <div class="row"><span class="label">${t("payments.receipt.html.hirer")}</span><span class="value">${payment.booking?.hirer?.firstName || ""} ${payment.booking?.hirer?.lastName || ""}</span></div>
+      <div class="row section-title"><span class="label">${t("payments.receipt.html.breakdownSection")}</span></div>
+      <div class="row"><span class="label">${t("payments.receipt.html.workerEarnings")}</span><span class="value">${fmtMoneyNative(payment.workerPayout || payment.amount * (1 - feeRate), payment.currency)}</span></div>
+      <div class="row fee-row"><span class="label">${t(
+        "payments.receipt.html.platformFee",
+        {
+          percent: feePercent,
+        },
+      )}</span><span class="value">+ ${fmtMoneyNative(payment.platformFee || payment.amount * feeRate, payment.currency)}</span></div>
+      <div class="row net-row"><span class="label">${t("payments.receipt.html.totalPaid")}</span><span class="value">${fmtMoneyNative(payment.amount, payment.currency)}</span></div>
       ${
         payment.provider || payment.providerRef
           ? `
-      <div class="row section-title"><span class="label">Payment Details</span></div>
-      <div class="row"><span class="label">Provider</span><span class="value">${payment.provider || "—"}</span></div>
-      ${payment.providerRef ? `<div class="row"><span class="label">Provider Ref</span><span class="value mono">${payment.providerRef}</span></div>` : ""}
+      <div class="row section-title"><span class="label">${t("payments.receipt.html.paymentDetailsSection")}</span></div>
+      <div class="row"><span class="label">${t("payments.receipt.html.provider")}</span><span class="value">${payment.provider || "—"}</span></div>
+      ${payment.providerRef ? `<div class="row"><span class="label">${t("payments.receipt.html.providerRef")}</span><span class="value mono">${payment.providerRef}</span></div>` : ""}
       `
           : ""
       }
     </div>
     <div class="receipt-footer">
-      <p>Thank you for using <strong>SkilledProz</strong></p>
-      <p style="margin-top: 6px;">This is an electronically generated receipt. No signature required.</p>
+      <p>${t("payments.receipt.html.thankYouPrefix")} <strong>SkilledProz</strong></p>
+      <p style="margin-top: 6px;">${t("payments.receipt.html.electronicNote")}</p>
       <p style="margin-top: 8px; font-size: 11px;">skilledproz.com · support@skilledproz.com</p>
     </div>
   </div>
@@ -282,6 +294,7 @@ function generateReceiptHTML(payment, isDark) {
 
 // ── Receipt Modal ───────────────────────────────────────────────────────
 function ReceiptModal({ payment, onClose, c, isDark }) {
+  const { t } = useTranslation();
   const [printing, setPrinting] = useState(false);
   if (!payment) return null;
 
@@ -289,9 +302,13 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
   const hirer = booking?.hirer ?? {};
   const worker = booking?.worker ?? {};
   const statusMeta = STATUS_META[payment.status] ?? {
+    labelKey: null,
     label: payment.status,
     key: "pending",
   };
+  const statusLabel = statusMeta.labelKey
+    ? t(statusMeta.labelKey)
+    : statusMeta.label || payment.status;
   const sc = statusColors(statusMeta.key, c);
 
   const feeRate = getHirerFeeRate(payment.currency);
@@ -303,12 +320,12 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
     setPrinting(true);
     try {
       await Print.printAsync({
-        html: generateReceiptHTML(payment, isDark),
+        html: generateReceiptHTML(payment, isDark, t),
       });
     } catch (err) {
       Alert.alert(
-        "Print failed",
-        err?.message || "Could not open the print dialog.",
+        t("payments.receipt.printFailedTitle"),
+        err?.message || t("payments.receipt.printFailedBody"),
       );
     } finally {
       setPrinting(false);
@@ -412,7 +429,7 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                     color: c.text,
                   }}
                 >
-                  Payment Receipt
+                  {t("payments.receipt.title")}
                 </AppText>
                 <View
                   style={{
@@ -430,7 +447,7 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                       letterSpacing: 0.5,
                     }}
                   >
-                    {statusMeta.label}
+                    {statusLabel}
                   </AppText>
                 </View>
               </View>
@@ -440,22 +457,26 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
               {/* Meta grid */}
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
                 <MetaItem
-                  label="Receipt ID"
+                  label={t("payments.receipt.meta.receiptId")}
                   value={`#${String(payment.id).slice(0, 12).toUpperCase()}`}
                   c={c}
                 />
                 <MetaItem
-                  label="Date"
+                  label={t("payments.receipt.meta.date")}
                   value={fmtDateTime(payment.createdAt)}
                   c={c}
                 />
                 <MetaItem
-                  label="Provider"
+                  label={t("payments.receipt.meta.provider")}
                   value={payment.provider ?? "—"}
                   c={c}
                 />
                 {payment.providerRef ? (
-                  <MetaItem label="Ref" value={payment.providerRef} c={c} />
+                  <MetaItem
+                    label={t("payments.receipt.meta.ref")}
+                    value={payment.providerRef}
+                    c={c}
+                  />
                 ) : null}
               </View>
 
@@ -464,7 +485,9 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
               {/* Parties */}
               <View style={{ gap: 12 }}>
                 <View>
-                  <AppText style={labelStyle(c)}>FROM (HIRER)</AppText>
+                  <AppText style={labelStyle(c)}>
+                    {t("payments.receipt.parties.fromHirer")}
+                  </AppText>
                   <AppText
                     style={{
                       fontSize: 14,
@@ -494,7 +517,9 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                   />
                 </View>
                 <View>
-                  <AppText style={labelStyle(c)}>TO (WORKER)</AppText>
+                  <AppText style={labelStyle(c)}>
+                    {t("payments.receipt.parties.toWorker")}
+                  </AppText>
                   <AppText
                     style={{
                       fontSize: 14,
@@ -519,7 +544,9 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
               {/* Job */}
               {booking ? (
                 <View>
-                  <AppText style={labelStyle(c)}>JOB</AppText>
+                  <AppText style={labelStyle(c)}>
+                    {t("payments.receipt.jobLabel")}
+                  </AppText>
                   <AppText
                     style={{
                       fontSize: 14,
@@ -560,7 +587,9 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
               {/* Breakdown — native currency (actual transaction) */}
               <View style={{ gap: 10 }}>
                 <View style={rowBetween}>
-                  <AppText style={dimText(c)}>Worker's earnings</AppText>
+                  <AppText style={dimText(c)}>
+                    {t("payments.receipt.breakdown.workerEarnings")}
+                  </AppText>
                   <AppText
                     style={{
                       fontSize: 14,
@@ -573,7 +602,9 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                 </View>
                 <View style={rowBetween}>
                   <AppText style={dimText(c)}>
-                    Platform fee ({feePercent}%)
+                    {t("payments.receipt.breakdown.platformFee", {
+                      percent: feePercent,
+                    })}
                   </AppText>
                   <AppText
                     style={{
@@ -603,7 +634,7 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                       color: c.text,
                     }}
                   >
-                    Total you paid
+                    {t("payments.receipt.breakdown.totalPaid")}
                   </AppText>
                   <AppText
                     style={{
@@ -640,12 +671,13 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                     lineHeight: 17,
                   }}
                 >
-                  Worker receives{" "}
+                  {t("payments.receipt.workerGetsPrefix")}{" "}
                   <AppText style={{ fontWeight: "700", color: c.green }}>
-                    100%
+                    {t("payments.receipt.workerGetsPercent")}
                   </AppText>{" "}
-                  of the job amount (
-                  {fmtMoneyNative(workerPayout, payment.currency)})
+                  {t("payments.receipt.workerGetsSuffix", {
+                    amount: fmtMoneyNative(workerPayout, payment.currency),
+                  })}
                 </AppText>
               </View>
 
@@ -660,8 +692,9 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                   }}
                 >
                   <AppText style={{ fontSize: 12, color: c.green }}>
-                    Funds released to worker on{" "}
-                    {fmtDateTime(payment.escrowReleasedAt)}
+                    {t("payments.receipt.fundsReleasedOn", {
+                      date: fmtDateTime(payment.escrowReleasedAt),
+                    })}
                   </AppText>
                 </View>
               ) : null}
@@ -677,7 +710,9 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                   }}
                 >
                   <AppText style={{ fontSize: 12, color: "#a78bfa" }}>
-                    Refunded on {fmtDateTime(payment.refundedAt)}
+                    {t("payments.receipt.refundedOn", {
+                      date: fmtDateTime(payment.refundedAt),
+                    })}
                   </AppText>
                 </View>
               ) : null}
@@ -692,7 +727,7 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                 }}
               >
                 <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                  SkilledPro · Global Skills Marketplace
+                  {t("payments.receipt.footerTagline")}
                 </AppText>
                 <Pressable
                   onPress={handlePrint}
@@ -716,7 +751,9 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                       color: c.orange,
                     }}
                   >
-                    {printing ? "Preparing…" : "Print / Save PDF"}
+                    {printing
+                      ? t("payments.receipt.preparing")
+                      : t("payments.receipt.printSave")}
                   </AppText>
                 </Pressable>
               </View>
@@ -813,14 +850,20 @@ function SummaryCard({ label, value, sub, accent, c }) {
 // `format` comes straight from useCurrency() — it reads `currencyCode`,
 // which CurrencyPicker changes via setCurrencyCode. This is the exact same
 // function DashboardScreen uses on its Total Spent card.
-function PaymentCard({ payment, onOpenReceipt, c, format }) {
+function PaymentCard({ payment, onOpenReceipt, c, format, t }) {
   const statusMeta = STATUS_META[payment.status] ?? {
+    labelKey: null,
     label: payment.status,
     key: "pending",
   };
+  const statusLabel = statusMeta.labelKey
+    ? t(statusMeta.labelKey)
+    : statusMeta.label || payment.status;
+
   const sc = statusColors(statusMeta.key, c);
   const worker = payment.booking?.worker ?? {};
   const bookingStatus = BOOKING_STATUS_META[payment.booking?.status];
+  const bookingStatusLabel = bookingStatus ? t(bookingStatus.labelKey) : null;
   const rowFeePercent = Math.round(getHirerFeeRate(payment.currency) * 100);
 
   return (
@@ -875,7 +918,7 @@ function PaymentCard({ payment, onOpenReceipt, c, format }) {
                   color: statusColors(bookingStatus.key, c).fg,
                 }}
               >
-                {bookingStatus.label}
+                {bookingStatusLabel}
               </AppText>
             </View>
           ) : null}
@@ -890,7 +933,7 @@ function PaymentCard({ payment, onOpenReceipt, c, format }) {
           }}
         >
           <AppText style={{ fontSize: 10, fontWeight: "700", color: sc.fg }}>
-            {statusMeta.label}
+            {statusLabel}
           </AppText>
         </View>
       </View>
@@ -978,12 +1021,16 @@ function PaymentCard({ payment, onOpenReceipt, c, format }) {
           {format(payment.amount)}
         </AppText>
         <AppText style={{ fontSize: 11, color: c.textMuted }}>
-          Worker gets{" "}
-          <AppText style={{ fontWeight: "700", color: c.green }}>100%</AppText>{" "}
-          ({format(payment.workerPayout)})
+          {t("payments.card.workerGetsPrefix")}{" "}
+          <AppText style={{ fontWeight: "700", color: c.green }}>
+            {t("payments.card.workerGetsPercent")}
+          </AppText>{" "}
+          {t("payments.card.workerGetsSuffix", {
+            amount: format(payment.workerPayout),
+          })}
         </AppText>
         <AppText style={{ fontSize: 10, color: c.orange, fontWeight: "600" }}>
-          {`Platform fee: ${rowFeePercent}%`}
+          {t("payments.card.platformFee", { percent: rowFeePercent })}
         </AppText>
       </View>
 
@@ -1004,7 +1051,7 @@ function PaymentCard({ payment, onOpenReceipt, c, format }) {
         ]}
       >
         <AppText style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}>
-          Receipt
+          {t("payments.card.receipt")}
         </AppText>
       </Pressable>
     </View>
@@ -1029,7 +1076,7 @@ function SkeletonRows({ c }) {
 }
 
 // ── Empty state ─────────────────────────────────────────────────────────
-function EmptyState({ c }) {
+function EmptyState({ c, t }) {
   return (
     <View
       style={{
@@ -1045,7 +1092,7 @@ function EmptyState({ c }) {
     >
       <FaInbox size={40} color={c.textMuted} />
       <AppText style={{ fontSize: 15, fontWeight: "600", color: c.textDim }}>
-        No transactions yet
+        {t("payments.empty.title")}
       </AppText>
       <AppText
         style={{
@@ -1055,7 +1102,7 @@ function EmptyState({ c }) {
           maxWidth: 300,
         }}
       >
-        Your payment history will appear here once you book a worker.
+        {t("payments.empty.subtitle")}
       </AppText>
     </View>
   );
@@ -1063,6 +1110,7 @@ function EmptyState({ c }) {
 
 // ── Main screen ─────────────────────────────────────────────────────────
 export default function PaymentHistoryScreen() {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const c = theme.colors;
   const isDark = bgLuminance(c.bg) < 0.5;
@@ -1104,9 +1152,9 @@ export default function PaymentHistoryScreen() {
         setSummary(d.summary ?? null);
         setAvailableCurrencies(d.availableCurrencies ?? []);
       })
-      .catch(() => setError("Failed to load payment history."))
+      .catch(() => setError(t("payments.errors.loadFailed")))
       .finally(() => setLoading(false));
-  }, [page, statusFilter, currencyFilter]);
+  }, [page, statusFilter, currencyFilter, t]);
 
   // Client-side search
   const visible = useMemo(() => {
@@ -1169,12 +1217,12 @@ export default function PaymentHistoryScreen() {
                     letterSpacing: -0.5,
                   }}
                 >
-                  Payment History
+                  {t("payments.title")}
                 </AppText>
                 <AppText
                   style={{ fontSize: 12, color: c.textDim, marginTop: 2 }}
                 >
-                  All transactions and receipts
+                  {t("payments.subtitle")}
                 </AppText>
               </View>
               <CurrencyPicker compact />
@@ -1183,22 +1231,24 @@ export default function PaymentHistoryScreen() {
             {/* Summary row — uses format(), same as Dashboard Total Spent */}
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
               <SummaryCard
-                label="Total Spent"
+                label={t("payments.summary.totalSpent")}
                 value={format(totalSpent)}
-                sub={`${total} transaction${total !== 1 ? "s" : ""}`}
+                sub={t("payments.summary.transactionsCount", {
+                  count: total,
+                })}
                 accent
                 c={c}
               />
               <SummaryCard
-                label="In Escrow"
+                label={t("payments.summary.inEscrow")}
                 value={format(inEscrow)}
-                sub="Awaiting release"
+                sub={t("payments.summary.awaitingRelease")}
                 c={c}
               />
               <SummaryCard
-                label="Refunded"
+                label={t("payments.summary.refunded")}
                 value={format(totalRefunds)}
-                sub="Returned to you"
+                sub={t("payments.summary.returnedToYou")}
                 c={c}
               />
             </View>
@@ -1220,7 +1270,7 @@ export default function PaymentHistoryScreen() {
               <TextInput
                 value={search}
                 onChangeText={setSearch}
-                placeholder="Search by job, worker, or ID…"
+                placeholder={t("payments.searchPlaceholder")}
                 placeholderTextColor={c.textMuted}
                 style={{
                   flex: 1,
@@ -1246,7 +1296,9 @@ export default function PaymentHistoryScreen() {
               {statusTabList.map((s) => {
                 const active = statusFilter === s;
                 const label =
-                  s === "ALL" ? "All" : (STATUS_META[s]?.label ?? s);
+                  s === "ALL"
+                    ? t("payments.tabs.all")
+                    : t(STATUS_META[s]?.labelKey ?? `payments.status.${s}`);
                 return (
                   <Pressable
                     key={s}
@@ -1299,7 +1351,7 @@ export default function PaymentHistoryScreen() {
                     marginRight: 4,
                   }}
                 >
-                  Currency:
+                  {t("payments.filters.currencyLabel")}
                 </AppText>
                 <Pressable
                   onPress={() => {
@@ -1327,7 +1379,7 @@ export default function PaymentHistoryScreen() {
                       fontWeight: "600",
                     }}
                   >
-                    All
+                    {t("payments.filters.all")}
                   </AppText>
                 </Pressable>
                 {availableCurrencies.map((cur) => {
@@ -1373,6 +1425,7 @@ export default function PaymentHistoryScreen() {
             onOpenReceipt={() => setReceipt(item)}
             c={c}
             format={format}
+            t={t}
           />
         )}
         ListEmptyComponent={
@@ -1383,7 +1436,7 @@ export default function PaymentHistoryScreen() {
           ) : loading ? (
             <SkeletonRows c={c} />
           ) : (
-            <EmptyState c={c} />
+            <EmptyState c={c} t={t} />
           )
         }
         ListFooterComponent={
@@ -1417,11 +1470,14 @@ export default function PaymentHistoryScreen() {
               >
                 <FaChevronLeft size={11} color={c.textDim} />
                 <AppText style={{ fontSize: 12, color: c.textDim }}>
-                  Prev
+                  {t("payments.pagination.prev")}
                 </AppText>
               </Pressable>
               <AppText style={{ fontSize: 12, color: c.textDim }}>
-                {`Page ${page} of ${totalPages}`}
+                {t("payments.pagination.pageOf", {
+                  page,
+                  pages: totalPages,
+                })}
               </AppText>
               <Pressable
                 onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -1442,7 +1498,7 @@ export default function PaymentHistoryScreen() {
                 ]}
               >
                 <AppText style={{ fontSize: 12, color: c.textDim }}>
-                  Next
+                  {t("payments.pagination.next")}
                 </AppText>
                 <FaChevronRight size={11} color={c.textDim} />
               </Pressable>
