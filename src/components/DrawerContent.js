@@ -298,10 +298,25 @@ export default function DrawerContent({ state }) {
         ]}
       >
         <View style={styles.logoTextRow}>
-          <AppText style={[styles.logoText, { color: c.text }]}>
+          <AppText
+            weight="displayBlack"
+            style={{
+              fontSize: 20,
+              letterSpacing: -0.5,
+            }}
+          >
             Skilled
           </AppText>
-          <AppText style={[styles.logoText, { color: c.orange }]}>Proz</AppText>
+          <AppText
+            weight="displayBlack"
+            style={{
+              fontSize: 20,
+              letterSpacing: -0.5,
+              color: c.orange,
+            }}
+          >
+            Proz
+          </AppText>
         </View>
         <AppText style={[styles.logoRole, { color: c.textMuted }]}>
           Hirer Portal
