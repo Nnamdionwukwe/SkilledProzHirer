@@ -39,6 +39,7 @@ import BookingDetailSidebar from "../../components/booking/BookingDetailSidebar"
 import WorkerPaymentPreview from "../../components/booking/WorkerPaymentPreview";
 import RaiseDisputeSheet from "../../components/booking/RaiseDisputeSheet";
 import { FaArrowLeft, FaExclamationCircle, FaTimes } from "../../icons/fa";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 
 // ═══════════════════════════════════════════════════════════════════════
 // Inline stub — RefundRequest
@@ -389,10 +390,14 @@ export default function BookingDetailScreen() {
           }
         }
       } catch (err) {
-        toast.error(
-          err?.response?.data?.message ||
-            t("booking.loadFailed", "Could not load booking details."),
-        );
+        // Poller never surfaces errors — no toast on silent refresh.
+        // Initial load / focus / pull-to-refresh still show the toast.
+        if (!silent) {
+          toast.error(
+            err?.response?.data?.message ||
+              t("booking.loadFailed", "Could not load booking details."),
+          );
+        }
       } finally {
         setLoading(false);
       }
@@ -681,6 +686,24 @@ export default function BookingDetailScreen() {
   // /voice-calls/:conversationId/initiate so the receiver's
   // VoiceCallBanner picks up the PENDING call and rings.
   const [startingVideoCall, setStartingVideoCall] = useState(false);
+
+  // ── Silent background refresh every 5s ──
+  // Paused while any inline form is open (cancel reason, refund request,
+  // raise-dispute) or while any PATCH/POST is in flight (status update,
+  // SOS resolve, refund, invoice generation, video-call setup). Prevents
+  // the poller from racing optimistic updates or wiping a typed draft.
+  const fetchSilent = useCallback(() => fetchAll(true), [fetchAll]);
+  usePlatformRefresh(
+    fetchSilent,
+    !acting &&
+      !refundLoading &&
+      !resolvingSOS &&
+      !showCancel &&
+      !showRefundModal &&
+      !showDispute &&
+      !startingVideoCall &&
+      !invoiceLoading,
+  );
 
   const handleStartVideoCall = async () => {
     if (startingVideoCall) return;

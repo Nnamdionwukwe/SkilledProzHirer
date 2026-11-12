@@ -48,6 +48,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useCurrency } from "../../contexts/CurrencyContext";
 import { useToast } from "../../contexts/ToastContext";
 import { getHirerDashboard } from "../../api/hirer";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 
 export default function DashboardScreen() {
   const { t } = useTranslation();
@@ -69,12 +70,15 @@ export default function DashboardScreen() {
   // Stat value clamp — clamp(16px, 3vw, 28px) from website
   const statValueFontSize = Math.min(28, Math.max(16, width * 0.03));
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     try {
       const result = await getHirerDashboard();
       setData(result);
     } catch (err) {
-      toast.error(err?.response?.data?.message || t("toast.networkError"));
+      // Poller never surfaces errors — no toast on silent refresh.
+      if (!silent) {
+        toast.error(err?.response?.data?.message || t("toast.networkError"));
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -85,6 +89,14 @@ export default function DashboardScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // ── Silent background refresh every 5s ──
+  // No gate needed: this screen has no inline forms or modals that a
+  // background refresh could disrupt. `refreshing` is only true while
+  // the user's pull-to-refresh is active, and the poller tick simply
+  // coincides harmlessly with it (both fetch the same data).
+  const fetchSilent = useCallback(() => load(true), [load]);
+  usePlatformRefresh(fetchSilent, true);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
