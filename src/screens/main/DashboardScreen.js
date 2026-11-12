@@ -28,6 +28,7 @@ import {
   View,
   StyleSheet,
   RefreshControl,
+  Pressable,
   useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -134,8 +135,12 @@ export default function DashboardScreen() {
             {t("dashboard.overview")}
           </AppText>
           <AppText
-            style={[styles.title, { color: theme.colors.text }]}
-            numberOfLines={1}
+            weight="displayBlack"
+            style={{
+              fontSize: 15,
+              letterSpacing: -0.5,
+              marginBottom: 4,
+            }}
           >
             {t("dashboard.title")}
           </AppText>
@@ -148,31 +153,27 @@ export default function DashboardScreen() {
           ]}
         >
           <CurrencyPicker compact />
-          <View
-            style={[
+          <Pressable
+            onPress={goPostJob}
+            style={({ pressed }) => [
               styles.ctaBtn,
               { backgroundColor: theme.colors.orange },
               headerStacked && styles.ctaBtnStacked,
+              pressed && { opacity: 0.85 },
             ]}
           >
             <Ionicons name="add" size={16} color={theme.colors.bg} />
             <AppText style={[styles.ctaBtnText, { color: theme.colors.bg }]}>
               {t("dashboard.postAJob")}
             </AppText>
-          </View>
+          </Pressable>
         </View>
       </View>
 
       {/* ══════════ STATS ══════════ */}
-      <View
-        style={[styles.statsGrid, statsRowSingle && styles.statsGridSingleRow]}
-      >
-        <View
-          style={[
-            styles.statCell,
-            statsRowSingle ? styles.statCellSingleRow : styles.statCellTwoCol,
-          ]}
-        >
+      {/* Row 1 — three cards, flexed equally */}
+      <View style={styles.statsRowThree}>
+        <View style={styles.statCellThird}>
           <StatCard
             icon="clipboard-outline"
             label={t("dashboard.totalBookings")}
@@ -184,12 +185,7 @@ export default function DashboardScreen() {
           />
         </View>
 
-        <View
-          style={[
-            styles.statCell,
-            statsRowSingle ? styles.statCellSingleRow : styles.statCellTwoCol,
-          ]}
-        >
+        <View style={styles.statCellThird}>
           <StatCard
             icon="flash-outline"
             label={t("dashboard.activeJobs")}
@@ -201,12 +197,7 @@ export default function DashboardScreen() {
           />
         </View>
 
-        <View
-          style={[
-            styles.statCell,
-            statsRowSingle ? styles.statCellSingleRow : styles.statCellTwoCol,
-          ]}
-        >
+        <View style={styles.statCellThird}>
           <StatCard
             icon="checkmark-circle-outline"
             label={t("dashboard.completed")}
@@ -217,24 +208,20 @@ export default function DashboardScreen() {
             border="rgba(34, 197, 94, 0.15)"
           />
         </View>
+      </View>
 
-        <View
-          style={[
-            styles.statCell,
-            statsRowSingle ? styles.statCellSingleRow : styles.statCellTwoCol,
-          ]}
-        >
-          <StatCard
-            icon="card-outline"
-            label={t("dashboard.totalSpent")}
-            value={format(totalSpent)}
-            fontSize={statValueFontSize}
-            color={theme.colors.text}
-            bg={theme.colors.bgCard}
-            border={theme.colors.border}
-            footer={spentFooter}
-          />
-        </View>
+      {/* Row 2 — Total Spent, full width on its own line */}
+      <View style={styles.statsRowFull}>
+        <StatCard
+          icon="card-outline"
+          label={t("dashboard.totalSpent")}
+          value={format(totalSpent)}
+          fontSize={statValueFontSize}
+          color={theme.colors.text}
+          bg={theme.colors.bgCard}
+          border={theme.colors.border}
+          footer={spentFooter}
+        />
       </View>
 
       {/* ══════════ PANELS ══════════ */}
@@ -322,10 +309,12 @@ function StatCard({ icon, label, value, footer, fontSize, color, bg, border }) {
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.5}
-        style={[
-          styles.statValue,
-          { color, fontSize, lineHeight: fontSize * 1.2 },
-        ]}
+        weight="displayBlack"
+        style={{
+          fontSize: 15,
+          letterSpacing: -0.5,
+          marginBottom: 4,
+        }}
       >
         {value}
       </AppText>
@@ -362,24 +351,35 @@ function EmptyState({ icon, text }) {
   );
 }
 
-// ─── Styles (verbatim from CSS, phone root=14) ────────────────────────────────
+// ─── Styles (modern glass + layered depth, phone root=14) ─────────────────────
 const styles = StyleSheet.create({
-  // .header
+  // .header — sits on a card with soft ambient shadow
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 20,
+    gap: 14,
+    marginBottom: 24,
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    // layered shadow — reads as "lifted card"
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 6,
   },
   headerStacked: {
     flexDirection: "column",
     alignItems: "stretch",
   },
-  headerTitleBlock: { flexShrink: 1 },
+  headerTitleBlock: { flexShrink: 1, minWidth: 0 },
 
-  // .eyebrow — 0.6875rem @14 = 9.63, 600, ls 0.12em → 1.156, UPPER, mb 2
+  // .eyebrow — pill badge with tinted bg
   eyebrow: {
     fontFamily: "DMSans_600SemiBold",
     fontSize: 9.63,
@@ -387,19 +387,25 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 1.156,
     textTransform: "uppercase",
-    marginBottom: 2,
+    marginBottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(249,115,22,0.10)",
+    overflow: "hidden",
   },
 
-  // .title — 1.5rem @14 = 21, Syne 700, ls -0.4, lh 1.2
+  // .title — larger, tracking tighter, more weight
   title: {
     fontFamily: "Syne_700Bold",
-    fontSize: 21,
-    lineHeight: 25,
+    fontSize: 22,
+    lineHeight: 26,
     fontWeight: "700",
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
 
-  // .headerActions — row, gap 0.5rem (8), wrap, align-center
+  // .headerActions
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -408,18 +414,21 @@ const styles = StyleSheet.create({
   },
   headerActionsStacked: { justifyContent: "flex-start" },
 
-  // .ctaBtn — pad 8/14, r8, font 0.875rem @14 = 12.25, 600, gap 6,
-  //           min-h 40, white-space nowrap
+  // .ctaBtn — modern: gradient feel via tint + soft shadow + hover-lift radius
   ctaBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minHeight: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    minHeight: 42,
+    shadowColor: "#f97316",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  // <360px: .ctaBtn { justify-content: center; flex: 1; }
   ctaBtnStacked: {
     flex: 1,
     justifyContent: "center",
@@ -428,25 +437,39 @@ const styles = StyleSheet.create({
     fontFamily: "DMSans_600SemiBold",
     fontSize: 12.25,
     lineHeight: 16,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 
-  // .statsGrid — flex-wrap, gap 12 (mobile) via per-cell padding
+  // .statsGrid — wider gutter so the cards breathe
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 20,
-    marginHorizontal: -6,
+    marginBottom: 24,
+    marginHorizontal: -7,
+  },
+  // Row 1 — three flexed cards
+  statsRowThree: {
+    flexDirection: "row",
+    marginBottom: 16,
+    marginHorizontal: -8,
+  },
+  statCellThird: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 8,
+  },
+
+  // Row 2 — full-width row
+  statsRowFull: {
+    marginBottom: 28,
   },
   statsGridSingleRow: {},
 
-  // 2-col mobile: width 50%, gutter 6 each side → 12 between
   statCellTwoCol: {
     width: "50%",
-    paddingHorizontal: 6,
-    paddingBottom: 12,
+    paddingHorizontal: 7,
+    paddingBottom: 14,
   },
-  // 4-col ≥768: width 25%, gutter 6 → 14 between (clamp 8→14)
   statCellSingleRow: {
     width: "25%",
     paddingHorizontal: 7,
@@ -454,61 +477,70 @@ const styles = StyleSheet.create({
   },
   statCell: {},
 
-  // .statCard — border 1, r 12, pad 16, min-width 0, overflow hidden
+  // .statCard — modern: 16 radius, deep shadow, inner top highlight
   statCard: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     minWidth: 0,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 4,
+    // subtle top-border glow — reads as a glass card catching light
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
   },
-  // .statIcon — 24px, lh 1 (24), mb 6
+
   statIcon: {
-    fontSize: 24,
-    lineHeight: 24,
-    marginBottom: 6,
+    fontSize: 26,
+    lineHeight: 26,
+    marginBottom: 8,
   },
-  // .statValue — 700, ls -0.5, lh 1.2, mb 2 (fontSize set inline to clamp)
+
   statValue: {
     fontFamily: "Syne_700Bold",
     fontWeight: "700",
-    letterSpacing: -0.5,
-    marginBottom: 2,
+    letterSpacing: -0.6,
+    marginBottom: 4,
   },
-  // .statLabel — 12 / 500 / text-dim
+
   statLabel: {
     fontFamily: "DMSans_500Medium",
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "500",
   },
-  // .statFooter — 0.65rem @14 = 9.1 / 500 / lh 1.35 (12.3) / mt 4
+
   statFooter: {
     fontFamily: "DMSans_500Medium",
     fontSize: 9.1,
     lineHeight: 12.3,
     fontWeight: "500",
-    marginTop: 4,
+    marginTop: 6,
   },
 
-  // .grid2 — mobile 1col, gap clamp(8,1.5vw,16) → 16
+  // .grid2 — larger gap so panels separate cleanly
   grid2: {
-    gap: 16,
+    gap: 18,
   },
-  // ≥900: 1fr 1fr, gap clamp(10,1.8vw,18) → 18
   grid2TwoCol: {
     flexDirection: "row",
-    gap: 18,
+    gap: 20,
   },
   grid2Cell: { flex: 1, minWidth: 0 },
 
-  // .empty — pad 24/16, 0.8125rem @14 = 11.38 / text-muted
+  // .empty — bigger tap area, softer icon treatment
   empty: {
-    paddingVertical: 24,
+    paddingVertical: 28,
     paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 10,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.015)",
   },
   emptyText: {
     fontFamily: "DMSans_400Regular",
