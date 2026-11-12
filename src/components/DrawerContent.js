@@ -58,130 +58,140 @@ const ICON = {
   logout: "log-out-outline",
 };
 
+// `label` values are i18n keys — translated at render via t(label).
+// The group names are keys as well — translated at render.
 const NAV = [
   {
-    group: "OVERVIEW",
+    group: "nav.groupOverview",
     items: [
-      { label: "Dashboard", route: "Dashboard", icon: ICON.dashboard },
-      { label: "My Bookings", route: "Bookings", icon: ICON.bookings },
-      { label: "Post a Job", route: "PostJob", icon: ICON.postJob },
+      { label: "nav.dashboard", route: "Dashboard", icon: ICON.dashboard },
+      { label: "nav.myBookings", route: "Bookings", icon: ICON.bookings },
+      { label: "nav.postJob", route: "PostJob", icon: ICON.postJob },
       {
-        label: "Jobs Management",
+        label: "nav.jobsManagement",
         route: "JobsManagement",
         icon: ICON.jobsManagement,
       },
     ],
   },
   {
-    group: "WORKERS",
+    group: "nav.groupWorkers",
     items: [
       {
-        label: "Saved Workers",
+        label: "nav.savedWorkers",
         route: "SavedWorkers",
         icon: ICON.savedWorkers,
       },
       {
-        label: "Browse Workers",
+        label: "nav.browseWorkers",
         route: "BrowseWorkers",
         icon: ICON.browseWorkers,
       },
       {
-        label: "Browse By Categories",
+        label: "nav.browseByCategories",
         route: "BrowseByCategories",
         icon: ICON.browseByCategories,
       },
     ],
   },
   {
-    group: "FINANCES",
+    group: "nav.groupFinances",
     items: [
       {
-        label: "Payment History",
+        label: "nav.paymentHistory",
         route: "PaymentHistory",
         icon: ICON.paymentHistory,
       },
-      { label: "My Wallet", route: "Wallet", icon: ICON.wallet },
+      { label: "nav.wallet", route: "Wallet", icon: ICON.wallet },
       {
-        label: "Refund History",
+        label: "nav.refundHistory",
         route: "RefundHistory",
         icon: ICON.refundHistory,
       },
-      { label: "Disputes", route: "Disputes", icon: ICON.disputes },
+      { label: "nav.disputes", route: "Disputes", icon: ICON.disputes },
     ],
   },
   {
-    group: "PAYROLL",
+    group: "nav.groupPayroll",
     items: [
       {
-        label: "Retained Staffs",
+        label: "nav.retainedStaff",
         route: "RetainedStaff",
         icon: ICON.retainedStaff,
       },
     ],
   },
   {
-    group: "COMMUNITY",
+    group: "nav.groupCommunity",
     items: [
       {
-        label: "Community Feed",
+        label: "nav.communityFeed",
         route: "CommunityFeed",
         icon: ICON.communityFeed,
       },
-      { label: "My Posts", route: "MyPosts", icon: ICON.myPosts },
-      { label: "Campaigns", route: "Campaign", icon: ICON.campaigns },
-      { label: "Referrals", route: "ReferralDashboard", icon: ICON.referrals },
+      { label: "nav.myPosts", route: "MyPosts", icon: ICON.myPosts },
+      { label: "nav.campaigns", route: "Campaign", icon: ICON.campaigns },
+      {
+        label: "nav.referrals",
+        route: "ReferralDashboard",
+        icon: ICON.referrals,
+      },
     ],
   },
   {
-    group: "REVIEWS & REPORTS",
+    group: "nav.groupReviewsReports",
     items: [
       {
-        label: "Reviews Received",
+        label: "nav.reviewsReceived",
         route: "ReviewsReceived",
         icon: ICON.reviewsReceived,
       },
       {
-        label: "Reviews Given",
+        label: "nav.reviewsGiven",
         route: "ReviewsGiven",
         icon: ICON.reviewsGiven,
       },
-      { label: "Reports", route: "MyReports", icon: ICON.reports },
+      { label: "nav.reports", route: "MyReports", icon: ICON.reports },
     ],
   },
   {
-    group: "ACCOUNT & SUPPORT",
+    group: "nav.groupAccountSupport",
     items: [
       {
-        label: "Messages",
+        label: "nav.messages",
         route: "Messages",
         icon: ICON.messages,
         badge: "messages",
       },
       {
-        label: "Live Support Chat",
+        label: "nav.liveSupportChat",
         route: "SupportChat",
         icon: ICON.supportChat,
         badge: "support",
       },
       {
-        label: "Support Hub",
+        label: "nav.supportHub",
         route: "SupportHub",
         icon: ICON.supportHub,
         badge: "support",
       },
       {
-        label: "Notifications",
+        label: "nav.notifications",
         route: "Notifications",
         icon: ICON.notifications,
         badge: "notifications",
       },
-      { label: "Verification", route: "Verification", icon: ICON.verification },
       {
-        label: "Subscriptions",
+        label: "nav.verification",
+        route: "Verification",
+        icon: ICON.verification,
+      },
+      {
+        label: "nav.subscriptions",
         route: "Subscriptions",
         icon: ICON.subscriptions,
       },
-      { label: "Settings", route: "Settings", icon: ICON.settings },
+      { label: "nav.settings", route: "Settings", icon: ICON.settings },
     ],
   },
 ];
@@ -319,7 +329,7 @@ export default function DrawerContent({ state }) {
           </AppText>
         </View>
         <AppText style={[styles.logoRole, { color: c.textMuted }]}>
-          Hirer Portal
+          {t("nav.hirerPortal")}
         </AppText>
       </View>
 
@@ -352,7 +362,7 @@ export default function DrawerContent({ state }) {
           <View style={[styles.userBadge, { backgroundColor: c.greenDim }]}>
             <View style={[styles.userBadgeDot, { backgroundColor: c.green }]} />
             <AppText style={[styles.userBadgeText, { color: c.green }]}>
-              Hirer
+              {t("common.hirer")}
             </AppText>
           </View>
         </View>
@@ -367,7 +377,7 @@ export default function DrawerContent({ state }) {
         {NAV.map((group) => (
           <View key={group.group} style={styles.navGroup}>
             <AppText style={[styles.groupLabel, { color: c.textMuted }]}>
-              {group.group}
+              {t(group.group)}
             </AppText>
 
             {group.items.map((item) => {
@@ -406,7 +416,7 @@ export default function DrawerContent({ state }) {
                     ]}
                     numberOfLines={1}
                   >
-                    {item.label}
+                    {t(item.label)}
                   </AppText>
 
                   {count > 0 && (
@@ -446,7 +456,7 @@ export default function DrawerContent({ state }) {
             style={styles.navIcon}
           />
           <AppText style={[styles.logoutText, { color: c.textMuted }]}>
-            Log out
+            {t("nav.logout")}
           </AppText>
         </Pressable>
       </View>
@@ -479,10 +489,10 @@ export default function DrawerContent({ state }) {
             ]}
           >
             <AppText style={[styles.modalTitle, { color: c.text }]}>
-              Log out of SkilledProz?
+              {t("drawer.logoutTitle")}
             </AppText>
             <AppText style={[styles.modalMessage, { color: c.textDim }]}>
-              You will need to sign in again to access your account.
+              {t("drawer.logoutMessage")}
             </AppText>
 
             <View style={styles.modalActions}>
@@ -501,7 +511,7 @@ export default function DrawerContent({ state }) {
                 ]}
               >
                 <AppText style={[styles.modalBtnLabel, { color: c.textDim }]}>
-                  Cancel
+                  {t("common.cancel")}
                 </AppText>
               </Pressable>
 
@@ -518,7 +528,9 @@ export default function DrawerContent({ state }) {
                 ]}
               >
                 <AppText style={[styles.modalBtnLabel, { color: "#fff" }]}>
-                  {loggingOut ? "Logging out…" : "Log out"}
+                  {loggingOut
+                    ? t("drawer.loggingOut")
+                    : t("drawer.logoutConfirm")}
                 </AppText>
               </Pressable>
             </View>
