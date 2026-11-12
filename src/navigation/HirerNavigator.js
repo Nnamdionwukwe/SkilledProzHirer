@@ -72,6 +72,7 @@ import SupportHubScreen from "../screens/main/SupportHubScreen";
 import SupportTicketThreadScreen from "../screens/main/SupportTicketThreadScreen";
 import ReleasePaymentScreen from "../screens/main/ReleasePaymentScreen";
 import CreateBookingFromJobScreen from "../screens/main/CreateBookingFromJobScreen";
+import { UnreadProvider } from "../contexts/UnreadContext";
 
 const Drawer = createDrawerNavigator();
 
@@ -282,317 +283,319 @@ export default function HirerNavigator() {
   const screenWidth = Dimensions.get("window").width;
 
   return (
-    <View style={{ flex: 1 }}>
-      <Drawer.Navigator
-        initialRouteName="Dashboard"
-        drawerContent={(props) => <DrawerContent {...props} />}
-        screenOptions={{
-          headerShown: false,
-          drawerType: "front",
-          drawerStyle: {
-            width: Math.min(320, screenWidth * 0.85),
-            backgroundColor: theme.colors.bgPanel,
-            borderRightColor: theme.colors.border,
-            borderRightWidth: StyleSheet.hairlineWidth,
-          },
-          sceneContainerStyle: { backgroundColor: theme.colors.bg },
-          overlayColor: "rgba(0,0,0,0.5)",
-          swipeEdgeWidth: 60,
-        }}
-      >
-        <Drawer.Screen name="Dashboard">
-          {() => <ScreenWithChrome Screen={DashboardScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen name="Bookings">
-          {() => <ScreenWithChrome Screen={BookingsScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen name="PostJob">
-          {() => <ScreenWithChrome Screen={PostJobScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen name="BrowseWorkers">
-          {() => <ScreenWithChrome Screen={BrowseWorkersScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen name="CommunityFeed">
-          {() => <ScreenWithChrome Screen={CommunityFeedScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen name="JobsManagement">
-          {() => <ScreenWithChrome Screen={JobsManagementScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen name="RetainedStaff">
-          {() => <ScreenWithChrome Screen={RetainedStaffScreen} />}
-        </Drawer.Screen>
-
-        {/* Hidden Routes */}
-        <Drawer.Screen
-          name="CreateBooking"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={CreateBookingScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="CreateBookingFromJob"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={CreateBookingFromJobScreen} />}
-        </Drawer.Screen>
-
-        <Drawer.Screen
-          name="BookingDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={BookingDetailScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="InitiatePayment"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={InitiatePaymentScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="PaymentHistory"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={PaymentHistoryScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="JobDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={JobDetailScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="JobApplications"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={JobApplicationsScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="MyPosts"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={MyPostsScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Disputes"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={DisputesScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="SavedWorkers"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={SavedWorkersScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="WorkerProfile"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={WorkerPublicProfileScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="BrowseByCategories"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={BrowseByCategoriesScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="CategoryDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={CategoryDetailScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Messages"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={MessagesScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Chat"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={ChatScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="ReviewsReceived"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={ReviewsReceivedScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="ReviewsGiven"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={ReviewsGivenScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Notifications"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={NotificationsScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Verification"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={VerificationScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Profile"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={ProfileScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Subscriptions"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={SubscriptionsScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="FeaturedBoost"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={FeaturedBoostScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="ReferralDashboard"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={ReferralDashboardScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="MyReports"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={MyReportsScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Campaign"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={CampaignDashboardScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Settings"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={SettingsScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="WorkerDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={WorkerPublicProfileScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="HirerDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={HirerPublicProfileScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="RefundHistory"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={RefundHistoryScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="RefundDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={RefundDetailScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="MyDisputes"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={MyDisputesScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="EditJob"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={EditJobScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="EditProfile"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={EditProfileScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="Wallet"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={HirerWalletScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="WalletTransactionDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={WalletTransactionDetailScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="RetainedStaffList"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={RetainedStaffListScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="RetainedStaffDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={RetainedStaffDetailScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="RetainedStaffCycleDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={RetainedStaffCycleDetailScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="PostDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={PostDetailScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="SupportChat"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={SupportChatScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="SupportHub"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={SupportHubScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="SupportTicketDetail"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={SupportTicketThreadScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="ReleasePayment"
-          options={{ drawerItemStyle: { display: "none" } }}
-        >
-          {() => <ScreenWithChrome Screen={ReleasePaymentScreen} />}
-        </Drawer.Screen>
-        <Drawer.Screen
-          name="VideoCall"
-          component={VideoCallScreen}
-          options={{
+    <UnreadProvider>
+      <View style={{ flex: 1 }}>
+        <Drawer.Navigator
+          initialRouteName="Dashboard"
+          drawerContent={(props) => <DrawerContent {...props} />}
+          screenOptions={{
             headerShown: false,
-            swipeEnabled: false,
-            drawerItemStyle: { display: "none" },
+            drawerType: "front",
+            drawerStyle: {
+              width: Math.min(320, screenWidth * 0.85),
+              backgroundColor: theme.colors.bgPanel,
+              borderRightColor: theme.colors.border,
+              borderRightWidth: StyleSheet.hairlineWidth,
+            },
+            sceneContainerStyle: { backgroundColor: theme.colors.bg },
+            overlayColor: "rgba(0,0,0,0.5)",
+            swipeEdgeWidth: 60,
           }}
-        />
-      </Drawer.Navigator>
-    </View>
+        >
+          <Drawer.Screen name="Dashboard">
+            {() => <ScreenWithChrome Screen={DashboardScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen name="Bookings">
+            {() => <ScreenWithChrome Screen={BookingsScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen name="PostJob">
+            {() => <ScreenWithChrome Screen={PostJobScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen name="BrowseWorkers">
+            {() => <ScreenWithChrome Screen={BrowseWorkersScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen name="CommunityFeed">
+            {() => <ScreenWithChrome Screen={CommunityFeedScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen name="JobsManagement">
+            {() => <ScreenWithChrome Screen={JobsManagementScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen name="RetainedStaff">
+            {() => <ScreenWithChrome Screen={RetainedStaffScreen} />}
+          </Drawer.Screen>
+
+          {/* Hidden Routes */}
+          <Drawer.Screen
+            name="CreateBooking"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={CreateBookingScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="CreateBookingFromJob"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={CreateBookingFromJobScreen} />}
+          </Drawer.Screen>
+
+          <Drawer.Screen
+            name="BookingDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={BookingDetailScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="InitiatePayment"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={InitiatePaymentScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="PaymentHistory"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={PaymentHistoryScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="JobDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={JobDetailScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="JobApplications"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={JobApplicationsScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="MyPosts"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={MyPostsScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Disputes"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={DisputesScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="SavedWorkers"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={SavedWorkersScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="WorkerProfile"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={WorkerPublicProfileScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="BrowseByCategories"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={BrowseByCategoriesScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="CategoryDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={CategoryDetailScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Messages"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={MessagesScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Chat"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={ChatScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="ReviewsReceived"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={ReviewsReceivedScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="ReviewsGiven"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={ReviewsGivenScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Notifications"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={NotificationsScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Verification"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={VerificationScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Profile"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={ProfileScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Subscriptions"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={SubscriptionsScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="FeaturedBoost"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={FeaturedBoostScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="ReferralDashboard"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={ReferralDashboardScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="MyReports"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={MyReportsScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Campaign"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={CampaignDashboardScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Settings"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={SettingsScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="WorkerDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={WorkerPublicProfileScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="HirerDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={HirerPublicProfileScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="RefundHistory"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={RefundHistoryScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="RefundDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={RefundDetailScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="MyDisputes"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={MyDisputesScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="EditJob"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={EditJobScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="EditProfile"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={EditProfileScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="Wallet"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={HirerWalletScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="WalletTransactionDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={WalletTransactionDetailScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="RetainedStaffList"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={RetainedStaffListScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="RetainedStaffDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={RetainedStaffDetailScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="RetainedStaffCycleDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={RetainedStaffCycleDetailScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="PostDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={PostDetailScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="SupportChat"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={SupportChatScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="SupportHub"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={SupportHubScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="SupportTicketDetail"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={SupportTicketThreadScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="ReleasePayment"
+            options={{ drawerItemStyle: { display: "none" } }}
+          >
+            {() => <ScreenWithChrome Screen={ReleasePaymentScreen} />}
+          </Drawer.Screen>
+          <Drawer.Screen
+            name="VideoCall"
+            component={VideoCallScreen}
+            options={{
+              headerShown: false,
+              swipeEnabled: false,
+              drawerItemStyle: { display: "none" },
+            }}
+          />
+        </Drawer.Navigator>
+      </View>
+    </UnreadProvider>
   );
 }
 

@@ -12,7 +12,7 @@ import { useAuthStore } from "../store/authStore";
 import { FaCommentDots } from "../icons/fa";
 import { rem } from "../constants/theme";
 import { navigationRef, hasRoute } from "../navigation/navigationRef";
-import { useUnread } from "../navigation/WorkerNavigator";
+import { useUnread } from "../contexts/UnreadContext";
 
 const SCREEN_FALLBACK = {
   Dashboard: { title: "Dashboard", subtitle: "Your work at a glance" },
@@ -104,7 +104,7 @@ export default function TopBar({
   try {
     ctx = useUnread() || ctx;
   } catch (e) {
-    // If TopBar is used outside WorkerNavigator (e.g. Hirer), it falls back to props.
+    // If TopBar is used outside a UnreadProvider, it falls back to props.
   }
   const unreadCount = propUnread ?? ctx.unreadNotifs ?? 0;
   const unreadMessages = propMessages ?? ctx.unreadMessages ?? 0;

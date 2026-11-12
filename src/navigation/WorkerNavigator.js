@@ -1,12 +1,5 @@
 // src/navigation/WorkerNavigator.js
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { View, StyleSheet, Pressable, Animated } from "react-native";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -19,11 +12,10 @@ import { useTranslation } from "react-i18next";
 import WorkerDrawerContent from "../components/WorkerDrawerContent";
 import TopBar from "../components/TopBar";
 import { useAuthStore } from "../store/authStore";
-import { getNotifications } from "../api/notifications";
-import { getConversations } from "../api/messages";
 import { navigationRef } from "./navigationRef";
 import { ICON } from "../constants/icons";
 import { useTheme } from "../contexts/ThemeContext";
+import { UnreadProvider, useUnread } from "../contexts/UnreadContext";
 
 // ── Import your real screens ──
 import WorkerDashboardScreen from "../screens/main/worker/WorkerDashboardScreen";
@@ -77,61 +69,6 @@ import SupportHubScreen from "../screens/main/SupportHubScreen";
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
 const ScrollContext = React.createContext(null);
-
-// ════════════════════════════════════════════════════════════════════════
-// Unread Counts
-// ════════════════════════════════════════════════════════════════════════
-const UnreadContext = createContext({
-  unreadNotifs: 0,
-  unreadMessages: 0,
-  refresh: () => {},
-});
-
-function UnreadProvider({ children }) {
-  const { user } = useAuthStore();
-  const [unreadNotifs, setUnreadNotifs] = useState(0);
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const cancelledRef = useRef(false);
-
-  const refresh = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const [notifData, convos] = await Promise.all([
-        getNotifications({ page: 1, limit: 1 }),
-        getConversations(),
-      ]);
-      if (cancelledRef.current) return;
-      setUnreadNotifs(Number(notifData?.unreadCount ?? 0));
-      setUnreadMessages(
-        convos.reduce((sum, c) => sum + (Number(c.unreadCount) || 0), 0),
-      );
-    } catch (e) {}
-  }, [user?.id]);
-
-  useEffect(() => {
-    cancelledRef.current = false;
-    if (!user?.id) {
-      setUnreadNotifs(0);
-      setUnreadMessages(0);
-      return;
-    }
-    refresh();
-    const id = setInterval(refresh, 30_000);
-    return () => {
-      cancelledRef.current = true;
-      clearInterval(id);
-    };
-  }, [user?.id, refresh]);
-
-  return (
-    <UnreadContext.Provider value={{ unreadNotifs, unreadMessages, refresh }}>
-      {children}
-    </UnreadContext.Provider>
-  );
-}
-export function useUnread() {
-  return useContext(UnreadContext);
-}
 
 // ════════════════════════════════════════════════════════════════════════
 // Floating Tab Bar
@@ -311,7 +248,7 @@ function FloatingTabBar() {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Screen With Chrome Wrapper — now accepts title + subtitle
+// Screen With Chrome Wrapper
 // ════════════════════════════════════════════════════════════════════════
 function ScreenWithChrome({ Screen, title, subtitle }) {
   const { theme } = useTheme();
@@ -342,7 +279,7 @@ function ScreenWithChrome({ Screen, title, subtitle }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Drawer — every Drawer.Screen now passes title + subtitle
+// Drawer
 // ════════════════════════════════════════════════════════════════════════
 function WorkerDrawer() {
   const { unreadNotifs, unreadMessages } = useUnread();
@@ -668,7 +605,7 @@ function WorkerDrawer() {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Stack (unchanged)
+// Stack
 // ════════════════════════════════════════════════════════════════════════
 function WorkerStack() {
   const { t } = useTranslation();
