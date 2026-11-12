@@ -4,6 +4,7 @@ import { View, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useNavigationState } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 
 import AppText from "./AppText";
 import Avatar from "./Avatar";
@@ -14,78 +15,273 @@ import { rem } from "../constants/theme";
 import { navigationRef, hasRoute } from "../navigation/navigationRef";
 import { useUnread } from "../contexts/UnreadContext";
 
-const SCREEN_FALLBACK = {
-  Dashboard: { title: "Dashboard", subtitle: "Your work at a glance" },
-  Bookings: { title: "My Bookings", subtitle: "Manage your bookings" },
-  WorkerBookings: { title: "My Bookings", subtitle: "Jobs assigned to you" },
-  WorkerJobs: { title: "Browse Jobs", subtitle: "Find your next opportunity" },
-  WorkerProfile: { title: "My Profile", subtitle: "Your public profile" },
-  WorkerEarnings: { title: "Earnings", subtitle: "Track your income" },
-  WorkerWithdrawals: { title: "Wallet", subtitle: "Earnings & payouts" },
+// Title/subtitle keys per route — translated via t(...) at render.
+// Keys use the existing `screenTitles.*` and `screenSub.*` namespaces in
+// en.json. Where `screenTitles.*` doesn't exist for a route, we fall back
+// to `screenSub.*` which already has a broad set of Hirer + Worker routes.
+const SCREEN_FALLBACK_KEYS = {
+  Dashboard: {
+    titleKey: "screenTitles.dashboard.title",
+    subtitleKey: "screenTitles.dashboard.subtitle",
+  },
+  Bookings: {
+    titleKey: "bookings.title",
+    subtitleKey: "screenSub.myBookings",
+  },
+  WorkerBookings: {
+    titleKey: "screenTitles.workerBookings.title",
+    subtitleKey: "screenTitles.workerBookings.subtitle",
+  },
+  WorkerJobs: {
+    titleKey: "screenTitles.workerJobs.title",
+    subtitleKey: "screenTitles.workerJobs.subtitle",
+  },
+  WorkerProfile: {
+    titleKey: "screenTitles.workerProfile.title",
+    subtitleKey: "screenTitles.workerProfile.subtitle",
+  },
+  WorkerEarnings: {
+    titleKey: "screenTitles.workerEarnings.title",
+    subtitleKey: "screenTitles.workerEarnings.subtitle",
+  },
+  WorkerWithdrawals: {
+    titleKey: "screenTitles.workerWithdrawals.title",
+    subtitleKey: "screenTitles.workerWithdrawals.subtitle",
+  },
   WorkerApplications: {
-    title: "Applications",
-    subtitle: "Jobs you've applied to",
+    titleKey: "screenTitles.workerApplications.title",
+    subtitleKey: "screenTitles.workerApplications.subtitle",
   },
-  WorkerReviews: { title: "Reviews", subtitle: "Feedback from hirers" },
-  WorkerPortfolio: { title: "Portfolio", subtitle: "Your work gallery" },
+  WorkerReviews: {
+    titleKey: "screenTitles.workerReviews.title",
+    subtitleKey: "screenTitles.workerReviews.subtitle",
+  },
+  WorkerPortfolio: {
+    titleKey: "screenTitles.workerPortfolio.title",
+    subtitleKey: "screenTitles.workerPortfolio.subtitle",
+  },
   WorkerCertifications: {
-    title: "Certifications",
-    subtitle: "Your trade certifications",
+    titleKey: "screenTitles.workerCertifications.title",
+    subtitleKey: "screenTitles.workerCertifications.subtitle",
   },
-  WorkerCategories: { title: "Categories", subtitle: "Your trade categories" },
+  WorkerCategories: {
+    titleKey: "screenTitles.workerCategories.title",
+    subtitleKey: "screenTitles.workerCategories.subtitle",
+  },
   WorkerAvailability: {
-    title: "Availability",
-    subtitle: "Set your weekly schedule",
+    titleKey: "screenTitles.workerAvailability.title",
+    subtitleKey: "screenTitles.workerAvailability.subtitle",
   },
-  WorkerDisputes: { title: "Disputes", subtitle: "Active disputes" },
-  WorkerVerification: { title: "Verification", subtitle: "Trust & Safety" },
-  WorkerSubscriptions: { title: "Subscriptions", subtitle: "Plans & billing" },
-  WorkerBoost: { title: "Boost Listing", subtitle: "Stand out in search" },
-  CreateBooking: { title: "Create Booking", subtitle: "Book a worker" },
-  BookingDetail: { title: "Booking Detail", subtitle: "Job details & actions" },
+  WorkerDisputes: {
+    titleKey: "screenTitles.workerDisputes.title",
+    subtitleKey: "screenTitles.workerDisputes.subtitle",
+  },
+  WorkerVerification: {
+    titleKey: "screenTitles.workerVerification.title",
+    subtitleKey: "screenTitles.workerVerification.subtitle",
+  },
+  WorkerSubscriptions: {
+    titleKey: "screenTitles.workerSubscriptions.title",
+    subtitleKey: "screenTitles.workerSubscriptions.subtitle",
+  },
+  WorkerBoost: {
+    titleKey: "screenTitles.workerBoost.title",
+    subtitleKey: "screenTitles.workerBoost.subtitle",
+  },
+  CreateBooking: {
+    titleKey: "createBooking.submit",
+    subtitleKey: "createBooking.subtitle",
+  },
+  BookingDetail: {
+    titleKey: "booking.section.jobDetails",
+    subtitleKey: "screenSub.bookingDetail",
+  },
   PaymentHistory: {
-    title: "Payment History",
-    subtitle: "Your transaction history",
+    titleKey: "payments.title",
+    subtitleKey: "payments.subtitle",
   },
-  PostJob: { title: "Post a Job", subtitle: "Find the right worker" },
-  JobsManagement: { title: "My Jobs", subtitle: "Manage your job listings" },
-  JobDetail: { title: "Job Detail", subtitle: "Job information" },
-  JobApplications: { title: "Applications", subtitle: "Workers who applied" },
-  MyPosts: { title: "Community", subtitle: "Your posts & updates" },
-  Disputes: { title: "Disputes", subtitle: "Active disputes" },
+  PostJob: {
+    titleKey: "postJob.screenTitle",
+    subtitleKey: "postJob.screenSubtitle",
+  },
+  JobsManagement: {
+    titleKey: "jobsManagement.title",
+    subtitleKey: "jobsManagement.eyebrow",
+  },
+  JobDetail: {
+    titleKey: "jobs.detail.details",
+    subtitleKey: "screenSub.jobDetails",
+  },
+  JobApplications: {
+    titleKey: "jobApplications.card.viewProfile",
+    subtitleKey: "jobApplications.empty.subtitle",
+  },
+  MyPosts: {
+    titleKey: "posts.myTitle",
+    subtitleKey: "posts.mySubtitle",
+  },
+  Disputes: {
+    titleKey: "disputes.title",
+    subtitleKey: "disputes.subtitle",
+  },
   SavedWorkers: {
-    title: "Saved Workers",
-    subtitle: "Workers you've bookmarked",
+    titleKey: "savedWorkers.title",
+    subtitleKey: "savedWorkers.subtitle",
   },
   BrowseWorkers: {
-    title: "Browse Workers",
-    subtitle: "Find skilled professionals",
+    titleKey: "browse.title",
+    subtitleKey: "browse.noResultsSub",
   },
-  WorkerDetail: { title: "Worker Profile", subtitle: "View worker details" },
+  WorkerDetail: {
+    titleKey: "workerProfile.about",
+    subtitleKey: "profile.yourPublicProfile",
+  },
   BrowseByCategories: {
-    title: "Browse By Categories",
-    subtitle: "Search 500+ categories",
+    titleKey: "categories.title",
+    subtitleKey: "categories.subtitleCounts",
   },
-  CategoryDetail: { title: "Category", subtitle: "Workers in this category" },
+  CategoryDetail: {
+    titleKey: "categoryDetail.backToCategories",
+    subtitleKey: "categoryDetail.workersAvailable",
+  },
   HirerPublicProfile: {
-    title: "Hirer Profile",
-    subtitle: "View profile & open jobs",
+    titleKey: "profile.hirer",
+    subtitleKey: "screenSub.hirerProfile",
   },
-  WorkerJobDetail: { title: "Job Details", subtitle: "View & apply" },
-  Messages: { title: "Messages", subtitle: "Your conversations" },
-  Chat: { title: "Messages", subtitle: "Direct message" },
+  WorkerJobDetail: {
+    titleKey: "jobs.detail.details",
+    subtitleKey: "screenSub.jobDetails",
+  },
+  Messages: {
+    titleKey: "messages.title",
+    subtitleKey: "messages.directMessage",
+  },
+  Chat: {
+    titleKey: "messages.title",
+    subtitleKey: "messages.directMessage",
+  },
   ReviewsReceived: {
-    title: "Reviews Received",
-    subtitle: "Feedback from workers",
+    titleKey: "reviews.receivedTitle",
+    subtitleKey: "reviews.receivedSubtitle",
   },
-  ReviewsGiven: { title: "Reviews Given", subtitle: "Feedback you've left" },
-  CommunityFeed: { title: "Community", subtitle: "Posts & discussions" },
-  Notifications: { title: "Notifications", subtitle: "View & manage alerts" },
-  Verification: { title: "Verification", subtitle: "Trust & Safety" },
-  Profile: { title: "My Profile", subtitle: "Manage your account" },
-  Subscriptions: { title: "Subscriptions", subtitle: "Plans & billing" },
-  FeaturedBoost: { title: "Boost Listing", subtitle: "Stand out in search" },
-  Settings: { title: "Settings", subtitle: "Preferences & security" },
+  ReviewsGiven: {
+    titleKey: "reviews.givenTitle",
+    subtitleKey: "reviews.givenSubtitle",
+  },
+  CommunityFeed: {
+    titleKey: "nav.community",
+    subtitleKey: "screenSub.community",
+  },
+  Notifications: {
+    titleKey: "notifications.title",
+    subtitleKey: "screenSub.notifications",
+  },
+  Verification: {
+    titleKey: "verification.heroTitle",
+    subtitleKey: "verification.statusHeading",
+  },
+  Profile: {
+    titleKey: "profile.myProfile",
+    subtitleKey: "profile.yourPublicProfile",
+  },
+  Subscriptions: {
+    titleKey: "subscription.title",
+    subtitleKey: "subscription.subtitleHirer",
+  },
+  FeaturedBoost: {
+    titleKey: "featured.title",
+    subtitleKey: "featured.subtitle",
+  },
+  Settings: {
+    titleKey: "settings.title",
+    subtitleKey: "settings.subtitle",
+  },
+
+  // ── Added: Hirer routes that previously had no subtitle ────────────────
+  Wallet: {
+    titleKey: "nav.wallet", // verify — or "wallet.title" if that exists
+    subtitleKey: "screenSub.wallet",
+  },
+  WalletTransactionDetail: {
+    titleKey: "wallet.transactionDetail", // verify
+    subtitleKey: "screenSub.walletTransactionDetail",
+  },
+  RefundHistory: {
+    titleKey: "nav.refundHistory", // verify — or "refundHistory.header.title"
+    subtitleKey: "screenSub.refundHistory",
+  },
+  RefundDetail: {
+    titleKey: "refundHistory.header.title", // verify
+    subtitleKey: "screenSub.refundDetail",
+  },
+  RetainedStaff: {
+    titleKey: "nav.retainedStaff", // verify — or "retainedStaff.title"
+    subtitleKey: "screenSub.retainedStaff",
+  },
+  RetainedStaffList: {
+    titleKey: "retainedStaff.title", // verify
+    subtitleKey: "screenSub.retainedStaffList",
+  },
+  RetainedStaffDetail: {
+    titleKey: "retainedStaff.title", // verify
+    subtitleKey: "screenSub.retainedStaffDetail",
+  },
+  RetainedStaffCycleDetail: {
+    titleKey: "retainedStaff.title", // verify
+    subtitleKey: "screenSub.retainedStaffCycleDetail",
+  },
+  Campaign: {
+    titleKey: "nav.campaigns", // verify — or "nav.campaign"
+    subtitleKey: "screenSub.campaigns",
+  },
+  ReferralDashboard: {
+    titleKey: "nav.referrals", // verify — or "nav.referralDashboard"
+    subtitleKey: "screenSub.referrals",
+  },
+  MyReports: {
+    titleKey: "nav.reports", // verify — or "nav.MyReports"
+    subtitleKey: "screenSub.myReports",
+  },
+  SupportChat: {
+    titleKey: "nav.liveSupportChat", // verify
+    subtitleKey: "screenSub.supportChat",
+  },
+  SupportHub: {
+    titleKey: "nav.supportHub", // verify
+    subtitleKey: "screenSub.supportHub",
+  },
+  SupportTicketDetail: {
+    titleKey: "support.ticket", // verify
+    subtitleKey: "screenSub.supportTicketDetail",
+  },
+  PostDetail: {
+    titleKey: "posts.myTitle", // verify — or a dedicated postDetail key
+    subtitleKey: "screenSub.postDetail",
+  },
+  EditProfile: {
+    titleKey: "profile.myProfile", // verify — or "profile.editProfile"
+    subtitleKey: "screenSub.editProfile",
+  },
+  EditJob: {
+    titleKey: "jobs.detail.details", // verify — or "jobs.edit.title"
+    subtitleKey: "screenSub.editJob",
+  },
+  MyDisputes: {
+    titleKey: "disputes.title", // verify — or "disputes.myDisputes"
+    subtitleKey: "screenSub.myDisputes",
+  },
+  CreateBookingFromJob: {
+    titleKey: "createBooking.submit", // verify
+    subtitleKey: "screenSub.createBookingFromJob",
+  },
+  InitiatePayment: {
+    titleKey: "payments.title", // verify — or "payment.initiate"
+    subtitleKey: "screenSub.initiatePayment",
+  },
+  ReleasePayment: {
+    titleKey: "payments.title", // verify — or "payments.releasePayment"
+    subtitleKey: "screenSub.releasePayment",
+  },
 };
 
 export default function TopBar({
@@ -94,6 +290,7 @@ export default function TopBar({
   unreadCount: propUnread = null,
   unreadMessages: propMessages = null,
 }) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -112,16 +309,14 @@ export default function TopBar({
   const routeName = useNavigationState(
     (state) => state?.routes?.[state.index]?.name,
   );
-  const fallback = SCREEN_FALLBACK[routeName] ?? {};
-  const title = titleProp ?? fallback.title ?? prettyTitle(routeName);
-  const resolvedSub = subtitleProp ?? fallback.subtitle ?? null;
+  const keys = SCREEN_FALLBACK_KEYS[routeName] ?? {};
+  const title =
+    titleProp ?? (keys.titleKey ? t(keys.titleKey) : prettyTitle(routeName));
+  const resolvedSub =
+    subtitleProp ?? (keys.subtitleKey ? t(keys.subtitleKey) : null);
 
   // ── Smart hamburger ─────────────────────────────────────────────
-  // Try the direct parent first (drawer-based screens). Only when the
-  // parent cannot open a drawer do we fall back to the WorkerHome route —
-  // and only if that route actually exists in the current navigator tree.
   const handleMenu = () => {
-    // 1. Try the direct parent drawer (works for drawer-hosted screens).
     const parent = navigation.getParent();
     if (parent) {
       try {
@@ -130,9 +325,6 @@ export default function TopBar({
       } catch (e) {}
     }
 
-    // 2. Descend into WorkerHome only if the navigator chain actually
-    //    contains that route — hasRoute now walks UP the parent chain
-    //    so this returns true even when the current state is the Drawer.
     if (hasRoute(navigation, "WorkerHome")) {
       try {
         navigation.navigate("WorkerHome", { screen: "Dashboard" });
@@ -145,7 +337,6 @@ export default function TopBar({
       } catch (e) {}
     }
 
-    // 3. Root ref fallback — bubble-up via the global ref.
     try {
       if (navigationRef.isReady?.()) {
         navigationRef.dispatch({ type: "OPEN_DRAWER" });
@@ -154,13 +345,6 @@ export default function TopBar({
   };
 
   // ── Role-aware navigation ───────────────────────────────────────
-  // Worker Drawer screens (Notifications, Messages, WorkerProfile) live
-  // nested inside WorkerHome. From a Stack screen we must go through
-  // WorkerHome with the `screen` param so React Navigation can resolve
-  // the child drawer's routes.
-  //
-  // Guarded by hasRoute so we never call navigate("WorkerHome") when the
-  // current navigator doesn't contain that route (e.g. Hirer app).
   const navToWorkerScreen = (screen) => {
     if (user?.role === "WORKER" && hasRoute(navigation, "WorkerHome")) {
       try {
@@ -172,16 +356,13 @@ export default function TopBar({
   };
 
   const safeNavigate = (screen) => {
-    // 1. Worker-app: route through WorkerHome if it's in this navigator
     if (navToWorkerScreen(screen)) return;
-    // 2. Direct navigate — works when `screen` is a top-level route
     try {
       if (hasRoute(navigation, screen)) {
         navigation.navigate(screen);
         return;
       }
     } catch (e2) {}
-    // 3. Root ref — last resort
     try {
       if (hasRoute(null, screen)) {
         navigationRef.navigate(screen);
