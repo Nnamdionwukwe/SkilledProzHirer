@@ -15,6 +15,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   RefreshControl,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -28,12 +29,60 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { retainedStaffApi } from "../../api/retainedStaff";
 
+// ── Currency symbols ────────────────────────────────────────
+const CURRENCY_SYMBOLS = {
+  NGN: "₦",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  GHS: "GH₵",
+  KES: "KSh",
+  ZAR: "R",
+  CAD: "C$",
+  AUD: "A$",
+  JPY: "¥",
+  CNY: "¥",
+  INR: "₹",
+  BRL: "R$",
+  AED: "د.إ",
+  SAR: "ر.س",
+  QAR: "ر.ق",
+  EGP: "E£",
+  TZS: "TSh",
+  UGX: "USh",
+  RWF: "FRw",
+  XOF: "CFA",
+  MAD: "DH",
+  PHP: "₱",
+  IDR: "Rp",
+  VND: "₫",
+  THB: "฿",
+  BDT: "৳",
+  PKR: "₨",
+  MYR: "RM",
+  SGD: "S$",
+  HKD: "HK$",
+  USDC: "USDC",
+  USDT: "USDT",
+};
+
+function getCurrencySymbol(currency) {
+  return CURRENCY_SYMBOLS[currency] || currency || "";
+}
+
 function formatMoney(amount, currency = "NGN") {
   if (amount == null) return "—";
-  return `${currency} ${Number(amount).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  const sym = getCurrencySymbol(currency || "NGN");
+  const isCrypto = ["USDC", "USDT"].includes(currency);
+  try {
+    const formatted = Number(amount).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    return isCrypto ? `${sym} ${formatted}` : `${sym}${formatted}`;
+  } catch {
+    return isCrypto ? `${sym} ${amount}` : `${sym}${amount}`;
+  }
 }
 
 function formatDate(d) {
@@ -666,13 +715,13 @@ export default function RetainedStaffCycleDetailScreen() {
                   <AppText
                     style={{
                       fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
-                      fontSize: rem(0.75),
+                      fontSize: rem(0.9),
                       fontWeight: "700",
                       color: c.textDim,
                       textTransform: "uppercase",
                     }}
                   >
-                    {cycle.currency}
+                    {getCurrencySymbol(cycle.currency)}
                   </AppText>
                 </View>
                 <TextInput
@@ -817,12 +866,10 @@ export default function RetainedStaffCycleDetailScreen() {
           ]}
         >
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: theme.fonts?.display || "Syne_700Bold",
-              fontSize: rem(1),
-              fontWeight: "700",
-              color: c.text,
-              marginBottom: 12,
+              fontSize: 13,
+              letterSpacing: -0.5,
             }}
           >
             {t("retainedStaff.releaseHistoryTitle", {
@@ -879,25 +926,34 @@ export default function RetainedStaffCycleDetailScreen() {
                     { backgroundColor: c.orangeDim },
                   ]}
                 >
-                  <AppText
-                    style={{
-                      fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
-                      fontSize: rem(0.8),
-                      fontWeight: "700",
-                      color: c.orange,
-                    }}
-                  >
-                    {(r.releasedBy?.firstName?.[0] || "H").toUpperCase()}
-                  </AppText>
+                  {r.releasedBy?.avatar ? (
+                    <Image
+                      source={{ uri: r.releasedBy.avatar }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 16,
+                      }}
+                    />
+                  ) : (
+                    <AppText
+                      style={{
+                        fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
+                        fontSize: rem(0.8),
+                        fontWeight: "700",
+                        color: c.orange,
+                      }}
+                    >
+                      {(r.releasedBy?.firstName?.[0] || "H").toUpperCase()}
+                    </AppText>
+                  )}
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <AppText
+                    weight="displayBlack"
                     style={{
-                      fontFamily:
-                        theme.fonts?.displayBlack || "Syne_800ExtraBold",
-                      fontSize: rem(0.95),
-                      fontWeight: "800",
-                      color: c.text,
+                      fontSize: 10,
+                      letterSpacing: -0.5,
                     }}
                   >
                     {formatMoney(r.amount, r.currency || cycle.currency)}
