@@ -874,12 +874,11 @@ export default function PostJobScreen() {
         {t("postJob.headerEyebrow")}
       </AppText>
       <AppText
+        weight="displayBlack"
         style={{
-          fontFamily: "Syne_800ExtraBold",
-          fontSize: 24,
-          fontWeight: "800",
-          color: c.text,
-          letterSpacing: -0.4,
+          fontSize: 15,
+          letterSpacing: -0.5,
+          marginBottom: 4,
         }}
       >
         {t("postJob.screenTitle")}
