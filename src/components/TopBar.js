@@ -228,7 +228,11 @@ export default function TopBar({
         <View style={{ flex: 1, marginLeft: rem(0.75) }}>
           <AppText
             numberOfLines={1}
-            style={[styles.title, { color: theme.colors.text }]}
+            weight="displayBlack"
+            style={{
+              fontSize: 9,
+              letterSpacing: -0.5,
+            }}
           >
             {title}
           </AppText>
@@ -283,7 +287,7 @@ export default function TopBar({
                     textAlign: "center",
                   }}
                 >
-                  {unreadCount > 99 ? "99+" : String(unreadCount)}
+                  {unreadCount > 9 ? "9+" : String(unreadCount)}
                 </AppText>
               </View>
             )}
