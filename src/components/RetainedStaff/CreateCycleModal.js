@@ -176,13 +176,10 @@ export default function CreateCycleModal({
             <View style={[styles.header, { borderBottomColor: c.border }]}>
               <View style={{ flex: 1 }}>
                 <AppText
+                  weight="displayBlack"
                   style={{
-                    fontFamily:
-                      theme.fonts?.displayBlack || "Syne_800ExtraBold",
-                    fontSize: rem(1.25),
-                    lineHeight: rem(1.25) * 1.15,
-                    fontWeight: "800",
-                    color: c.text,
+                    fontSize: 15,
+                    letterSpacing: -0.5,
                   }}
                 >
                   {t("retainedStaff.createCycleTitle")}

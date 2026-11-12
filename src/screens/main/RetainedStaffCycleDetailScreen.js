@@ -363,11 +363,11 @@ export default function RetainedStaffCycleDetailScreen() {
       >
         <View style={{ flex: 1 }}>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: theme.fonts?.displayBlack || "Syne_800ExtraBold",
-              fontSize: rem(1.5),
-              fontWeight: "800",
-              color: c.text,
+              fontSize: 13,
+              letterSpacing: -0.5,
+              marginBottom: 4,
             }}
           >
             {cycle.label || t("retainedStaff.payrollCycleDefault")}
@@ -399,7 +399,7 @@ export default function RetainedStaffCycleDetailScreen() {
           <AppText
             style={{
               fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
-              fontSize: rem(0.65),
+              fontSize: rem(0.5),
               fontWeight: "800",
               letterSpacing: 0.06 * rem(0.65),
               textTransform: "uppercase",
@@ -478,20 +478,19 @@ export default function RetainedStaffCycleDetailScreen() {
           />
           <View style={[styles.breakTotal, { borderTopColor: c.border }]}>
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: theme.fonts?.display || "Syne_700Bold",
-                fontSize: rem(1.1),
-                fontWeight: "800",
-                color: c.text,
+                fontSize: 10,
+                letterSpacing: -0.5,
               }}
             >
               {t("retainedStaff.workerReceives")}
             </AppText>
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: theme.fonts?.displayBlack || "Syne_800ExtraBold",
-                fontSize: rem(1.1),
-                fontWeight: "800",
+                fontSize: 11,
+                letterSpacing: -0.5,
                 color: c.orange,
               }}
             >
