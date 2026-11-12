@@ -320,7 +320,10 @@ function StatCard({ icon, label, value, footer, fontSize, color, bg, border }) {
       </AppText>
       <AppText
         numberOfLines={1}
-        style={[styles.statLabel, { color: theme.colors.textDim }]}
+        style={[
+          styles.statLabel,
+          { color: theme.colors.textDim, fontSize: 10 },
+        ]}
       >
         {label}
       </AppText>
