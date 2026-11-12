@@ -27,6 +27,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../components/AppText";
 import Skeleton from "../../components/Skeleton";
@@ -108,6 +109,7 @@ function WorkerCard({
   onNavigateProfile,
   onNavigateBook,
   c,
+  t,
 }) {
   const wp = worker.workerProfile;
 
@@ -175,7 +177,7 @@ function WorkerCard({
               <AppText
                 style={{ fontSize: 11, fontWeight: "600", color: c.green }}
               >
-                ● Available
+                {t("savedWorkers.available")}
               </AppText>
             ) : null}
           </View>
@@ -242,7 +244,9 @@ function WorkerCard({
             <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
               {hourlyText}
             </AppText>
-            <AppText style={{ fontSize: 10, color: c.textMuted }}>/hr</AppText>
+            <AppText style={{ fontSize: 10, color: c.textMuted }}>
+              {t("savedWorkers.perHour")}
+            </AppText>
           </View>
         ) : null}
 
@@ -253,7 +257,9 @@ function WorkerCard({
             <AppText style={{ fontSize: 13, fontWeight: "700", color: c.text }}>
               {String(wp.completedJobs)}
             </AppText>
-            <AppText style={{ fontSize: 10, color: c.textMuted }}>jobs</AppText>
+            <AppText style={{ fontSize: 10, color: c.textMuted }}>
+              {t("savedWorkers.jobsUnit")}
+            </AppText>
           </View>
         ) : null}
 
@@ -265,7 +271,7 @@ function WorkerCard({
               {String(wp.totalReviews)}
             </AppText>
             <AppText style={{ fontSize: 10, color: c.textMuted }}>
-              reviews
+              {t("savedWorkers.reviewsUnit")}
             </AppText>
           </View>
         ) : null}
@@ -289,7 +295,7 @@ function WorkerCard({
             <AppText
               style={{ fontSize: 10, fontWeight: "700", color: c.green }}
             >
-              Verified
+              {t("savedWorkers.verified")}
             </AppText>
           </View>
         ) : null}
@@ -298,7 +304,7 @@ function WorkerCard({
       {/* Last hired — hired tab only */}
       {worker.lastCategory ? (
         <AppText style={{ fontSize: 11, color: c.textMuted }}>
-          {"Last hired for: "}
+          {t("savedWorkers.lastHiredForPrefix")}{" "}
           <AppText style={{ fontWeight: "600", color: c.textDim }}>
             {worker.lastCategory.name || ""}
           </AppText>
@@ -308,11 +314,13 @@ function WorkerCard({
       {/* Saved at — saved tab only */}
       {worker.savedAt ? (
         <AppText style={{ fontSize: 11, color: c.textMuted }}>
-          {`Saved ${new Date(worker.savedAt).toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          })}`}
+          {t("savedWorkers.savedAt", {
+            date: new Date(worker.savedAt).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            }),
+          })}
         </AppText>
       ) : null}
 
@@ -332,7 +340,7 @@ function WorkerCard({
           <AppText
             style={{ fontSize: 12, fontWeight: "600", color: c.textDim }}
           >
-            View Profile
+            {t("savedWorkers.viewProfile")}
           </AppText>
           <FaArrowRight size={12} color={c.textDim} />
         </Pressable>
@@ -354,7 +362,7 @@ function WorkerCard({
           ]}
         >
           <AppText style={{ fontSize: 12, fontWeight: "700", color: "#000" }}>
-            Book
+            {t("savedWorkers.book")}
           </AppText>
         </Pressable>
 
@@ -401,14 +409,16 @@ function Skeletons({ c }) {
 }
 
 // ── Empty state ─────────────────────────────────────────────────────────
-function Empty({ tab, onBrowse, c }) {
+function Empty({ tab, onBrowse, c, t }) {
   const Icon = tab === "saved" ? FaBookmark : FaBriefcase;
   const title =
-    tab === "saved" ? "No saved workers yet" : "No hired workers yet";
+    tab === "saved"
+      ? t("savedWorkers.emptyTitle")
+      : t("savedWorkers.emptyHiredTitle");
   const subtitle =
     tab === "saved"
-      ? "Browse workers and tap the bookmark icon to save them here."
-      : "Workers you've previously booked will appear here.";
+      ? t("savedWorkers.emptySub")
+      : t("savedWorkers.emptyHiredSub");
 
   return (
     <View
@@ -465,7 +475,7 @@ function Empty({ tab, onBrowse, c }) {
         ]}
       >
         <AppText style={{ fontSize: 13, fontWeight: "700", color: c.orange }}>
-          Browse Workers
+          {t("savedWorkers.browseWorkers")}
         </AppText>
         <FaArrowRight size={12} color={c.orange} />
       </Pressable>
@@ -475,6 +485,7 @@ function Empty({ tab, onBrowse, c }) {
 
 // ── Main screen ─────────────────────────────────────────────────────────
 export default function SavedWorkersScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const { theme } = useTheme();
   const c = theme.colors;
@@ -499,7 +510,7 @@ export default function SavedWorkersScreen() {
       const res = await client.get("/hirers/me/saved-workers");
       setSaved(res.data.data?.workers || []);
     } catch {
-      notify("Failed to load saved workers", "error");
+      notify(t("savedWorkers.errorLoadSaved"), "error");
     } finally {
       setLoadingSaved(false);
     }
@@ -511,7 +522,7 @@ export default function SavedWorkersScreen() {
       const res = await client.get("/hirers/me/hired-workers");
       setHired(res.data.data?.workers || []);
     } catch {
-      notify("Failed to load hired workers", "error");
+      notify(t("savedWorkers.errorLoadHired"), "error");
     } finally {
       setLoadingHired(false);
     }
@@ -552,9 +563,9 @@ export default function SavedWorkersScreen() {
       try {
         await client.delete(`/hirers/me/saved-workers/${workerId}`);
         setSaved((prev) => prev.filter((w) => w.id !== workerId));
-        notify("Worker removed from saved list");
+        notify(t("savedWorkers.toastRemoved"));
       } catch {
-        notify("Failed to remove worker", "error");
+        notify(t("savedWorkers.errorRemove"), "error");
       } finally {
         setUnsaving(null);
       }
@@ -655,20 +666,19 @@ export default function SavedWorkersScreen() {
             >
               <View style={{ flex: 1, minWidth: 0 }}>
                 <AppText
+                  weight="displayBlack"
                   style={{
-                    fontFamily: "Syne_800ExtraBold",
-                    fontSize: 24,
-                    fontWeight: "900",
-                    color: c.text,
+                    fontSize: 15,
                     letterSpacing: -0.5,
+                    marginBottom: 4,
                   }}
                 >
-                  My Workers
+                  {t("savedWorkers.title")}
                 </AppText>
                 <AppText
-                  style={{ fontSize: 13, color: c.textDim, marginTop: 4 }}
+                  style={{ fontSize: 12, color: c.textDim, marginTop: 4 }}
                 >
-                  Manage your saved shortlist and view your hiring history.
+                  {t("savedWorkers.subtitle")}
                 </AppText>
               </View>
               <Pressable
@@ -695,7 +705,7 @@ export default function SavedWorkersScreen() {
                     color: "#000",
                   }}
                 >
-                  Browse Workers
+                  {t("savedWorkers.browseWorkers")}
                 </AppText>
               </Pressable>
             </View>
@@ -742,7 +752,7 @@ export default function SavedWorkersScreen() {
                     color: tab === "saved" ? c.orange : c.textDim,
                   }}
                 >
-                  Saved
+                  {t("savedWorkers.tabSaved")}
                 </AppText>
                 {saved.length > 0 ? (
                   <View
@@ -794,7 +804,7 @@ export default function SavedWorkersScreen() {
                     color: tab === "hired" ? c.orange : c.textDim,
                   }}
                 >
-                  Previously Hired
+                  {t("savedWorkers.tabHired")}
                 </AppText>
                 {hired.length > 0 ? (
                   <View
@@ -823,7 +833,7 @@ export default function SavedWorkersScreen() {
           isLoading ? (
             <Skeletons c={c} />
           ) : (
-            <Empty tab={tab} onBrowse={handleBrowse} c={c} />
+            <Empty tab={tab} onBrowse={handleBrowse} c={c} t={t} />
           )
         }
         renderItem={({ item }) => (
@@ -836,6 +846,7 @@ export default function SavedWorkersScreen() {
               onNavigateProfile={handleNavigateProfile}
               onNavigateBook={handleNavigateBook}
               c={c}
+              t={t}
             />
           </View>
         )}
