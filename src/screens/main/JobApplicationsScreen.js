@@ -45,6 +45,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 import {
   FaArrowLeft,
   FaMapMarkerAlt,
@@ -362,7 +363,7 @@ export default function JobApplicationsScreen() {
   const [undoTarget, setUndoTarget] = useState(null);
 
   const fetchAll = useCallback(
-    async (isRefresh = false) => {
+    async (isRefresh = false, isSilent = false) => {
       if (!jobId) return;
       if (!isRefresh) setLoading(true);
       try {
@@ -373,9 +374,13 @@ export default function JobApplicationsScreen() {
         setJob(jobRes?.data?.data?.jobPost || jobRes?.data?.data);
         setApplications(appsRes?.data?.data?.applications || []);
       } catch (err) {
-        setError(t("jobApplications.errors.loadFailed"));
+        // Poller never surfaces errors — user never sees a red banner
+        // from a background refresh. Pull-to-refresh / focus still do.
+        if (!isSilent) {
+          setError(t("jobApplications.errors.loadFailed"));
+        }
       } finally {
-        setLoading(false);
+        if (!isRefresh) setLoading(false);
         setRefreshing(false);
       }
     },
@@ -398,6 +403,14 @@ export default function JobApplicationsScreen() {
       fetchAll(true);
     }, [fetchAll]),
   );
+
+  // ── Silent background refresh every 5s ──
+  // Paused while a decision PATCH is in flight (updating !== null) or
+  // while the Undo modal is open — otherwise a silent poll would race
+  // with the optimistic state update and could flicker the status back.
+  const fetchSilent = useCallback(() => fetchAll(true, true), [fetchAll]);
+
+  usePlatformRefresh(fetchSilent, !updating && !undoTarget);
 
   const onRefresh = () => {
     setRefreshing(true);

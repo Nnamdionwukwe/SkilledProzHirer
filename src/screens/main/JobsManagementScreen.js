@@ -27,6 +27,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
 import { CURRENCY_META } from "../../contexts/CurrencyContext";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 import {
   FaPlus,
   FaCalendarAlt,
@@ -148,7 +149,7 @@ export default function JobsManagementScreen() {
 
   // ── Fetch ─────────────────────────────────────────────────────────
   const load = useCallback(
-    async (pg = page, flt = filter, isRefresh = false) => {
+    async (pg = page, flt = filter, isRefresh = false, isSilent = false) => {
       if (!isRefresh) setLoading(true);
       try {
         const params = { page: pg, limit: 9 };
@@ -159,9 +160,13 @@ export default function JobsManagementScreen() {
         setTotal(data.total || 0);
         setPages(data.pages || 1);
       } catch (err) {
-        setError(t("jobsManagement.errors.loadFailed"));
+        // Poller never surfaces errors — user never sees a red banner
+        // from a background refresh. Pull-to-refresh does surface them.
+        if (!isSilent) {
+          setError(t("jobsManagement.errors.loadFailed"));
+        }
       } finally {
-        setLoading(false);
+        if (!isRefresh) setLoading(false);
         setRefreshing(false);
       }
     },
@@ -172,6 +177,15 @@ export default function JobsManagementScreen() {
   useEffect(() => {
     load(page, filter);
   }, [filter, page, load]);
+
+  // Silent fetch wrapper for the poller — no spinner, no error banner
+  const fetchSilent = useCallback(
+    () => load(page, filter, true, true),
+    [load, page, filter],
+  );
+
+  // ── Silent background refresh every 5s ──
+  usePlatformRefresh(fetchSilent, true);
 
   const onRefresh = () => {
     setRefreshing(true);
