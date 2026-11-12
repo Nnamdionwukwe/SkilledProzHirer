@@ -556,9 +556,10 @@ function CurrencyTab({ currency, balance, isActive, onPress, c }) {
           alignItems: "center",
           justifyContent: "center",
           gap: 2,
-          paddingHorizontal: 12,
+          paddingHorizontal: 10,
           paddingVertical: 8,
-          minWidth: 92,
+          minWidth: 100,
+          maxHeight: 70,
           backgroundColor: isActive ? c.orangeDim : c.bgCard,
           borderWidth: 2,
           borderColor: isActive ? c.orange : isZero ? c.border : c.border,
@@ -570,16 +571,18 @@ function CurrencyTab({ currency, balance, isActive, onPress, c }) {
     >
       <CurrencyIcon
         currency={currency}
-        size={12}
+        size={10}
         color={isActive ? c.orange : c.textDim}
       />
       <AppText
         style={{
           fontFamily: "DMSans_600SemiBold",
-          fontSize: 10,
+          fontSize: 8,
           fontWeight: "700",
           color: isActive ? c.orange : c.text,
           letterSpacing: 0.3,
+          marginTop: -5,
+          marginBottom: -8,
         }}
       >
         {currency}
@@ -587,7 +590,7 @@ function CurrencyTab({ currency, balance, isActive, onPress, c }) {
       <AppText
         style={{
           fontFamily: "DMSans_500Medium",
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: "600",
           color: c.textDim,
         }}
@@ -597,18 +600,18 @@ function CurrencyTab({ currency, balance, isActive, onPress, c }) {
       {isZero ? (
         <View
           style={{
-            paddingHorizontal: 6,
-            paddingVertical: 1,
+            paddingHorizontal: 8,
+            paddingVertical: -3,
             backgroundColor: c.bgCard,
             borderWidth: 1,
             borderColor: c.border,
             borderRadius: 4,
-            marginTop: 2,
+            marginTop: -5,
           }}
         >
           <AppText
             style={{
-              fontSize: 8,
+              fontSize: 6,
               fontWeight: "600",
               color: c.textMuted,
             }}
