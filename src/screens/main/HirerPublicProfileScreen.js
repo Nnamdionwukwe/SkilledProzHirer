@@ -875,7 +875,12 @@ export default function HirerPublicProfileScreen() {
                 onMsgChange={(v) => setApplyMsg((m) => ({ ...m, [job.id]: v }))}
                 applyResult={applyResult[job.id]}
                 onViewFull={() =>
-                  navigation.navigate("WorkerJobDetail", { jobId: job.id })
+                  navigation.navigate(
+                    viewerUser?.role === "WORKER"
+                      ? "WorkerJobDetail"
+                      : "JobDetail",
+                    { jobId: job.id },
+                  )
                 }
               />
             ))
