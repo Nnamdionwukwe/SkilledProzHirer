@@ -32,6 +32,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import client from "../../api/client";
 import { FaSearch, FaComments } from "../../icons/fa";
 import { rem } from "../../constants/theme";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 
 const CONVO_POLL_MS = 12000;
 
@@ -196,7 +197,7 @@ export default function MessagesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (isSilent = false) => {
     try {
       const res = await client.get("/messages/conversations", {
         params: { page: 1, limit: 50, _t: Date.now() },
@@ -204,7 +205,11 @@ export default function MessagesScreen() {
       const list = res.data?.data?.conversations || [];
       setRawConversations(list);
     } catch (err) {
-      console.log("⚠️ conversations fetch failed:", err?.message);
+      // Poller never surfaces errors — no console spam from silent polls.
+      // Initial load / focus / pull-to-refresh still log for debugging.
+      if (!isSilent) {
+        console.log("⚠️ conversations fetch failed:", err?.message);
+      }
     }
   }, []);
 
@@ -221,10 +226,17 @@ export default function MessagesScreen() {
     }, [loadConversations]),
   );
 
-  useEffect(() => {
-    const id = setInterval(loadConversations, CONVO_POLL_MS);
-    return () => clearInterval(id);
-  }, [loadConversations]);
+  // ── Silent background refresh every 5s ──
+  // Replaces the old 12s setInterval — the PlatformPollerProvider already
+  // pauses when the app is backgrounded, so no extra guard is needed here.
+  // No gate needed: search is a local filter on top of conversations, so
+  // refreshing conversations never wipes the search input or the visible
+  // filtered list.
+  const fetchSilent = useCallback(
+    () => loadConversations(true),
+    [loadConversations],
+  );
+  usePlatformRefresh(fetchSilent, true);
 
   // Deep-link: conversationId or withUserId passed via route
   useEffect(() => {

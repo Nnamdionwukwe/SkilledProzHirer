@@ -22,6 +22,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
 import { getBookings } from "../../api/bookings";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 
 import {
   FaBriefcase,
@@ -448,7 +449,7 @@ export default function BookingsScreen() {
   const [total, setTotal] = useState(0);
 
   const load = useCallback(
-    async (pg = 1, flt = filter) => {
+    async (pg = 1, flt = filter, isSilent = false) => {
       try {
         const params = { page: pg, limit: 12 };
         if (flt !== "ALL") params.status = flt;
@@ -457,7 +458,10 @@ export default function BookingsScreen() {
         setPages(data.pages ?? 1);
         setTotal(data.total ?? 0);
       } catch {
-        toast.error(t("toast.networkError"));
+        // Poller never surfaces errors — no toast on silent refresh.
+        if (!isSilent) {
+          toast.error(t("toast.networkError"));
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -469,6 +473,16 @@ export default function BookingsScreen() {
   useEffect(() => {
     load(page, filter);
   }, [filter, page]);
+
+  // ── Silent background refresh every 5s ──
+  // No gate: this screen has no inline forms or modals. `refreshing` is
+  // only true while the user's pull-to-refresh is active, and the poller
+  // tick coincides harmlessly (same fetch, same data).
+  const fetchSilent = useCallback(
+    () => load(page, filter, true),
+    [load, page, filter],
+  );
+  usePlatformRefresh(fetchSilent, true);
 
   const handleFilter = (f) => {
     setFilter(f);

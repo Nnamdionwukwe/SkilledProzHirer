@@ -32,6 +32,7 @@ import {
   deleteNotification,
   clearAllNotifications,
 } from "../../api/notifications";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 
 // ── Time ago ──────────────────────────────────────────────────────────────────
 function timeAgo(d) {
@@ -524,20 +525,33 @@ export default function NotificationsScreen() {
   const [tab, setTab] = useState("all");
   const [selected, setSelected] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [acting, setActing] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isSilent = false) => {
     try {
       const data = await getNotifications({ page: 1, limit: 50 });
       setAll(data.notifications ?? []);
       setUnreadCount(data.unreadCount ?? 0);
       setTotal(data.total ?? 0);
     } catch {
-      toast.error(t("toast.unknownError"));
+      // Poller never surfaces errors — no toast on silent refresh.
+      if (!isSilent) {
+        toast.error(t("toast.unknownError"));
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
+
+  // ── Silent background refresh every 5s ──
+  // Paused while any mutation is in flight (mark-read, mark-all-read,
+  // delete, clear-all) so the poller can't race the optimistic state
+  // updates. Also paused while the detail modal is open — otherwise a
+  // silent refresh could swap the `selected` notification object out
+  // from under the modal if the backend state changed.
+  const fetchSilent = useCallback(() => load(true), [load]);
+  usePlatformRefresh(fetchSilent, !acting && !selected && !confirm);
 
   useEffect(() => {
     load();
@@ -551,13 +565,17 @@ export default function NotificationsScreen() {
   const handlePress = async (notif) => {
     setSelected(notif);
     if (!notif.isRead) {
+      setActing(true);
       try {
         await markAsRead(notif.id);
         setAll((prev) =>
           prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n)),
         );
         setUnreadCount((u) => Math.max(0, u - 1));
-      } catch {}
+      } catch {
+      } finally {
+        setActing(false);
+      }
     }
   };
 
@@ -568,18 +586,22 @@ export default function NotificationsScreen() {
       confirmLabel: t("common.delete"),
       destructive: true,
       onConfirm: async () => {
+        setActing(true);
         try {
           await deleteNotification(id);
           setAll((prev) => prev.filter((n) => n.id !== id));
-          setTotal((t) => t - 1);
+          setTotal((prev) => prev - 1);
         } catch {
           toast.error(t("toast.unknownError"));
+        } finally {
+          setActing(false);
         }
       },
     });
   };
 
   const handleMarkAll = async () => {
+    setActing(true);
     try {
       await markAllAsRead();
       setAll((prev) => prev.map((n) => ({ ...n, isRead: true })));
@@ -587,6 +609,8 @@ export default function NotificationsScreen() {
       toast.success(t("notifications.markedAll"));
     } catch {
       toast.error(t("toast.unknownError"));
+    } finally {
+      setActing(false);
     }
   };
 
@@ -597,6 +621,7 @@ export default function NotificationsScreen() {
       confirmLabel: t("notifications.clearAll"),
       destructive: true,
       onConfirm: async () => {
+        setActing(true);
         try {
           await clearAllNotifications();
           setAll([]);
@@ -605,6 +630,8 @@ export default function NotificationsScreen() {
           toast.success(t("notifications.cleared"));
         } catch {
           toast.error(t("toast.unknownError"));
+        } finally {
+          setActing(false);
         }
       },
     });
