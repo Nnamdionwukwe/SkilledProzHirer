@@ -363,14 +363,10 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess }) {
             <View style={[styles.header, { borderBottomColor: c.border }]}>
               <View style={{ flex: 1 }}>
                 <AppText
+                  weight="displayBlack"
                   style={{
-                    fontFamily:
-                      theme.fonts?.displayBlack || "Syne_800ExtraBold",
-                    fontSize: rem(1.25),
-                    lineHeight: rem(1.25) * 1.15,
-                    fontWeight: "800",
-                    color: c.text,
-                    letterSpacing: -0.02 * rem(1.25),
+                    fontSize: 15,
+                    letterSpacing: -0.5,
                   }}
                 >
                   {step === 1
