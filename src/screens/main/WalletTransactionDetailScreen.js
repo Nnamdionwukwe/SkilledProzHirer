@@ -690,13 +690,10 @@ export default function WalletTransactionDetailScreen() {
             </AppText>
           </Pressable>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: "Syne_800ExtraBold",
-              fontSize: 22,
-              fontWeight: "800",
-              color: c.text,
-              letterSpacing: -0.3,
-              marginTop: 4,
+              fontSize: 15,
+              letterSpacing: -0.5,
             }}
           >
             Transaction Details
@@ -721,12 +718,12 @@ export default function WalletTransactionDetailScreen() {
           <View style={{ flex: 1, minWidth: 0 }}>
             <AppText style={labelStyle(c)}>STATUS</AppText>
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: "Syne_800ExtraBold",
-                fontSize: 16,
-                fontWeight: "800",
+                fontSize: 13,
+                letterSpacing: -0.5,
                 color: statusConfig.color,
-                marginTop: 2,
+                marginBottom: 4,
               }}
             >
               {statusConfig.label}

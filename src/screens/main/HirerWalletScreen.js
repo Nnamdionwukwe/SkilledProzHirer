@@ -45,6 +45,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../components/AppText";
 import Skeleton from "../../components/Skeleton";
@@ -86,78 +87,6 @@ import {
 const PENDING_REF_KEY = "@skilledproz:pendingDepositReference";
 
 // ── Helpers (verbatim from web) ─────────────────────────────────────────
-function formatCurrency(amount, currency = "NGN") {
-  const numAmount =
-    typeof amount === "number" ? amount : parseFloat(amount) || 0;
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency || "NGN",
-      minimumFractionDigits: 2,
-    }).format(numAmount);
-  } catch {
-    return `${currency} ${numAmount.toFixed(2)}`;
-  }
-}
-
-function formatDate(date) {
-  if (!date) return "—";
-  return new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function getStatusColor(status, c) {
-  const colors = {
-    PENDING: c.orange,
-    PROCESSING: "#3B82F6",
-    COMPLETED: c.green,
-    SUCCESS: c.green,
-    FAILED: c.red,
-    REVERSED: c.textMuted,
-    CANCELLED: c.textMuted,
-    INITIATED: c.orange,
-  };
-  return colors[status] || c.textMuted;
-}
-
-function getStatusLabel(status) {
-  const labels = {
-    PENDING: "Pending",
-    PROCESSING: "Processing",
-    COMPLETED: "Completed",
-    SUCCESS: "Success",
-    FAILED: "Failed",
-    REVERSED: "Reversed",
-    CANCELLED: "Cancelled",
-    INITIATED: "Initiated",
-  };
-  return labels[status] || status;
-}
-
-function StatusIcon({ status, size = 11, c }) {
-  const color = getStatusColor(status, c);
-  if (status === "COMPLETED" || status === "SUCCESS")
-    return <FaCheckCircle size={size} color={color} />;
-  if (status === "PENDING" || status === "INITIATED" || status === "PROCESSING")
-    return <FaSpinner size={size} color={color} />;
-  if (status === "FAILED" || status === "REVERSED" || status === "CANCELLED")
-    return <FaTimesCircle size={size} color={color} />;
-  return <FaClock size={size} color={color} />;
-}
-
-function CurrencyIcon({ currency, size = 14, color }) {
-  // Simplified icon set — mobile fa.js only ships these
-  if (currency === "NGN") return <FaMoneyBillWave size={size} color={color} />;
-  if (currency === "USD" || currency === "EUR" || currency === "GBP")
-    return <FaDollarSign size={size} color={color} />;
-  return <FaMoneyBillWave size={size} color={color} />;
-}
-
 const CURRENCY_SYMBOLS = {
   NGN: "₦",
   USD: "$",
@@ -200,6 +129,87 @@ function getCurrencySymbol(currency) {
   return CURRENCY_SYMBOLS[currency] || currency;
 }
 
+// Symbol-prefixed currency formatter — no Intl (which renders the code on
+// Hermes/Android). Uses CURRENCY_SYMBOLS for the prefix and toLocaleString
+// for the numeric portion.
+function formatCurrency(amount, currency = "NGN") {
+  const numAmount =
+    typeof amount === "number" ? amount : parseFloat(amount) || 0;
+  const sym = getCurrencySymbol(currency || "NGN");
+  const isCrypto = ["USDC", "USDT", "BTC", "ETH"].includes(currency);
+  try {
+    const formatted = numAmount.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    return isCrypto ? `${sym} ${formatted}` : `${sym}${formatted}`;
+  } catch {
+    return isCrypto
+      ? `${sym} ${numAmount.toFixed(2)}`
+      : `${sym}${numAmount.toFixed(2)}`;
+  }
+}
+
+function formatDate(date) {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getStatusColor(status, c) {
+  const colors = {
+    PENDING: c.orange,
+    PROCESSING: "#3B82F6",
+    COMPLETED: c.green,
+    SUCCESS: c.green,
+    FAILED: c.red,
+    REVERSED: c.textMuted,
+    CANCELLED: c.textMuted,
+    INITIATED: c.orange,
+  };
+  return colors[status] || c.textMuted;
+}
+
+// Status labels come from i18n so we can translate them.
+function getStatusLabel(status, t) {
+  const map = {
+    PENDING: "wallet.status.pending",
+    PROCESSING: "wallet.status.processing",
+    COMPLETED: "wallet.status.completed",
+    SUCCESS: "wallet.status.success",
+    FAILED: "wallet.status.failed",
+    REVERSED: "wallet.status.reversed",
+    CANCELLED: "wallet.status.cancelled",
+    INITIATED: "wallet.status.initiated",
+  };
+  const key = map[status];
+  return key ? t(key) : status;
+}
+
+function StatusIcon({ status, size = 11, c }) {
+  const color = getStatusColor(status, c);
+  if (status === "COMPLETED" || status === "SUCCESS")
+    return <FaCheckCircle size={size} color={color} />;
+  if (status === "PENDING" || status === "INITIATED" || status === "PROCESSING")
+    return <FaSpinner size={size} color={color} />;
+  if (status === "FAILED" || status === "REVERSED" || status === "CANCELLED")
+    return <FaTimesCircle size={size} color={color} />;
+  return <FaClock size={size} color={color} />;
+}
+
+function CurrencyIcon({ currency, size = 14, color }) {
+  // Simplified icon set — mobile fa.js only ships these
+  if (currency === "NGN") return <FaMoneyBillWave size={size} color={color} />;
+  if (currency === "USD" || currency === "EUR" || currency === "GBP")
+    return <FaDollarSign size={size} color={color} />;
+  return <FaMoneyBillWave size={size} color={color} />;
+}
+
 // ── Fee model (verbatim) ────────────────────────────────────────────────
 const NGN_WALLET_WITHDRAWAL_FEE_RATE = 0.01;
 const NGN_WALLET_WITHDRAWAL_FEE_CAP = 100;
@@ -233,45 +243,54 @@ function getWalletWithdrawalFee(amount, currency = "NGN") {
   return { fee, netAmount, feeRate, feePercent };
 }
 
-function getTransactionLabel(type) {
-  const labels = {
-    DEPOSIT: "Deposit",
-    WITHDRAWAL: "Withdrawal",
-    PAYMENT: "Payment",
-    SUBSCRIPTION: "Subscription",
-    REFUND: "Refund",
-    BONUS: "Bonus",
-    ADJUSTMENT: "Adjustment",
+// Transaction label — translated via i18n.
+function getTransactionLabel(type, t) {
+  const map = {
+    DEPOSIT: "wallet.txTypes.deposit",
+    WITHDRAWAL: "wallet.txTypes.withdrawal",
+    PAYMENT: "wallet.txTypes.payment",
+    SUBSCRIPTION: "wallet.txTypes.subscription",
+    REFUND: "wallet.txTypes.refund",
+    BONUS: "wallet.txTypes.bonus",
+    ADJUSTMENT: "wallet.txTypes.adjustment",
   };
-  return labels[type] || type;
+  const key = map[type];
+  return key ? t(key) : type;
 }
 
-function getPaymentChannel(tx) {
+function getPaymentChannel(tx, t) {
   if (tx.type === "DEPOSIT") {
     const p = tx.meta?.paymentProvider;
     if (p === "FLUTTERWAVE" || p === "PAYSTACK")
-      return { label: "Card / Mobile Money", Icon: FaCreditCard };
-    return { label: "Card / Bank", Icon: FaCreditCard };
+      return { label: t("wallet.channels.cardMobile"), Icon: FaCreditCard };
+    return { label: t("wallet.channels.cardBank"), Icon: FaCreditCard };
   }
   if (tx.type === "WITHDRAWAL")
-    return { label: "Bank Transfer", Icon: FaBuilding };
+    return { label: t("wallet.channels.bankTransfer"), Icon: FaBuilding };
   if (tx.type === "PAYMENT") {
     const p = tx.meta?.paymentProvider || "WALLET";
-    if (p === "WALLET") return { label: "Wallet", Icon: FaWallet };
+    if (p === "WALLET")
+      return { label: t("wallet.channels.wallet"), Icon: FaWallet };
     if (p === "PAYSTACK")
-      return { label: "Card (Paystack)", Icon: FaCreditCard };
+      return { label: t("wallet.channels.paystackCard"), Icon: FaCreditCard };
     if (p === "FLUTTERWAVE")
-      return { label: "Card (Flutterwave)", Icon: FaCreditCard };
+      return {
+        label: t("wallet.channels.flutterwaveCard"),
+        Icon: FaCreditCard,
+      };
     if (p === "BANK_TRANSFER")
-      return { label: "Bank Transfer", Icon: FaBuilding };
-    if (p === "CRYPTO") return { label: "Crypto", Icon: FaDollarSign };
-    return { label: "Payment", Icon: FaCreditCard };
+      return { label: t("wallet.channels.bankTransfer"), Icon: FaBuilding };
+    if (p === "CRYPTO")
+      return { label: t("wallet.channels.crypto"), Icon: FaDollarSign };
+    return { label: t("wallet.channels.payment"), Icon: FaCreditCard };
   }
   if (tx.type === "SUBSCRIPTION")
-    return { label: "Subscription", Icon: FaShieldAlt };
-  if (tx.type === "REFUND") return { label: "Refund", Icon: FaArrowUp };
-  if (tx.type === "BONUS") return { label: "Bonus", Icon: FaPlus };
-  return { label: "Adjustment", Icon: FaMinus };
+    return { label: t("wallet.channels.subscription"), Icon: FaShieldAlt };
+  if (tx.type === "REFUND")
+    return { label: t("wallet.channels.refund"), Icon: FaArrowUp };
+  if (tx.type === "BONUS")
+    return { label: t("wallet.channels.bonus"), Icon: FaPlus };
+  return { label: t("wallet.channels.adjustment"), Icon: FaMinus };
 }
 
 // ── Bank list (verbatim) ────────────────────────────────────────────────
@@ -302,36 +321,36 @@ const CURRENCY_METHODS = {
     {
       key: "ng_bank",
       method: "bank_transfer",
-      label: "Nigerian Bank / Fintech",
+      labelKey: "wallet.methods.ngBank",
       Icon: FaCreditCard,
-      desc: "GTBank, Kuda, OPay, Access, Zenith, UBA, PalmPay +70 more",
+      descKey: "wallet.methodsDesc.ngBank",
       country: "NG",
       hasBankList: true,
     },
     {
       key: "ng_mtn",
       method: "mobile_money",
-      label: "MTN MoMo Nigeria",
+      labelKey: "wallet.methods.mtn",
       Icon: FaUser,
-      desc: "MTN mobile money",
+      descKey: "wallet.methodsDesc.mtn",
       country: "NG",
       provider: "MTN",
     },
     {
       key: "ng_airtel",
       method: "mobile_money",
-      label: "Airtel Money Nigeria",
+      labelKey: "wallet.methods.airtel",
       Icon: FaUser,
-      desc: "Airtel mobile money",
+      descKey: "wallet.methodsDesc.airtel",
       country: "NG",
       provider: "Airtel",
     },
     {
       key: "crypto",
       method: "crypto",
-      label: "USDC / USDT",
+      labelKey: "wallet.methods.crypto",
       Icon: FaDollarSign,
-      desc: "Stablecoin — any country",
+      descKey: "wallet.methodsDesc.crypto",
     },
   ],
 };
@@ -340,17 +359,17 @@ const INTL_METHODS = [
   {
     key: "intl_bank",
     method: "bank_transfer",
-    label: "International Wire",
+    labelKey: "wallet.methods.intlBank",
     Icon: FaGlobe,
-    desc: "SWIFT / IBAN — 150+ countries",
+    descKey: "wallet.methodsDesc.intlBank",
     isInternational: true,
   },
   {
     key: "crypto",
     method: "crypto",
-    label: "USDC / USDT",
+    labelKey: "wallet.methods.crypto",
     Icon: FaDollarSign,
-    desc: "Stablecoin — any country",
+    descKey: "wallet.methodsDesc.crypto",
   },
 ];
 
@@ -365,14 +384,15 @@ const CRYPTO_NETWORKS = [
 const CRYPTO_TOKENS = ["USDC", "USDT", "BTC", "ETH"];
 
 const BANK_TYPE_LABELS = {
-  commercial: { label: "Commercial", color: "#818cf8" },
-  digital: { label: "Digital/Fintech", color: "#f97316" },
-  microfinance: { label: "Microfinance", color: "#22c55e" },
-  merchant: { label: "Merchant", color: "#a78bfa" },
+  commercial: { labelKey: "wallet.bankTypes.commercial", color: "#818cf8" },
+  digital: { labelKey: "wallet.bankTypes.digital", color: "#f97316" },
+  microfinance: { labelKey: "wallet.bankTypes.microfinance", color: "#22c55e" },
+  merchant: { labelKey: "wallet.bankTypes.merchant", color: "#a78bfa" },
 };
 
 // ── CopyButton ─────────────────────────────────────────────────────────
-function CopyButton({ text, label = "Copy", c }) {
+function CopyButton({ text, label, c }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
     try {
@@ -381,6 +401,7 @@ function CopyButton({ text, label = "Copy", c }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {}
   };
+  const shownLabel = label ?? t("wallet.copy.default");
   return (
     <Pressable
       onPress={handleCopy}
@@ -411,7 +432,7 @@ function CopyButton({ text, label = "Copy", c }) {
           color: copied ? c.green : c.textDim,
         }}
       >
-        {copied ? "Copied!" : label}
+        {copied ? t("wallet.copy.copied") : shownLabel}
       </AppText>
     </Pressable>
   );
@@ -492,15 +513,10 @@ function StatCard({ Icon, label, value, accent, c }) {
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <AppText
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.7}
+          weight="displayBlack"
           style={{
-            fontFamily: "Syne_800ExtraBold",
-            fontSize: 15,
-            fontWeight: "800",
-            color: accentStyles.valueColor,
-            letterSpacing: -0.2,
+            fontSize: 11,
+            letterSpacing: -0.5,
           }}
         >
           {value}
@@ -525,6 +541,7 @@ function StatCard({ Icon, label, value, accent, c }) {
 
 // ── CurrencyTab ────────────────────────────────────────────────────────
 function CurrencyTab({ currency, balance, isActive, onPress, c }) {
+  const { t } = useTranslation();
   const symbol = getCurrencySymbol(currency);
   const safe = typeof balance === "number" ? balance : 0;
   const isZero = safe === 0;
@@ -596,7 +613,7 @@ function CurrencyTab({ currency, balance, isActive, onPress, c }) {
               color: c.textMuted,
             }}
           >
-            Empty
+            {t("wallet.empty")}
           </AppText>
         </View>
       ) : null}
@@ -606,13 +623,14 @@ function CurrencyTab({ currency, balance, isActive, onPress, c }) {
 
 // ── TransactionRow ─────────────────────────────────────────────────────
 function TransactionRow({ transaction, onPress, c, format }) {
+  const { t } = useTranslation();
   const isCredit =
     transaction.type === "DEPOSIT" ||
     transaction.type === "REFUND" ||
     transaction.type === "BONUS";
   const amountColor = isCredit ? c.green : c.red;
   const prefix = isCredit ? "+" : "-";
-  const channel = getPaymentChannel(transaction);
+  const channel = getPaymentChannel(transaction, t);
   const ChannelIcon = channel.Icon;
 
   const amount =
@@ -669,7 +687,7 @@ function TransactionRow({ transaction, onPress, c, format }) {
                 color: c.text,
               }}
             >
-              {getTransactionLabel(transaction.type)}
+              {getTransactionLabel(transaction.type, t)}
             </AppText>
             {transaction.reference ? (
               <View
@@ -704,11 +722,11 @@ function TransactionRow({ transaction, onPress, c, format }) {
             }}
           >
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: "Syne_800ExtraBold",
-                fontSize: 13,
-                fontWeight: "800",
+                fontSize: 11,
                 color: amountColor,
+                letterSpacing: -0.5,
               }}
             >
               {`${prefix}${format(amount, transaction.currency || "NGN")}`}
@@ -778,7 +796,7 @@ function TransactionRow({ transaction, onPress, c, format }) {
               letterSpacing: 0.5,
             }}
           >
-            {getStatusLabel(transaction.status)}
+            {getStatusLabel(transaction.status, t)}
           </AppText>
         </View>
         <FaChevronRight size={11} color={c.textMuted} />
@@ -789,6 +807,7 @@ function TransactionRow({ transaction, onPress, c, format }) {
 
 // ── Deposit Modal ──────────────────────────────────────────────────────
 function DepositModal({ isOpen, onClose, onDeposit, loading, currencies, c }) {
+  const { t } = useTranslation();
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("NGN");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -806,8 +825,10 @@ function DepositModal({ isOpen, onClose, onDeposit, loading, currencies, c }) {
     const num = parseFloat(amount);
     if (isNaN(num) || num < 100) {
       Alert.alert(
-        "Minimum",
-        `Minimum deposit amount is ${getCurrencySymbol(currency)}100`,
+        t("wallet.deposit.minimumTitle"),
+        t("wallet.deposit.minimumBody", {
+          amount: `${getCurrencySymbol(currency)}100`,
+        }),
       );
       return;
     }
@@ -861,7 +882,7 @@ function DepositModal({ isOpen, onClose, onDeposit, loading, currencies, c }) {
                   color: c.text,
                 }}
               >
-                Fund Wallet
+                {t("wallet.deposit.title")}
               </AppText>
             </View>
             <Pressable onPress={onClose} hitSlop={6}>
@@ -877,7 +898,7 @@ function DepositModal({ isOpen, onClose, onDeposit, loading, currencies, c }) {
               marginBottom: 14,
             }}
           >
-            Enter the amount you want to add to your wallet
+            {t("wallet.deposit.subtitle")}
           </AppText>
 
           {/* Amount input */}
@@ -932,7 +953,7 @@ function DepositModal({ isOpen, onClose, onDeposit, loading, currencies, c }) {
               marginBottom: 6,
             }}
           >
-            Currency
+            {t("wallet.deposit.currencyLabel")}
           </AppText>
           <Pressable
             onPress={() => setPickerOpen(true)}
@@ -966,7 +987,9 @@ function DepositModal({ isOpen, onClose, onDeposit, loading, currencies, c }) {
               marginBottom: 14,
             }}
           >
-            {`Minimum: ${getCurrencySymbol(currency)}100`}
+            {t("wallet.deposit.minimumHint", {
+              amount: `${getCurrencySymbol(currency)}100`,
+            })}
           </AppText>
 
           <View style={{ flexDirection: "row", gap: 8 }}>
@@ -988,7 +1011,7 @@ function DepositModal({ isOpen, onClose, onDeposit, loading, currencies, c }) {
               <AppText
                 style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
               >
-                Cancel
+                {t("wallet.deposit.cancel")}
               </AppText>
             </Pressable>
             <Pressable
@@ -1016,7 +1039,7 @@ function DepositModal({ isOpen, onClose, onDeposit, loading, currencies, c }) {
                     color: "#000",
                   }}
                 >
-                  Proceed to Pay
+                  {t("wallet.deposit.proceed")}
                 </AppText>
               )}
             </Pressable>
@@ -1100,6 +1123,7 @@ function WithdrawalConfirmModal({
   withdrawalData,
   c,
 }) {
+  const { t } = useTranslation();
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
 
@@ -1122,7 +1146,7 @@ function WithdrawalConfirmModal({
 
   const handleConfirmClick = () => {
     if (!pin || pin.length !== 4) {
-      setPinError("Please enter your 4-digit withdrawal PIN");
+      setPinError(t("wallet.confirmWithdrawal.pinRequired"));
       return;
     }
     setPinError("");
@@ -1156,14 +1180,13 @@ function WithdrawalConfirmModal({
                 }}
               >
                 <AppText
+                  weight="displayBlack"
                   style={{
-                    fontFamily: "Syne_800ExtraBold",
-                    fontSize: 16,
-                    fontWeight: "800",
-                    color: c.text,
+                    fontSize: 15,
+                    letterSpacing: -0.5,
                   }}
                 >
-                  Confirm Withdrawal
+                  {t("wallet.confirmWithdrawal.title")}
                 </AppText>
                 <Pressable onPress={onClose} hitSlop={6}>
                   <FaTimes size={16} color={c.textDim} />
@@ -1188,17 +1211,32 @@ function WithdrawalConfirmModal({
                   <AppText
                     style={{
                       flex: 1,
-                      fontSize: 12,
+                      fontSize: 10,
                       color: c.textDim,
                       lineHeight: 17,
                     }}
                   >
-                    Please{" "}
-                    <AppText style={{ fontWeight: "700", color: c.text }}>
-                      verify your bank details carefully
+                    {t("wallet.confirmWithdrawal.disclaimerPrefix")}{" "}
+                    <AppText
+                      style={{ fontWeight: "700", fontSize: 10, color: c.text }}
+                    >
+                      {t("wallet.confirmWithdrawal.verifyBold")}
                     </AppText>{" "}
-                    before confirming. Withdrawals cannot be reversed once
-                    approved by our team.
+                    {t("wallet.confirmWithdrawal.disclaimerMiddle")}{" "}
+                    <AppText
+                      onPress={() =>
+                        Linking.openURL("https://skilledproz.com/refund-policy")
+                      }
+                      style={{
+                        fontWeight: "700",
+                        fontSize: 10,
+                        color: c.orange,
+                        textDecorationLine: "underline",
+                      }}
+                    >
+                      {t("wallet.confirmWithdrawal.refundPolicy")}
+                    </AppText>
+                    .
                   </AppText>
                 </View>
 
@@ -1213,15 +1251,25 @@ function WithdrawalConfirmModal({
                     gap: 8,
                   }}
                 >
-                  <AppText style={labelStyle(c)}>BANK DETAILS</AppText>
-                  <Row label="Bank" value={bankName || "—"} c={c} />
+                  <AppText style={labelStyle(c)}>
+                    {t("wallet.confirmWithdrawal.bankDetails")}
+                  </AppText>
                   <Row
-                    label="Account Number"
+                    label={t("wallet.confirmWithdrawal.bank")}
+                    value={bankName || "—"}
+                    c={c}
+                  />
+                  <Row
+                    label={t("wallet.confirmWithdrawal.accountNumber")}
                     value={accountNumber || "—"}
                     copy
                     c={c}
                   />
-                  <Row label="Account Name" value={accountName || "—"} c={c} />
+                  <Row
+                    label={t("wallet.confirmWithdrawal.accountName")}
+                    value={accountName || "—"}
+                    c={c}
+                  />
                 </View>
 
                 {/* Breakdown */}
@@ -1235,7 +1283,9 @@ function WithdrawalConfirmModal({
                     gap: 8,
                   }}
                 >
-                  <AppText style={labelStyle(c)}>WITHDRAWAL BREAKDOWN</AppText>
+                  <AppText style={labelStyle(c)}>
+                    {t("wallet.confirmWithdrawal.breakdown")}
+                  </AppText>
                   <View
                     style={{
                       flexDirection: "row",
@@ -1243,7 +1293,7 @@ function WithdrawalConfirmModal({
                     }}
                   >
                     <AppText style={{ fontSize: 12, color: c.textDim }}>
-                      Amount
+                      {t("wallet.confirmWithdrawal.amount")}
                     </AppText>
                     <AppText
                       style={{ fontSize: 13, fontWeight: "700", color: c.text }}
@@ -1258,7 +1308,9 @@ function WithdrawalConfirmModal({
                     }}
                   >
                     <AppText style={{ fontSize: 12, color: c.textDim }}>
-                      {`Platform Fee (${feePercent}%)`}
+                      {t("wallet.confirmWithdrawal.platformFee", {
+                        percent: feePercent,
+                      })}
                     </AppText>
                     <AppText
                       style={{
@@ -1287,7 +1339,7 @@ function WithdrawalConfirmModal({
                         color: c.textDim,
                       }}
                     >
-                      You'll Receive
+                      {t("wallet.confirmWithdrawal.youReceive")}
                     </AppText>
                     <View
                       style={{
@@ -1325,11 +1377,13 @@ function WithdrawalConfirmModal({
                     gap: 6,
                   }}
                 >
-                  <AppText style={labelStyle(c)}>WITHDRAWAL PIN</AppText>
+                  <AppText style={labelStyle(c)}>
+                    {t("wallet.confirmWithdrawal.pinLabel")}
+                  </AppText>
                   <TextInput
                     value={pin}
-                    onChangeText={(t) => {
-                      setPin(t.replace(/\D/g, "").slice(0, 4));
+                    onChangeText={(v) => {
+                      setPin(v.replace(/\D/g, "").slice(0, 4));
                       setPinError("");
                     }}
                     keyboardType="numeric"
@@ -1352,8 +1406,7 @@ function WithdrawalConfirmModal({
                     }}
                   />
                   <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                    Enter the same 4-digit PIN you use for worker, referral, and
-                    campaign withdrawals.
+                    {t("wallet.confirmWithdrawal.pinHint")}
                   </AppText>
                   {pinError ? (
                     <View
@@ -1388,8 +1441,7 @@ function WithdrawalConfirmModal({
                   <AppText
                     style={{ flex: 1, fontSize: 11, color: c.textMuted }}
                   >
-                    This request will be reviewed by our admin team. Processing
-                    may take 24-48 hours.
+                    {t("wallet.confirmWithdrawal.adminNote")}
                   </AppText>
                 </View>
 
@@ -1418,7 +1470,7 @@ function WithdrawalConfirmModal({
                         color: c.textDim,
                       }}
                     >
-                      Cancel
+                      {t("wallet.confirmWithdrawal.cancel")}
                     </AppText>
                   </Pressable>
                   <Pressable
@@ -1451,7 +1503,7 @@ function WithdrawalConfirmModal({
                             color: "#fff",
                           }}
                         >
-                          Confirm Withdrawal
+                          {t("wallet.confirmWithdrawal.confirm")}
                         </AppText>
                       </>
                     )}
@@ -1511,6 +1563,7 @@ const labelStyle = (c) => ({
 
 // ── Bank dropdown modal ───────────────────────────────────────────────
 function BankDropdown({ banks, value, onChange, loading, placeholder, c }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -1556,7 +1609,7 @@ function BankDropdown({ banks, value, onChange, loading, placeholder, c }) {
             <AppText
               style={{ fontSize: 12, color: c.textMuted, fontStyle: "italic" }}
             >
-              Loading banks…
+              {t("wallet.banks.loading")}
             </AppText>
           ) : selected ? (
             <AppText
@@ -1567,7 +1620,7 @@ function BankDropdown({ banks, value, onChange, loading, placeholder, c }) {
             </AppText>
           ) : (
             <AppText style={{ fontSize: 12, color: c.textMuted }}>
-              {placeholder ?? "Select bank"}
+              {placeholder ?? t("wallet.banks.selectPlaceholder")}
             </AppText>
           )}
         </View>
@@ -1614,7 +1667,7 @@ function BankDropdown({ banks, value, onChange, loading, placeholder, c }) {
                   color: c.text,
                 }}
               >
-                Select Bank
+                {t("wallet.banks.selectTitle")}
               </AppText>
               <Pressable onPress={() => setOpen(false)} hitSlop={6}>
                 <FaTimes size={16} color={c.textDim} />
@@ -1637,7 +1690,9 @@ function BankDropdown({ banks, value, onChange, loading, placeholder, c }) {
                 value={search}
                 onChangeText={setSearch}
                 autoFocus
-                placeholder={`Search ${banks.length} banks…`}
+                placeholder={t("wallet.banks.searchPlaceholder", {
+                  count: banks.length,
+                })}
                 placeholderTextColor={c.textMuted}
                 style={{
                   flex: 1,
@@ -1661,7 +1716,7 @@ function BankDropdown({ banks, value, onChange, loading, placeholder, c }) {
                 >
                   <FaSearch size={22} color={c.textMuted} />
                   <AppText style={{ fontSize: 12, color: c.textMuted }}>
-                    {`No bank found for "${search}"`}
+                    {t("wallet.banks.noResults", { query: search })}
                   </AppText>
                 </View>
               ) : search.trim() ? (
@@ -1695,7 +1750,11 @@ function BankDropdown({ banks, value, onChange, loading, placeholder, c }) {
                         borderBottomColor: c.border,
                       }}
                     >
-                      {`${BANK_TYPE_LABELS[g.type]?.label || g.type} (${g.items.length})`}
+                      {t(
+                        BANK_TYPE_LABELS[g.type]?.labelKey ||
+                          "wallet.bankTypes.commercial",
+                      )}{" "}
+                      ({g.items.length})
                     </AppText>
                     {g.items.map((b) => (
                       <BankOption
@@ -1722,6 +1781,7 @@ function BankDropdown({ banks, value, onChange, loading, placeholder, c }) {
 }
 
 function BankOption({ bank, selected, onSelect, c }) {
+  const { t } = useTranslation();
   const typeMeta = BANK_TYPE_LABELS[bank.type ?? "commercial"];
   return (
     <Pressable
@@ -1760,7 +1820,7 @@ function BankOption({ bank, selected, onSelect, c }) {
           <AppText
             style={{ fontSize: 9, fontWeight: "700", color: typeMeta.color }}
           >
-            {typeMeta.label}
+            {t(typeMeta.labelKey)}
           </AppText>
         ) : null}
         <AppText
@@ -1787,6 +1847,7 @@ function WorkerStyleWithdrawModal({
   currency,
   c,
 }) {
+  const { t } = useTranslation();
   const [selMethod, setSelMethod] = useState(null);
   const [form, setForm] = useState({});
   const [amount, setAmount] = useState("");
@@ -1844,11 +1905,11 @@ function WorkerStyleWithdrawModal({
           setBanks(fallback);
         } else {
           setBanks([]);
-          setError("Could not load bank list. Please try again later.");
+          setError(t("wallet.withdraw.errors.bankListFailed"));
         }
       })
       .finally(() => setBanksLoading(false));
-  }, [selMethod]);
+  }, [selMethod, t]);
 
   useEffect(() => {
     setVerifiedName(null);
@@ -1859,7 +1920,7 @@ function WorkerStyleWithdrawModal({
 
   const verifyAccount = async () => {
     if (!form.accountNumber || !form.bankCode) {
-      setVerifyErr("Enter account number and select a bank first.");
+      setVerifyErr(t("wallet.withdraw.errors.enterAccountAndBank"));
       return;
     }
     setVerifying(true);
@@ -1874,7 +1935,8 @@ function WorkerStyleWithdrawModal({
       setVerifiedName(res.data.data.accountName);
     } catch (e) {
       setVerifyErr(
-        e.response?.data?.message ?? "Account not found. Check details.",
+        e.response?.data?.message ??
+          t("wallet.withdraw.errors.accountNotFound"),
       );
     } finally {
       setVerifying(false);
@@ -1884,33 +1946,45 @@ function WorkerStyleWithdrawModal({
   const handleReview = () => {
     setError("");
     const amt = parseFloat(amount);
-    if (!amt || amt <= 0) return setError("Enter a valid amount.");
-    if (amt < 1) return setError("Minimum withdrawal is 1 unit.");
+    if (!amt || amt <= 0)
+      return setError(t("wallet.withdraw.errors.validAmount"));
+    if (amt < 1) return setError(t("wallet.withdraw.errors.minimum"));
     if (amt > balance)
       return setError(
-        `Exceeds available balance (${formatCurrency(balance, currency)}).`,
+        t("wallet.withdraw.errors.exceedsBalance", {
+          balance: formatCurrency(balance, currency),
+        }),
       );
-    if (!selMethod) return setError("Select a payout method.");
+    if (!selMethod) return setError(t("wallet.withdraw.errors.selectMethod"));
 
     const m = selMethod.method;
     if (m === "bank_transfer" && !selMethod.isInternational) {
-      if (!form.bankCode) return setError("Select a bank.");
-      if (!form.accountNumber) return setError("Enter account number.");
+      if (!form.bankCode)
+        return setError(t("wallet.withdraw.errors.selectBank"));
+      if (!form.accountNumber)
+        return setError(t("wallet.withdraw.errors.enterAccount"));
       if (!verifiedName)
-        return setError("Verify your account name before proceeding.");
+        return setError(t("wallet.withdraw.errors.verifyFirst"));
     }
     if (m === "bank_transfer" && selMethod.isInternational) {
-      if (!form.accountNumber) return setError("Enter account / IBAN number.");
-      if (!form.swiftBic) return setError("Enter SWIFT / BIC code.");
-      if (!form.accountName) return setError("Enter account holder name.");
+      if (!form.accountNumber)
+        return setError(t("wallet.withdraw.errors.enterIban"));
+      if (!form.swiftBic)
+        return setError(t("wallet.withdraw.errors.enterSwift"));
+      if (!form.accountName)
+        return setError(t("wallet.withdraw.errors.enterHolderName"));
     }
     if (m === "mobile_money") {
-      if (!form.mobileNumber) return setError("Enter mobile number.");
+      if (!form.mobileNumber)
+        return setError(t("wallet.withdraw.errors.enterMobile"));
     }
     if (m === "crypto") {
-      if (!form.cryptoAddress) return setError("Enter wallet address.");
-      if (!form.cryptoToken) return setError("Select crypto token.");
-      if (!form.cryptoNetwork) return setError("Select network.");
+      if (!form.cryptoAddress)
+        return setError(t("wallet.withdraw.errors.enterAddress"));
+      if (!form.cryptoToken)
+        return setError(t("wallet.withdraw.errors.selectToken"));
+      if (!form.cryptoNetwork)
+        return setError(t("wallet.withdraw.errors.selectNetwork"));
     }
 
     const payload = {
@@ -1994,14 +2068,13 @@ function WorkerStyleWithdrawModal({
               }}
             >
               <AppText
+                weight="displayBlack"
                 style={{
-                  fontFamily: "Syne_800ExtraBold",
-                  fontSize: 16,
-                  fontWeight: "800",
-                  color: c.text,
+                  fontSize: 15,
+                  letterSpacing: -0.5,
                 }}
               >
-                Request Payout
+                {t("wallet.withdraw.title")}
               </AppText>
               <Pressable onPress={onClose} hitSlop={6}>
                 <FaTimes size={16} color={c.textDim} />
@@ -2058,7 +2131,7 @@ function WorkerStyleWithdrawModal({
                     <AppText
                       style={{ fontSize: 12, fontWeight: "700", color: c.text }}
                     >
-                      {`${currency} Wallet`}
+                      {t("wallet.withdraw.walletLabel", { currency })}
                     </AppText>
                     <AppText
                       style={{
@@ -2079,14 +2152,14 @@ function WorkerStyleWithdrawModal({
                       letterSpacing: 0.5,
                     }}
                   >
-                    AVAILABLE
+                    {t("wallet.withdraw.available")}
                   </AppText>
                   <AppText
                     numberOfLines={1}
+                    weight="displayBlack"
                     style={{
-                      fontFamily: "Syne_800ExtraBold",
                       fontSize: 13,
-                      fontWeight: "800",
+                      letterSpacing: -0.5,
                       color: c.orange,
                     }}
                   >
@@ -2097,7 +2170,9 @@ function WorkerStyleWithdrawModal({
 
               {/* Method grid */}
               <View>
-                <AppText style={labelStyle(c)}>PAYOUT METHOD</AppText>
+                <AppText style={labelStyle(c)}>
+                  {t("wallet.withdraw.methodLabel")}
+                </AppText>
                 <View
                   style={{
                     flexDirection: "row",
@@ -2142,7 +2217,7 @@ function WorkerStyleWithdrawModal({
                             textAlign: "center",
                           }}
                         >
-                          {m.label}
+                          {t(m.labelKey)}
                         </AppText>
                         <AppText
                           numberOfLines={2}
@@ -2152,7 +2227,7 @@ function WorkerStyleWithdrawModal({
                             textAlign: "center",
                           }}
                         >
-                          {m.desc}
+                          {t(m.descKey)}
                         </AppText>
                       </Pressable>
                     );
@@ -2164,9 +2239,13 @@ function WorkerStyleWithdrawModal({
               {selMethod?.method === "bank_transfer" &&
               !selMethod.isInternational ? (
                 <View style={{ gap: 10 }}>
-                  <AppText style={labelStyle(c)}>PAYOUT DETAILS</AppText>
+                  <AppText style={labelStyle(c)}>
+                    {t("wallet.withdraw.payoutDetails")}
+                  </AppText>
                   <View>
-                    <AppText style={fieldLabel(c)}>Bank / Fintech *</AppText>
+                    <AppText style={fieldLabel(c)}>
+                      {t("wallet.withdraw.bankLabel")}
+                    </AppText>
                     <BankDropdown
                       banks={banks}
                       loading={banksLoading}
@@ -2175,15 +2254,17 @@ function WorkerStyleWithdrawModal({
                         setF("bankCode", b.code);
                         setF("bankName", b.name);
                       }}
-                      placeholder="Select bank, Kuda, OPay…"
+                      placeholder={t("wallet.banks.selectPlaceholder")}
                       c={c}
                     />
                   </View>
                   <View>
-                    <AppText style={fieldLabel(c)}>Account Number *</AppText>
+                    <AppText style={fieldLabel(c)}>
+                      {t("wallet.withdraw.accountNumberLabel")}
+                    </AppText>
                     <TextInput
                       value={form.accountNumber ?? ""}
-                      onChangeText={(t) => setF("accountNumber", t)}
+                      onChangeText={(v) => setF("accountNumber", v)}
                       keyboardType="numeric"
                       maxLength={12}
                       placeholder="0123456789"
@@ -2251,7 +2332,7 @@ function WorkerStyleWithdrawModal({
                         </View>
                       ) : (
                         <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                          Verify to confirm account holder name
+                          {t("wallet.withdraw.verifyHint")}
                         </AppText>
                       )}
                     </View>
@@ -2284,7 +2365,7 @@ function WorkerStyleWithdrawModal({
                           color: c.textDim,
                         }}
                       >
-                        {verifying ? "…" : "Verify"}
+                        {verifying ? "…" : t("wallet.withdraw.verifyBtn")}
                       </AppText>
                     </Pressable>
                   </View>
@@ -2294,45 +2375,47 @@ function WorkerStyleWithdrawModal({
               {selMethod?.method === "bank_transfer" &&
               selMethod.isInternational ? (
                 <View style={{ gap: 10 }}>
-                  <AppText style={labelStyle(c)}>PAYOUT DETAILS</AppText>
+                  <AppText style={labelStyle(c)}>
+                    {t("wallet.withdraw.payoutDetails")}
+                  </AppText>
                   {[
                     {
                       key: "bankName",
-                      label: "Bank Name *",
-                      placeholder: "e.g. Bank of America",
+                      labelKey: "wallet.withdraw.fields.bankName",
+                      placeholderKey: "wallet.withdraw.fields.bankNamePh",
                     },
                     {
                       key: "accountNumber",
-                      label: "Account / IBAN *",
-                      placeholder: "IBAN or account number",
+                      labelKey: "wallet.withdraw.fields.iban",
+                      placeholderKey: "wallet.withdraw.fields.ibanPh",
                     },
                     {
                       key: "swiftBic",
-                      label: "SWIFT / BIC *",
-                      placeholder: "e.g. BOFAUS3N",
+                      labelKey: "wallet.withdraw.fields.swift",
+                      placeholderKey: "wallet.withdraw.fields.swiftPh",
                     },
                     {
                       key: "routingNumber",
-                      label: "Routing (US/CA)",
-                      placeholder: "9-digit routing",
+                      labelKey: "wallet.withdraw.fields.routing",
+                      placeholderKey: "wallet.withdraw.fields.routingPh",
                     },
                     {
                       key: "accountName",
-                      label: "Account Holder Name *",
-                      placeholder: "Full name on account",
+                      labelKey: "wallet.withdraw.fields.holderName",
+                      placeholderKey: "wallet.withdraw.fields.holderNamePh",
                     },
                     {
                       key: "bankCountry",
-                      label: "Bank Country *",
-                      placeholder: "e.g. United States",
+                      labelKey: "wallet.withdraw.fields.bankCountry",
+                      placeholderKey: "wallet.withdraw.fields.bankCountryPh",
                     },
-                  ].map(({ key, label, placeholder }) => (
+                  ].map(({ key, labelKey, placeholderKey }) => (
                     <View key={key}>
-                      <AppText style={fieldLabel(c)}>{label}</AppText>
+                      <AppText style={fieldLabel(c)}>{t(labelKey)}</AppText>
                       <TextInput
                         value={form[key] ?? ""}
-                        onChangeText={(t) => setF(key, t)}
-                        placeholder={placeholder}
+                        onChangeText={(v) => setF(key, v)}
+                        placeholder={t(placeholderKey)}
                         placeholderTextColor={c.textMuted}
                         style={inputStyle(c)}
                       />
@@ -2343,26 +2426,30 @@ function WorkerStyleWithdrawModal({
 
               {selMethod?.method === "mobile_money" ? (
                 <View style={{ gap: 10 }}>
-                  <AppText style={labelStyle(c)}>PAYOUT DETAILS</AppText>
+                  <AppText style={labelStyle(c)}>
+                    {t("wallet.withdraw.payoutDetails")}
+                  </AppText>
                   <View>
-                    <AppText style={fieldLabel(c)}>Mobile Number *</AppText>
+                    <AppText style={fieldLabel(c)}>
+                      {t("wallet.withdraw.fields.mobileNumber")}
+                    </AppText>
                     <TextInput
                       value={form.mobileNumber ?? ""}
-                      onChangeText={(t) => setF("mobileNumber", t)}
+                      onChangeText={(v) => setF("mobileNumber", v)}
                       keyboardType="phone-pad"
-                      placeholder="+234 800 000 0000"
+                      placeholder={t("wallet.withdraw.fields.mobileNumberPh")}
                       placeholderTextColor={c.textMuted}
                       style={inputStyle(c)}
                     />
                   </View>
                   <View>
                     <AppText style={fieldLabel(c)}>
-                      Account Name (optional)
+                      {t("wallet.withdraw.fields.mobileName")}
                     </AppText>
                     <TextInput
                       value={form.mobileName ?? ""}
-                      onChangeText={(t) => setF("mobileName", t)}
-                      placeholder="Name on mobile account"
+                      onChangeText={(v) => setF("mobileName", v)}
+                      placeholder={t("wallet.withdraw.fields.mobileNamePh")}
                       placeholderTextColor={c.textMuted}
                       style={inputStyle(c)}
                     />
@@ -2383,7 +2470,7 @@ function WorkerStyleWithdrawModal({
                     >
                       <FaUser size={11} color={c.orange} />
                       <AppText style={{ fontSize: 11, color: c.orange }}>
-                        Provider:{" "}
+                        {t("wallet.withdraw.providerPrefix")}{" "}
                         <AppText style={{ fontWeight: "700" }}>
                           {selMethod.provider}
                         </AppText>
@@ -2395,25 +2482,31 @@ function WorkerStyleWithdrawModal({
 
               {selMethod?.method === "crypto" ? (
                 <View style={{ gap: 10 }}>
-                  <AppText style={labelStyle(c)}>PAYOUT DETAILS</AppText>
+                  <AppText style={labelStyle(c)}>
+                    {t("wallet.withdraw.payoutDetails")}
+                  </AppText>
                   <View>
-                    <AppText style={fieldLabel(c)}>Token *</AppText>
+                    <AppText style={fieldLabel(c)}>
+                      {t("wallet.withdraw.fields.token")}
+                    </AppText>
                     <View
                       style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
                     >
-                      {CRYPTO_TOKENS.map((t) => (
+                      {CRYPTO_TOKENS.map((tk) => (
                         <Pressable
-                          key={t}
-                          onPress={() => setF("cryptoToken", t)}
+                          key={tk}
+                          onPress={() => setF("cryptoToken", tk)}
                           style={({ pressed }) => [
                             {
                               paddingHorizontal: 12,
                               paddingVertical: 7,
                               backgroundColor:
-                                form.cryptoToken === t ? c.orangeDim : c.bgCard,
+                                form.cryptoToken === tk
+                                  ? c.orangeDim
+                                  : c.bgCard,
                               borderWidth: 1,
                               borderColor:
-                                form.cryptoToken === t ? c.orange : c.border,
+                                form.cryptoToken === tk ? c.orange : c.border,
                               borderRadius: 8,
                               opacity: pressed ? 0.85 : 1,
                             },
@@ -2424,17 +2517,19 @@ function WorkerStyleWithdrawModal({
                               fontSize: 11,
                               fontWeight: "700",
                               color:
-                                form.cryptoToken === t ? c.orange : c.textDim,
+                                form.cryptoToken === tk ? c.orange : c.textDim,
                             }}
                           >
-                            {t}
+                            {tk}
                           </AppText>
                         </Pressable>
                       ))}
                     </View>
                   </View>
                   <View>
-                    <AppText style={fieldLabel(c)}>Network *</AppText>
+                    <AppText style={fieldLabel(c)}>
+                      {t("wallet.withdraw.fields.network")}
+                    </AppText>
                     <View style={{ gap: 6 }}>
                       {CRYPTO_NETWORKS.map((n) => (
                         <Pressable
@@ -2475,11 +2570,13 @@ function WorkerStyleWithdrawModal({
                     </View>
                   </View>
                   <View>
-                    <AppText style={fieldLabel(c)}>Wallet Address *</AppText>
+                    <AppText style={fieldLabel(c)}>
+                      {t("wallet.withdraw.fields.walletAddress")}
+                    </AppText>
                     <TextInput
                       value={form.cryptoAddress ?? ""}
-                      onChangeText={(t) => setF("cryptoAddress", t)}
-                      placeholder="0x… or TRC20 address"
+                      onChangeText={(v) => setF("cryptoAddress", v)}
+                      placeholder={t("wallet.withdraw.fields.walletAddressPh")}
                       placeholderTextColor={c.textMuted}
                       style={[
                         inputStyle(c),
@@ -2512,8 +2609,7 @@ function WorkerStyleWithdrawModal({
                         lineHeight: 16,
                       }}
                     >
-                      Double-check the network matches your wallet. Sending to
-                      the wrong network will result in permanent loss of funds.
+                      {t("wallet.withdraw.cryptoWarning")}
                     </AppText>
                   </View>
                 </View>
@@ -2523,7 +2619,7 @@ function WorkerStyleWithdrawModal({
               <View>
                 <AppText
                   style={labelStyle(c)}
-                >{`AMOUNT (${currency})`}</AppText>
+                >{`${t("wallet.withdraw.amountLabel")} (${currency})`}</AppText>
                 <View
                   style={{
                     flexDirection: "row",
@@ -2591,7 +2687,7 @@ function WorkerStyleWithdrawModal({
                           color: c.textMuted,
                         }}
                       >
-                        {f === 1 ? "Max" : `${f * 100}%`}
+                        {f === 1 ? t("wallet.withdraw.max") : `${f * 100}%`}
                       </AppText>
                     </Pressable>
                   ))}
@@ -2614,13 +2710,15 @@ function WorkerStyleWithdrawModal({
                           }}
                         >
                           <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                            You receive approx.{" "}
+                            {t("wallet.withdraw.netPreviewPrefix")}{" "}
                             <AppText
                               style={{ fontWeight: "700", color: c.green }}
                             >
                               {formatCurrency(netAmount, currency)}
                             </AppText>{" "}
-                            after {feePercent}% fee
+                            {t("wallet.withdraw.netPreviewSuffix", {
+                              percent: feePercent,
+                            })}
                           </AppText>
                         </View>
                       );
@@ -2668,7 +2766,10 @@ function WorkerStyleWithdrawModal({
                     lineHeight: 16,
                   }}
                 >
-                  {`Payouts processed within 1–3 business days · ${getWalletWithdrawalFee(1, currency).feePercent}% withdrawal fee applies · Crypto is USDC/USDT equivalent · Minimum: 1 ${currency}`}
+                  {t("wallet.withdraw.infoNote", {
+                    feePercent: getWalletWithdrawalFee(1, currency).feePercent,
+                    currency,
+                  })}
                 </AppText>
               </View>
 
@@ -2699,14 +2800,14 @@ function WorkerStyleWithdrawModal({
                   <>
                     <FaArrowUp size={14} color="#000" />
                     <AppText
+                      weight="displayBlack"
                       style={{
-                        fontFamily: "Syne_800ExtraBold",
-                        fontSize: 14,
-                        fontWeight: "800",
+                        fontSize: 13,
+                        letterSpacing: -0.5,
                         color: "#000",
                       }}
                     >
-                      Review Withdrawal
+                      {t("wallet.withdraw.reviewBtn")}
                     </AppText>
                   </>
                 )}
@@ -2760,6 +2861,7 @@ function MessageModal({
   type = "success",
   c,
 }) {
+  const { t } = useTranslation();
   if (!isOpen) return null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -2831,7 +2933,7 @@ function MessageModal({
                 color: "#000",
               }}
             >
-              Got it
+              {t("wallet.message.gotIt")}
             </AppText>
           </Pressable>
         </View>
@@ -2926,6 +3028,7 @@ function SelectModal({ open, onClose, title, options, value, onSelect, c }) {
 
 // ── MAIN SCREEN ────────────────────────────────────────────────────────
 export default function HirerWalletScreen({ navigation }) {
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const { theme } = useTheme();
   const c = theme.colors;
@@ -3102,15 +3205,20 @@ export default function HirerWalletScreen({ navigation }) {
             const status = res.data.data?.status;
             if (status === "SUCCESS") {
               showMessage(
-                "Deposit Confirmed 🎉",
-                `Your wallet has been funded with ${formatCurrency(res.data.data.amount, res.data.data.currency)}.`,
+                t("wallet.depositConfirmed.title"),
+                t("wallet.depositConfirmed.body", {
+                  amount: formatCurrency(
+                    res.data.data.amount,
+                    res.data.data.currency,
+                  ),
+                }),
                 "success",
               );
               await AsyncStorage.removeItem(PENDING_REF_KEY);
             } else if (status === "FAILED") {
               showMessage(
-                "Deposit Failed",
-                "Your deposit attempt did not complete. Please try again.",
+                t("wallet.depositFailed.title"),
+                t("wallet.depositFailed.body"),
                 "error",
               );
               await AsyncStorage.removeItem(PENDING_REF_KEY);
@@ -3147,8 +3255,8 @@ export default function HirerWalletScreen({ navigation }) {
 
       if (!paymentLink) {
         showMessage(
-          "Payment Initiated",
-          "Please check your email for payment instructions.",
+          t("wallet.depositInitiated.title"),
+          t("wallet.depositInitiated.body"),
           "info",
         );
         setShowDepositModal(false);
@@ -3161,8 +3269,8 @@ export default function HirerWalletScreen({ navigation }) {
         await Linking.openURL(paymentLink);
       } catch {
         showMessage(
-          "Cannot open browser",
-          `Please open this link: ${paymentLink}`,
+          t("wallet.cannotOpenBrowser.title"),
+          t("wallet.cannotOpenBrowser.body", { link: paymentLink }),
           "info",
         );
       }
@@ -3188,8 +3296,10 @@ export default function HirerWalletScreen({ navigation }) {
             clearInterval(poll);
             await AsyncStorage.removeItem(PENDING_REF_KEY);
             showMessage(
-              "Deposit Confirmed 🎉",
-              `Your wallet has been funded with ${formatCurrency(amount, currency)}.`,
+              t("wallet.depositConfirmed.title"),
+              t("wallet.depositConfirmed.body", {
+                amount: formatCurrency(amount, currency),
+              }),
               "success",
             );
             await fetchWallet(false);
@@ -3203,8 +3313,10 @@ export default function HirerWalletScreen({ navigation }) {
                 clearInterval(poll);
                 await AsyncStorage.removeItem(PENDING_REF_KEY);
                 showMessage(
-                  "Deposit Confirmed 🎉",
-                  `Your wallet has been funded with ${formatCurrency(amount, currency)}.`,
+                  t("wallet.depositConfirmed.title"),
+                  t("wallet.depositConfirmed.body", {
+                    amount: formatCurrency(amount, currency),
+                  }),
                   "success",
                 );
                 await fetchWallet(false);
@@ -3215,8 +3327,8 @@ export default function HirerWalletScreen({ navigation }) {
           if (attempts >= maxAttempts) {
             clearInterval(poll);
             showMessage(
-              "Verification Pending",
-              `We're still waiting to confirm your payment. Your wallet will update automatically once confirmed. If you don't see it within 10 minutes, contact support with reference: ${reference}`,
+              t("wallet.verificationPending.title"),
+              t("wallet.verificationPending.body", { reference }),
               "info",
             );
           }
@@ -3224,8 +3336,8 @@ export default function HirerWalletScreen({ navigation }) {
       }, 5000);
     } catch (err) {
       showMessage(
-        "Deposit Failed",
-        err.response?.data?.message || "Failed to initiate deposit",
+        t("wallet.depositFailed.title"),
+        err.response?.data?.message || t("wallet.depositFailed.body"),
         "error",
       );
     } finally {
@@ -3243,19 +3355,25 @@ export default function HirerWalletScreen({ navigation }) {
         data.currency,
       );
       showMessage(
-        "Withdrawal Request Submitted ✅",
-        `Your withdrawal of ${formatCurrency(data.amount, data.currency)} has been submitted for admin approval.\n\nFee: ${formatCurrency(fee, data.currency)}\nNet Amount: ${formatCurrency(netAmount, data.currency)}\nReference: ${res.data.data.reference}`,
+        t("wallet.withdrawalSubmitted.title"),
+        t("wallet.withdrawalSubmitted.body", {
+          amount: formatCurrency(data.amount, data.currency),
+          fee: formatCurrency(fee, data.currency),
+          netAmount: formatCurrency(netAmount, data.currency),
+          reference: res.data.data.reference,
+        }),
         "success",
       );
       setShowWithdrawModal(false);
       await fetchWallet(false);
     } catch (err) {
       const status = err.response?.status;
-      const msg = err.response?.data?.message || "Failed to process withdrawal";
+      const msg =
+        err.response?.data?.message || t("wallet.withdrawFailed.body");
       if (status === 401 || status === 403 || status === 429) {
-        showMessage("PIN Verification Failed", msg, "error");
+        showMessage(t("wallet.pinFailed.title"), msg, "error");
       } else {
-        showMessage("Withdrawal Failed", msg, "error");
+        showMessage(t("wallet.withdrawFailed.title"), msg, "error");
       }
     } finally {
       setSubmitting(false);
@@ -3271,7 +3389,7 @@ export default function HirerWalletScreen({ navigation }) {
     return (
       tx.reference?.toLowerCase().includes(q) ||
       tx.description?.toLowerCase().includes(q) ||
-      getTransactionLabel(tx.type).toLowerCase().includes(q)
+      getTransactionLabel(tx.type, t).toLowerCase().includes(q)
     );
   });
 
@@ -3318,15 +3436,13 @@ export default function HirerWalletScreen({ navigation }) {
             >
               <FaWallet size={22} color={c.orange} />
               <AppText
+                weight="displayBlack"
                 style={{
-                  fontFamily: "Syne_800ExtraBold",
-                  fontSize: titleSize,
-                  fontWeight: "900",
-                  color: c.text,
+                  fontSize: 15,
                   letterSpacing: -0.5,
                 }}
               >
-                Wallet
+                {t("wallet.title")}
               </AppText>
             </View>
             <AppText
@@ -3337,7 +3453,7 @@ export default function HirerWalletScreen({ navigation }) {
                 marginTop: 4,
               }}
             >
-              Manage your funds across multiple currencies
+              {t("wallet.subtitle")}
             </AppText>
           </View>
           <Pressable
@@ -3430,7 +3546,7 @@ export default function HirerWalletScreen({ navigation }) {
                   textTransform: "uppercase",
                 }}
               >
-                {`Available Balance (${activeCurrency})`}
+                {t("wallet.availableBalance", { currency: activeCurrency })}
               </AppText>
               {!hasBalance ? (
                 <View
@@ -3450,7 +3566,7 @@ export default function HirerWalletScreen({ navigation }) {
                       color: c.textMuted,
                     }}
                   >
-                    Empty
+                    {t("wallet.empty")}
                   </AppText>
                 </View>
               ) : null}
@@ -3468,13 +3584,11 @@ export default function HirerWalletScreen({ navigation }) {
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.5}
+                weight="displayBlack"
                 style={{
-                  fontFamily: "Syne_800ExtraBold",
-                  fontSize: balanceSize,
-                  fontWeight: "900",
-                  color: c.orange,
+                  fontSize: 15,
                   letterSpacing: -0.5,
-                  lineHeight: balanceSize * 1.1,
+                  color: c.orange,
                 }}
               >
                 {formatCurrency(currentBalance, activeCurrency)}
@@ -3537,7 +3651,7 @@ export default function HirerWalletScreen({ navigation }) {
                   color: "#000",
                 }}
               >
-                Add Money
+                {t("wallet.actions.addMoney")}
               </AppText>
             </Pressable>
             <Pressable
@@ -3568,7 +3682,7 @@ export default function HirerWalletScreen({ navigation }) {
                   color: hasBalance ? c.text : c.textMuted,
                 }}
               >
-                Withdraw
+                {t("wallet.actions.withdraw")}
               </AppText>
             </Pressable>
           </View>
@@ -3579,7 +3693,7 @@ export default function HirerWalletScreen({ navigation }) {
           <View style={{ width: "48.5%", minWidth: 0 }}>
             <StatCard
               Icon={FaArrowDown}
-              label="Total Deposits"
+              label={t("wallet.stats.totalDeposits")}
               value={formatCurrency(wallet?.totalDeposited || 0, "NGN")}
               accent="green"
               c={c}
@@ -3588,7 +3702,7 @@ export default function HirerWalletScreen({ navigation }) {
           <View style={{ width: "48.5%", minWidth: 0 }}>
             <StatCard
               Icon={FaCreditCard}
-              label="Total Spent"
+              label={t("wallet.stats.totalSpent")}
               value={formatCurrency(wallet?.totalSpent || 0, "NGN")}
               accent="orange"
               c={c}
@@ -3597,7 +3711,7 @@ export default function HirerWalletScreen({ navigation }) {
           <View style={{ width: "48.5%", minWidth: 0 }}>
             <StatCard
               Icon={FaArrowUp}
-              label="Total Withdrawn"
+              label={t("wallet.stats.totalWithdrawn")}
               value={formatCurrency(wallet?.totalWithdrawn || 0, "NGN")}
               c={c}
             />
@@ -3605,7 +3719,7 @@ export default function HirerWalletScreen({ navigation }) {
           <View style={{ width: "48.5%", minWidth: 0 }}>
             <StatCard
               Icon={FaClock}
-              label="Transactions"
+              label={t("wallet.stats.transactions")}
               value={String(pagination.total || 0)}
               c={c}
             />
@@ -3631,16 +3745,17 @@ export default function HirerWalletScreen({ navigation }) {
             }}
           >
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: "Syne_700Bold",
-                fontSize: 14,
-                fontWeight: "800",
-                color: c.text,
+                fontSize: 13,
+                letterSpacing: -0.5,
               }}
             >
               {activeCurrency
-                ? `Transaction History (${activeCurrency})`
-                : "Transaction History"}
+                ? t("wallet.txHistory.titleWithCurrency", {
+                    currency: activeCurrency,
+                  })
+                : t("wallet.txHistory.title")}
             </AppText>
 
             {/* Search */}
@@ -3661,7 +3776,7 @@ export default function HirerWalletScreen({ navigation }) {
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search transactions..."
+                placeholder={t("wallet.txHistory.searchPlaceholder")}
                 placeholderTextColor={c.textMuted}
                 style={{
                   flex: 1,
@@ -3695,7 +3810,7 @@ export default function HirerWalletScreen({ navigation }) {
                   style={{ fontSize: 11, fontWeight: "600", color: c.text }}
                   numberOfLines={1}
                 >
-                  {filterType || "All Types"}
+                  {filterType || t("wallet.txHistory.allTypes")}
                 </AppText>
                 <FaChevronDown size={10} color={c.textMuted} />
               </Pressable>
@@ -3721,7 +3836,7 @@ export default function HirerWalletScreen({ navigation }) {
                   style={{ fontSize: 11, fontWeight: "600", color: c.text }}
                   numberOfLines={1}
                 >
-                  {filterStatus || "All Statuses"}
+                  {filterStatus || t("wallet.txHistory.allStatuses")}
                 </AppText>
                 <FaChevronDown size={10} color={c.textMuted} />
               </Pressable>
@@ -3750,7 +3865,7 @@ export default function HirerWalletScreen({ navigation }) {
                   color: c.text,
                 }}
               >
-                No transactions found
+                {t("wallet.txHistory.emptyTitle")}
               </AppText>
               <AppText
                 style={{
@@ -3759,7 +3874,9 @@ export default function HirerWalletScreen({ navigation }) {
                   textAlign: "center",
                 }}
               >
-                {`Your transaction history for ${activeCurrency} will appear here`}
+                {t("wallet.txHistory.emptySubtitle", {
+                  currency: activeCurrency,
+                })}
               </AppText>
             </View>
           ) : (
@@ -3817,11 +3934,14 @@ export default function HirerWalletScreen({ navigation }) {
                 <AppText
                   style={{ fontSize: 11, fontWeight: "600", color: c.textDim }}
                 >
-                  Prev
+                  {t("wallet.pagination.prev")}
                 </AppText>
               </Pressable>
               <AppText style={{ fontSize: 11, color: c.textMuted }}>
-                {`Page ${pagination.page} of ${pagination.pages}`}
+                {t("wallet.pagination.pageOf", {
+                  page: pagination.page,
+                  pages: pagination.pages,
+                })}
               </AppText>
               <Pressable
                 disabled={pagination.page === pagination.pages}
@@ -3851,7 +3971,7 @@ export default function HirerWalletScreen({ navigation }) {
                 <AppText
                   style={{ fontSize: 11, fontWeight: "600", color: c.textDim }}
                 >
-                  Next
+                  {t("wallet.pagination.next")}
                 </AppText>
                 <FaArrowRight size={10} color={c.textDim} />
               </Pressable>
@@ -3891,14 +4011,17 @@ export default function HirerWalletScreen({ navigation }) {
       <SelectModal
         open={typeFilterOpen}
         onClose={() => setTypeFilterOpen(false)}
-        title="Filter by Type"
+        title={t("wallet.txHistory.filterByType")}
         options={[
-          { value: "", label: "All Types" },
-          { value: "DEPOSIT", label: "Deposits" },
-          { value: "WITHDRAWAL", label: "Withdrawals" },
-          { value: "PAYMENT", label: "Payments" },
-          { value: "SUBSCRIPTION", label: "Subscriptions" },
-          { value: "REFUND", label: "Refunds" },
+          { value: "", label: t("wallet.txHistory.allTypes") },
+          { value: "DEPOSIT", label: t("wallet.txTypes.depositPlural") },
+          { value: "WITHDRAWAL", label: t("wallet.txTypes.withdrawalPlural") },
+          { value: "PAYMENT", label: t("wallet.txTypes.paymentPlural") },
+          {
+            value: "SUBSCRIPTION",
+            label: t("wallet.txTypes.subscriptionPlural"),
+          },
+          { value: "REFUND", label: t("wallet.txTypes.refundPlural") },
         ]}
         value={filterType}
         onSelect={setFilterType}
@@ -3908,13 +4031,13 @@ export default function HirerWalletScreen({ navigation }) {
       <SelectModal
         open={statusFilterOpen}
         onClose={() => setStatusFilterOpen(false)}
-        title="Filter by Status"
+        title={t("wallet.txHistory.filterByStatus")}
         options={[
-          { value: "", label: "All Statuses" },
-          { value: "PENDING", label: "Pending" },
-          { value: "COMPLETED", label: "Completed" },
-          { value: "FAILED", label: "Failed" },
-          { value: "REVERSED", label: "Reversed" },
+          { value: "", label: t("wallet.txHistory.allStatuses") },
+          { value: "PENDING", label: t("wallet.status.pending") },
+          { value: "COMPLETED", label: t("wallet.status.completed") },
+          { value: "FAILED", label: t("wallet.status.failed") },
+          { value: "REVERSED", label: t("wallet.status.reversed") },
         ]}
         value={filterStatus}
         onSelect={setFilterStatus}

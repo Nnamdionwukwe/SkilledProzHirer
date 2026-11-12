@@ -150,26 +150,37 @@ export function CurrencyProvider({ children, initialCode = "USD" }) {
 
   const currency = getCurrency(code);
 
+  // ── `format` — symbol-prefixed currency formatter ─────────────────────
+  // We deliberately do NOT use Intl.NumberFormat's `style: "currency"`
+  // because React Native (Hermes) ships a trimmed CLDR dataset — on
+  // Android the formatter frequently degrades to rendering the ISO
+  // currency *code* (e.g. "NGN 12,345") instead of the symbol
+  // (₦12,345). We use CURRENCY_META's `symbol` table as the prefix and
+  // format the numeric portion ourselves — same result on every
+  // platform and every JS engine.
   const format = useMemo(
     () =>
       (amount, opts = {}) => {
         const targetCode = opts.currencyCode || code;
-        const target = getCurrency(targetCode);
+        const meta = CURRENCY_META[targetCode] ||
+          CURRENCY_META[code] || { symbol: "" };
+        const symbol = meta.symbol || "";
+
         const num = Number(amount ?? 0);
-        try {
-          return new Intl.NumberFormat(opts.locale || undefined, {
-            style: "currency",
-            currency: targetCode,
-            minimumFractionDigits: opts.minimumFractionDigits ?? 0,
-            maximumFractionDigits: opts.maximumFractionDigits ?? 2,
-          }).format(num);
-        } catch {
-          const formatted = num.toLocaleString(undefined, {
-            minimumFractionDigits: opts.minimumFractionDigits ?? 0,
-            maximumFractionDigits: opts.maximumFractionDigits ?? 2,
-          });
-          return `${target.symbol}${formatted}`;
-        }
+        const isCrypto = ["USDC", "USDT"].includes(targetCode);
+        const minFrac = opts.minimumFractionDigits ?? 0;
+        const maxFrac = opts.maximumFractionDigits ?? 2;
+
+        const formatted = (Number.isFinite(num) ? num : 0).toLocaleString(
+          opts.locale || "en-US",
+          {
+            minimumFractionDigits: isCrypto ? 2 : minFrac,
+            maximumFractionDigits: isCrypto ? 2 : maxFrac,
+          },
+        );
+
+        // Crypto symbols are words (USDC / USDT), so add a space.
+        return isCrypto ? `${symbol} ${formatted}` : `${symbol}${formatted}`;
       },
     [code],
   );

@@ -4558,6 +4558,232 @@
       "pinRequired": "Please enter your 4-digit withdrawal PIN"
     }
   },
+  "wallet": {
+    "title": "Wallet",
+    "subtitle": "Manage your funds across multiple currencies",
+    "availableBalance": "Available Balance ({{currency}})",
+    "empty": "Empty",
+    "actions": {
+      "addMoney": "Add Money",
+      "withdraw": "Withdraw"
+    },
+    "stats": {
+      "totalDeposits": "Total Deposits",
+      "totalSpent": "Total Spent",
+      "totalWithdrawn": "Total Withdrawn",
+      "transactions": "Transactions"
+    },
+    "status": {
+      "pending": "Pending",
+      "processing": "Processing",
+      "completed": "Completed",
+      "success": "Success",
+      "failed": "Failed",
+      "reversed": "Reversed",
+      "cancelled": "Cancelled",
+      "initiated": "Initiated"
+    },
+    "txTypes": {
+      "deposit": "Deposit",
+      "withdrawal": "Withdrawal",
+      "payment": "Payment",
+      "subscription": "Subscription",
+      "refund": "Refund",
+      "bonus": "Bonus",
+      "adjustment": "Adjustment",
+      "depositPlural": "Deposits",
+      "withdrawalPlural": "Withdrawals",
+      "paymentPlural": "Payments",
+      "subscriptionPlural": "Subscriptions",
+      "refundPlural": "Refunds"
+    },
+    "channels": {
+      "cardMobile": "Card / Mobile Money",
+      "cardBank": "Card / Bank",
+      "bankTransfer": "Bank Transfer",
+      "wallet": "Wallet",
+      "paystackCard": "Card (Paystack)",
+      "flutterwaveCard": "Card (Flutterwave)",
+      "crypto": "Crypto",
+      "payment": "Payment",
+      "subscription": "Subscription",
+      "refund": "Refund",
+      "bonus": "Bonus",
+      "adjustment": "Adjustment"
+    },
+    "bankTypes": {
+      "commercial": "Commercial",
+      "digital": "Digital/Fintech",
+      "microfinance": "Microfinance",
+      "merchant": "Merchant"
+    },
+    "copy": {
+      "default": "Copy",
+      "copied": "Copied!"
+    },
+    "banks": {
+      "loading": "Loading banks…",
+      "selectTitle": "Select Bank",
+      "selectPlaceholder": "Select bank",
+      "searchPlaceholder": "Search {{count}} banks…",
+      "noResults": "No bank found for \"{{query}}\""
+    },
+    "methods": {
+      "ngBank": "Nigerian Bank / Fintech",
+      "mtn": "MTN MoMo Nigeria",
+      "airtel": "Airtel Money Nigeria",
+      "crypto": "USDC / USDT",
+      "intlBank": "International Wire"
+    },
+    "methodsDesc": {
+      "ngBank": "GTBank, Kuda, OPay, Access, Zenith, UBA, PalmPay +70 more",
+      "mtn": "MTN mobile money",
+      "airtel": "Airtel mobile money",
+      "crypto": "Stablecoin — any country",
+      "intlBank": "SWIFT / IBAN — 150+ countries"
+    },
+    "deposit": {
+      "title": "Fund Wallet",
+      "subtitle": "Enter the amount you want to add to your wallet",
+      "currencyLabel": "Currency",
+      "minimumHint": "Minimum: {{amount}}",
+      "minimumTitle": "Minimum",
+      "minimumBody": "Minimum deposit amount is {{amount}}",
+      "cancel": "Cancel",
+      "proceed": "Proceed to Pay"
+    },
+    "depositConfirmed": {
+      "title": "Deposit Confirmed 🎉",
+      "body": "Your wallet has been funded with {{amount}}."
+    },
+    "depositFailed": {
+      "title": "Deposit Failed",
+      "body": "Your deposit attempt did not complete. Please try again."
+    },
+    "depositInitiated": {
+      "title": "Payment Initiated",
+      "body": "Please check your email for payment instructions."
+    },
+    "cannotOpenBrowser": {
+      "title": "Cannot open browser",
+      "body": "Please open this link: {{link}}"
+    },
+    "verificationPending": {
+      "title": "Verification Pending",
+      "body": "We're still waiting to confirm your payment. Your wallet will update automatically once confirmed. If you don't see it within 10 minutes, contact support with reference: {{reference}}"
+    },
+    "withdrawalSubmitted": {
+      "title": "Withdrawal Request Submitted ✅",
+      "body": "Your withdrawal of {{amount}} has been submitted for admin approval.\n\nFee: {{fee}}\nNet Amount: {{netAmount}}\nReference: {{reference}}"
+    },
+    "pinFailed": {
+      "title": "PIN Verification Failed"
+    },
+    "withdrawFailed": {
+      "title": "Withdrawal Failed",
+      "body": "Failed to process withdrawal"
+    },
+    "message": {
+      "gotIt": "Got it"
+    },
+    "txHistory": {
+      "title": "Transaction History",
+      "titleWithCurrency": "Transaction History ({{currency}})",
+      "searchPlaceholder": "Search transactions...",
+      "allTypes": "All Types",
+      "allStatuses": "All Statuses",
+      "filterByType": "Filter by Type",
+      "filterByStatus": "Filter by Status",
+      "emptyTitle": "No transactions found",
+      "emptySubtitle": "Your transaction history for {{currency}} will appear here"
+    },
+    "pagination": {
+      "prev": "Prev",
+      "next": "Next",
+      "pageOf": "Page {{page}} of {{pages}}"
+    },
+    "confirmWithdrawal": {
+      "title": "Confirm Withdrawal",
+      "disclaimerPrefix": "Please",
+      "verifyBold": "verify your bank details carefully",
+      "disclaimerMiddle": "before confirming. Withdrawals cannot be reversed once approved by our team. By continuing, you agree to our",
+      "refundPolicy": "Refund Policy",
+      "bankDetails": "BANK DETAILS",
+      "bank": "Bank",
+      "accountNumber": "Account Number",
+      "accountName": "Account Name",
+      "breakdown": "WITHDRAWAL BREAKDOWN",
+      "amount": "Amount",
+      "platformFee": "Platform Fee ({{percent}}%)",
+      "youReceive": "You'll Receive",
+      "pinLabel": "WITHDRAWAL PIN",
+      "pinHint": "Enter the same 4-digit PIN you use for worker, referral, and campaign withdrawals.",
+      "pinRequired": "Please enter your 4-digit withdrawal PIN",
+      "adminNote": "This request will be reviewed by our admin team. Processing may take 24-48 hours.",
+      "cancel": "Cancel",
+      "confirm": "Confirm Withdrawal"
+    },
+    "withdraw": {
+      "title": "Request Payout",
+      "walletLabel": "{{currency}} Wallet",
+      "available": "AVAILABLE",
+      "methodLabel": "PAYOUT METHOD",
+      "payoutDetails": "PAYOUT DETAILS",
+      "bankLabel": "Bank / Fintech *",
+      "accountNumberLabel": "Account Number *",
+      "verifyHint": "Verify to confirm account holder name",
+      "verifyBtn": "Verify",
+      "providerPrefix": "Provider:",
+      "amountLabel": "AMOUNT",
+      "max": "Max",
+      "netPreviewPrefix": "You receive approx.",
+      "netPreviewSuffix": "after {{percent}}% fee",
+      "cryptoWarning": "Double-check the network matches your wallet. Sending to the wrong network will result in permanent loss of funds.",
+      "infoNote": "Payouts processed within 1–3 business days · {{feePercent}}% withdrawal fee applies · Crypto is USDC/USDT equivalent · Minimum: 1 {{currency}}",
+      "reviewBtn": "Review Withdrawal",
+      "fields": {
+        "bankName": "Bank Name *",
+        "bankNamePh": "e.g. Bank of America",
+        "iban": "Account / IBAN *",
+        "ibanPh": "IBAN or account number",
+        "swift": "SWIFT / BIC *",
+        "swiftPh": "e.g. BOFAUS3N",
+        "routing": "Routing (US/CA)",
+        "routingPh": "9-digit routing",
+        "holderName": "Account Holder Name *",
+        "holderNamePh": "Full name on account",
+        "bankCountry": "Bank Country *",
+        "bankCountryPh": "e.g. United States",
+        "mobileNumber": "Mobile Number *",
+        "mobileNumberPh": "+234 800 000 0000",
+        "mobileName": "Account Name (optional)",
+        "mobileNamePh": "Name on mobile account",
+        "token": "Token *",
+        "network": "Network *",
+        "walletAddress": "Wallet Address *",
+        "walletAddressPh": "0x… or TRC20 address"
+      },
+      "errors": {
+        "validAmount": "Enter a valid amount.",
+        "minimum": "Minimum withdrawal is 1 unit.",
+        "exceedsBalance": "Exceeds available balance ({{balance}}).",
+        "selectMethod": "Select a payout method.",
+        "selectBank": "Select a bank.",
+        "enterAccount": "Enter account number.",
+        "enterAccountAndBank": "Enter account number and select a bank first.",
+        "enterIban": "Enter account / IBAN number.",
+        "enterSwift": "Enter SWIFT / BIC code.",
+        "enterHolderName": "Enter account holder name.",
+        "enterMobile": "Enter mobile number.",
+        "enterAddress": "Enter wallet address.",
+        "selectToken": "Select crypto token.",
+        "selectNetwork": "Select network.",
+        "verifyFirst": "Verify your account name before proceeding.",
+        "accountNotFound": "Account not found. Check details.",
+        "bankListFailed": "Could not load bank list. Please try again later."
+      }
+    }
+  },
   "referral": {
     "eyebrow": "Referral Program",
     "title": "Invite & Earn",
