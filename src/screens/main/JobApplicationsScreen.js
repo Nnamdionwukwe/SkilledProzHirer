@@ -137,8 +137,59 @@ function InlineInterviewCallButton({
 }) {
   const { toast } = useToast();
   const [creating, setCreating] = useState(false);
+  const [messageing, setMessageing] = useState(false);
   const [error, setError] = useState("");
 
+  // ── Find or create the conversation with this worker ─────────────
+  async function resolveConversationId() {
+    // 1) Try to find an existing conversation
+    try {
+      const res = await client.get("/messages/conversations", {
+        params: { page: 1, limit: 100, _t: Date.now() },
+      });
+      const list = res.data?.data?.conversations || [];
+      const peerIdStr = String(workerId);
+      const found = list.find((convo) =>
+        (convo.users || []).some((u) => {
+          const uid = String(u.userId || u.user?.id || u.id);
+          return uid === peerIdStr;
+        }),
+      );
+      if (found?.id) return found.id;
+    } catch {}
+
+    // 2) No conversation — create one
+    const res = await client.post("/messages", {
+      receiverId: workerId,
+      content: `📞 Interview call for "${jobTitle || "the role"}"`,
+    });
+    return res.data?.data?.conversationId;
+  }
+
+  // ── Initiate a video call room and return the room URL ───────────
+  // The backend exposes the room on `call.roomUrl` / `call.url` /
+  // `call.meetingUrl` depending on version — pick the first that exists.
+  async function resolveInterviewUrl(conversationId) {
+    const callRes = await client.post(
+      `/voice-calls/${conversationId}/initiate`,
+      {
+        callType: "video",
+        returnTo: "JobApplications",
+        returnParams: { jobId: jobPostId },
+      },
+    );
+    const call = callRes?.data?.data?.call;
+    if (!call) throw new Error("Call could not be initiated");
+    const url =
+      call.roomUrl ||
+      call.url ||
+      call.meetingUrl ||
+      call.joinUrl ||
+      `https://meet.skilledproz.com/${conversationId}`;
+    return url;
+  }
+
+  // ── Start Interview (unchanged — opens the in-app VideoCall) ─────
   async function handleStartInterview() {
     if (!workerId) {
       setError("Missing worker info");
@@ -146,50 +197,10 @@ function InlineInterviewCallButton({
     }
     setCreating(true);
     setError("");
-
     try {
-      // 1. Find or create a conversation with this worker
-      let conversationId = null;
-      try {
-        const res = await client.get("/messages/conversations", {
-          params: { page: 1, limit: 100, _t: Date.now() },
-        });
-        const list = res.data?.data?.conversations || [];
-        const peerIdStr = String(workerId);
-        const found = list.find((convo) =>
-          (convo.users || []).some((u) => {
-            const uid = String(u.userId || u.user?.id || u.id);
-            return uid === peerIdStr;
-          }),
-        );
-        if (found?.id) conversationId = found.id;
-      } catch {}
-
-      if (!conversationId) {
-        const res = await client.post("/messages", {
-          receiverId: workerId,
-          content: `📞 Interview call for "${jobTitle || "the role"}"`,
-        });
-        conversationId = res.data?.data?.conversationId;
-      }
-
+      const conversationId = await resolveConversationId();
       if (!conversationId) throw new Error("Could not establish conversation");
-
-      // 2. Initiate the call
-      const callRes = await client.post(
-        `/voice-calls/${conversationId}/initiate`,
-        {
-          callType: "video",
-          returnTo: "JobApplications",
-          returnParams: { jobId: jobPostId },
-        },
-      );
-
-      if (!callRes?.data?.data?.call) {
-        throw new Error("Call could not be initiated");
-      }
-
-      // 3. Navigate to the in-app VideoCall screen with returnTo
+      await resolveInterviewUrl(conversationId);
       navigation.navigate("VideoCall", {
         conversationId,
         returnTo: "JobApplications",
@@ -206,38 +217,52 @@ function InlineInterviewCallButton({
     }
   }
 
+  // ── Message Link — open Chat with the interview link pre-filled ──
   async function handleMessageLink() {
     if (!workerId) return;
-    // Just navigate to the chat — no room link needed since it's in-app now
+    setMessageing(true);
+    setError("");
     try {
-      const res = await client.get("/messages/conversations", {
-        params: { page: 1, limit: 100, _t: Date.now() },
-      });
-      const list = res.data?.data?.conversations || [];
-      const peerIdStr = String(workerId);
-      const found = list.find((convo) =>
-        (convo.users || []).some((u) => {
-          const uid = String(u.userId || u.user?.id || u.id);
-          return uid === peerIdStr;
-        }),
-      );
+      const conversationId = await resolveConversationId();
+      if (!conversationId) throw new Error("Could not establish conversation");
 
-      if (found?.id) {
-        navigation.navigate("Chat", { conversationId: found.id });
-      } else {
-        navigation.navigate("Chat", { withUserId: workerId });
+      // Only initiate a room if one doesn't already exist. If the hirer
+      // pressed "Start Interview" earlier, we can reuse the same room.
+      let url = null;
+      try {
+        // Cheap probe — if initiate returns the same room, we can just use it.
+        url = await resolveInterviewUrl(conversationId);
+      } catch {
+        // If initiating fails, still open chat — user can retype later
       }
-    } catch {
-      navigation.navigate("Chat", { withUserId: workerId });
+
+      const prefill = url
+        ? `Hi ${workerName || "there"}, here's the interview link for "${jobTitle || "the role"}": ${url}\n\nLooking forward to speaking with you!`
+        : `Hi ${workerName || "there"}, let's schedule a quick interview for "${jobTitle || "the role"}".`;
+
+      navigation.navigate("Chat", {
+        conversationId,
+        withUserId: workerId,
+        prefillMessage: prefill,
+      });
+    } catch (err) {
+      setError(
+        err.response?.data?.message || err.message || "Failed to open chat",
+      );
+      toast.error("Could not open chat.");
+    } finally {
+      setMessageing(false);
     }
   }
+
+  const busy = creating || messageing;
 
   return (
     <View style={styles.interviewButtons}>
       {/* Start Interview — primary */}
       <Pressable
         onPress={handleStartInterview}
-        disabled={creating}
+        disabled={busy}
         style={({ pressed }) => [
           styles.interviewBtnPrimary,
           {
@@ -258,33 +283,38 @@ function InlineInterviewCallButton({
         )}
       </Pressable>
 
-      {/* Message — secondary */}
+      {/* Message Link — secondary */}
       <Pressable
         onPress={handleMessageLink}
-        disabled={creating}
+        disabled={busy}
         style={({ pressed }) => [
           styles.interviewBtnSecondary,
           {
             borderColor: c.orangeGlow,
             backgroundColor: c.orangeDim,
-            opacity: pressed ? 0.85 : 1,
+            opacity: messageing ? 0.6 : pressed ? 0.85 : 1,
           },
         ]}
       >
-        <FaCommentDots size={11} color={c.orange} />
-        <AppText
-          style={{
-            fontSize: 11,
-            fontWeight: "700",
-            color: c.orange,
-            marginLeft: 5,
-          }}
-        >
-          Message
-        </AppText>
+        {messageing ? (
+          <ActivityIndicator size="small" color={c.orange} />
+        ) : (
+          <>
+            <FaCommentDots size={11} color={c.orange} />
+            <AppText
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: c.orange,
+                marginLeft: 5,
+              }}
+            >
+              Message Link
+            </AppText>
+          </>
+        )}
       </Pressable>
 
-      {/* Error */}
       {error ? (
         <AppText
           style={{
@@ -714,7 +744,7 @@ export default function JobApplicationsScreen() {
                   }
                   onAvatarClick={setLightboxSrc}
                   onViewProfile={() =>
-                    navigation.navigate("Profile", {
+                    navigation.navigate("WorkerProfile", {
                       userId: app.worker?.id,
                     })
                   }
@@ -949,10 +979,11 @@ function SummaryStat({ value, label, color, c }) {
   return (
     <View style={styles.summaryStatCol}>
       <AppText
+        weight="displayBlack"
         style={{
-          fontFamily: "Syne_800ExtraBold",
-          fontSize: 20,
-          fontWeight: "800",
+          fontSize: 15,
+          letterSpacing: -0.5,
+          marginBottom: 4,
           color,
         }}
       >

@@ -427,6 +427,7 @@ export default function ChatScreen() {
   const routeConvoId = route.params?.conversationId || null;
   const routeWithId = route.params?.withUserId || null;
   const routeDraft = route.params?.draft || "";
+  const routePrefill = route.params?.prefillMessage || "";
 
   const [activeConvoId, setActiveConvoId] = useState(routeConvoId);
   const [withUserId, setWithUserId] = useState(routeWithId);
@@ -435,7 +436,7 @@ export default function ChatScreen() {
 
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
-  const [newMessage, setNewMessage] = useState(routeDraft);
+  const [newMessage, setNewMessage] = useState(routePrefill || routeDraft);
   const [sending, setSending] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -459,7 +460,7 @@ export default function ChatScreen() {
     setConvoMeta(null);
     setWithUser(null);
     lastIdRef.current = null;
-    setNewMessage(routeDraft || "");
+    setNewMessage(routePrefill || routeDraft || "");
 
     if (routeConvoId) {
       setActiveConvoId(routeConvoId);
@@ -472,7 +473,7 @@ export default function ChatScreen() {
       setWithUserId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeConvoId, routeWithId, routeDraft]);
+  }, [routeConvoId, routeWithId, routeDraft, routePrefill]);
 
   useEffect(() => {
     if (!activeConvoId) return;
