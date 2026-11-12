@@ -66,9 +66,11 @@ export default function ConfirmModal({
         >
           {/* Title */}
           <AppText
-            variant="title"
-            weight="semibold"
-            style={[styles.title, { color: c.text }]}
+            weight="displayBlack"
+            style={{
+              fontSize: 13,
+              letterSpacing: -0.5,
+            }}
           >
             {title}
           </AppText>
@@ -146,7 +148,11 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   title: { textAlign: "center" },
-  message: { textAlign: "center", marginTop: 8 },
+  message: {
+    textAlign: "center",
+    marginTop: 8,
+    fontSize: 13,
+  },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: 20 },
   btnRow: { flexDirection: "row", gap: 10 },
   btn: {

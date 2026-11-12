@@ -210,11 +210,15 @@ export default function RetainedStaffDetailScreen() {
     }
   };
 
+  // ── Delete Staff Member ────────────────────────────────────
+  // Keep the modal open until the API call succeeds (matches web).
+  // On success: close the modal, toast, navigate away.
+  // On failure: keep the modal open, toast the error.
   const handleDeleteStaff = async () => {
-    setShowDeleteModal(false);
     setActionLoading(true);
     try {
       await retainedStaffApi.deleteStaff(memberId);
+      setShowDeleteModal(false);
       toast.success(t("retainedStaff.staffDeleted"));
       navigation.navigate("RetainedStaffList");
     } catch (err) {
@@ -226,13 +230,16 @@ export default function RetainedStaffDetailScreen() {
     }
   };
 
+  // ── Delete Cycle ───────────────────────────────────────────
+  // On success: clear the target (closes the modal), toast, refresh.
+  // On failure: keep the target set so the user can retry.
   const handleDeleteCycle = async () => {
     if (!cycleToDelete) return;
     const target = cycleToDelete;
-    setCycleToDelete(null);
     setActionLoading(true);
     try {
       await retainedStaffApi.deleteCycle(target.id);
+      setCycleToDelete(null);
       toast.success(t("retainedStaff.cycleDeleted"));
       loadMember({ silent: true });
     } catch (err) {
@@ -325,346 +332,474 @@ export default function RetainedStaffDetailScreen() {
   const canDelete = (member?._count?.cycles ?? 0) === 0;
 
   return (
-    <AppScreen
-      contentContainerStyle={{ paddingBottom: 40 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={c.orange}
-          colors={[c.orange]}
-        />
-      }
-    >
-      {/* Back link */}
-      <Pressable
-        onPress={goBack}
-        style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}
+    <>
+      <AppScreen
+        contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={c.orange}
+            colors={[c.orange]}
+          />
+        }
       >
-        <Ionicons name="arrow-back" size={16} color={c.textDim} />
-        <AppText
-          style={{
-            fontFamily: theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
-            fontSize: rem(0.85),
-            fontWeight: "600",
-            color: c.textDim,
-            marginLeft: 6,
-          }}
-        >
-          {t("retainedStaff.backToStaff")}
-        </AppText>
-      </Pressable>
-
-      {/* Profile header */}
-      <View style={[styles.profileHeader, isWide && styles.profileHeaderWide]}>
-        <View style={[styles.avatarLg, { backgroundColor: c.bgInput }]}>
-          {avatar ? (
-            <Image source={{ uri: avatar }} style={styles.avatarLgImg} />
-          ) : (
-            <Ionicons name="person-outline" size={32} color={c.textMuted} />
-          )}
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <AppText
-            weight="displayBlack"
-            numberOfLines={2}
-            style={{
-              fontSize: 15,
-              letterSpacing: -0.5,
-            }}
-          >
-            {member?.worker?.firstName} {member?.worker?.lastName}
-          </AppText>
-          <AppText
-            style={{
-              fontFamily: theme.fonts?.body || "DMSans_400Regular",
-              fontSize: rem(0.875),
-              color: c.textDim,
-              marginTop: 2,
-            }}
-          >
-            {member.jobTitle}
-            {member.department ? ` · ${member.department}` : ""}
-          </AppText>
-          <View
-            style={{
-              alignSelf: "flex-start",
-              borderWidth: 1,
-              borderColor: statusColor,
-              borderRadius: 999,
-              paddingHorizontal: 10,
-              paddingVertical: 2,
-              marginTop: 6,
-            }}
-          >
-            <AppText
-              style={{
-                fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
-                fontSize: rem(0.65),
-                fontWeight: "800",
-                letterSpacing: 0.05 * rem(0.65),
-                textTransform: "uppercase",
-                color: statusColor,
-              }}
-            >
-              {member.status}
-            </AppText>
-          </View>
-        </View>
-
-        {/* Actions */}
-        <View
+        {/* Back link */}
+        <Pressable
+          onPress={goBack}
           style={{
             flexDirection: "row",
-            flexWrap: "wrap",
-            gap: 8,
-            marginTop: isWide ? 0 : 12,
+            alignItems: "center",
+            marginBottom: 16,
           }}
         >
-          <IconBtn
-            icon="create-outline"
-            onPress={() => setShowEditModal(true)}
-            theme={theme}
-          />
-          {canDelete ? (
-            <IconBtn
-              icon="trash-outline"
-              danger
-              onPress={() => setShowDeleteModal(true)}
-              theme={theme}
-            />
-          ) : null}
-          {member.status === "ACTIVE" ? (
-            <SmallBtn
-              label={t("retainedStaff.pauseBtn")}
-              icon="pause-outline"
-              onPress={handlePause}
-              disabled={actionLoading}
-              theme={theme}
-              rem={rem}
-            />
-          ) : null}
-          {member.status === "PAUSED" ? (
-            <SmallBtn
-              label={t("retainedStaff.resumeBtn")}
-              icon="play-outline"
-              onPress={handleResume}
-              disabled={actionLoading}
-              theme={theme}
-              rem={rem}
-            />
-          ) : null}
-          <Pressable
-            onPress={() => setShowCycleModal(true)}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              {
-                backgroundColor: pressed ? c.orangeHover : c.orange,
-              },
-            ]}
-          >
-            <Ionicons name="add" size={14} color="#fff" />
-            <AppText
-              style={{
-                fontFamily: theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
-                fontSize: rem(0.85),
-                fontWeight: "600",
-                color: "#fff",
-                marginLeft: 6,
-              }}
-            >
-              {t("retainedStaff.createCycleBtn")}
-            </AppText>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* KPI cards */}
-      <View style={styles.statsGrid}>
-        {[
-          {
-            icon: "cash-outline",
-            label: t("retainedStaff.kpiPayRate"),
-            value: formatMoney(member.payRate, member.currency),
-            accent: "default",
-          },
-          {
-            icon: "time-outline",
-            label: t("retainedStaff.kpiLifetimePaid"),
-            value: formatMoney(member.totalPaidLifetime, member.currency),
-            accent: "green",
-          },
-          {
-            icon: "cash-outline",
-            label: t("retainedStaff.kpiHeld"),
-            value: formatMoney(member.totalHeld, member.currency),
-            accent: "orange",
-          },
-          {
-            icon: "calendar-outline",
-            label: t("retainedStaff.kpiNextCycle"),
-            value: member.nextCycleAt ? formatDate(member.nextCycleAt) : "—",
-            accent: "yellow",
-          },
-        ].map((kpi, i) => (
-          <View
-            key={i}
+          <Ionicons name="arrow-back" size={16} color={c.textDim} />
+          <AppText
             style={{
-              width: isWide ? "23%" : isCompact ? "48%" : "48%",
-              marginBottom: 12,
+              fontFamily: theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
+              fontSize: rem(0.85),
+              fontWeight: "600",
+              color: c.textDim,
+              marginLeft: 6,
             }}
           >
-            <StatCard
-              icon={kpi.icon}
-              label={kpi.label}
-              value={kpi.value}
-              accent={kpi.accent}
-              valueStyle={figureStyle}
-              labelStyle={labelStyle}
-            />
+            {t("retainedStaff.backToStaff")}
+          </AppText>
+        </Pressable>
+
+        {/* Profile header */}
+        <View
+          style={[styles.profileHeader, isWide && styles.profileHeaderWide]}
+        >
+          <View style={[styles.avatarLg, { backgroundColor: c.bgInput }]}>
+            {avatar ? (
+              <Image source={{ uri: avatar }} style={styles.avatarLgImg} />
+            ) : (
+              <Ionicons name="person-outline" size={32} color={c.textMuted} />
+            )}
           </View>
-        ))}
-      </View>
-
-      {/* Tabs */}
-      <View
-        style={[styles.tabRow, { borderBottomColor: c.border, marginTop: 8 }]}
-      >
-        {[
-          {
-            key: "payroll",
-            label: t("retainedStaff.tabPayroll"),
-            icon: "time-outline",
-          },
-          {
-            key: "documents",
-            label: t("retainedStaff.tabDocuments"),
-            icon: "document-outline",
-          },
-          {
-            key: "notes",
-            label: t("retainedStaff.tabNotes"),
-            icon: "book-outline",
-          },
-        ].map((tb) => {
-          const active = tab === tb.key;
-          return (
-            <Pressable
-              key={tb.key}
-              onPress={() => setTab(tb.key)}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                paddingVertical: 12,
-                paddingHorizontal: 8,
-                borderBottomWidth: 2,
-                borderBottomColor: active ? c.orange : "transparent",
-              }}
-            >
-              <Ionicons
-                name={tb.icon}
-                size={14}
-                color={active ? c.orange : c.textDim}
-              />
-              <AppText
-                style={{
-                  fontFamily: active
-                    ? theme.fonts?.bodyBold || "DMSans_700Bold"
-                    : theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
-                  fontSize: rem(0.85),
-                  fontWeight: active ? "700" : "600",
-                  color: active ? c.orange : c.textDim,
-                }}
-              >
-                {tb.label}
-              </AppText>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Tab content */}
-      {tab === "payroll" ? (
-        <View style={{ marginTop: 16 }}>
-          <View style={styles.panelHeader}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <AppText
               weight="displayBlack"
+              numberOfLines={2}
               style={{
                 fontSize: 15,
                 letterSpacing: -0.5,
-                flex: 1,
               }}
             >
-              {t("retainedStaff.recentCycles")}
+              {member?.worker?.firstName} {member?.worker?.lastName}
             </AppText>
+            <AppText
+              style={{
+                fontFamily: theme.fonts?.body || "DMSans_400Regular",
+                fontSize: rem(0.875),
+                color: c.textDim,
+                marginTop: 2,
+              }}
+            >
+              {member.jobTitle}
+              {member.department ? ` · ${member.department}` : ""}
+            </AppText>
+            <View
+              style={{
+                alignSelf: "flex-start",
+                borderWidth: 1,
+                borderColor: statusColor,
+                borderRadius: 999,
+                paddingHorizontal: 10,
+                paddingVertical: 2,
+                marginTop: 6,
+              }}
+            >
+              <AppText
+                style={{
+                  fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
+                  fontSize: rem(0.65),
+                  fontWeight: "800",
+                  letterSpacing: 0.05 * rem(0.65),
+                  textTransform: "uppercase",
+                  color: statusColor,
+                }}
+              >
+                {member.status}
+              </AppText>
+            </View>
+          </View>
+
+          {/* Actions */}
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+              marginTop: isWide ? 0 : 12,
+            }}
+          >
+            <IconBtn
+              icon="create-outline"
+              onPress={() => setShowEditModal(true)}
+              theme={theme}
+            />
+            {canDelete ? (
+              <IconBtn
+                icon="trash-outline"
+                danger
+                onPress={() => setShowDeleteModal(true)}
+                theme={theme}
+              />
+            ) : null}
+            {member.status === "ACTIVE" ? (
+              <SmallBtn
+                label={t("retainedStaff.pauseBtn")}
+                icon="pause-outline"
+                onPress={handlePause}
+                disabled={actionLoading}
+                theme={theme}
+                rem={rem}
+              />
+            ) : null}
+            {member.status === "PAUSED" ? (
+              <SmallBtn
+                label={t("retainedStaff.resumeBtn")}
+                icon="play-outline"
+                onPress={handleResume}
+                disabled={actionLoading}
+                theme={theme}
+                rem={rem}
+              />
+            ) : null}
             <Pressable
               onPress={() => setShowCycleModal(true)}
               style={({ pressed }) => [
-                styles.smallBtn,
+                styles.primaryBtn,
                 {
-                  backgroundColor: c.bgCard,
-                  borderColor: pressed ? c.orange : c.border,
+                  backgroundColor: pressed ? c.orangeHover : c.orange,
                 },
               ]}
             >
-              <Ionicons name="add" size={12} color={c.textDim} />
+              <Ionicons name="add" size={14} color="#fff" />
               <AppText
                 style={{
                   fontFamily: theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
-                  fontSize: rem(0.75),
+                  fontSize: rem(0.85),
                   fontWeight: "600",
-                  color: c.textDim,
-                  marginLeft: 4,
+                  color: "#fff",
+                  marginLeft: 6,
                 }}
               >
                 {t("retainedStaff.createCycleBtn")}
               </AppText>
             </Pressable>
           </View>
+        </View>
 
-          {cycles.length === 0 ? (
-            <EmptyState
-              icon="time-outline"
-              iconSize={32}
-              text={t("retainedStaff.noCyclesYet")}
-              compact
-            />
-          ) : (
-            <View style={{ gap: 8, marginTop: 12 }}>
-              {cycles.map((cycle) => {
-                const statusColor = CYCLE_STATUS_COLOR(theme, cycle.status);
-                const canDeleteCycle = [
-                  "AWAITING_PAYMENT",
-                  "CANCELLED",
-                ].includes(cycle.status);
-                return (
+        {/* KPI cards */}
+        <View style={styles.statsGrid}>
+          {[
+            {
+              icon: "cash-outline",
+              label: t("retainedStaff.kpiPayRate"),
+              value: formatMoney(member.payRate, member.currency),
+              accent: "default",
+            },
+            {
+              icon: "time-outline",
+              label: t("retainedStaff.kpiLifetimePaid"),
+              value: formatMoney(member.totalPaidLifetime, member.currency),
+              accent: "green",
+            },
+            {
+              icon: "cash-outline",
+              label: t("retainedStaff.kpiHeld"),
+              value: formatMoney(member.totalHeld, member.currency),
+              accent: "orange",
+            },
+            {
+              icon: "calendar-outline",
+              label: t("retainedStaff.kpiNextCycle"),
+              value: member.nextCycleAt ? formatDate(member.nextCycleAt) : "—",
+              accent: "yellow",
+            },
+          ].map((kpi, i) => (
+            <View
+              key={i}
+              style={{
+                width: isWide ? "23%" : isCompact ? "48%" : "48%",
+                marginBottom: 12,
+              }}
+            >
+              <StatCard
+                icon={kpi.icon}
+                label={kpi.label}
+                value={kpi.value}
+                accent={kpi.accent}
+                valueStyle={figureStyle}
+                labelStyle={labelStyle}
+              />
+            </View>
+          ))}
+        </View>
+
+        {/* Tabs */}
+        <View
+          style={[styles.tabRow, { borderBottomColor: c.border, marginTop: 8 }]}
+        >
+          {[
+            {
+              key: "payroll",
+              label: t("retainedStaff.tabPayroll"),
+              icon: "time-outline",
+            },
+            {
+              key: "documents",
+              label: t("retainedStaff.tabDocuments"),
+              icon: "document-outline",
+            },
+            {
+              key: "notes",
+              label: t("retainedStaff.tabNotes"),
+              icon: "book-outline",
+            },
+          ].map((tb) => {
+            const active = tab === tb.key;
+            return (
+              <Pressable
+                key={tb.key}
+                onPress={() => setTab(tb.key)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderBottomWidth: 2,
+                  borderBottomColor: active ? c.orange : "transparent",
+                }}
+              >
+                <Ionicons
+                  name={tb.icon}
+                  size={14}
+                  color={active ? c.orange : c.textDim}
+                />
+                <AppText
+                  style={{
+                    fontFamily: active
+                      ? theme.fonts?.bodyBold || "DMSans_700Bold"
+                      : theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
+                    fontSize: rem(0.85),
+                    fontWeight: active ? "700" : "600",
+                    color: active ? c.orange : c.textDim,
+                  }}
+                >
+                  {tb.label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Tab content */}
+        {tab === "payroll" ? (
+          <View style={{ marginTop: 16 }}>
+            <View style={styles.panelHeader}>
+              <AppText
+                weight="displayBlack"
+                style={{
+                  fontSize: 15,
+                  letterSpacing: -0.5,
+                  flex: 1,
+                }}
+              >
+                {t("retainedStaff.recentCycles")}
+              </AppText>
+              <Pressable
+                onPress={() => setShowCycleModal(true)}
+                style={({ pressed }) => [
+                  styles.smallBtn,
+                  {
+                    backgroundColor: c.bgCard,
+                    borderColor: pressed ? c.orange : c.border,
+                  },
+                ]}
+              >
+                <Ionicons name="add" size={12} color={c.textDim} />
+                <AppText
+                  style={{
+                    fontFamily:
+                      theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
+                    fontSize: rem(0.75),
+                    fontWeight: "600",
+                    color: c.textDim,
+                    marginLeft: 4,
+                  }}
+                >
+                  {t("retainedStaff.createCycleBtn")}
+                </AppText>
+              </Pressable>
+            </View>
+
+            {cycles.length === 0 ? (
+              <EmptyState
+                icon="time-outline"
+                iconSize={32}
+                text={t("retainedStaff.noCyclesYet")}
+                compact
+              />
+            ) : (
+              <View style={{ gap: 8, marginTop: 12 }}>
+                {cycles.map((cycle) => {
+                  const statusColor = CYCLE_STATUS_COLOR(theme, cycle.status);
+                  const canDeleteCycle = [
+                    "AWAITING_PAYMENT",
+                    "CANCELLED",
+                  ].includes(cycle.status);
+                  return (
+                    <View
+                      key={cycle.id}
+                      style={[
+                        styles.cycleRow,
+                        {
+                          backgroundColor: c.bgCard,
+                          borderColor: c.border,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <AppText
+                          numberOfLines={1}
+                          style={{
+                            fontFamily:
+                              theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
+                            fontSize: rem(0.9),
+                            fontWeight: "600",
+                            color: c.text,
+                          }}
+                        >
+                          {formatDate(cycle.periodStart)} —{" "}
+                          {formatDate(cycle.periodEnd)}
+                        </AppText>
+                        <AppText
+                          numberOfLines={1}
+                          style={{
+                            fontFamily:
+                              theme.fonts?.body || "DMSans_400Regular",
+                            fontSize: rem(0.75),
+                            color: c.textDim,
+                            marginTop: 2,
+                          }}
+                        >
+                          {String(cycle.type || "").replace("_", " ")}
+                          {cycle.label ? ` · ${cycle.label}` : ""}
+                        </AppText>
+                        <AppText
+                          weight="displayBlack"
+                          style={{
+                            fontSize: 13,
+                            letterSpacing: -0.5,
+                            marginTop: 4,
+                          }}
+                        >
+                          {formatMoney(cycle.netAmount, cycle.currency)}
+                        </AppText>
+                      </View>
+                      <View style={{ alignItems: "flex-end", gap: 8 }}>
+                        <View
+                          style={{
+                            borderWidth: 1,
+                            borderColor: statusColor,
+                            borderRadius: 999,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                          }}
+                        >
+                          <AppText
+                            style={{
+                              fontFamily:
+                                theme.fonts?.bodyBold || "DMSans_700Bold",
+                              fontSize: rem(0.65),
+                              fontWeight: "800",
+                              color: statusColor,
+                              letterSpacing: 0.04 * rem(0.65),
+                            }}
+                          >
+                            {String(cycle.status).replace("_", " ")}
+                          </AppText>
+                        </View>
+                        <View style={{ flexDirection: "row", gap: 6 }}>
+                          <IconBtn
+                            icon="chevron-forward"
+                            onPress={() => goCycle(cycle.id)}
+                            theme={theme}
+                          />
+                          {canDeleteCycle ? (
+                            <IconBtn
+                              icon="trash-outline"
+                              danger
+                              onPress={() => setCycleToDelete(cycle)}
+                              theme={theme}
+                            />
+                          ) : null}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {tab === "documents" ? (
+          <View style={{ marginTop: 16 }}>
+            <AppText
+              weight="displayBlack"
+              style={{
+                fontSize: 15,
+                letterSpacing: -0.5,
+                marginBottom: 12,
+              }}
+            >
+              {t("retainedStaff.employmentDocs")}
+            </AppText>
+            {!member?.documents || member.documents.length === 0 ? (
+              <EmptyState
+                icon="document-outline"
+                iconSize={32}
+                text={t("retainedStaff.noDocs")}
+                compact
+              />
+            ) : (
+              <View style={{ gap: 8 }}>
+                {member.documents.map((doc) => (
                   <View
-                    key={cycle.id}
+                    key={doc.id}
                     style={[
-                      styles.cycleRow,
+                      styles.docRow,
                       {
                         backgroundColor: c.bgCard,
                         borderColor: c.border,
                       },
                     ]}
                   >
+                    <Ionicons
+                      name="document-outline"
+                      size={18}
+                      color={c.textDim}
+                    />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <AppText
                         numberOfLines={1}
                         style={{
                           fontFamily:
                             theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
-                          fontSize: rem(0.9),
+                          fontSize: rem(0.875),
                           fontWeight: "600",
                           color: c.text,
                         }}
                       >
-                        {formatDate(cycle.periodStart)} —{" "}
-                        {formatDate(cycle.periodEnd)}
+                        {doc.title}
                       </AppText>
                       <AppText
-                        numberOfLines={1}
                         style={{
                           fontFamily: theme.fonts?.body || "DMSans_400Regular",
                           fontSize: rem(0.75),
@@ -672,249 +807,140 @@ export default function RetainedStaffDetailScreen() {
                           marginTop: 2,
                         }}
                       >
-                        {String(cycle.type || "").replace("_", " ")}
-                        {cycle.label ? ` · ${cycle.label}` : ""}
+                        {doc.type} · {formatDate(doc.createdAt)}
+                      </AppText>
+                    </View>
+                    <Pressable onPress={() => {}} hitSlop={8}>
+                      <AppText
+                        style={{
+                          fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
+                          fontSize: rem(0.8),
+                          fontWeight: "600",
+                          color: c.orange,
+                        }}
+                      >
+                        {t("retainedStaff.viewDoc")}
+                      </AppText>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {tab === "notes" ? (
+          <View style={{ marginTop: 16 }}>
+            <AppText
+              weight="displayBlack"
+              style={{
+                fontSize: 15,
+                letterSpacing: -0.5,
+                marginBottom: 12,
+              }}
+            >
+              {t("retainedStaff.hrNotes")}
+            </AppText>
+            {!member?.staffNotes || member.staffNotes.length === 0 ? (
+              <EmptyState
+                icon="book-outline"
+                iconSize={32}
+                text={t("retainedStaff.noNotes")}
+                compact
+              />
+            ) : (
+              <View style={{ gap: 8 }}>
+                {member.staffNotes.map((note) => (
+                  <View
+                    key={note.id}
+                    style={[
+                      styles.docRow,
+                      {
+                        backgroundColor: c.bgCard,
+                        borderColor: c.border,
+                        alignItems: "flex-start",
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <AppText
+                        style={{
+                          fontFamily:
+                            theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
+                          fontSize: rem(0.875),
+                          fontWeight: "600",
+                          color: c.text,
+                        }}
+                      >
+                        {note.title}
                       </AppText>
                       <AppText
-                        weight="displayBlack"
                         style={{
-                          fontSize: 13,
-                          letterSpacing: -0.5,
-                          marginTop: 4,
+                          fontFamily: theme.fonts?.body || "DMSans_400Regular",
+                          fontSize: rem(0.75),
+                          color: c.textDim,
+                          marginTop: 2,
                         }}
                       >
-                        {formatMoney(cycle.netAmount, cycle.currency)}
+                        {note.body}
                       </AppText>
                     </View>
-                    <View style={{ alignItems: "flex-end", gap: 8 }}>
-                      <View
-                        style={{
-                          borderWidth: 1,
-                          borderColor: statusColor,
-                          borderRadius: 999,
-                          paddingHorizontal: 8,
-                          paddingVertical: 2,
-                        }}
-                      >
-                        <AppText
-                          style={{
-                            fontFamily:
-                              theme.fonts?.bodyBold || "DMSans_700Bold",
-                            fontSize: rem(0.65),
-                            fontWeight: "800",
-                            color: statusColor,
-                            letterSpacing: 0.04 * rem(0.65),
-                          }}
-                        >
-                          {String(cycle.status).replace("_", " ")}
-                        </AppText>
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 6 }}>
-                        <IconBtn
-                          icon="chevron-forward"
-                          onPress={() => goCycle(cycle.id)}
-                          theme={theme}
-                        />
-                        {canDeleteCycle ? (
-                          <IconBtn
-                            icon="trash-outline"
-                            danger
-                            onPress={() => setCycleToDelete(cycle)}
-                            theme={theme}
-                          />
-                        ) : null}
-                      </View>
-                    </View>
                   </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
-      ) : null}
+                ))}
+              </View>
+            )}
+          </View>
+        ) : null}
+      </AppScreen>
 
-      {tab === "documents" ? (
-        <View style={{ marginTop: 16 }}>
-          <AppText
-            weight="displayBlack"
-            style={{
-              fontSize: 15,
-              letterSpacing: -0.5,
-              marginBottom: 12,
+      {/* ── Modals ───────────────────────────────────────────────
+          Mounted as siblings of AppScreen (not children), so the
+          React Native Modal renders on the native modal layer even
+          when AppScreen's internal ScrollView is scrolled. This is
+          the key fix for the modals not showing. */}
+      {member ? (
+        <>
+          <CreateCycleModal
+            isOpen={showCycleModal}
+            onClose={() => setShowCycleModal(false)}
+            onSuccess={(cycle) => {
+              loadMember({ silent: true });
+              if (cycle?.id) goCycle(cycle.id);
             }}
-          >
-            {t("retainedStaff.employmentDocs")}
-          </AppText>
-          {!member?.documents || member.documents.length === 0 ? (
-            <EmptyState
-              icon="document-outline"
-              iconSize={32}
-              text={t("retainedStaff.noDocs")}
-              compact
-            />
-          ) : (
-            <View style={{ gap: 8 }}>
-              {member.documents.map((doc) => (
-                <View
-                  key={doc.id}
-                  style={[
-                    styles.docRow,
-                    {
-                      backgroundColor: c.bgCard,
-                      borderColor: c.border,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="document-outline"
-                    size={18}
-                    color={c.textDim}
-                  />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <AppText
-                      numberOfLines={1}
-                      style={{
-                        fontFamily:
-                          theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
-                        fontSize: rem(0.875),
-                        fontWeight: "600",
-                        color: c.text,
-                      }}
-                    >
-                      {doc.title}
-                    </AppText>
-                    <AppText
-                      style={{
-                        fontFamily: theme.fonts?.body || "DMSans_400Regular",
-                        fontSize: rem(0.75),
-                        color: c.textDim,
-                        marginTop: 2,
-                      }}
-                    >
-                      {doc.type} · {formatDate(doc.createdAt)}
-                    </AppText>
-                  </View>
-                  <Pressable onPress={() => {}} hitSlop={8}>
-                    <AppText
-                      style={{
-                        fontFamily: theme.fonts?.bodyBold || "DMSans_700Bold",
-                        fontSize: rem(0.8),
-                        fontWeight: "600",
-                        color: c.orange,
-                      }}
-                    >
-                      {t("retainedStaff.viewDoc")}
-                    </AppText>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      ) : null}
-
-      {tab === "notes" ? (
-        <View style={{ marginTop: 16 }}>
-          <AppText
-            weight="displayBlack"
-            style={{
-              fontSize: 15,
-              letterSpacing: -0.5,
-              marginBottom: 12,
+            member={member}
+          />
+          <EditStaffModal
+            isOpen={showEditModal}
+            onClose={() => setShowEditModal(false)}
+            onSuccess={(updated) => {
+              if (updated) setMember(updated);
             }}
-          >
-            {t("retainedStaff.hrNotes")}
-          </AppText>
-          {!member?.staffNotes || member.staffNotes.length === 0 ? (
-            <EmptyState
-              icon="book-outline"
-              iconSize={32}
-              text={t("retainedStaff.noNotes")}
-              compact
-            />
-          ) : (
-            <View style={{ gap: 8 }}>
-              {member.staffNotes.map((note) => (
-                <View
-                  key={note.id}
-                  style={[
-                    styles.docRow,
-                    {
-                      backgroundColor: c.bgCard,
-                      borderColor: c.border,
-                      alignItems: "flex-start",
-                    },
-                  ]}
-                >
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <AppText
-                      style={{
-                        fontFamily:
-                          theme.fonts?.bodySemiBold || "DMSans_600SemiBold",
-                        fontSize: rem(0.875),
-                        fontWeight: "600",
-                        color: c.text,
-                      }}
-                    >
-                      {note.title}
-                    </AppText>
-                    <AppText
-                      style={{
-                        fontFamily: theme.fonts?.body || "DMSans_400Regular",
-                        fontSize: rem(0.75),
-                        color: c.textDim,
-                        marginTop: 2,
-                      }}
-                    >
-                      {note.body}
-                    </AppText>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      ) : null}
+            member={member}
+          />
+          <ConfirmModal
+            visible={showDeleteModal}
+            onCancel={() => setShowDeleteModal(false)}
+            onConfirm={handleDeleteStaff}
+            title={t("retainedStaff.deleteStaffTitle")}
+            message={t("retainedStaff.deleteStaffMessage")}
+            confirmLabel={t("retainedStaff.deleteStaffConfirm")}
+            destructive
+          />
 
-      {/* Modals */}
-      <CreateCycleModal
-        isOpen={showCycleModal}
-        onClose={() => setShowCycleModal(false)}
-        onSuccess={(cycle) => {
-          loadMember({ silent: true });
-          if (cycle?.id) goCycle(cycle.id);
-        }}
-        member={member}
-      />
-      <EditStaffModal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        onSuccess={(updated) => {
-          if (updated) setMember(updated);
-        }}
-        member={member}
-      />
-      <ConfirmModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={handleDeleteStaff}
-        title={t("retainedStaff.deleteStaffTitle")}
-        message={t("retainedStaff.deleteStaffMessage")}
-        confirmLabel={t("retainedStaff.deleteStaffConfirm")}
-        confirmVariant="danger"
-      />
-      <ConfirmModal
-        isOpen={!!cycleToDelete}
-        onClose={() => setCycleToDelete(null)}
-        onConfirm={handleDeleteCycle}
-        title={t("retainedStaff.deleteCycleTitle")}
-        message={t("retainedStaff.deleteCycleMessage", {
-          label: cycleToDelete?.label || "",
-        })}
-        confirmLabel={t("retainedStaff.deleteCycleConfirm")}
-        confirmVariant="danger"
-      />
-    </AppScreen>
+          <ConfirmModal
+            visible={!!cycleToDelete}
+            onCancel={() => setCycleToDelete(null)}
+            onConfirm={handleDeleteCycle}
+            title={t("retainedStaff.deleteCycleTitle")}
+            message={t("retainedStaff.deleteCycleMessage", {
+              label: cycleToDelete?.label || "",
+            })}
+            confirmLabel={t("retainedStaff.deleteCycleConfirm")}
+            destructive
+          />
+        </>
+      ) : null}
+    </>
   );
 }
 
