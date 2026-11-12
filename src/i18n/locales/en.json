@@ -1749,7 +1749,6 @@
     "failedAvailability": "Failed to update availability",
     "hirerPortal": "HIRER PORTAL",
     "inbox": "INBOX",
-    "jobsManagement": "Jobs Management",
     "logout": "Log out",
     "main": "MAIN",
     "messages": "Messages",
@@ -1998,6 +1997,89 @@
     "titleRequired": "Job title is required",
     "weeklyRate": "Weekly Rate",
     "yourTitleNote": "✦ Your title will be added as a new category when you post."
+  },
+  "jobsManagement": {
+    "eyebrow": "My Jobs",
+    "title": "Job Board",
+    "postNewJob": "Post New Job",
+    "postAJob": "Post a Job",
+
+    "status": {
+      "all": "All Jobs",
+      "open": "Open",
+      "filled": "Filled",
+      "cancelled": "Cancelled",
+      "total": "Total"
+    },
+
+    "jobType": {
+      "fullTime": "Full-time",
+      "partTime": "Part-time",
+      "contract": "Contract",
+      "temporary": "Temporary"
+    },
+
+    "locationType": {
+      "remote": "Remote",
+      "onSite": "On-site",
+      "hybrid": "Hybrid"
+    },
+
+    "duration": {
+      "hour": "hour",
+      "hours": "hour",
+      "hoursPlural": "hours",
+      "day": "day",
+      "days": "day",
+      "daysPlural": "days",
+      "week": "week",
+      "weeks": "week",
+      "weeksPlural": "weeks",
+      "month": "month",
+      "months": "month",
+      "monthsPlural": "months",
+      "year": "year",
+      "years": "year",
+      "yearsPlural": "years"
+    },
+
+    "card": {
+      "generalCategory": "General",
+      "applicantCount": "{{count}} applicant",
+      "applicantCount_plural": "{{count}} applicants",
+      "skillCount": "{{count}} skill",
+      "skillCount_plural": "{{count}} skills",
+      "edit": "Edit",
+      "markFilled": "Mark Filled",
+      "cancel": "Cancel",
+      "confirmFilled": "Mark job as filled?",
+      "confirmCancelled": "Cancel this job?",
+      "yes": "Yes",
+      "no": "No",
+      "reopenJob": "Reopen Job"
+    },
+
+    "empty": {
+      "titleAll": "No jobs posted yet",
+      "titleFiltered": "No {{status}} jobs",
+      "subtitleAll": "Post your first job and start receiving applications from skilled workers.",
+      "subtitleFiltered": "You don't have any {{status}} jobs right now."
+    },
+
+    "pagination": {
+      "previous": "Prev",
+      "next": "Next",
+      "pageOf": "{{page}} / {{pages}}"
+    },
+
+    "errors": {
+      "loadFailed": "Failed to load jobs.",
+      "statusUpdateFailed": "Failed to update job status."
+    },
+
+    "success": {
+      "statusUpdated": "Job marked as {{status}}."
+    }
   },
   "postJob.addedCategory": "Added category \"{{name}}\"",
   "postJob.additionalNotes": "Additional Notes",

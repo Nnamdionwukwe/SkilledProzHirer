@@ -907,13 +907,11 @@ export default function JobDetailScreen() {
         ) : null}
 
         <AppText
+          weight="displayBlack"
           style={{
-            fontFamily: "Syne_800ExtraBold",
-            fontSize: 22,
-            fontWeight: "800",
-            color: c.text,
-            lineHeight: 28,
-            marginBottom: 12,
+            fontSize: 13,
+            letterSpacing: -0.5,
+            marginBottom: 4,
           }}
         >
           {job.title}
@@ -1010,17 +1008,17 @@ export default function JobDetailScreen() {
           ]}
         >
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: "Syne_800ExtraBold",
-              fontSize: 26,
-              fontWeight: "800",
+              fontSize: 15,
+              letterSpacing: -0.5,
+              marginBottom: 4,
               color: c.orange,
-              lineHeight: 30,
             }}
           >
             {mainPaymentText}
           </AppText>
-          <AppText style={{ fontSize: 12, color: c.textDim, flex: 1 }}>
+          <AppText style={{ fontSize: 10, color: c.textDim, flex: 1 }}>
             {mainPaymentLabel}
           </AppText>
           <View
