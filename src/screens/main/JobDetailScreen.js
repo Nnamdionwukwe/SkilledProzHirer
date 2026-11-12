@@ -9,30 +9,9 @@
 //   POST  /jobs/:id/save
 //   DELETE /jobs/:id/save
 //
-// Renders (mirrors web):
-//   · Back link → role-aware destination
-//   · Alerts (error/success, dismissible)
-//   · Header card: category chip + status badge + save button,
-//     company line, title, type pill row, meta row, budget block
-//   · Description + notes
-//   · Responsibilities (if present)
-//   · Requirements (if present)
-//   · Skills chips
-//   · Qualifications chips
-//   · Work conditions (accommodation/meals)
-//   · Details grid (15+ conditional cards, including coordinates link)
-//   · Payment breakdown card (rate × duration + platform fee + total)
-//   · Requirements & Qualifications grouped block
-//   · How to Apply (external channels)
-//   · Worker apply flow (rejected/accepted/already-applied banners + form)
-//   · Job closed banner (filled/cancelled)
-//   · Manage actions (owner/admin)
-//   · Sidebar: hirer card + quick facts list + guest CTA
-//   · Not-found and skeleton states
-//
-// i18n:
-//   · Every visible string uses t() under the `jobs.detail.*` namespace
-//     (and `common.*` where applicable).
+// Currency: every displayed amount is rendered with the currency symbol
+// (via CURRENCY_META). The "Currency" detail card still shows the ISO
+// code (NGN, USD, ...) because that card IS the currency field.
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -55,6 +34,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
 import client from "../../api/client";
+import { CURRENCY_META } from "../../contexts/CurrencyContext";
 import { getHirerFeeRate } from "../../utils/pricing";
 import {
   FaBriefcase,
@@ -165,6 +145,11 @@ const EDUCATION_LEVEL_LABELS = {
   CERTIFICATION: "Certification",
   OTHER: "Other",
 };
+
+// ── Currency helper ───────────────────────────────────────────────
+function currencySymbol(code) {
+  return CURRENCY_META[code]?.symbol || code || "";
+}
 
 function parseRecurring(notes) {
   if (!notes) return null;
@@ -318,22 +303,24 @@ function computeJobPaymentBreakdown(jobPost) {
   const isCustom = budgetType === "CUSTOM";
   let isRecurring = false;
 
+  const sym = currencySymbol(currency);
+
   if (isFixed) {
     subtotal = rate;
-    calculationText = `Fixed price · ${currency} ${rate.toLocaleString()}`;
+    calculationText = `Fixed price · ${sym}${rate.toLocaleString()}`;
   } else if (isCustom) {
     subtotal = rate;
-    calculationText = `Custom rate · ${currency} ${rate.toLocaleString()}`;
+    calculationText = `Custom rate · ${sym}${rate.toLocaleString()}`;
   } else if (Number.isFinite(numericInRateUnit) && numericInRateUnit > 0) {
     isRecurring = true;
     subtotal = rate * numericInRateUnit;
     calculationText =
-      `${currency} ${rate.toLocaleString()} ` +
+      `${sym}${rate.toLocaleString()} ` +
       `${BUDGET_TYPE_PERIOD_LABELS[budgetType] || BUDGET_TYPE_LABELS[budgetType]} ` +
-      `× ${multiplierLabel} = ${currency} ${Math.round(subtotal).toLocaleString()}`;
+      `× ${multiplierLabel} = ${sym}${Math.round(subtotal).toLocaleString()}`;
   } else {
     subtotal = rate;
-    calculationText = `${currency} ${rate.toLocaleString()} ${
+    calculationText = `${sym}${rate.toLocaleString()} ${
       BUDGET_TYPE_PERIOD_LABELS[budgetType] || ""
     }`;
   }
@@ -597,10 +584,12 @@ export default function JobDetailScreen() {
   let salaryRangeText = null;
   if (job?.salaryMin && job?.salaryMax) {
     const cur = job.salaryCurrency || job.currency || "";
-    salaryRangeText = `${cur} ${Number(job.salaryMin).toLocaleString()} – ${Number(job.salaryMax).toLocaleString()}${salaryPeriodLabel ? ` · ${salaryPeriodLabel}` : ""}`;
+    const sym = currencySymbol(cur);
+    salaryRangeText = `${sym}${Number(job.salaryMin).toLocaleString()} – ${sym}${Number(job.salaryMax).toLocaleString()}${salaryPeriodLabel ? ` · ${salaryPeriodLabel}` : ""}`;
   } else if (job?.salaryAmount) {
     const cur = job.salaryCurrency || job.currency || "";
-    salaryRangeText = `${cur} ${Number(job.salaryAmount).toLocaleString()}${salaryPeriodLabel ? ` · ${salaryPeriodLabel}` : ""}`;
+    const sym = currencySymbol(cur);
+    salaryRangeText = `${sym}${Number(job.salaryAmount).toLocaleString()}${salaryPeriodLabel ? ` · ${salaryPeriodLabel}` : ""}`;
   }
 
   const mainPaymentText = hasSalaryText
@@ -608,7 +597,7 @@ export default function JobDetailScreen() {
     : hasSalaryRange
       ? salaryRangeText
       : hasBudget
-        ? `${job.currency} ${parseFloat(job.budget).toLocaleString()}`
+        ? `${currencySymbol(job.currency)}${parseFloat(job.budget).toLocaleString()}`
         : t("jobs.detail.noAmount");
 
   const mainPaymentLabel = hasSalaryText
@@ -1010,7 +999,7 @@ export default function JobDetailScreen() {
           <AppText
             weight="displayBlack"
             style={{
-              fontSize: 15,
+              fontSize: 13,
               letterSpacing: -0.5,
               marginBottom: 4,
               color: c.orange,
@@ -1018,29 +1007,57 @@ export default function JobDetailScreen() {
           >
             {mainPaymentText}
           </AppText>
-          <AppText style={{ fontSize: 10, color: c.textDim, flex: 1 }}>
+          <AppText style={{ fontSize: 9, color: c.textDim, flex: 1 }}>
             {mainPaymentLabel}
           </AppText>
-          <View
-            style={[
-              styles.applicantCount,
-              { backgroundColor: c.bgPanel, borderColor: c.border },
-            ]}
-          >
-            <FaUsers size={11} color={c.textDim} />
-            <AppText
-              style={{
-                fontSize: 11,
-                fontWeight: "600",
-                color: c.textDim,
-                marginLeft: 4,
-              }}
+          {canManage ? (
+            <Pressable
+              onPress={() => navigation.navigate("JobApplications", { jobId })}
+              style={({ pressed }) => [
+                styles.applicantCount,
+                {
+                  backgroundColor: pressed ? c.orangeDim : c.bgPanel,
+                  borderColor: pressed ? c.orangeGlow : c.border,
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}
             >
-              {t("jobs.detail.applicantsCount", {
-                count: job._count?.applications || 0,
-              })}
-            </AppText>
-          </View>
+              <FaUsers size={11} color={c.textDim} />
+              <AppText
+                style={{
+                  fontSize: 11,
+                  fontWeight: "600",
+                  color: c.textDim,
+                  marginLeft: 4,
+                }}
+              >
+                {t("jobs.detail.applicantsCount", {
+                  count: job._count?.applications || 0,
+                })}
+              </AppText>
+            </Pressable>
+          ) : (
+            <View
+              style={[
+                styles.applicantCount,
+                { backgroundColor: c.bgPanel, borderColor: c.border },
+              ]}
+            >
+              <FaUsers size={11} color={c.textDim} />
+              <AppText
+                style={{
+                  fontSize: 11,
+                  fontWeight: "600",
+                  color: c.textDim,
+                  marginLeft: 4,
+                }}
+              >
+                {t("jobs.detail.applicantsCount", {
+                  count: job._count?.applications || 0,
+                })}
+              </AppText>
+            </View>
+          )}
         </View>
       </View>
 
@@ -1339,6 +1356,7 @@ export default function JobDetailScreen() {
             />
           ) : null}
 
+          {/* Currency — shows the ISO code (NGN, USD, ...) */}
           {job.currency ? (
             <DetailCard
               icon={<FaDollarSign size={13} color={c.orange} />}
@@ -1446,7 +1464,7 @@ export default function JobDetailScreen() {
                     : t("jobs.detail.rate")}
                 </AppText>
                 <AppText style={styles.paymentBreakdownValue}>
-                  {paymentBreakdown.currency}{" "}
+                  {currencySymbol(paymentBreakdown.currency)}
                   {paymentBreakdown.rate.toLocaleString()}
                   {!paymentBreakdown.isFixed && paymentBreakdown.periodLabel ? (
                     <AppText
@@ -1520,7 +1538,7 @@ export default function JobDetailScreen() {
                     {t("jobs.detail.subtotal")}
                   </AppText>
                   <AppText style={styles.paymentBreakdownValue}>
-                    {paymentBreakdown.currency}{" "}
+                    {currencySymbol(paymentBreakdown.currency)}
                     {paymentBreakdown.subtotal.toLocaleString()}
                   </AppText>
                 </View>
@@ -1535,7 +1553,7 @@ export default function JobDetailScreen() {
                   </AppText>
                   <AppText
                     style={{
-                      fontSize: 10,
+                      fontSize: 9,
                       color: c.textMuted,
                       fontStyle: "italic",
                       marginTop: 2,
@@ -1545,7 +1563,7 @@ export default function JobDetailScreen() {
                   </AppText>
                 </View>
                 <AppText style={styles.paymentBreakdownValue}>
-                  + {paymentBreakdown.currency}{" "}
+                  + {currencySymbol(paymentBreakdown.currency)}
                   {paymentBreakdown.platformFee.toLocaleString()}
                 </AppText>
               </View>
@@ -1576,14 +1594,15 @@ export default function JobDetailScreen() {
                   {t("jobs.detail.totalToHire")}
                 </AppText>
                 <AppText
+                  weight="displayBlack"
                   style={{
-                    fontFamily: "Syne_800ExtraBold",
-                    fontSize: 20,
-                    fontWeight: "800",
+                    fontSize: 13,
+                    letterSpacing: -0.5,
+                    marginBottom: 4,
                     color: c.orange,
                   }}
                 >
-                  {paymentBreakdown.currency}{" "}
+                  {currencySymbol(paymentBreakdown.currency)}
                   {paymentBreakdown.grandTotal.toLocaleString()}
                 </AppText>
               </View>
@@ -1597,7 +1616,7 @@ export default function JobDetailScreen() {
               {paymentBreakdown.isRecurring ? (
                 <PaymentNote
                   text={t("jobs.detail.noteRecurring", {
-                    currency: paymentBreakdown.currency,
+                    currency: currencySymbol(paymentBreakdown.currency),
                     rate: paymentBreakdown.rate.toLocaleString(),
                     period: paymentBreakdown.periodLabel,
                     multiplier:
@@ -2137,11 +2156,12 @@ export default function JobDetailScreen() {
             ) : null}
           </View>
           <Pressable
-            onPress={() =>
-              navigation.navigate("HirerPublicProfile", {
-                userId: job.hirer.id,
-              })
-            }
+            onPress={() => {
+              const targetScreen = isHirer
+                ? "HirerDetail"
+                : "HirerPublicProfile";
+              navigation.navigate(targetScreen, { userId: job.hirer.id });
+            }}
             style={({ pressed }) => [
               styles.viewHirerBtn,
               {
