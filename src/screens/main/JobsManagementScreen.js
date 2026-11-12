@@ -41,6 +41,7 @@ import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
+import { CURRENCY_META } from "../../contexts/CurrencyContext";
 import {
   FaPlus,
   FaCalendarAlt,
@@ -249,12 +250,11 @@ export default function JobsManagementScreen() {
             My Jobs
           </AppText>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: "Syne_800ExtraBold",
-              fontSize: 24,
-              fontWeight: "800",
-              color: c.text,
-              letterSpacing: -0.4,
+              fontSize: 15,
+              letterSpacing: -0.5,
+              marginBottom: 4,
             }}
           >
             Job Board
@@ -475,382 +475,386 @@ function JobCard({ job, acting, onStatusChange, c, navigation }) {
         { backgroundColor: c.bgPanel, borderColor: c.border },
       ]}
     >
-      {/* Accent bar */}
-      <View style={[styles.accentBar, { backgroundColor: meta.color }]} />
+      <Pressable
+        onPress={() => navigation.navigate("JobDetail", { jobId: job.id })}
+        style={({ pressed }) => [
+          styles.card,
+          {
+            backgroundColor: c.bgPanel,
+            borderColor: c.border,
+            opacity: pressed ? 0.94 : 1,
+          },
+        ]}
+      >
+        {/* Accent bar */}
+        <View style={[styles.accentBar, { backgroundColor: meta.color }]} />
 
-      <View style={styles.cardInner}>
-        {/* Top: category + badge */}
-        <View style={styles.cardTop}>
-          <View
-            style={[
-              styles.categoryChip,
-              { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
-            ]}
-          >
-            {job.category?.icon ? (
-              <AppText style={{ fontSize: 11 }}>{job.category.icon}</AppText>
-            ) : null}
-            <AppText
-              style={{
-                fontSize: 10,
-                fontWeight: "700",
-                color: c.orange,
-                marginLeft: 4,
-              }}
-              numberOfLines={1}
-            >
-              {job.category?.name || "General"}
-            </AppText>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
-            <AppText
-              style={{
-                fontSize: 9,
-                fontWeight: "700",
-                color: meta.color,
-                letterSpacing: 0.4,
-                textTransform: "uppercase",
-              }}
-            >
-              {meta.label}
-            </AppText>
-          </View>
-        </View>
-
-        {/* Title & description */}
-        <AppText
-          style={{
-            fontFamily: "Syne_700Bold",
-            fontSize: 15,
-            fontWeight: "700",
-            color: c.text,
-            marginTop: 8,
-            lineHeight: 20,
-          }}
-          numberOfLines={2}
-        >
-          {job.title}
-        </AppText>
-        <AppText
-          style={{
-            fontSize: 12,
-            color: c.textDim,
-            marginTop: 4,
-            lineHeight: 18,
-          }}
-          numberOfLines={2}
-        >
-          {job.description}
-        </AppText>
-
-        {/* Meta row */}
-        <View style={styles.metaRow}>
-          <MetaItem
-            icon={<FaCalendarAlt size={10} color={c.textMuted} />}
-            label={scheduled.toLocaleDateString("en-GB", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
-            c={c}
-          />
-          {job.address ? (
-            <MetaItem
-              icon={<FaMapMarkerAlt size={10} color={c.textMuted} />}
-              label={job.address}
-              c={c}
-              truncate
-            />
-          ) : null}
-          {dur ? (
-            <MetaItem
-              icon={<AppText style={{ fontSize: 9 }}>⏱</AppText>}
-              label={dur}
-              c={c}
-            />
-          ) : null}
-          {JOB_TYPE_LABELS[job.jobType] ? (
-            <MetaItem
-              icon={<FaBriefcase size={10} color={c.textMuted} />}
-              label={JOB_TYPE_LABELS[job.jobType]}
-              c={c}
-            />
-          ) : null}
-          {LOCATION_TYPE_LABELS[job.locationType] ? (
-            <MetaItem
-              icon={
-                LocationIcon ? (
-                  <LocationIcon size={10} color={c.textMuted} />
-                ) : null
-              }
-              label={LOCATION_TYPE_LABELS[job.locationType]}
-              c={c}
-            />
-          ) : null}
-        </View>
-
-        {/* Budget + applicants */}
-        <View
-          style={[
-            styles.statsRow,
-            { borderTopColor: c.border, marginTop: 10, paddingTop: 10 },
-          ]}
-        >
-          <View style={{ flexDirection: "row", alignItems: "baseline" }}>
-            <AppText
-              style={{
-                fontFamily: "Syne_800ExtraBold",
-                fontSize: 16,
-                fontWeight: "800",
-                color: c.orange,
-              }}
-            >
-              {job.currency} {Number(job.budget || 0).toLocaleString()}
-            </AppText>
-            {budgetSuffix ? (
-              <AppText
-                style={{ fontSize: 10, color: c.textMuted, marginLeft: 3 }}
-              >
-                {budgetSuffix}
-              </AppText>
-            ) : null}
-          </View>
-          <Pressable
-            onPress={() =>
-              navigation.navigate("JobApplications", { jobId: job.id })
-            }
-            style={[
-              styles.applicantChip,
-              { backgroundColor: c.bgCard, borderColor: c.border },
-            ]}
-          >
-            <FaUsers size={10} color={c.textDim} />
-            <AppText style={{ fontSize: 11, color: c.textDim, marginLeft: 4 }}>
-              {applicantCount} applicant{applicantCount !== 1 ? "s" : ""}
-            </AppText>
-            {skillsCount > 0 ? (
-              <AppText
-                style={{ fontSize: 10, color: c.textMuted, marginLeft: 4 }}
-              >
-                · {skillsCount} skill{skillsCount !== 1 ? "s" : ""}
-              </AppText>
-            ) : null}
-          </Pressable>
-        </View>
-
-        {/* Applicant previews */}
-        {recentApplicants.length > 0 ? (
-          <View style={styles.previewsRow}>
-            {recentApplicants.map((app) => (
-              <View
-                key={app.id}
-                style={[
-                  styles.previewAvatar,
-                  { backgroundColor: c.orangeDim, borderColor: c.bgPanel },
-                ]}
-              >
-                {app.worker?.avatar ? (
-                  <Image
-                    source={{ uri: app.worker.avatar }}
-                    style={styles.previewImg}
-                  />
-                ) : (
-                  <AppText
-                    style={{ fontSize: 9, fontWeight: "700", color: c.orange }}
-                  >
-                    {app.worker?.firstName?.[0]}
-                    {app.worker?.lastName?.[0]}
-                  </AppText>
-                )}
-              </View>
-            ))}
-            {applicantCount > 3 ? (
-              <View style={[styles.previewMore, { backgroundColor: c.bgCard }]}>
-                <AppText
-                  style={{ fontSize: 9, fontWeight: "700", color: c.textDim }}
-                >
-                  +{applicantCount - 3}
-                </AppText>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {/* Actions */}
-        <View style={styles.actionsRow}>
-          <Pressable
-            onPress={() => navigation.navigate("JobDetail", { jobId: job.id })}
-            style={({ pressed }) => [
-              styles.viewBtn,
-              {
-                borderColor: c.border,
-                backgroundColor: c.bgCard,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <AppText
-              style={{ fontSize: 11, fontWeight: "600", color: c.textDim }}
-            >
-              View Details
-            </AppText>
-          </Pressable>
-          <Pressable
-            onPress={() =>
-              navigation.navigate("JobApplications", { jobId: job.id })
-            }
-            style={({ pressed }) => [
-              styles.appsBtn,
-              {
-                backgroundColor: c.orangeDim,
-                borderColor: "rgba(249,115,22,0.25)",
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <AppText
-              style={{ fontSize: 11, fontWeight: "700", color: c.orange }}
-            >
-              Applications
-            </AppText>
-          </Pressable>
-          {isOpen ? (
-            <Pressable
-              onPress={() => navigation.navigate("EditJob", { jobId: job.id })}
-              style={({ pressed }) => [
-                styles.editBtn,
-                {
-                  borderColor: c.border,
-                  opacity: pressed ? 0.85 : 1,
-                },
+        <View style={styles.cardInner}>
+          {/* Top: category + badge */}
+          <View style={styles.cardTop}>
+            <View
+              style={[
+                styles.categoryChip,
+                { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
               ]}
             >
-              <FaEdit size={10} color={c.textDim} />
+              {job.category?.icon ? (
+                <AppText style={{ fontSize: 11 }}>{job.category.icon}</AppText>
+              ) : null}
               <AppText
                 style={{
-                  fontSize: 11,
-                  fontWeight: "600",
-                  color: c.textDim,
-                  marginLeft: 3,
+                  fontSize: 10,
+                  fontWeight: "700",
+                  color: c.orange,
+                  marginLeft: 4,
+                }}
+                numberOfLines={1}
+              >
+                {job.category?.name || "General"}
+              </AppText>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
+              <AppText
+                style={{
+                  fontSize: 9,
+                  fontWeight: "700",
+                  color: meta.color,
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
                 }}
               >
-                Edit
+                {meta.label}
+              </AppText>
+            </View>
+          </View>
+
+          {/* Title & description */}
+          <AppText
+            weight="displayBlack"
+            style={{
+              fontSize: 13,
+              letterSpacing: -0.5,
+              marginBottom: 4,
+              marginTop: 4,
+            }}
+            numberOfLines={2}
+          >
+            {job.title}
+          </AppText>
+          <AppText
+            style={{
+              fontSize: 12,
+              color: c.textDim,
+              marginTop: 4,
+              lineHeight: 18,
+            }}
+            numberOfLines={2}
+          >
+            {job.description}
+          </AppText>
+
+          {/* Meta row */}
+          <View style={styles.metaRow}>
+            <MetaItem
+              icon={<FaCalendarAlt size={10} color={c.textMuted} />}
+              label={scheduled.toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+              c={c}
+            />
+            {job.address ? (
+              <MetaItem
+                icon={<FaMapMarkerAlt size={10} color={c.textMuted} />}
+                label={job.address}
+                c={c}
+                truncate
+              />
+            ) : null}
+            {dur ? (
+              <MetaItem
+                icon={<AppText style={{ fontSize: 9 }}>⏱</AppText>}
+                label={dur}
+                c={c}
+              />
+            ) : null}
+            {JOB_TYPE_LABELS[job.jobType] ? (
+              <MetaItem
+                icon={<FaBriefcase size={10} color={c.textMuted} />}
+                label={JOB_TYPE_LABELS[job.jobType]}
+                c={c}
+              />
+            ) : null}
+            {LOCATION_TYPE_LABELS[job.locationType] ? (
+              <MetaItem
+                icon={
+                  LocationIcon ? (
+                    <LocationIcon size={10} color={c.textMuted} />
+                  ) : null
+                }
+                label={LOCATION_TYPE_LABELS[job.locationType]}
+                c={c}
+              />
+            ) : null}
+          </View>
+
+          {/* Budget + applicants */}
+          <View
+            style={[
+              styles.statsRow,
+              { borderTopColor: c.border, marginTop: 10, paddingTop: 10 },
+            ]}
+          >
+            <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+              <AppText
+                weight="displayBlack"
+                style={{
+                  fontSize: 15,
+                  letterSpacing: -0.5,
+                  marginBottom: 4,
+                  color: c.orange,
+                }}
+              >
+                {CURRENCY_META[job.currency]?.symbol || job.currency}
+                {Number(job.budget || 0).toLocaleString()}
+              </AppText>
+              {budgetSuffix ? (
+                <AppText
+                  style={{ fontSize: 10, color: c.textMuted, marginLeft: 3 }}
+                >
+                  {budgetSuffix}
+                </AppText>
+              ) : null}
+            </View>
+            <Pressable
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                navigation.navigate("JobApplications", { jobId: job.id });
+              }}
+              style={[
+                styles.applicantChip,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
+            >
+              <FaUsers size={10} color={c.textDim} />
+              <AppText
+                style={{ fontSize: 11, color: c.textDim, marginLeft: 4 }}
+              >
+                {applicantCount} applicant{applicantCount !== 1 ? "s" : ""}
+              </AppText>
+              {skillsCount > 0 ? (
+                <AppText
+                  style={{ fontSize: 10, color: c.textMuted, marginLeft: 4 }}
+                >
+                  · {skillsCount} skill{skillsCount !== 1 ? "s" : ""}
+                </AppText>
+              ) : null}
+            </Pressable>
+          </View>
+
+          {/* Applicant previews */}
+          {recentApplicants.length > 0 ? (
+            <View style={styles.previewsRow}>
+              {recentApplicants.map((app) => (
+                <View
+                  key={app.id}
+                  style={[
+                    styles.previewAvatar,
+                    { backgroundColor: c.orangeDim, borderColor: c.bgPanel },
+                  ]}
+                >
+                  {app.worker?.avatar ? (
+                    <Image
+                      source={{ uri: app.worker.avatar }}
+                      style={styles.previewImg}
+                    />
+                  ) : (
+                    <AppText
+                      style={{
+                        fontSize: 9,
+                        fontWeight: "700",
+                        color: c.orange,
+                      }}
+                    >
+                      {app.worker?.firstName?.[0]}
+                      {app.worker?.lastName?.[0]}
+                    </AppText>
+                  )}
+                </View>
+              ))}
+              {applicantCount > 3 ? (
+                <View
+                  style={[styles.previewMore, { backgroundColor: c.bgCard }]}
+                >
+                  <AppText
+                    style={{ fontSize: 9, fontWeight: "700", color: c.textDim }}
+                  >
+                    +{applicantCount - 3}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Actions */}
+          <View style={styles.actionsRow}>
+            {isOpen ? (
+              <Pressable
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  navigation.navigate("EditJob", { jobId: job.id });
+                }}
+                style={({ pressed }) => [
+                  styles.editBtn,
+                  {
+                    borderColor: c.border,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <FaEdit size={10} color={c.textDim} />
+                <AppText
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "600",
+                    color: c.textDim,
+                    marginLeft: 3,
+                  }}
+                >
+                  Edit
+                </AppText>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Status actions */}
+          {isOpen && !showConfirm ? (
+            <View style={styles.statusActions}>
+              <Pressable
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  setShowConfirm("FILLED");
+                }}
+                disabled={acting}
+                style={({ pressed }) => [
+                  styles.fillBtn,
+                  {
+                    backgroundColor: "rgba(129,140,248,0.1)",
+                    borderColor: "rgba(129,140,248,0.25)",
+                    opacity: acting ? 0.4 : pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
+                >
+                  Mark Filled
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  setShowConfirm("CANCELLED");
+                }}
+                disabled={acting}
+                style={({ pressed }) => [
+                  styles.cancelBtn,
+                  {
+                    backgroundColor: c.redDim,
+                    borderColor: "rgba(239,68,68,0.2)",
+                    opacity: acting ? 0.4 : pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{ fontSize: 11, fontWeight: "700", color: c.red }}
+                >
+                  Cancel
+                </AppText>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Confirm row */}
+          {showConfirm ? (
+            <View
+              style={[
+                styles.confirmRow,
+                { backgroundColor: c.bgCard, borderColor: c.border },
+              ]}
+            >
+              <AppText style={{ fontSize: 11, color: c.textDim, flex: 1 }}>
+                {showConfirm === "FILLED"
+                  ? "Mark job as filled?"
+                  : "Cancel this job?"}
+              </AppText>
+              <Pressable
+                disabled={acting}
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  onStatusChange(job.id, showConfirm);
+                  setShowConfirm(null);
+                }}
+                style={({ pressed }) => [
+                  styles.confirmYes,
+                  {
+                    backgroundColor:
+                      showConfirm === "CANCELLED" ? c.red : c.green,
+                    opacity: acting ? 0.5 : pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <AppText
+                  style={{ fontSize: 11, fontWeight: "700", color: c.bg }}
+                >
+                  {acting ? "…" : "Yes"}
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  setShowConfirm(null);
+                }}
+                style={({ pressed }) => [
+                  styles.confirmNo,
+                  { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <AppText
+                  style={{ fontSize: 11, fontWeight: "600", color: c.textDim }}
+                >
+                  No
+                </AppText>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {!isOpen ? (
+            <Pressable
+              disabled={acting}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                onStatusChange(job.id, "OPEN");
+              }}
+              style={({ pressed }) => [
+                styles.reopenBtn,
+                {
+                  backgroundColor: c.greenDim,
+                  borderColor: "rgba(34,197,94,0.25)",
+                  opacity: acting ? 0.4 : pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <AppText
+                style={{ fontSize: 11, fontWeight: "700", color: c.green }}
+              >
+                {acting ? "…" : "Reopen Job"}
               </AppText>
             </Pressable>
           ) : null}
         </View>
-
-        {/* Status actions */}
-        {isOpen && !showConfirm ? (
-          <View style={styles.statusActions}>
-            <Pressable
-              onPress={() => setShowConfirm("FILLED")}
-              disabled={acting}
-              style={({ pressed }) => [
-                styles.fillBtn,
-                {
-                  backgroundColor: "rgba(129,140,248,0.1)",
-                  borderColor: "rgba(129,140,248,0.25)",
-                  opacity: acting ? 0.4 : pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <AppText
-                style={{ fontSize: 11, fontWeight: "700", color: "#818cf8" }}
-              >
-                Mark Filled
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowConfirm("CANCELLED")}
-              disabled={acting}
-              style={({ pressed }) => [
-                styles.cancelBtn,
-                {
-                  backgroundColor: c.redDim,
-                  borderColor: "rgba(239,68,68,0.2)",
-                  opacity: acting ? 0.4 : pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <AppText
-                style={{ fontSize: 11, fontWeight: "700", color: c.red }}
-              >
-                Cancel
-              </AppText>
-            </Pressable>
-          </View>
-        ) : null}
-
-        {/* Confirm row */}
-        {showConfirm ? (
-          <View
-            style={[
-              styles.confirmRow,
-              { backgroundColor: c.bgCard, borderColor: c.border },
-            ]}
-          >
-            <AppText style={{ fontSize: 11, color: c.textDim, flex: 1 }}>
-              {showConfirm === "FILLED"
-                ? "Mark job as filled?"
-                : "Cancel this job?"}
-            </AppText>
-            <Pressable
-              disabled={acting}
-              onPress={() => {
-                onStatusChange(job.id, showConfirm);
-                setShowConfirm(null);
-              }}
-              style={({ pressed }) => [
-                styles.confirmYes,
-                {
-                  backgroundColor:
-                    showConfirm === "CANCELLED" ? c.red : c.green,
-                  opacity: acting ? 0.5 : pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <AppText style={{ fontSize: 11, fontWeight: "700", color: c.bg }}>
-                {acting ? "…" : "Yes"}
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowConfirm(null)}
-              style={({ pressed }) => [
-                styles.confirmNo,
-                { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
-              ]}
-            >
-              <AppText
-                style={{ fontSize: 11, fontWeight: "600", color: c.textDim }}
-              >
-                No
-              </AppText>
-            </Pressable>
-          </View>
-        ) : null}
-
-        {!isOpen ? (
-          <Pressable
-            disabled={acting}
-            onPress={() => onStatusChange(job.id, "OPEN")}
-            style={({ pressed }) => [
-              styles.reopenBtn,
-              {
-                backgroundColor: c.greenDim,
-                borderColor: "rgba(34,197,94,0.25)",
-                opacity: acting ? 0.4 : pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <AppText
-              style={{ fontSize: 11, fontWeight: "700", color: c.green }}
-            >
-              {acting ? "…" : "Reopen Job"}
-            </AppText>
-          </Pressable>
-        ) : null}
-      </View>
+      </Pressable>
     </View>
   );
 }
