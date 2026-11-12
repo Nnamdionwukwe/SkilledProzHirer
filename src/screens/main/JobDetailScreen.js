@@ -13,7 +13,7 @@
 // (via CURRENCY_META). The "Currency" detail card still shows the ISO
 // code (NGN, USD, ...) because that card IS the currency field.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -36,6 +36,7 @@ import { useAuthStore } from "../../store/authStore";
 import client from "../../api/client";
 import { CURRENCY_META } from "../../contexts/CurrencyContext";
 import { getHirerFeeRate } from "../../utils/pricing";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 import {
   FaBriefcase,
   FaClock,
@@ -420,18 +421,17 @@ export default function JobDetailScreen() {
       navigation.goBack();
     }
   };
+
   // ── Fetch ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!jobId) {
-      setError(t("jobs.notFound"));
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    client
-      .get(`/jobs/${jobId}`)
-      .then((res) => {
-        if (cancelled) return;
+  const fetchJob = useCallback(
+    async (isSilent = false) => {
+      if (!jobId) {
+        setError(t("jobs.notFound"));
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await client.get(`/jobs/${jobId}`);
         const payload = res.data.data;
         const jobData = payload?.jobPost ?? payload;
         const savedFlag = payload?.isSaved ?? jobData?.isSaved ?? false;
@@ -443,18 +443,31 @@ export default function JobDetailScreen() {
           applicationStatus: appStatus,
         });
         setIsSaved(savedFlag);
+      } catch (err) {
+        // Poller never surfaces errors — user never sees a red banner
+        // from a background refresh. Initial load / pull-to-refresh do.
+        if (!isSilent) {
+          setError(err?.response?.data?.message || t("jobs.notFound"));
+        }
+      } finally {
         setLoading(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err?.response?.data?.message || t("jobs.notFound"));
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId]);
+    [jobId],
+  );
+
+  // ── Silent background refresh every 5s ──
+  // Paused while the user is drafting the apply message (`showForm`) or
+  // while a submit is in flight (`applying`) — if the backend status flipped
+  // mid-draft, a silent refresh could collapse the "Apply" section and
+  // lose the user's typed message. Pausing prevents that.
+  const fetchSilent = useCallback(() => fetchJob(true), [fetchJob]);
+  usePlatformRefresh(fetchSilent, !showForm && !applying);
+
+  useEffect(() => {
+    fetchJob(false);
+  }, [fetchJob]);
 
   // ── Apply ─────────────────────────────────────────────────────
   async function handleApply() {
