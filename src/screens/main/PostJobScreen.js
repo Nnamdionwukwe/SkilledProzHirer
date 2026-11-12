@@ -70,122 +70,156 @@ import {
 } from "../../icons/fa";
 
 // ── Constants — verbatim from web ────────────────────────────────────
+// `label` values are i18n keys. They are translated at render time
+// via `t(label)` — the array shape itself is unchanged.
 const ALL_LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "fr", label: "French" },
-  { code: "ar", label: "Arabic" },
-  { code: "yo", label: "Yoruba" },
-  { code: "ha", label: "Hausa" },
-  { code: "ig", label: "Igbo" },
-  { code: "sw", label: "Swahili" },
-  { code: "pt", label: "Portuguese" },
-  { code: "es", label: "Spanish" },
-  { code: "de", label: "German" },
-  { code: "zh", label: "Chinese" },
-  { code: "hi", label: "Hindi" },
-  { code: "bn", label: "Bengali" },
-  { code: "ur", label: "Urdu" },
-  { code: "tr", label: "Turkish" },
-  { code: "ko", label: "Korean" },
-  { code: "ja", label: "Japanese" },
-  { code: "ru", label: "Russian" },
-  { code: "id", label: "Indonesian" },
-  { code: "vi", label: "Vietnamese" },
-  { code: "it", label: "Italian" },
-  { code: "nl", label: "Dutch" },
-  { code: "pl", label: "Polish" },
-  { code: "fa", label: "Persian" },
-  { code: "am", label: "Amharic" },
-  { code: "zu", label: "Zulu" },
-  { code: "af", label: "Afrikaans" },
-  { code: "so", label: "Somali" },
+  { code: "en", label: "postJob.languages.en" },
+  { code: "fr", label: "postJob.languages.fr" },
+  { code: "ar", label: "postJob.languages.ar" },
+  { code: "yo", label: "postJob.languages.yo" },
+  { code: "ha", label: "postJob.languages.ha" },
+  { code: "ig", label: "postJob.languages.ig" },
+  { code: "sw", label: "postJob.languages.sw" },
+  { code: "pt", label: "postJob.languages.pt" },
+  { code: "es", label: "postJob.languages.es" },
+  { code: "de", label: "postJob.languages.de" },
+  { code: "zh", label: "postJob.languages.zh" },
+  { code: "hi", label: "postJob.languages.hi" },
+  { code: "bn", label: "postJob.languages.bn" },
+  { code: "ur", label: "postJob.languages.ur" },
+  { code: "tr", label: "postJob.languages.tr" },
+  { code: "ko", label: "postJob.languages.ko" },
+  { code: "ja", label: "postJob.languages.ja" },
+  { code: "ru", label: "postJob.languages.ru" },
+  { code: "id", label: "postJob.languages.id" },
+  { code: "vi", label: "postJob.languages.vi" },
+  { code: "it", label: "postJob.languages.it" },
+  { code: "nl", label: "postJob.languages.nl" },
+  { code: "pl", label: "postJob.languages.pl" },
+  { code: "fa", label: "postJob.languages.fa" },
+  { code: "am", label: "postJob.languages.am" },
+  { code: "zu", label: "postJob.languages.zu" },
+  { code: "af", label: "postJob.languages.af" },
+  { code: "so", label: "postJob.languages.so" },
 ];
 
 const DURATION_UNITS = [
-  { value: "hours", label: "Hours", hint: "e.g. 3" },
-  { value: "days", label: "Days", hint: "e.g. 2" },
-  { value: "weeks", label: "Weeks", hint: "e.g. 1" },
-  { value: "months", label: "Months", hint: "e.g. 2" },
-  { value: "years", label: "Years", hint: "e.g. 1" },
-  { value: "custom", label: "Custom", hint: "e.g. Full project" },
+  {
+    value: "hours",
+    label: "postJob.durationType.HOURS",
+    hint: "postJob.durationHint.hours",
+  },
+  {
+    value: "days",
+    label: "postJob.durationType.DAYS",
+    hint: "postJob.durationHint.days",
+  },
+  {
+    value: "weeks",
+    label: "postJob.durationType.WEEKS",
+    hint: "postJob.durationHint.weeks",
+  },
+  {
+    value: "months",
+    label: "postJob.durationType.MONTHS",
+    hint: "postJob.durationHint.months",
+  },
+  {
+    value: "years",
+    label: "postJob.durationType.YEARS",
+    hint: "postJob.durationHint.years",
+  },
+  {
+    value: "custom",
+    label: "postJob.durationType.CUSTOM",
+    hint: "postJob.durationHint.custom",
+  },
 ];
 
 const RECURRENCE_INTERVALS = [
-  { value: "DAILY", label: "Daily" },
-  { value: "WEEKLY", label: "Weekly" },
-  { value: "BIWEEKLY", label: "Every 2 weeks" },
-  { value: "MONTHLY", label: "Monthly" },
-  { value: "YEARLY", label: "Yearly" },
+  { value: "DAILY", label: "postJob.recurrenceInterval.DAILY" },
+  { value: "WEEKLY", label: "postJob.recurrenceInterval.WEEKLY" },
+  { value: "BIWEEKLY", label: "postJob.recurrenceInterval.BIWEEKLY" },
+  { value: "MONTHLY", label: "postJob.recurrenceInterval.MONTHLY" },
+  { value: "YEARLY", label: "postJob.recurrenceInterval.YEARLY" },
 ];
 
 const RECURRENCE_DURATIONS = [
-  { value: "2_WEEKS", label: "For 2 weeks" },
-  { value: "1_MONTH", label: "For 1 month" },
-  { value: "3_MONTHS", label: "For 3 months" },
-  { value: "6_MONTHS", label: "For 6 months" },
-  { value: "1_YEAR", label: "For 1 year" },
-  { value: "ONGOING", label: "Ongoing" },
+  { value: "2_WEEKS", label: "postJob.recurrenceDuration.TWO_WEEKS" },
+  { value: "1_MONTH", label: "postJob.recurrenceDuration.ONE_MONTH" },
+  { value: "3_MONTHS", label: "postJob.recurrenceDuration.THREE_MONTHS" },
+  { value: "6_MONTHS", label: "postJob.recurrenceDuration.SIX_MONTHS" },
+  { value: "1_YEAR", label: "postJob.recurrenceDuration.ONE_YEAR" },
+  { value: "ONGOING", label: "postJob.recurrenceDuration.ONGOING" },
 ];
 
 const JOB_TYPES = [
-  { value: "FULL_TIME", label: "Full-time", icon: FaBriefcase },
-  { value: "PART_TIME", label: "Part-time", icon: FaClock },
-  { value: "CONTRACT", label: "Contract", icon: FaFileAlt },
-  { value: "TEMPORARY", label: "Temporary", icon: FaClock },
+  { value: "FULL_TIME", label: "postJob.jobType.FULL_TIME", icon: FaBriefcase },
+  { value: "PART_TIME", label: "postJob.jobType.PART_TIME", icon: FaClock },
+  { value: "CONTRACT", label: "postJob.jobType.CONTRACT", icon: FaFileAlt },
+  { value: "TEMPORARY", label: "postJob.jobType.TEMPORARY", icon: FaClock },
 ];
 
 const LOCATION_TYPES = [
-  { value: "REMOTE", label: "Remote", icon: FaGlobe },
-  { value: "ON_SITE", label: "On-site", icon: FaMapMarkerAlt },
-  { value: "HYBRID", label: "Hybrid", icon: FaRandom },
+  { value: "REMOTE", label: "postJob.locationType.REMOTE", icon: FaGlobe },
+  {
+    value: "ON_SITE",
+    label: "postJob.locationType.ON_SITE",
+    icon: FaMapMarkerAlt,
+  },
+  { value: "HYBRID", label: "postJob.locationType.HYBRID", icon: FaRandom },
 ];
 
 const BUDGET_TYPES = [
-  { value: "HOURLY", label: "Per Hour" },
-  { value: "DAILY", label: "Per Day" },
-  { value: "WEEKLY", label: "Per Week" },
-  { value: "MONTHLY", label: "Per Month" },
-  { value: "YEARLY", label: "Per Year" },
-  { value: "CUSTOM", label: "Custom" },
+  { value: "HOURLY", label: "postJob.paymentType.HOURLY" },
+  { value: "DAILY", label: "postJob.paymentType.DAILY" },
+  { value: "WEEKLY", label: "postJob.paymentType.WEEKLY" },
+  { value: "MONTHLY", label: "postJob.paymentType.MONTHLY" },
+  { value: "YEARLY", label: "postJob.paymentType.YEARLY" },
+  { value: "CUSTOM", label: "postJob.paymentType.CUSTOM" },
 ];
 
 const SKILL_SUGGESTIONS = [
-  "Communication",
-  "Time Management",
-  "Problem Solving",
-  "Customer Service",
-  "Teamwork",
-  "Attention to Detail",
-  "Physical Stamina",
-  "Technical Skills",
-  "Safety Awareness",
-  "Driving License",
-  "Own Tools",
-  "Own Transport",
+  "postJob.skillsSuggestions.communication",
+  "postJob.skillsSuggestions.timeManagement",
+  "postJob.skillsSuggestions.problemSolving",
+  "postJob.skillsSuggestions.customerService",
+  "postJob.skillsSuggestions.teamwork",
+  "postJob.skillsSuggestions.attentionToDetail",
+  "postJob.skillsSuggestions.physicalStamina",
+  "postJob.skillsSuggestions.technicalSkills",
+  "postJob.skillsSuggestions.safetyAwareness",
+  "postJob.skillsSuggestions.drivingLicense",
+  "postJob.skillsSuggestions.ownTools",
+  "postJob.skillsSuggestions.ownTransport",
 ];
 
 const WORK_CONDITION_OPTIONS = [
   {
     key: "providesAccommodation",
-    label: "Accommodation provided",
+    label: "postJob.workConditions.accommodation",
     icon: FaHome,
   },
-  { key: "providesMeals", label: "Meals provided", icon: FaCoffee },
+  {
+    key: "providesMeals",
+    label: "postJob.workConditions.meals",
+    icon: FaCoffee,
+  },
 ];
 
 const QUALIFICATION_PRESETS = [
-  "High School Diploma",
-  "Bachelor's Degree",
-  "Master's Degree",
-  "Doctorate (PhD)",
-  "Trade Certification",
-  "Professional License",
-  "Vocational Training",
-  "Driving License",
-  "Food Handling Certificate",
-  "Safety Certification",
-  "First Aid / CPR",
-  "Teaching Certificate",
+  "postJob.qualificationPresets.highSchoolDiploma",
+  "postJob.qualificationPresets.bachelorsDegree",
+  "postJob.qualificationPresets.mastersDegree",
+  "postJob.qualificationPresets.doctorate",
+  "postJob.qualificationPresets.tradeCertification",
+  "postJob.qualificationPresets.professionalLicense",
+  "postJob.qualificationPresets.vocationalTraining",
+  "postJob.qualificationPresets.drivingLicense",
+  "postJob.qualificationPresets.foodHandlingCertificate",
+  "postJob.qualificationPresets.safetyCertification",
+  "postJob.qualificationPresets.firstAid",
+  "postJob.qualificationPresets.teachingCertificate",
 ];
 
 // ── Recurring pricing helpers (verbatim) ─────────────────────────────
@@ -337,9 +371,10 @@ export default function PostJobScreen() {
   const isSearching = normalizedSearch.length > 0;
   const showSearchResults = isSearching && !selectedCat;
 
-  const selectedLanguageLabel =
+  const selectedLanguageLabel = t(
     ALL_LANGUAGES.find((l) => l.code === form.languageRequirement)?.label ||
-    "English";
+      "postJob.languages.en",
+  );
 
   const currencySymbol =
     CURRENCIES.find((cu) => cu.code === form.currency)?.symbol || form.currency;
@@ -367,7 +402,7 @@ export default function PostJobScreen() {
       setShowCustomCat(false);
       setCatSearch("");
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to add custom category");
+      setError(err?.response?.data?.message || t("postJob.categoryAddFailed"));
     } finally {
       setAddingCat(false);
     }
@@ -387,7 +422,7 @@ export default function PostJobScreen() {
       return;
     }
     if (form.skills.length >= 20) {
-      setError("Maximum 20 skills");
+      setError(t("postJob.maxSkills"));
       return;
     }
     setForm((f) => ({ ...f, skills: [...f.skills, trimmed] }));
@@ -408,7 +443,7 @@ export default function PostJobScreen() {
       return;
     }
     if (form.qualifications.length >= 10) {
-      setError("Maximum 10 qualifications");
+      setError(t("postJob.maxQualifications"));
       return;
     }
     setForm((f) => ({
@@ -428,29 +463,26 @@ export default function PostJobScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────
   async function handleSubmit() {
-    if (!form.categoryId) return setError("Please select a category.");
-    if (!form.title) return setError("Job title is required.");
-    if (!form.description) return setError("Description is required.");
+    if (!form.categoryId) return setError(t("postJob.categoryRequired"));
+    if (!form.title) return setError(t("postJob.titleRequired"));
+    if (!form.description) return setError(t("postJob.descriptionRequired"));
     if (form.locationType !== "REMOTE" && !form.address)
-      return setError(
-        "Please enter a service address for on-site or hybrid jobs.",
-      );
-    if (!form.scheduledAt)
-      return setError("Please choose a scheduled date and time.");
+      return setError(t("postJob.locationRequired"));
+    if (!form.scheduledAt) return setError(t("postJob.startDateRequired"));
     if (form.scheduleMode === "ONE_OFF" && !form.estimatedValue) {
       return setError(
         form.durationUnit === "custom"
-          ? "Please describe the duration."
-          : "Please estimate how long the job will take.",
+          ? t("postJob.durationCustomRequired")
+          : t("postJob.durationRequired"),
       );
     }
-    if (!form.budget) return setError("Please enter a budget.");
+    if (!form.budget) return setError(t("postJob.budgetRequired"));
     if (
       form.showRateOptions &&
       form.budgetType === "CUSTOM" &&
       !form.budgetCustomLabel.trim()
     )
-      return setError("Please describe your custom pay rate.");
+      return setError(t("postJob.customRateLabelRequired"));
 
     const finalSkills = skillInput.trim()
       ? [...form.skills, skillInput.trim()].slice(0, 20)
@@ -498,16 +530,24 @@ export default function PostJobScreen() {
 
       const noteParts = [];
       if (form.scheduleMode === "RECURRING") {
-        const intervalLabel =
+        const intervalLabel = t(
           RECURRENCE_INTERVALS.find((i) => i.value === form.recurrenceInterval)
-            ?.label || form.recurrenceInterval;
-        const durationLabel =
-          RECURRENCE_DURATIONS.find(
-            (d) => d.value === form.recurrenceDuration,
-          )?.label?.toLowerCase() || form.recurrenceDuration;
-        noteParts.push(`Recurring: ${intervalLabel} ${durationLabel}.`);
+            ?.label || "postJob.recurrenceInterval.WEEKLY",
+        );
+        const durationLabel = t(
+          RECURRENCE_DURATIONS.find((d) => d.value === form.recurrenceDuration)
+            ?.label || "postJob.recurrenceDuration.ONE_MONTH",
+        ).toLowerCase();
+        noteParts.push(
+          t("postJob.notes.recurring", {
+            interval: intervalLabel,
+            duration: durationLabel,
+          }),
+        );
       } else if (form.durationUnit === "custom" && form.estimatedValue) {
-        noteParts.push(`Duration: ${form.estimatedValue.trim()}.`);
+        noteParts.push(
+          t("postJob.notes.duration", { value: form.estimatedValue.trim() }),
+        );
       }
       if (form.notes) noteParts.push(form.notes);
       const finalNotes = noteParts.join(" ");
@@ -541,7 +581,7 @@ export default function PostJobScreen() {
       setPostedJob(job);
       setSubmitted(true);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to post job.");
+      setError(err?.response?.data?.message || t("postJob.submitFailed"));
     } finally {
       setLoading(false);
     }
@@ -617,7 +657,7 @@ export default function PostJobScreen() {
               textAlign: "center",
             }}
           >
-            Job Posted!
+            {t("postJob.successTitle")}
           </AppText>
           <AppText
             style={{
@@ -628,11 +668,11 @@ export default function PostJobScreen() {
               lineHeight: 19,
             }}
           >
-            Your job{" "}
+            {t("postJob.successBodyPrefix")}{" "}
             <AppText style={{ fontWeight: "700", color: c.text }}>
               "{postedJob.title}"
             </AppText>{" "}
-            is now live on the platform.
+            {t("postJob.successBodySuffix")}
           </AppText>
 
           {/* Success card */}
@@ -670,7 +710,7 @@ export default function PostJobScreen() {
               icon={<FaMapMarkerAlt size={11} color={c.orange} />}
               text={
                 postedJob.locationType === "REMOTE"
-                  ? "Remote"
+                  ? t("postJob.locationType.REMOTE")
                   : postedJob.address || "—"
               }
               c={c}
@@ -680,8 +720,12 @@ export default function PostJobScreen() {
               icon={<FaDollarSign size={11} color={c.orange} />}
               text={`${postedJob.currency} ${Number(postedJob.budget).toLocaleString()}${
                 postedJob.budgetType === "FIXED" || !postedJob.budgetType
-                  ? " total"
-                  : ` · ${BUDGET_TYPES.find((t) => t.value === postedJob.budgetType)?.label}`
+                  ? ` ${t("postJob.budgetSuffixTotal")}`
+                  : ` · ${t(
+                      BUDGET_TYPES.find(
+                        (bt) => bt.value === postedJob.budgetType,
+                      )?.label || "postJob.paymentType.CUSTOM",
+                    )}`
               }`}
               c={c}
             />
@@ -689,7 +733,7 @@ export default function PostJobScreen() {
             {postedJob.estimatedValue ? (
               <SuccessMeta
                 icon={<FaClock size={11} color={c.orange} />}
-                text={`Est. ${postedJob.estimatedValue} ${postedJob.estimatedUnit || ""}`}
+                text={`${t("postJob.estimatedPrefix")} ${postedJob.estimatedValue} ${postedJob.estimatedUnit || ""}`}
                 c={c}
               />
             ) : null}
@@ -697,9 +741,10 @@ export default function PostJobScreen() {
             {postedJob.jobType ? (
               <SuccessMeta
                 icon={<FaBriefcase size={11} color={c.orange} />}
-                text={
-                  JOB_TYPES.find((t) => t.value === postedJob.jobType)?.label
-                }
+                text={t(
+                  JOB_TYPES.find((jt) => jt.value === postedJob.jobType)
+                    ?.label || "postJob.jobType.FULL_TIME",
+                )}
                 c={c}
               />
             ) : null}
@@ -715,11 +760,11 @@ export default function PostJobScreen() {
             {postedJob.languageRequirement ? (
               <SuccessMeta
                 icon={<FaGlobe size={11} color={c.orange} />}
-                text={
+                text={t(
                   ALL_LANGUAGES.find(
                     (l) => l.code === postedJob.languageRequirement,
-                  )?.label || postedJob.languageRequirement
-                }
+                  )?.label || "postJob.languages.en",
+                )}
                 c={c}
               />
             ) : null}
@@ -727,7 +772,9 @@ export default function PostJobScreen() {
             {postedJob.qualifications?.length > 0 ? (
               <SuccessMeta
                 icon={<FaAward size={11} color={c.orange} />}
-                text={`${postedJob.qualifications.length} qualification${postedJob.qualifications.length !== 1 ? "s" : ""} required`}
+                text={t("postJob.qualificationsCount", {
+                  count: postedJob.qualifications.length,
+                })}
                 c={c}
               />
             ) : null}
@@ -735,7 +782,9 @@ export default function PostJobScreen() {
             {postedJob.skills?.length > 0 ? (
               <SuccessMeta
                 icon={<FaTag size={11} color={c.orange} />}
-                text={`${postedJob.skills.length} skill${postedJob.skills.length !== 1 ? "s" : ""} required`}
+                text={t("postJob.skillsCount", {
+                  count: postedJob.skills.length,
+                })}
                 c={c}
               />
             ) : null}
@@ -743,21 +792,23 @@ export default function PostJobScreen() {
             {postedJob.providesAccommodation ? (
               <SuccessMeta
                 icon={<FaHome size={11} color={c.orange} />}
-                text="Accommodation provided"
+                text={t("postJob.workConditions.accommodationProvided")}
                 c={c}
               />
             ) : null}
             {postedJob.providesMeals ? (
               <SuccessMeta
                 icon={<FaCoffee size={11} color={c.orange} />}
-                text="Meals provided"
+                text={t("postJob.workConditions.mealsProvided")}
                 c={c}
               />
             ) : null}
 
             <SuccessMeta
               icon={<FaUsers size={11} color={c.orange} />}
-              text={`${applicationsCount} applicant${applicationsCount !== 1 ? "s" : ""} so far`}
+              text={t("postJob.applicantsSoFar", {
+                count: applicationsCount,
+              })}
               c={c}
             />
 
@@ -779,7 +830,7 @@ export default function PostJobScreen() {
               ]}
             >
               <AppText style={{ fontSize: 13, fontWeight: "700", color: c.bg }}>
-                View My Jobs
+                {t("postJob.viewMyJobs")}
               </AppText>
             </Pressable>
             <Pressable
@@ -792,7 +843,7 @@ export default function PostJobScreen() {
               <AppText
                 style={{ fontSize: 13, fontWeight: "600", color: c.textDim }}
               >
-                Post Another Job
+                {t("postJob.postAnotherJob")}
               </AppText>
             </Pressable>
           </View>
@@ -817,7 +868,7 @@ export default function PostJobScreen() {
           marginBottom: 4,
         }}
       >
-        Hiring
+        {t("postJob.headerEyebrow")}
       </AppText>
       <AppText
         style={{
@@ -828,7 +879,7 @@ export default function PostJobScreen() {
           letterSpacing: -0.4,
         }}
       >
-        Post a Job
+        {t("postJob.screenTitle")}
       </AppText>
       <AppText
         style={{
@@ -839,11 +890,11 @@ export default function PostJobScreen() {
           lineHeight: 19,
         }}
       >
-        Describe what you need and connect with skilled workers.
+        {t("postJob.screenSubtitle")}
       </AppText>
 
       {/* ── Category ────────────────────────────────────────────── */}
-      <Field label="Category" required c={c}>
+      <Field label={t("postJob.category")} required c={c}>
         {selectedCat ? (
           <View
             style={[
@@ -864,7 +915,7 @@ export default function PostJobScreen() {
               }}
               numberOfLines={1}
             >
-              Selected:{" "}
+              {t("postJob.selected")}{" "}
               <AppText style={{ fontWeight: "700" }}>
                 {selectedCat.icon} {selectedCat.name}
               </AppText>
@@ -878,7 +929,7 @@ export default function PostJobScreen() {
             <TextInput
               value={catSearch}
               onChangeText={setCatSearch}
-              placeholder="Search categories..."
+              placeholder={t("postJob.searchCategories")}
               placeholderTextColor={c.textMuted}
               style={[
                 styles.input,
@@ -925,7 +976,7 @@ export default function PostJobScreen() {
               <AppText
                 style={{ fontSize: 11, color: c.textMuted, marginTop: 6 }}
               >
-                No categories match "{catSearch.trim()}"
+                {t("postJob.noMatch", { query: catSearch.trim() })}
               </AppText>
             ) : null}
           </>
@@ -950,7 +1001,7 @@ export default function PostJobScreen() {
                     marginLeft: 4,
                   }}
                 >
-                  Can't find your category? Add a custom one
+                  {t("postJob.cantFindCategory")}
                 </AppText>
               </Pressable>
             ) : (
@@ -958,7 +1009,7 @@ export default function PostJobScreen() {
                 <TextInput
                   value={customCatName}
                   onChangeText={setCustomCatName}
-                  placeholder="Category name e.g. Solar Panel Installation"
+                  placeholder={t("postJob.categoryInputPlaceholder")}
                   placeholderTextColor={c.textMuted}
                   autoFocus
                   style={[
@@ -994,7 +1045,9 @@ export default function PostJobScreen() {
                         color: c.bg,
                       }}
                     >
-                      {addingCat ? "Adding…" : "Add Category"}
+                      {addingCat
+                        ? t("postJob.adding")
+                        : t("postJob.addCategory")}
                     </AppText>
                   </Pressable>
                   <Pressable
@@ -1014,7 +1067,7 @@ export default function PostJobScreen() {
                         color: c.textDim,
                       }}
                     >
-                      Cancel
+                      {t("common.cancel")}
                     </AppText>
                   </Pressable>
                 </View>
@@ -1025,11 +1078,11 @@ export default function PostJobScreen() {
       </Field>
 
       {/* ── Title ───────────────────────────────────────────────── */}
-      <Field label="Job Title" required c={c}>
+      <Field label={t("postJob.jobTitle")} required c={c}>
         <TextInput
           value={form.title}
           onChangeText={(v) => set("title", v)}
-          placeholder="e.g. Fix leaking bathroom pipe"
+          placeholder={t("postJob.jobTitlePlaceholder")}
           placeholderTextColor={c.textMuted}
           style={[
             styles.input,
@@ -1043,11 +1096,11 @@ export default function PostJobScreen() {
       </Field>
 
       {/* ── Description ─────────────────────────────────────────── */}
-      <Field label="Description" required c={c}>
+      <Field label={t("postJob.description")} required c={c}>
         <TextInput
           value={form.description}
           onChangeText={(v) => set("description", v)}
-          placeholder="Describe the job in detail..."
+          placeholder={t("postJob.descriptionPlaceholder")}
           placeholderTextColor={c.textMuted}
           multiline
           numberOfLines={4}
@@ -1064,32 +1117,34 @@ export default function PostJobScreen() {
       </Field>
 
       {/* ── Job Type ────────────────────────────────────────────── */}
-      <Field label="Job Type" c={c}>
+      <Field label={t("postJob.jobType")} c={c}>
         <OptionGrid
           options={JOB_TYPES}
           value={form.jobType}
           onChange={(v) => set("jobType", v)}
           c={c}
+          t={t}
         />
       </Field>
 
       {/* ── Location Type ───────────────────────────────────────── */}
-      <Field label="Work Location" c={c}>
+      <Field label={t("postJob.workLocation")} c={c}>
         <OptionGrid
           options={LOCATION_TYPES}
           value={form.locationType}
           onChange={(v) => set("locationType", v)}
           c={c}
+          t={t}
         />
       </Field>
 
       {/* ── Address (if not remote) ─────────────────────────────── */}
       {form.locationType !== "REMOTE" ? (
-        <Field label="Service Address" required c={c}>
+        <Field label={t("postJob.serviceAddress")} required c={c}>
           <TextInput
             value={form.address}
             onChangeText={(v) => set("address", v)}
-            placeholder="Full address where work will be done"
+            placeholder={t("postJob.locationAddressPlaceholder")}
             placeholderTextColor={c.textMuted}
             style={[
               styles.input,
@@ -1104,7 +1159,7 @@ export default function PostJobScreen() {
             <TextInput
               value={form.latitude}
               onChangeText={(v) => set("latitude", v.replace(/[^0-9.-]/g, ""))}
-              placeholder="Latitude (optional)"
+              placeholder={t("postJob.latitudePlaceholder")}
               placeholderTextColor={c.textMuted}
               keyboardType="decimal-pad"
               style={[
@@ -1120,7 +1175,7 @@ export default function PostJobScreen() {
             <TextInput
               value={form.longitude}
               onChangeText={(v) => set("longitude", v.replace(/[^0-9.-]/g, ""))}
-              placeholder="Longitude (optional)"
+              placeholder={t("postJob.longitudePlaceholder")}
               placeholderTextColor={c.textMuted}
               keyboardType="decimal-pad"
               style={[
@@ -1138,7 +1193,7 @@ export default function PostJobScreen() {
       ) : null}
 
       {/* ── Scheduled Date ──────────────────────────────────────── */}
-      <Field label="Scheduled Date & Time" required c={c}>
+      <Field label={t("postJob.scheduledDateTime")} required c={c}>
         <Pressable
           onPress={() => setShowDatePicker(true)}
           style={({ pressed }) => [
@@ -1159,7 +1214,7 @@ export default function PostJobScreen() {
           >
             {form.scheduledAt
               ? new Date(form.scheduledAt).toLocaleString()
-              : "Tap to choose a date and time"}
+              : t("postJob.tapToChooseDate")}
           </AppText>
         </Pressable>
         {showDatePicker ? (
@@ -1179,9 +1234,9 @@ export default function PostJobScreen() {
       </Field>
 
       {/* ── Language ────────────────────────────────────────────── */}
-      <Field label="Language Requirement" c={c}>
+      <Field label={t("postJob.languageRequirement")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          What language should the worker speak fluently?
+          {t("postJob.languageHint")}
         </AppText>
         <ScrollView
           horizontal
@@ -1210,33 +1265,42 @@ export default function PostJobScreen() {
                     color: active ? c.orange : c.textDim,
                   }}
                 >
-                  {l.label}
+                  {t(l.label)}
                 </AppText>
               </Pressable>
             );
           })}
         </ScrollView>
         <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 8 }}>
-          ✓ Workers must speak{" "}
-          <AppText style={{ fontWeight: "700", color: c.text }}>
+          {t("postJob.languageMustSpeakPrefix")}{" "}
+          <AppText style={{ fontWeight: "700", color: c.text, fontSize: 11 }}>
             {selectedLanguageLabel}
           </AppText>
         </AppText>
       </Field>
 
       {/* ── Schedule Mode ───────────────────────────────────────── */}
-      <Field label="Schedule" c={c}>
+      <Field label={t("postJob.schedule")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          Is this a one-off job, or something that repeats?
+          {t("postJob.scheduleHint")}
         </AppText>
         <OptionGrid
           options={[
-            { value: "ONE_OFF", label: "One-off job", icon: FaTarget },
-            { value: "RECURRING", label: "Recurring", icon: FaRefreshCw },
+            {
+              value: "ONE_OFF",
+              label: "postJob.scheduleMode.oneOff",
+              icon: FaTarget,
+            },
+            {
+              value: "RECURRING",
+              label: "postJob.scheduleMode.recurring",
+              icon: FaRefreshCw,
+            },
           ]}
           value={form.scheduleMode}
           onChange={(v) => set("scheduleMode", v)}
           c={c}
+          t={t}
         />
 
         {form.scheduleMode === "ONE_OFF" ? (
@@ -1249,7 +1313,7 @@ export default function PostJobScreen() {
                 marginBottom: 8,
               }}
             >
-              Roughly how long will it take?
+              {t("postJob.durationHint")}
             </AppText>
             <View style={styles.unitPills}>
               {DURATION_UNITS.map((u) => {
@@ -1274,7 +1338,7 @@ export default function PostJobScreen() {
                         color: active ? c.orange : c.textDim,
                       }}
                     >
-                      {u.label}
+                      {t(u.label)}
                     </AppText>
                   </Pressable>
                 );
@@ -1284,10 +1348,10 @@ export default function PostJobScreen() {
             <TextInput
               value={form.estimatedValue}
               onChangeText={(v) => set("estimatedValue", v)}
-              placeholder={
+              placeholder={t(
                 DURATION_UNITS.find((u) => u.value === form.durationUnit)
-                  ?.hint || ""
-              }
+                  ?.hint || "postJob.durationHint",
+              )}
               placeholderTextColor={c.textMuted}
               keyboardType={
                 form.durationUnit === "custom" ? "default" : "numeric"
@@ -1305,14 +1369,21 @@ export default function PostJobScreen() {
 
             {form.estimatedValue && form.durationUnit !== "custom" ? (
               <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 6 }}>
-                ✓ Est. {form.estimatedValue} {form.durationUnit} = approx.{" "}
-                {toEstimatedHours(form.durationUnit, form.estimatedValue)}h of
-                work
+                {t("postJob.durationSummary", {
+                  value: form.estimatedValue,
+                  unit: form.durationUnit,
+                  hours: toEstimatedHours(
+                    form.durationUnit,
+                    form.estimatedValue,
+                  ),
+                })}
               </AppText>
             ) : null}
             {form.estimatedValue && form.durationUnit === "custom" ? (
               <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 6 }}>
-                ✓ Duration: {form.estimatedValue}
+                {t("postJob.durationCustomSummary", {
+                  value: form.estimatedValue,
+                })}
               </AppText>
             ) : null}
           </>
@@ -1326,7 +1397,7 @@ export default function PostJobScreen() {
                 marginBottom: 8,
               }}
             >
-              How often, and for how long?
+              {t("postJob.recurrenceHint")}
             </AppText>
             <AppText
               style={{
@@ -1336,7 +1407,7 @@ export default function PostJobScreen() {
                 marginBottom: 4,
               }}
             >
-              FREQUENCY
+              {t("postJob.frequencyLabel")}
             </AppText>
             <ScrollView
               horizontal
@@ -1365,7 +1436,7 @@ export default function PostJobScreen() {
                         color: active ? c.orange : c.textDim,
                       }}
                     >
-                      {i.label}
+                      {t(i.label)}
                     </AppText>
                   </Pressable>
                 );
@@ -1381,7 +1452,7 @@ export default function PostJobScreen() {
                 marginBottom: 4,
               }}
             >
-              FOR HOW LONG
+              {t("postJob.forHowLongLabel")}
             </AppText>
             <ScrollView
               horizontal
@@ -1410,7 +1481,7 @@ export default function PostJobScreen() {
                         color: active ? c.orange : c.textDim,
                       }}
                     >
-                      {d.label}
+                      {t(d.label)}
                     </AppText>
                   </Pressable>
                 );
@@ -1418,22 +1489,27 @@ export default function PostJobScreen() {
             </ScrollView>
 
             <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 8 }}>
-              ✓ Repeats{" "}
-              {RECURRENCE_INTERVALS.find(
-                (i) => i.value === form.recurrenceInterval,
-              )?.label?.toLowerCase()}{" "}
-              {RECURRENCE_DURATIONS.find(
-                (d) => d.value === form.recurrenceDuration,
-              )?.label?.toLowerCase()}
+              {t("postJob.recurringSummary", {
+                interval: t(
+                  RECURRENCE_INTERVALS.find(
+                    (i) => i.value === form.recurrenceInterval,
+                  )?.label || "postJob.recurrenceInterval.WEEKLY",
+                ).toLowerCase(),
+                duration: t(
+                  RECURRENCE_DURATIONS.find(
+                    (d) => d.value === form.recurrenceDuration,
+                  )?.label || "postJob.recurrenceDuration.ONE_MONTH",
+                ).toLowerCase(),
+              })}
             </AppText>
           </>
         )}
       </Field>
 
       {/* ── Budget ──────────────────────────────────────────────── */}
-      <Field label="Budget" required c={c}>
+      <Field label={t("postJob.budget")} required c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          How much are you offering for this job?
+          {t("postJob.budgetHint")}
         </AppText>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TextInput
@@ -1529,7 +1605,7 @@ export default function PostJobScreen() {
                 marginLeft: 4,
               }}
             >
-              Pay by the hour / day instead
+              {t("postJob.payByRate")}
             </AppText>
           </Pressable>
         ) : (
@@ -1537,15 +1613,15 @@ export default function PostJobScreen() {
             <AppText
               style={{ fontSize: 11, color: c.textMuted, marginBottom: 6 }}
             >
-              Pay rate:
+              {t("postJob.payRateLabel")}
             </AppText>
             <View style={styles.unitPills}>
-              {BUDGET_TYPES.map((t) => {
-                const active = form.budgetType === t.value;
+              {BUDGET_TYPES.map((bt) => {
+                const active = form.budgetType === bt.value;
                 return (
                   <Pressable
-                    key={t.value}
-                    onPress={() => set("budgetType", t.value)}
+                    key={bt.value}
+                    onPress={() => set("budgetType", bt.value)}
                     style={({ pressed }) => [
                       styles.pill,
                       {
@@ -1562,7 +1638,7 @@ export default function PostJobScreen() {
                         color: active ? c.orange : c.textDim,
                       }}
                     >
-                      {t.label}
+                      {t(bt.label)}
                     </AppText>
                   </Pressable>
                 );
@@ -1573,7 +1649,7 @@ export default function PostJobScreen() {
               <TextInput
                 value={form.budgetCustomLabel}
                 onChangeText={(v) => set("budgetCustomLabel", v)}
-                placeholder="Describe your rate (e.g. 'Per session')"
+                placeholder={t("postJob.customRateLabelPlaceholder")}
                 placeholderTextColor={c.textMuted}
                 style={[
                   styles.input,
@@ -1607,7 +1683,7 @@ export default function PostJobScreen() {
                   marginLeft: 4,
                 }}
               >
-                Back to total budget
+                {t("postJob.backToTotal")}
               </AppText>
             </Pressable>
           </View>
@@ -1615,24 +1691,23 @@ export default function PostJobScreen() {
 
         {/* Total preview */}
         {form.budget && form.showRateOptions && form.budgetType !== "CUSTOM" ? (
-          <BudgetPreview form={form} c={c} />
+          <BudgetPreview form={form} c={c} t={t} />
         ) : null}
 
         {form.budget && !form.showRateOptions ? (
           <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 8 }}>
-            ✓ You're offering{" "}
-            <AppText style={{ fontWeight: "700", color: c.text }}>
-              {form.currency} {parseFloat(form.budget || 0).toLocaleString()}
-            </AppText>{" "}
-            as the total budget
+            {t("postJob.totalBudgetSummary", {
+              currency: form.currency,
+              amount: parseFloat(form.budget || 0).toLocaleString(),
+            })}
           </AppText>
         ) : null}
       </Field>
 
       {/* ── Work Conditions ─────────────────────────────────────── */}
-      <Field label="Work Conditions" c={c}>
+      <Field label={t("postJob.workConditionsTitle")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          Does this job come with accommodation or meals?
+          {t("postJob.workConditionsHint")}
         </AppText>
         <OptionGrid
           options={WORK_CONDITION_OPTIONS.map((opt) => ({
@@ -1655,24 +1730,30 @@ export default function PostJobScreen() {
             set(v, !form[v]);
           }}
           c={c}
+          t={t}
         />
         {form.providesAccommodation || form.providesMeals ? (
           <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 8 }}>
-            ✓ Job includes{" "}
-            {[
-              form.providesAccommodation && "accommodation",
-              form.providesMeals && "meals",
-            ]
-              .filter(Boolean)
-              .join(" and ")}
+            {t("postJob.workConditionsSummary", {
+              items: [
+                form.providesAccommodation
+                  ? t("postJob.workConditions.accommodationLower")
+                  : null,
+                form.providesMeals
+                  ? t("postJob.workConditions.mealsLower")
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(` ${t("common.and")} `),
+            })}
           </AppText>
         ) : null}
       </Field>
 
       {/* ── Qualifications ──────────────────────────────────────── */}
-      <Field label="Required Qualifications" c={c}>
+      <Field label={t("postJob.requiredQualifications")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          Add any specific qualifications this job requires. Optional.
+          {t("postJob.qualificationsHint")}
         </AppText>
         <View
           style={[
@@ -1706,7 +1787,9 @@ export default function PostJobScreen() {
                 addQualification(qualificationInput);
             }}
             placeholder={
-              form.qualifications.length === 0 ? "Type a qualification…" : ""
+              form.qualifications.length === 0
+                ? t("postJob.qualificationPlaceholder")
+                : ""
             }
             placeholderTextColor={c.textMuted}
             style={{
@@ -1739,7 +1822,7 @@ export default function PostJobScreen() {
                       marginLeft: 4,
                     }}
                   >
-                    Hide common qualifications
+                    {t("postJob.hidePresets")}
                   </AppText>
                 </>
               ) : (
@@ -1753,7 +1836,7 @@ export default function PostJobScreen() {
                       marginLeft: 4,
                     }}
                   >
-                    Show common qualifications
+                    {t("postJob.showPresets")}
                   </AppText>
                 </>
               )}
@@ -1762,13 +1845,13 @@ export default function PostJobScreen() {
             {showQualificationPresets ? (
               <View style={styles.skillSuggestions}>
                 {QUALIFICATION_PRESETS.filter(
-                  (q) => !form.qualifications.includes(q),
+                  (key) => !form.qualifications.includes(t(key)),
                 )
                   .slice(0, 12)
-                  .map((q) => (
+                  .map((key) => (
                     <Pressable
-                      key={q}
-                      onPress={() => addQualification(q)}
+                      key={key}
+                      onPress={() => addQualification(t(key))}
                       style={({ pressed }) => [
                         styles.suggestionPill,
                         { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
@@ -1783,7 +1866,7 @@ export default function PostJobScreen() {
                           marginLeft: 3,
                         }}
                       >
-                        {q}
+                        {t(key)}
                       </AppText>
                     </Pressable>
                   ))}
@@ -1794,16 +1877,17 @@ export default function PostJobScreen() {
 
         {form.qualifications.length > 0 ? (
           <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 6 }}>
-            ✓ {form.qualifications.length} qualification
-            {form.qualifications.length !== 1 ? "s" : ""} required
+            {t("postJob.qualificationsAdded", {
+              count: form.qualifications.length,
+            })}
           </AppText>
         ) : null}
       </Field>
 
       {/* ── Skills ──────────────────────────────────────────────── */}
-      <Field label="Required Skills" c={c}>
+      <Field label={t("postJob.skills")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          Add skills the worker should have.
+          {t("postJob.skillsHint")}
         </AppText>
         <View
           style={[
@@ -1834,7 +1918,9 @@ export default function PostJobScreen() {
             onBlur={() => {
               if (skillInput.trim()) addSkill(skillInput);
             }}
-            placeholder={form.skills.length === 0 ? "Type a skill…" : ""}
+            placeholder={
+              form.skills.length === 0 ? t("postJob.skillPlaceholder") : ""
+            }
             placeholderTextColor={c.textMuted}
             style={{
               flex: 1,
@@ -1848,12 +1934,12 @@ export default function PostJobScreen() {
 
         {form.skills.length < 20 ? (
           <View style={styles.skillSuggestions}>
-            {SKILL_SUGGESTIONS.filter((s) => !form.skills.includes(s))
+            {SKILL_SUGGESTIONS.filter((key) => !form.skills.includes(t(key)))
               .slice(0, 8)
-              .map((s) => (
+              .map((key) => (
                 <Pressable
-                  key={s}
-                  onPress={() => addSkill(s)}
+                  key={key}
+                  onPress={() => addSkill(t(key))}
                   style={({ pressed }) => [
                     styles.suggestionPill,
                     { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
@@ -1868,7 +1954,7 @@ export default function PostJobScreen() {
                       marginLeft: 3,
                     }}
                   >
-                    {s}
+                    {t(key)}
                   </AppText>
                 </Pressable>
               ))}
@@ -1877,11 +1963,11 @@ export default function PostJobScreen() {
       </Field>
 
       {/* ── Notes ───────────────────────────────────────────────── */}
-      <Field label="Additional Notes" c={c}>
+      <Field label={t("postJob.additionalNotes")} c={c}>
         <TextInput
           value={form.notes}
           onChangeText={(v) => set("notes", v)}
-          placeholder="Access instructions, tools needed, preferences..."
+          placeholder={t("postJob.notesPlaceholder")}
           placeholderTextColor={c.textMuted}
           multiline
           numberOfLines={3}
@@ -1931,7 +2017,7 @@ export default function PostJobScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <FaBolt size={14} color={c.bg} />
             <AppText style={{ fontSize: 14, fontWeight: "700", color: c.bg }}>
-              Post Job
+              {t("postJob.postJob")}
             </AppText>
           </View>
         )}
@@ -1963,7 +2049,7 @@ function Field({ label, required, children, c }) {
 }
 
 // ── Option grid ────────────────────────────────────────────────────
-function OptionGrid({ options, value, multiValue, onChange, c }) {
+function OptionGrid({ options, value, multiValue, onChange, c, t }) {
   const isMulti = Array.isArray(multiValue);
 
   return (
@@ -1998,7 +2084,7 @@ function OptionGrid({ options, value, multiValue, onChange, c }) {
               }}
               numberOfLines={1}
             >
-              {opt.label}
+              {t(opt.label)}
             </AppText>
           </Pressable>
         );
@@ -2008,7 +2094,7 @@ function OptionGrid({ options, value, multiValue, onChange, c }) {
 }
 
 // ── Budget preview ─────────────────────────────────────────────────
-function BudgetPreview({ form, c }) {
+function BudgetPreview({ form, c, t }) {
   if (form.scheduleMode === "ONE_OFF") {
     const rate = parseFloat(form.budget);
     if (!Number.isFinite(rate) || rate <= 0) return null;
@@ -2039,31 +2125,43 @@ function BudgetPreview({ form, c }) {
     const total = rate * periods;
 
     const unitNounMap = {
-      HOURLY: ["hour", "hours"],
-      DAILY: ["day", "days"],
-      WEEKLY: ["week", "weeks"],
-      MONTHLY: ["month", "months"],
-      YEARLY: ["year", "years"],
+      HOURLY: [t("postJob.units.hourSingular"), t("postJob.units.hourPlural")],
+      DAILY: [t("postJob.units.daySingular"), t("postJob.units.dayPlural")],
+      WEEKLY: [t("postJob.units.weekSingular"), t("postJob.units.weekPlural")],
+      MONTHLY: [
+        t("postJob.units.monthSingular"),
+        t("postJob.units.monthPlural"),
+      ],
+      YEARLY: [t("postJob.units.yearSingular"), t("postJob.units.yearPlural")],
     };
-    const [sing, plur] = unitNounMap[form.budgetType] || ["unit", "units"];
+    const [sing, plur] = unitNounMap[form.budgetType] || [
+      t("postJob.units.unitSingular"),
+      t("postJob.units.unitPlural"),
+    ];
     const rounded = Number(periods.toFixed(2));
     const periodsLabel = `${rounded} ${rounded === 1 ? sing : plur}`;
-    const periodLabel =
+    const periodLabel = t(
       {
-        HOURLY: "per hour",
-        DAILY: "per day",
-        WEEKLY: "per week",
-        MONTHLY: "per month",
-        YEARLY: "per year",
-      }[form.budgetType] || `per ${form.budgetType.toLowerCase()}`;
+        HOURLY: "postJob.budgetPeriod.perHour",
+        DAILY: "postJob.budgetPeriod.perDay",
+        WEEKLY: "postJob.budgetPeriod.perWeek",
+        MONTHLY: "postJob.budgetPeriod.perMonth",
+        YEARLY: "postJob.budgetPeriod.perYear",
+      }[form.budgetType] || "postJob.budgetPeriod.perHour",
+    );
 
     return (
       <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 8 }}>
-        ✓ Total:{" "}
+        {t("postJob.totalPrefix")}{" "}
         <AppText style={{ fontWeight: "700", color: c.text }}>
           {form.currency} {Math.round(total).toLocaleString()}
         </AppText>{" "}
-        ({form.currency} {rate.toLocaleString()} {periodLabel} × {periodsLabel})
+        {t("postJob.budgetPreviewSuffix", {
+          currency: form.currency,
+          rate: rate.toLocaleString(),
+          period: periodLabel,
+          periods: periodsLabel,
+        })}
       </AppText>
     );
   }
@@ -2076,26 +2174,29 @@ function BudgetPreview({ form, c }) {
   const rate = parseFloat(form.budget);
   if (!Number.isFinite(rate) || rate <= 0) return null;
   const total = rate * recurring.count;
-  const unitLabel =
-    recurring.unit === "hours"
-      ? `${recurring.count} hours`
-      : `${recurring.count} ${recurring.unit}`;
-  const periodLabel =
+  const unitLabel = t("postJob.hoursCount", { count: recurring.count });
+  const periodLabel = t(
     {
-      HOURLY: "per hour",
-      DAILY: "per day",
-      WEEKLY: "per week",
-      MONTHLY: "per month",
-      YEARLY: "per year",
-    }[form.budgetType] || `per ${form.budgetType.toLowerCase()}`;
+      HOURLY: "postJob.budgetPeriod.perHour",
+      DAILY: "postJob.budgetPeriod.perDay",
+      WEEKLY: "postJob.budgetPeriod.perWeek",
+      MONTHLY: "postJob.budgetPeriod.perMonth",
+      YEARLY: "postJob.budgetPeriod.perYear",
+    }[form.budgetType] || "postJob.budgetPeriod.perHour",
+  );
 
   return (
     <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 8 }}>
-      ✓ Total:{" "}
+      {t("postJob.totalPrefix")}{" "}
       <AppText style={{ fontWeight: "700", color: c.text }}>
         {form.currency} {Math.round(total).toLocaleString()}
       </AppText>{" "}
-      ({form.currency} {rate.toLocaleString()} {periodLabel} × {unitLabel})
+      {t("postJob.budgetPreviewSuffix", {
+        currency: form.currency,
+        rate: rate.toLocaleString(),
+        period: periodLabel,
+        periods: unitLabel,
+      })}
     </AppText>
   );
 }
