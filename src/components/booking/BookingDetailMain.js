@@ -964,17 +964,13 @@ export default function BookingDetailMain({
             gap: 8,
           }}
         >
-          <View
-            style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}
-          >
+          <View style={{ gap: 12 }}>
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: "Syne_700Bold",
-                fontSize: 14,
-                fontWeight: "800",
-                color: c.text,
-                flex: 1,
-                lineHeight: 26,
+                fontSize: 12,
+                letterSpacing: -0.5,
+                marginBottom: 4,
               }}
             >
               {booking.title}
@@ -1004,7 +1000,6 @@ export default function BookingDetailMain({
           {booking.category ? (
             <View
               style={{
-                alignSelf: "flex-start",
                 paddingHorizontal: 10,
                 paddingVertical: 3,
                 backgroundColor: c.orangeDim,
@@ -1028,7 +1023,6 @@ export default function BookingDetailMain({
               flexDirection: "row",
               alignItems: "center",
               gap: 4,
-              alignSelf: "flex-start",
               paddingHorizontal: 10,
               paddingVertical: 3,
               backgroundColor: "rgba(129,140,248,0.1)",
@@ -1399,17 +1393,13 @@ export default function BookingDetailMain({
             gap: 8,
           }}
         >
-          <View
-            style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}
-          >
+          <View style={{ gap: 12 }}>
             <AppText
+              weight="displayBlack"
               style={{
-                fontFamily: "Syne_700Bold",
-                fontSize: 20,
-                fontWeight: "800",
-                color: c.text,
-                flex: 1,
-                lineHeight: 26,
+                fontSize: 12,
+                letterSpacing: -0.5,
+                marginBottom: 4,
               }}
             >
               {booking.title}
@@ -1439,7 +1429,6 @@ export default function BookingDetailMain({
           {booking.category ? (
             <View
               style={{
-                alignSelf: "flex-start",
                 paddingHorizontal: 10,
                 paddingVertical: 3,
                 backgroundColor: c.orangeDim,
@@ -1493,7 +1482,6 @@ export default function BookingDetailMain({
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 4,
-                alignSelf: "flex-start",
                 paddingHorizontal: 10,
                 paddingVertical: 3,
                 backgroundColor: "rgba(129,140,248,0.1)",
@@ -1832,17 +1820,13 @@ export default function BookingDetailMain({
           gap: 8,
         }}
       >
-        <View
-          style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}
-        >
+        <View style={{ gap: 12 }}>
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: "Syne_700Bold",
-              fontSize: 20,
-              fontWeight: "800",
-              color: c.text,
-              flex: 1,
-              lineHeight: 26,
+              fontSize: 12,
+              letterSpacing: -0.5,
+              marginBottom: 4,
             }}
           >
             {booking.title}
@@ -1872,7 +1856,6 @@ export default function BookingDetailMain({
         {booking.category ? (
           <View
             style={{
-              alignSelf: "flex-start",
               paddingHorizontal: 10,
               paddingVertical: 3,
               backgroundColor: c.orangeDim,
@@ -1919,6 +1902,31 @@ export default function BookingDetailMain({
             </AppText>
           </View>
         ) : null}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            paddingHorizontal: 10,
+            paddingVertical: 3,
+            backgroundColor: "rgba(129,140,248,0.1)",
+            borderWidth: 1,
+            borderColor: "rgba(129,140,248,0.25)",
+            borderRadius: 12,
+          }}
+        >
+          <FaUser size={10} color="#818cf8" />
+          <AppText
+            style={{
+              fontSize: 11,
+              fontWeight: "800",
+              color: "#818cf8",
+              fontFamily: "DMSans_700Bold",
+            }}
+          >
+            {t("booking.detail.directBooking", "Direct Booking")}
+          </AppText>
+        </View>
       </View>
 
       {step >= 0 ? <Timeline step={step} c={c} t={t} /> : null}
