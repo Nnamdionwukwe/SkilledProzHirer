@@ -28,6 +28,7 @@ import AppText from "../../components/AppText";
 import Skeleton from "../../components/Skeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import client from "../../api/client";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 
 const SYMBOL_MAP = {
   NGN: "₦",
@@ -822,32 +823,43 @@ export default function RefundHistoryScreen() {
   const LIMIT = 15;
   const pages = Math.max(1, Math.ceil(total / LIMIT));
 
-  const fetchSummary = useCallback(async () => {
+  const fetchSummary = useCallback(async (isSilent = false) => {
     try {
       const res = await client.get("/worker/refunds/summary");
       setSummary(res.data.data);
-    } catch {}
+    } catch {
+      // Summary has no error UI anyway — swallow on silent AND non-silent.
+      // Kept the isSilent param for symmetry with fetchList.
+      if (!isSilent) {
+        // no-op — summary errors are non-blocking on this screen
+      }
+    }
   }, []);
 
-  const fetchList = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const params = { page, limit: LIMIT };
-      if (status !== "ALL") params.status = status;
-      if (refundType !== "ALL") params.refundType = refundType;
-      const res = await client.get("/worker/refunds", { params });
-      setRefunds(res.data.data?.refunds || []);
-      setTotal(res.data.data?.total || 0);
-    } catch (err) {
-      setError(
-        err?.response?.data?.message || t("refundHistory.list.loadFailed"),
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [page, status, refundType, t]);
+  const fetchList = useCallback(
+    async (isSilent = false) => {
+      if (!isSilent) setLoading(true);
+      setError("");
+      try {
+        const params = { page, limit: LIMIT };
+        if (status !== "ALL") params.status = status;
+        if (refundType !== "ALL") params.refundType = refundType;
+        const res = await client.get("/worker/refunds", { params });
+        setRefunds(res.data.data?.refunds || []);
+        setTotal(res.data.data?.total || 0);
+      } catch (err) {
+        if (!isSilent) {
+          setError(
+            err?.response?.data?.message || t("refundHistory.list.loadFailed"),
+          );
+        }
+      } finally {
+        if (!isSilent) setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [page, status, refundType, t],
+  );
 
   useEffect(() => {
     fetchSummary();
@@ -863,6 +875,18 @@ export default function RefundHistoryScreen() {
       fetchList();
     }, [fetchSummary, fetchList]),
   );
+
+  // ── Silent background refresh every 5s ──
+  // Both the summary cards AND the list are re-fetched silently so the
+  // totals stay in sync with the rows. Paused while the detail modal is
+  // open (selectedId set) so the modal never re-mounts under the user.
+  // Also implicitly respects the current page + status + refundType
+  // because fetchList already closes over them.
+  const fetchSilent = useCallback(async () => {
+    await Promise.allSettled([fetchSummary(), fetchList(true)]);
+  }, [fetchSummary, fetchList]);
+
+  usePlatformRefresh(fetchSilent, !selectedId);
 
   const handleRefresh = () => {
     setRefreshing(true);

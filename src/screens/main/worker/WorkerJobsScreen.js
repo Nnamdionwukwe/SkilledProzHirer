@@ -24,6 +24,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { useAuthStore } from "../../../store/authStore";
 import { rem, FONTS } from "../../../constants/theme";
 import client from "../../../api/client";
+import { usePlatformRefresh } from "../../../contexts/PlatformPollerContext";
 
 // ── Duration formatter (mirror of utils/formatDuration on web) ──────────
 function formatJobDuration(job) {
@@ -339,25 +340,44 @@ export default function WorkerJobsScreen() {
   }, []);
 
   // Load jobs
-  const loadJobs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = { page, limit: 15 };
-      if (q) params.q = q;
-      if (category) params.category = category;
-      const res = await client.get("/jobs", { params });
-      setJobs(res.data?.data?.jobPosts || []);
-      setTotal(res.data?.data?.total || 0);
-      setPages(res.data?.data?.pages || 1);
-    } catch (err) {
-      toast.error(
-        err?.response?.data?.message ||
-          t("workerJobs.toast.loadError", "Could not load jobs"),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [q, category, page, t, toast]);
+  const loadJobs = useCallback(
+    async (isSilent = false) => {
+      // Silent polls must not flash the skeleton — keep the current list
+      // on screen and swap it out when the fresh data lands.
+      if (!isSilent) setLoading(true);
+      try {
+        const params = { page, limit: 15 };
+        if (q) params.q = q;
+        if (category) params.category = category;
+        const res = await client.get("/jobs", { params });
+        setJobs(res.data?.data?.jobPosts || []);
+        setTotal(res.data?.data?.total || 0);
+        setPages(res.data?.data?.pages || 1);
+      } catch (err) {
+        // Poller never surfaces errors — no toast on silent refresh.
+        // Initial load / submit-search still show the toast.
+        if (!isSilent) {
+          toast.error(
+            err?.response?.data?.message ||
+              t("workerJobs.toast.loadError", "Could not load jobs"),
+          );
+        }
+      } finally {
+        if (!isSilent) setLoading(false);
+      }
+    },
+    [q, category, page, t, toast],
+  );
+
+  // ── Silent background refresh every 5s ──
+  // No gate needed: the search input `q` is local state and the fetcher
+  // reads it without ever writing it. Refresh always respects the current
+  // page + category + query, so the visible slice stays fresh. The category
+  // picker modal (`categoryModalOpen`) is local state — safe to refresh
+  // beneath it, and picking a category always triggers a fresh fetch via
+  // setCategory + setPage(1) → loadJobs.
+  const fetchSilent = useCallback(() => loadJobs(true), [loadJobs]);
+  usePlatformRefresh(fetchSilent, true);
 
   useEffect(() => {
     loadJobs();

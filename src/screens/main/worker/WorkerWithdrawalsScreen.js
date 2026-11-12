@@ -26,6 +26,7 @@ import { useTranslation } from "react-i18next";
 import client from "../../../api/client";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
+import { usePlatformRefresh } from "../../../contexts/PlatformPollerContext";
 
 const SCREEN_W = Dimensions.get("window").width;
 
@@ -2640,7 +2641,7 @@ export default function WorkerWithdrawalsScreen() {
   // Track which currency should be selected when opening the payout modal
   const [payoutDefaultCurrency, setPayoutDefaultCurrency] = useState("NGN");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isSilent = false) => {
     try {
       const wdRes = await client.get("/payments/withdrawals", {
         params: { limit: 50 },
@@ -2660,14 +2661,30 @@ export default function WorkerWithdrawalsScreen() {
       } catch {}
       setAllHistory(wide);
     } catch (err) {
-      toast.error(
-        err?.response?.data?.message ?? t("workerWithdrawals.main.loadFailed"),
-      );
+      // Poller never surfaces errors — no toast on silent refresh.
+      if (!isSilent) {
+        toast.error(
+          err?.response?.data?.message ??
+            t("workerWithdrawals.main.loadFailed"),
+        );
+      }
     } finally {
-      setLoading(false);
+      // Only flip the skeleton off on the non-silent path. Silent polls keep
+      // `loading` as-is so the skeleton never flashes over fresh data.
+      if (!isSilent) {
+        setLoading(false);
+      }
       setRefreshing(false);
     }
   }, []);
+
+  // ── Silent background refresh every 5s ──
+  // Paused while the payout modal is open OR the receipt modal is open:
+  // the payout modal holds an in-progress form (amount, bank details, PIN)
+  // that a silent refresh must not disturb, and the receipt modal is a
+  // full-screen ViewShot capture — refreshing behind it would be jarring.
+  const fetchSilent = useCallback(() => load(true), [load]);
+  usePlatformRefresh(fetchSilent, !showPayout && !receipt);
 
   useEffect(() => {
     load();

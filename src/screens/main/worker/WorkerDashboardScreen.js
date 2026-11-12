@@ -25,6 +25,7 @@ import { rem, FONTS } from "../../../constants/theme";
 import { getWorkerDashboard } from "../../../api/workerAuth";
 import { CURRENCIES } from "../../../constants/currencies";
 import client from "../../../api/client";
+import { usePlatformRefresh } from "../../../contexts/PlatformPollerContext";
 
 function formatCurrency(amount, currency = "NGN") {
   try {
@@ -172,23 +173,30 @@ export default function WorkerDashboardScreen() {
   const tabletCardWidth = (containerWidth - gap * 3) / 4;
   const desktopHalfWidth = (containerWidth - gap) / 2;
 
-  const fetchDashboardSilently = useCallback(async () => {
-    try {
-      const freshData = await getWorkerDashboard();
-      setData(freshData);
-      // Seed the shared store from the fresh profile so all screens match.
-      hydrateAvailability(freshData?.profile || freshData?.user);
-      if (
-        freshData?.profile?.isAvailable !== undefined &&
-        freshData.profile.isAvailable !== user?.isAvailable
-      ) {
-        if (updateUser)
-          updateUser({ isAvailable: freshData.profile.isAvailable });
+  const fetchDashboardSilently = useCallback(
+    async (isSilent = false) => {
+      try {
+        const freshData = await getWorkerDashboard();
+        setData(freshData);
+        // Seed the shared store from the fresh profile so all screens match.
+        hydrateAvailability(freshData?.profile || freshData?.user);
+        if (
+          freshData?.profile?.isAvailable !== undefined &&
+          freshData.profile.isAvailable !== user?.isAvailable
+        ) {
+          if (updateUser)
+            updateUser({ isAvailable: freshData.profile.isAvailable });
+        }
+      } catch (err) {
+        // Poller never surfaces errors — no console spam from silent polls.
+        // Post-toggle fetch still logs for debugging.
+        if (!isSilent) {
+          console.error("Silent fetch failed:", err);
+        }
       }
-    } catch (err) {
-      console.error("Silent fetch failed:", err);
-    }
-  }, [updateUser, user?.isAvailable, hydrateAvailability]);
+    },
+    [updateUser, user?.isAvailable, hydrateAvailability],
+  );
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -222,6 +230,17 @@ export default function WorkerDashboardScreen() {
       isMounted = false;
     };
   }, []); // eslint-disable-line
+
+  // ── Silent background refresh every 5s ──
+  // Paused while the availability toggle PATCH is in flight (`isTogglingAvail`
+  // from useWorkerAvailability) so a poll can't race the optimistic update.
+  // No other gate needed — the currency picker is local state and safe to
+  // refresh under; every other card is pure display.
+  const fetchSilent = useCallback(
+    () => fetchDashboardSilently(true),
+    [fetchDashboardSilently],
+  );
+  usePlatformRefresh(fetchSilent, !isTogglingAvail);
 
   // ── Toggle — writes through the shared store. Optimistic update, auto
   //    rollback on failure. Keeps authStore.isAvailable mirrored for any

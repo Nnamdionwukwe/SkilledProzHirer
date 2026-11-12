@@ -24,6 +24,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { useAuthStore } from "../../../store/authStore";
 import { rem, FONTS } from "../../../constants/theme";
 import client from "../../../api/client";
+import { usePlatformRefresh } from "../../../contexts/PlatformPollerContext";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 function fmtDate(d) {
@@ -464,29 +465,47 @@ export default function WorkerApplicationsScreen() {
 
   const LIMIT = 10;
 
-  const load = useCallback(async () => {
-    if (!user?.id) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const params = { page, limit: LIMIT };
-      if (statusFilter !== "ALL") params.status = statusFilter;
-      const res = await client.get("/jobs/worker/my-applications", { params });
-      const d = res.data?.data;
-      setApplications(d?.applications || []);
-      setTotal(d?.total || 0);
-      setPages(d?.pages || 1);
-    } catch (e) {
-      setError(
-        t(
-          "workerApplications.error.loadFailed",
-          "Failed to load your applications.",
-        ),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [page, statusFilter, user?.id, t]);
+  const load = useCallback(
+    async (isSilent = false) => {
+      if (!user?.id) return;
+      // Silent polls must not flash the skeleton — keep the current list.
+      if (!isSilent) setLoading(true);
+      if (!isSilent) setError(null);
+      try {
+        const params = { page, limit: LIMIT };
+        if (statusFilter !== "ALL") params.status = statusFilter;
+        const res = await client.get("/jobs/worker/my-applications", {
+          params,
+        });
+        const d = res.data?.data;
+        setApplications(d?.applications || []);
+        setTotal(d?.total || 0);
+        setPages(d?.pages || 1);
+      } catch (e) {
+        // Poller never surfaces errors — no red banner on silent refresh.
+        if (!isSilent) {
+          setError(
+            t(
+              "workerApplications.error.loadFailed",
+              "Failed to load your applications.",
+            ),
+          );
+        }
+      } finally {
+        if (!isSilent) setLoading(false);
+      }
+    },
+    [page, statusFilter, user?.id, t],
+  );
+
+  // ── Silent background refresh every 5s ──
+  // No gate: this screen is read-only — no mutations. The tab filter
+  // (`statusFilter`) and pagination (`page`) are local state that the
+  // fetcher reads but never writes, so refreshing beneath any interaction
+  // is safe. Fetch always respects the current page + filter because
+  // `load` closes over them.
+  const fetchSilent = useCallback(() => load(true), [load]);
+  usePlatformRefresh(fetchSilent, true);
 
   useEffect(() => {
     load();

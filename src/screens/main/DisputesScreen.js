@@ -32,6 +32,7 @@ import PageSkeleton from "../../components/PageSkeleton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import client from "../../api/client";
+import { usePlatformRefresh } from "../../contexts/PlatformPollerContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CURRENCY — symbol-safe formatter
@@ -388,14 +389,18 @@ export default function MyDisputesScreen({ route }) {
   const [pdfViewerSrc, setPdfViewerSrc] = useState(null);
 
   const load = useCallback(
-    async (isRefresh = false) => {
+    async (isRefresh = false, isSilent = false) => {
       if (!isRefresh) setLoading(true);
       try {
         const res = await client.get("/disputes/my");
         const list = res?.data?.data?.disputes || [];
         setDisputes(dedupeDisputes(list));
       } catch (err) {
-        toast.error(err?.response?.data?.message || t("disputes.loadFailed"));
+        // Poller never surfaces errors — no toast on silent refresh.
+        // Initial load / focus / pull-to-refresh still toast.
+        if (!isSilent) {
+          toast.error(err?.response?.data?.message || t("disputes.loadFailed"));
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -412,6 +417,19 @@ export default function MyDisputesScreen({ route }) {
     useCallback(() => {
       load(false);
     }, [load]),
+  );
+
+  // ── Silent background refresh every 5s ──
+  // Paused while a cancel PATCH is in flight OR while any modal is open
+  // (cancel confirm, image lightbox, PDF viewer). Also paused while a card
+  // is expanded AND its cancel button could be tapped — but that's covered
+  // by `cancelling` being set at the moment of the PATCH, so we only need
+  // to guard on `cancelling` and the modal flags. Expanded card state is
+  // safe to refresh — the expanded body re-renders with fresh data.
+  const fetchSilent = useCallback(() => load(true, true), [load]);
+  usePlatformRefresh(
+    fetchSilent,
+    !cancelling && !showCancelModal && !lightboxImage && !pdfViewerSrc,
   );
 
   useEffect(() => {
