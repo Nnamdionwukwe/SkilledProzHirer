@@ -24,6 +24,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../components/AppText";
 import Skeleton from "../../components/Skeleton";
@@ -44,6 +45,7 @@ const PAGE_SIZE = 100;
 const SEARCH_DEBOUNCE = 300;
 
 export default function CategoriesBrowseScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const { theme } = useTheme();
   const c = theme.colors;
@@ -107,7 +109,7 @@ export default function CategoriesBrowseScreen() {
         if (myRequestId !== requestIdRef.current) return;
         if (__DEV__)
           console.log("[CategoriesBrowse] fetch failed:", err?.message);
-        setLoadError("Couldn't load categories. Please try again.");
+        setLoadError(t("categories.loadFailed"));
       } finally {
         if (myRequestId === requestIdRef.current) {
           setLoading(false);
@@ -115,7 +117,7 @@ export default function CategoriesBrowseScreen() {
         }
       }
     },
-    [search],
+    [search, t],
   );
 
   // Load page 1 when search changes
@@ -179,13 +181,17 @@ export default function CategoriesBrowseScreen() {
         }
 
         listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
-        setSuggestMsg(`✅ "${normalised.name}" added to the platform!`);
+        setSuggestMsg(t("categories.addedSuccess", { name: normalised.name }));
         setSuggestMsgKind("ok");
       } else if (alreadyExists) {
-        setSuggestMsg(`"${category?.name || submitted}" already exists.`);
+        setSuggestMsg(
+          t("categories.alreadyExists", {
+            name: category?.name || submitted,
+          }),
+        );
         setSuggestMsgKind("warn");
       } else {
-        setSuggestMsg("Unexpected response from the server.");
+        setSuggestMsg(t("categories.unexpectedResponse"));
         setSuggestMsgKind("error");
       }
 
@@ -203,36 +209,22 @@ export default function CategoriesBrowseScreen() {
       if (status === 429) {
         if (!Number.isNaN(retryAfter) && retryAfter > 0) {
           const minutes = Math.max(1, Math.ceil(retryAfter / 60));
-          setSuggestMsg(
-            `Too many suggestions. Try again in ${minutes} minute${
-              minutes !== 1 ? "s" : ""
-            }.`,
-          );
+          setSuggestMsg(t("categories.rateLimitedWithTime", { minutes }));
         } else {
-          setSuggestMsg(
-            serverMsg ||
-              "Too many suggestions. Please wait a while before trying again.",
-          );
+          setSuggestMsg(serverMsg || t("categories.rateLimited"));
         }
         setSuggestMsgKind("warn");
       } else if (status === 400) {
-        setSuggestMsg(
-          serverMsg || "Please check the category name and try again.",
-        );
+        setSuggestMsg(serverMsg || t("categories.badRequest"));
         setSuggestMsgKind("error");
       } else if (status === 401 || status === 403) {
-        setSuggestMsg(
-          serverMsg || "You are not allowed to add categories right now.",
-        );
+        setSuggestMsg(serverMsg || t("categories.notAllowed"));
         setSuggestMsgKind("error");
       } else if (status >= 500) {
-        setSuggestMsg("Server error. Please try again in a moment.");
+        setSuggestMsg(t("categories.serverError"));
         setSuggestMsgKind("error");
       } else {
-        setSuggestMsg(
-          serverMsg ||
-            "Couldn't reach the server. Check your connection and try again.",
-        );
+        setSuggestMsg(serverMsg || t("categories.networkError"));
         setSuggestMsgKind("error");
       }
     } finally {
@@ -276,7 +268,7 @@ export default function CategoriesBrowseScreen() {
       >
         <FaArrowLeft size={14} color={c.orange} />
         <AppText style={{ fontSize: 13, fontWeight: "500", color: c.orange }}>
-          Back
+          {t("categories.back")}
         </AppText>
       </Pressable>
 
@@ -290,7 +282,7 @@ export default function CategoriesBrowseScreen() {
             marginBottom: 4,
           }}
         >
-          Browse Categories
+          {t("categories.title")}
         </AppText>
         <AppText
           style={{
@@ -300,12 +292,11 @@ export default function CategoriesBrowseScreen() {
             marginTop: 6,
           }}
         >
-          {total > 0
-            ? `${total} ${search ? "matching " : ""}categor${
-                total === 1 ? "y" : "ies"
-              }`
-            : "All categories"}{" "}
-          — search or add yours
+          {t("categories.subtitleCounts", {
+            count: total,
+            isSearch: search ? 1 : 0,
+            context: search ? "search" : "all",
+          })}
         </AppText>
       </View>
 
@@ -326,7 +317,7 @@ export default function CategoriesBrowseScreen() {
         >
           <FaSearch size={16} color={c.textMuted} />
           <TextInput
-            placeholder="Search categories..."
+            placeholder={t("categories.searchPlaceholder")}
             placeholderTextColor={c.textMuted}
             value={searchInput}
             onChangeText={setSearchInput}
@@ -369,14 +360,14 @@ export default function CategoriesBrowseScreen() {
             <AppText
               style={{ fontSize: 13, fontWeight: "700", color: c.orange }}
             >
-              Add Category
+              {t("categories.addCategory")}
             </AppText>
           </Pressable>
         ) : (
           <View style={{ gap: 8 }}>
             <TextInput
               autoFocus
-              placeholder="e.g. Drone Operator, Solar Engineer..."
+              placeholder={t("categories.suggestPlaceholder")}
               placeholderTextColor={c.textMuted}
               value={suggestName}
               onChangeText={setSuggestName}
@@ -419,7 +410,7 @@ export default function CategoriesBrowseScreen() {
                   <AppText
                     style={{ fontSize: 13, fontWeight: "700", color: "#000" }}
                   >
-                    Add
+                    {t("categories.add")}
                   </AppText>
                 )}
               </Pressable>
@@ -445,7 +436,7 @@ export default function CategoriesBrowseScreen() {
               >
                 <FaX size={12} color={c.textDim} />
                 <AppText style={{ fontSize: 13, color: c.textDim }}>
-                  Cancel
+                  {t("categories.cancel")}
                 </AppText>
               </Pressable>
             </View>
@@ -526,7 +517,7 @@ export default function CategoriesBrowseScreen() {
             ]}
           >
             <AppText style={{ fontSize: 11, fontWeight: "700", color: c.red }}>
-              Retry
+              {t("categories.retry")}
             </AppText>
           </Pressable>
         </View>
@@ -577,7 +568,9 @@ export default function CategoriesBrowseScreen() {
       >
         <FaUsers size={11} color={c.textDim} />
         <AppText style={{ fontSize: 12, color: c.textDim }}>
-          {`${item._count?.workers || 0} workers`}
+          {t("categories.workersCount", {
+            count: item._count?.workers || 0,
+          })}
         </AppText>
       </View>
       {item.isUserSubmitted ? (
@@ -594,7 +587,7 @@ export default function CategoriesBrowseScreen() {
         >
           <FaTag size={9} color={c.orange} />
           <AppText style={{ fontSize: 10, fontWeight: "700", color: c.orange }}>
-            Community
+            {t("categories.communityBadge")}
           </AppText>
         </View>
       ) : null}
@@ -652,8 +645,8 @@ export default function CategoriesBrowseScreen() {
                 }}
               >
                 {search
-                  ? `No categories found for "${search}".`
-                  : "No categories found."}
+                  ? t("categories.emptySearch", { query: search })
+                  : t("categories.emptyAll")}
               </AppText>
               {search ? (
                 <Pressable
@@ -686,7 +679,7 @@ export default function CategoriesBrowseScreen() {
                       color: c.orange,
                     }}
                   >
-                    {`Add "${search}" as a new category`}
+                    {t("categories.addNew", { name: search })}
                   </AppText>
                 </Pressable>
               ) : null}
@@ -718,8 +711,10 @@ export default function CategoriesBrowseScreen() {
                     style={{ fontSize: 13, fontWeight: "600", color: c.text }}
                   >
                     {loadingMore
-                      ? "Loading..."
-                      : `Show more (${total - categories.length} remaining)`}
+                      ? t("categories.loadingMore")
+                      : t("categories.showMore", {
+                          count: total - categories.length,
+                        })}
                   </AppText>
                 </Pressable>
               ) : (
@@ -730,9 +725,10 @@ export default function CategoriesBrowseScreen() {
                     textAlign: "center",
                   }}
                 >
-                  {`That's all ${total} ${search ? "matching " : ""}categor${
-                    total === 1 ? "y" : "ies"
-                  }.`}
+                  {t("categories.allShown", {
+                    count: total,
+                    context: search ? "search" : "all",
+                  })}
                 </AppText>
               )}
             </View>

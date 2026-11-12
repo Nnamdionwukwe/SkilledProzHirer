@@ -14,6 +14,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "react-native";
+import { useTranslation } from "react-i18next";
 
 import AppText from "../../components/AppText";
 import Skeleton from "../../components/Skeleton";
@@ -54,7 +55,7 @@ function Stars({ rating, c }) {
 }
 
 // ── Single worker card ──────────────────────────────────────────────────
-function WorkerCard({ worker, c, onPress }) {
+function WorkerCard({ worker, c, onPress, t }) {
   const { user: viewer } = useAuthStore();
   const isHirer = viewer?.role === "HIRER";
 
@@ -148,7 +149,9 @@ function WorkerCard({ worker, c, onPress }) {
               {wp.avgRating.toFixed(1)}
             </AppText>
             <AppText style={{ fontSize: 10, color: c.textDim }}>
-              {`(${wp.totalReviews || 0} reviews)`}
+              {t("categoryDetail.reviewsCount", {
+                count: wp.totalReviews || 0,
+              })}
             </AppText>
           </>
         ) : (
@@ -159,7 +162,7 @@ function WorkerCard({ worker, c, onPress }) {
               color: c.textMuted,
             }}
           >
-            New
+            {t("categoryDetail.newWorker")}
           </AppText>
         )}
       </View>
@@ -175,7 +178,10 @@ function WorkerCard({ worker, c, onPress }) {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
           <FaDollarSign size={12} color={c.orange} />
           <AppText style={{ fontSize: 13, fontWeight: "600", color: c.orange }}>
-            {`${wp.currency || "USD"} ${wp.hourlyRate}/hr`}
+            {t("categoryDetail.hourlyRate", {
+              currency: wp.currency || "USD",
+              rate: wp.hourlyRate,
+            })}
           </AppText>
         </View>
       ) : null}
@@ -221,7 +227,7 @@ function WorkerCard({ worker, c, onPress }) {
                 color: c.green,
               }}
             >
-              Available
+              {t("categoryDetail.available")}
             </AppText>
           </View>
         ) : (
@@ -240,7 +246,7 @@ function WorkerCard({ worker, c, onPress }) {
                 color: c.textMuted,
               }}
             >
-              Busy
+              {t("categoryDetail.busy")}
             </AppText>
           </View>
         )}
@@ -277,6 +283,7 @@ function WorkerCard({ worker, c, onPress }) {
 
 // ── Main screen ─────────────────────────────────────────────────────────
 export default function CategoryDetailScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
   const { theme } = useTheme();
@@ -309,8 +316,8 @@ export default function CategoryDetailScreen() {
           );
         setError(
           err?.response?.status === 404
-            ? "Category not found"
-            : "Could not load workers for this category",
+            ? t("categoryDetail.errors.notFound")
+            : t("categoryDetail.errors.loadFailed"),
         );
       })
       .finally(() => setLoading(false));
@@ -333,7 +340,7 @@ export default function CategoryDetailScreen() {
               color: c.text,
             }}
           >
-            Category not found
+            {t("categoryDetail.errors.notFound")}
           </AppText>
           <Pressable
             onPress={goBackToCategories}
@@ -355,7 +362,7 @@ export default function CategoryDetailScreen() {
             <AppText
               style={{ fontSize: 13, fontWeight: "500", color: c.orange }}
             >
-              Back to Categories
+              {t("categoryDetail.backToCategories")}
             </AppText>
           </Pressable>
         </View>
@@ -393,7 +400,7 @@ export default function CategoryDetailScreen() {
             <AppText
               style={{ fontSize: 13, fontWeight: "500", color: c.orange }}
             >
-              Back
+              {t("categoryDetail.back")}
             </AppText>
           </Pressable>
 
@@ -440,7 +447,9 @@ export default function CategoryDetailScreen() {
               >
                 <FaUsers size={14} color={c.textDim} />
                 <AppText style={{ fontSize: 14, color: c.textDim }}>
-                  {`${workers.length} workers available`}
+                  {t("categoryDetail.workersAvailable", {
+                    count: workers.length,
+                  })}
                 </AppText>
               </View>
             </>
@@ -473,7 +482,7 @@ export default function CategoryDetailScreen() {
             <AppText
               style={{ fontSize: 14, color: c.textDim, textAlign: "center" }}
             >
-              No workers found in this category
+              {t("categoryDetail.emptyNoWorkers")}
             </AppText>
             <Pressable
               onPress={goBackToCategories}
@@ -495,7 +504,7 @@ export default function CategoryDetailScreen() {
               <AppText
                 style={{ fontSize: 13, fontWeight: "500", color: c.orange }}
               >
-                Browse other categories
+                {t("categoryDetail.browseOther")}
               </AppText>
             </Pressable>
           </View>
@@ -509,6 +518,7 @@ export default function CategoryDetailScreen() {
                   <WorkerCard
                     worker={worker}
                     c={c}
+                    t={t}
                     onPress={() =>
                       userId && navigation.navigate("WorkerProfile", { userId })
                     }

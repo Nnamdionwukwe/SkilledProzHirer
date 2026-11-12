@@ -347,16 +347,16 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                   <View
                     style={{
                       backgroundColor: c.orange,
-                      paddingHorizontal: 6,
-                      paddingVertical: 3,
+                      paddingHorizontal: 3,
+                      paddingVertical: -3,
                       borderRadius: 5,
                     }}
                   >
                     <AppText
+                      weight="displayBlack"
                       style={{
-                        fontFamily: "Syne_800ExtraBold",
-                        fontSize: 11,
-                        fontWeight: "700",
+                        fontSize: 8,
+                        letterSpacing: -0.5,
                         color: "#000",
                       }}
                     >
@@ -364,11 +364,11 @@ function ReceiptModal({ payment, onClose, c, isDark }) {
                     </AppText>
                   </View>
                   <AppText
+                    weight="displayBlack"
                     style={{
-                      fontFamily: "Syne_700Bold",
-                      fontSize: 14,
-                      fontWeight: "600",
-                      color: c.text,
+                      fontSize: 15,
+                      letterSpacing: -0.5,
+                      marginBottom: 4,
                     }}
                   >
                     SkilledProz
@@ -795,12 +795,9 @@ function SummaryCard({ label, value, sub, accent, c }) {
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.7}
+        weight="displayBlack"
         style={{
-          fontFamily: "Syne_800ExtraBold",
-          fontSize: 20,
-          fontWeight: "700",
-          color: accent ? c.orange : c.text,
-          marginTop: 2,
+          fontSize: 15,
         }}
       >
         {value}
@@ -1166,12 +1163,10 @@ export default function PaymentHistoryScreen() {
             >
               <View style={{ flex: 1, minWidth: 0 }}>
                 <AppText
+                  weight="displayBlack"
                   style={{
-                    fontFamily: "Syne_800ExtraBold",
-                    fontSize: 22,
-                    fontWeight: "700",
-                    color: c.text,
-                    letterSpacing: -0.3,
+                    fontSize: 15,
+                    letterSpacing: -0.5,
                   }}
                 >
                   Payment History
