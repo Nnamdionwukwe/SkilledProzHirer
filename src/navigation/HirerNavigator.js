@@ -565,10 +565,13 @@ export default function HirerNavigator() {
           </Drawer.Screen>
           <Drawer.Screen
             name="SupportChat"
-            options={{ drawerItemStyle: { display: "none" } }}
-          >
-            {() => <ScreenWithChrome Screen={SupportChatScreen} />}
-          </Drawer.Screen>
+            component={SupportChatScreen}
+            options={{
+              drawerItemStyle: { display: "none" },
+              headerShown: false,
+              swipeEnabled: false,
+            }}
+          />
           <Drawer.Screen
             name="SupportHub"
             options={{ drawerItemStyle: { display: "none" } }}
@@ -577,10 +580,13 @@ export default function HirerNavigator() {
           </Drawer.Screen>
           <Drawer.Screen
             name="SupportTicketDetail"
-            options={{ drawerItemStyle: { display: "none" } }}
-          >
-            {() => <ScreenWithChrome Screen={SupportTicketThreadScreen} />}
-          </Drawer.Screen>
+            component={SupportTicketThreadScreen}
+            options={{
+              drawerItemStyle: { display: "none" },
+              headerShown: false,
+              swipeEnabled: false,
+            }}
+          />
           <Drawer.Screen
             name="ReleasePayment"
             options={{ drawerItemStyle: { display: "none" } }}
