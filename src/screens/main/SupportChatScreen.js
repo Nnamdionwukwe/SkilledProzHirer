@@ -43,24 +43,56 @@ const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_FILES = 5;
 const MAX_VIDEO_SECONDS = 60;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// normaliseFile — guarantees RN's FormData bridge can serialise the file.
-//   • uri must start with file:// | content:// | assets-library://
-//     (bare paths → prepend file://)
-//   • name must not contain spaces, quotes, parens, or unicode
-//     (RN's fetch crashes on these — the web browser auto-sanitises, RN
-//      does not)
-//   • type must be a real MIME type — application/octet-stream is treated
-//     as "unknown" by some server-side multipart parsers and by RN's XHR
-//     bridge on Android, causing a silent drop that surfaces as
-//     `Network Error`.
-// ─────────────────────────────────────────────────────────────────────────────
+// Canonical MIME normaliser — maps anything the picker might return to
+// the exact value the web upload sends (which the backend's ALLOWED_MIMES
+// set accepts). Runs before the file is handed to FormData.
+function canonicalMime(mime, filename, isVideo) {
+  // 1. strip parameters — "image/jpeg; charset=binary" → "image/jpeg"
+  let m = String(mime || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+
+  // 2. alias normalisation
+  if (m === "image/jpg" || m === "image/pjpeg") m = "image/jpeg";
+  if (m === "video/quicktime") m = "video/quicktime"; // keep as-is; server accepts
+  if (m === "application/x-pdf") m = "application/pdf";
+
+  // 3. fall back to extension-based detection when the picker returned
+  //    octet-stream or an empty/unknown value
+  if (!m || m === "application/octet-stream" || m === "application/unknown") {
+    const ext = (
+      /\.[a-zA-Z0-9]+$/.exec(filename || "")?.[0] || ""
+    ).toLowerCase();
+    const extMap = {
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".png": "image/png",
+      ".webp": "image/webp",
+      ".gif": "image/gif",
+      ".heic": "image/heic",
+      ".heif": "image/heif",
+      ".mp4": "video/mp4",
+      ".mov": "video/quicktime",
+      ".webm": "video/webm",
+      ".pdf": "application/pdf",
+      ".doc": "application/msword",
+      ".docx":
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".txt": "text/plain",
+      ".zip": "application/zip",
+    };
+    m = extMap[ext] || (isVideo ? "video/mp4" : "image/jpeg");
+  }
+
+  return m;
+}
+
 function normaliseFile(raw, fallbackExt = "jpg") {
   if (!raw?.uri) return null;
 
   let uri = String(raw.uri);
   if (uri.startsWith("http://") || uri.startsWith("https://")) {
-    // Remote URLs are never pickable attachments — reject.
     return null;
   }
   if (
@@ -76,21 +108,18 @@ function normaliseFile(raw, fallbackExt = "jpg") {
   const base = (raw.name || `upload_${Date.now()}`).replace(/[^\w.\-]/g, "_");
   const safeName = /\.[a-zA-Z0-9]+$/.test(base) ? base : `${base}${ext}`;
 
-  const type =
-    raw.mimeType && raw.mimeType !== "application/octet-stream"
-      ? raw.mimeType
-      : raw.type === "video"
-        ? "video/mp4"
-        : "image/jpeg";
+  const isVideo =
+    raw.type === "video" || (raw.mimeType && raw.mimeType.startsWith("video/"));
+
+  const mimeType = canonicalMime(raw.mimeType, safeName, isVideo);
 
   return {
     uri,
     name: safeName,
-    mimeType: type,
+    mimeType,
     size: raw.size,
   };
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // useKeyboardHeight — tracks the on-screen keyboard height.
 // Only the footer uses this, so the chat list is never pushed up.
@@ -463,14 +492,10 @@ export default function SupportChatScreen() {
               uri = `file://${uri}`;
             }
 
-            const extMatch = /\.[a-zA-Z0-9]+$/.exec(n.name || "");
-            const ext = extMatch ? extMatch[0] : ".bin";
-            const safeName = `attachment_${Date.now()}_${i}${ext}`;
-
             form.append("attachments", {
               uri,
-              name: safeName,
-              type: n.mimeType || "application/octet-stream",
+              name: n.name,
+              type: n.mimeType || "image/jpeg",
             });
           });
 

@@ -10,7 +10,7 @@
 //   POST /support/chat/:id/csat
 //   GET  /support/tickets · POST /support/tickets · etc.
 
-import client from "./client";
+import client, { tokenStore } from "./client";
 import { useAuthStore } from "../store/authStore";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,7 +122,7 @@ export const uploadChatAttachments = async (formData) => {
   const baseURL = client.defaults.baseURL || "";
   const url = `${baseURL.replace(/\/+$/, "")}/support/chat/upload`;
 
-  const token = readAuthToken();
+  const token = await tokenStore.getAccess(); // ← same source as client.js
   if (!token) {
     const err = new Error("Authentication token missing");
     err.response = { status: 401, data: { message: "Not authorized" } };
@@ -131,7 +131,6 @@ export const uploadChatAttachments = async (formData) => {
 
   const res = await fetch(url, {
     method: "POST",
-    // Do NOT set Content-Type — fetch derives multipart + boundary from FormData
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
