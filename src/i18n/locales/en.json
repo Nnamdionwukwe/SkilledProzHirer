@@ -5621,7 +5621,8 @@
     },
 
     "card": {
-      "viewDetails": "View details"
+      "viewDetails": "View details",
+      "receipt": "Receipt"
     },
 
     "empty": {
@@ -5909,7 +5910,8 @@
     },
     "card": {
       "retrying": "Awaiting admin approval — will retry automatically.",
-      "retryCount": "attempt {{count}}"
+      "retryCount": "attempt {{count}}",
+      "receipt": "Receipt"
     },
 
     "time": {
