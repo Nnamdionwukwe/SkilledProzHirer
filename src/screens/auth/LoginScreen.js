@@ -311,7 +311,7 @@ export default function LoginScreen() {
         ref={formScrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingBottom: 24 + keyboardHeight,
+          paddingBottom: 0,
           flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
