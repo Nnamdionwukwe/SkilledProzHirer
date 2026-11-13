@@ -412,10 +412,13 @@ export default function HirerNavigator() {
           </Drawer.Screen>
           <Drawer.Screen
             name="Chat"
-            options={{ drawerItemStyle: { display: "none" } }}
-          >
-            {() => <ScreenWithChrome Screen={ChatScreen} />}
-          </Drawer.Screen>
+            component={ChatScreen}
+            options={{
+              drawerItemStyle: { display: "none" },
+              headerShown: false,
+              swipeEnabled: false,
+            }}
+          />
           <Drawer.Screen
             name="ReviewsReceived"
             options={{ drawerItemStyle: { display: "none" } }}
