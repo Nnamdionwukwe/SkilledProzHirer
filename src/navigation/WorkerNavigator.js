@@ -1,5 +1,11 @@
 // src/navigation/WorkerNavigator.js
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { View, StyleSheet, Pressable, Animated } from "react-native";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -86,6 +92,61 @@ function FloatingTabBar() {
     isHidden: false,
   });
 
+  // ── Tab layout measurements ────────────────────────────────────────────
+  // Each tab records its x position (in the parent row) and width, so the
+  // sliding highlight can animate to the correct slot. Measured via
+  // onLayout on the row-level View — no extra wrapper needed per tab.
+  const tabLayouts = useRef({}); // { [tab.name]: { x, width } }
+
+  // Animated value that drives the highlight's translateX.
+  const highlightX = useRef(new Animated.Value(0)).current;
+  // Same value as a plain number, so we can read it synchronously when
+  // computing target offsets without depending on async listeners.
+  const highlightXNum = useRef(0);
+  useEffect(() => {
+    const id = highlightX.addListener(({ value }) => {
+      highlightXNum.current = value;
+    });
+    return () => highlightX.removeListener(id);
+  }, [highlightX]);
+
+  // Animated value for the highlight width (some tabs may have a
+  // different icon size and hence different widths).
+  const highlightW = useRef(new Animated.Value(40)).current;
+
+  // How far the highlight has to travel each time the active route
+  // changes. Recomputed whenever either the active route or the tab
+  // layouts change.
+  const animateTo = useCallback(
+    (routeName, animated = true) => {
+      const layout = tabLayouts.current[routeName];
+      if (!layout) return;
+      const targetX = layout.x;
+      const targetW = layout.width;
+      if (animated) {
+        Animated.parallel([
+          Animated.spring(highlightX, {
+            toValue: targetX,
+            useNativeDriver: false,
+            friction: 12,
+            tension: 90,
+          }),
+          Animated.spring(highlightW, {
+            toValue: targetW,
+            useNativeDriver: false,
+            friction: 12,
+            tension: 90,
+          }),
+        ]).start();
+      } else {
+        highlightX.setValue(targetX);
+        highlightW.setValue(targetW);
+      }
+    },
+    [highlightX, highlightW],
+  );
+
+  // ── Scroll hide-on-scroll effect (unchanged) ───────────────────────────
   useEffect(() => {
     if (!scrollY) return;
     const listener = scrollY.addListener(({ value }) => {
@@ -133,27 +194,48 @@ function FloatingTabBar() {
     return () => scrollY.removeListener(listener);
   }, [scrollY, translateY]);
 
+  // ── Route tracking effect (unchanged) ──────────────────────────────────
   useEffect(() => {
+    const getTopmostRouteName = (state) => {
+      if (!state) return null;
+      const route = state.routes?.[state.index ?? state.routes.length - 1];
+      if (!route) return null;
+      if (route.state) {
+        const inner = getTopmostRouteName(route.state);
+        if (inner) return inner;
+      }
+      return route.name;
+    };
+
     const unsub = navigationRef.addListener("state", () => {
       const state = navigationRef.getRootState();
-      const findActive = (s) => {
-        if (!s) return null;
-        if (s.type === "drawer") return s.routes[s.index]?.name;
-        for (const r of s.routes) {
-          const f = findActive(r.state);
-          if (f) return f;
-        }
-        return null;
-      };
-      const current = findActive(state);
-      if (current) {
-        setActiveRoute(current);
-        scrollState.current.isHidden = false;
-        translateY.setValue(0);
-      }
+      const top = getTopmostRouteName(state);
+      setActiveRoute(top || "Dashboard");
+      scrollState.current.isHidden = false;
+      scrollState.current.lastOffset = 0;
+      translateY.setValue(0);
     });
     return unsub;
   }, [translateY]);
+
+  // ── Slide the highlight whenever activeRoute or layouts change ─────────
+  const isTabRoute = (name) =>
+    name === "Dashboard" ||
+    name === "WorkerBookings" ||
+    name === "WorkerJobs" ||
+    name === "WorkerApplications" ||
+    name === "WorkerWithdrawals" ||
+    name === "WorkerEmployers";
+
+  const [layoutsReady, setLayoutsReady] = useState(0);
+
+  useEffect(() => {
+    if (!isTabRoute(activeRoute)) return;
+    // animateTo returns early if the layout hasn't been measured yet;
+    // layoutsReady in the deps ensures we retry once they land.
+    animateTo(activeRoute, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRoute, layoutsReady]);
 
   const tabs = [
     { name: "Dashboard", icon: "home-outline" },
@@ -165,6 +247,7 @@ function FloatingTabBar() {
   ];
 
   const isDark = effectiveMode !== "light";
+  const highlightVisible = isTabRoute(activeRoute);
 
   return (
     <Animated.View
@@ -205,39 +288,77 @@ function FloatingTabBar() {
           ]}
         />
         <View style={styles.tabRow}>
+          {/* Sliding highlight — a single animated pill positioned
+              absolutely behind the tab icons. It follows the current
+              active tab by animating translateX and width. Hidden when
+              the current top-of-stack route isn't one of the six tabs. */}
+          {highlightVisible && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.activePill,
+                {
+                  position: "absolute",
+                  top: "50%",
+                  marginTop: -14,
+                  left: 0,
+                  backgroundColor: c.orangeDim,
+                  borderColor: "rgba(249, 115, 22, 0.5)",
+                  transform: [{ translateX: highlightX }],
+                  width: highlightW,
+                },
+              ]}
+            />
+          )}
           {tabs.map((tab) => {
             const isFocused = activeRoute === tab.name;
             const activeIcon = tab.icon.replace("-outline", "");
             return (
               <Pressable
                 key={tab.name}
-                onPress={() => navigationRef.navigate(tab.name)}
+                onPress={() => {
+                  try {
+                    navigationRef.navigate("WorkerHome", {
+                      screen: tab.name,
+                    });
+                  } catch {
+                    navigationRef.navigate(tab.name);
+                  }
+                }}
+                onLayout={(e) => {
+                  const { x, width } = e.nativeEvent.layout;
+                  tabLayouts.current[tab.name] = { x, width };
+                  // Force the highlight effect to retry once all layouts
+                  // are measured.
+                  setLayoutsReady((n) => n + 1);
+                  // If this is the initially active tab and its layout
+                  // just landed, snap the highlight into place without
+                  // animation so it doesn't fly in from x=0.
+                  if (
+                    tab.name === activeRoute &&
+                    highlightXNum.current === 0 &&
+                    highlightW._value === 40
+                  ) {
+                    highlightX.setValue(x);
+                    highlightW.setValue(width);
+                  }
+                }}
                 style={({ pressed }) => [
                   styles.tabItem,
                   pressed && { opacity: 0.7 },
                 ]}
               >
-                {isFocused ? (
-                  <View
-                    style={[
-                      styles.activePill,
-                      {
-                        backgroundColor: c.orangeDim,
-                        borderColor: "rgba(249, 115, 22, 0.5)",
-                      },
-                    ]}
-                  >
-                    <Ionicons name={activeIcon} size={18} color={c.orange} />
-                  </View>
-                ) : (
-                  <Ionicons
-                    name={tab.icon}
-                    size={18}
-                    color={
-                      isDark ? "rgba(255,255,255,0.85)" : "rgba(20,20,30,0.75)"
-                    }
-                  />
-                )}
+                <Ionicons
+                  name={isFocused ? activeIcon : tab.icon}
+                  size={18}
+                  color={
+                    isFocused
+                      ? c.orange
+                      : isDark
+                        ? "rgba(255,255,255,0.85)"
+                        : "rgba(20,20,30,0.75)"
+                  }
+                />
               </Pressable>
             );
           })}
@@ -275,6 +396,25 @@ function ScreenWithChrome({ Screen, title, subtitle }) {
         <FloatingTabBar />
       </View>
     </ScrollContext.Provider>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Screen With Stack Chrome
+// Used by Stack screens (BookingDetail, HirerPublicProfile, etc.) so they
+// render the FloatingTabBar at the bottom — matching the hirer side where
+// every non-chat screen shows the pill. The TopBar is rendered by the
+// Stack.Navigator via the `header` option, so this wrapper only adds the
+// floating bar over the screen content.
+// ════════════════════════════════════════════════════════════════════════
+function ScreenWithStackChrome({ Screen }) {
+  const navigation = useNavigation();
+  const route = useRoute();
+  return (
+    <View style={{ flex: 1 }}>
+      <Screen navigation={navigation} route={route} />
+      <FloatingTabBar />
+    </View>
   );
 }
 
@@ -624,21 +764,12 @@ function WorkerStack() {
       title: t("jobs.detail.details"),
       subtitle: t("screenSub.jobDetails"),
     },
-    Chat: { title: t("nav.messages"), subtitle: t("screenSub.directMessage") },
     PostDetail: { title: t("nav.myPosts"), subtitle: t("screenSub.community") },
     RefundDetail: { title: t("nav.refunds"), subtitle: t("screenSub.refunds") },
     MyDisputes: { title: t("nav.disputes"), subtitle: t("screenSub.disputes") },
     EditProfile: {
       title: t("profile.editProfile"),
       subtitle: t("screenSub.myProfile"),
-    },
-    SupportChat: {
-      title: t("nav.liveSupport"),
-      subtitle: t("screenSub.supportChat"),
-    },
-    SupportTicketThread: {
-      title: t("nav.supportTicket"),
-      subtitle: t("screenSub.supportTicket"),
     },
   };
 
@@ -647,8 +778,25 @@ function WorkerStack() {
       <Stack.Navigator
         screenOptions={({ route }) => {
           if (route.name === "WorkerHome") return { headerShown: false };
-          if (route.name === "VideoCall")
+
+          // Chat surfaces: chrome-free — no TopBar. Matches the hirer side.
+          if (
+            route.name === "Chat" ||
+            route.name === "SupportChat" ||
+            route.name === "SupportTicketThread"
+          ) {
+            return { headerShown: false };
+          }
+
+          // VideoCall: chrome-free, full-screen modal. Matches the hirer side.
+          if (route.name === "VideoCall") {
             return { headerShown: false, presentation: "fullScreenModal" };
+          }
+
+          // All other stack screens: TopBar header (this is the worker-only
+          // difference from the hirer drawer — the worker has real pushed
+          // stack screens with a back button). The FloatingTabBar is added
+          // by ScreenWithStackChrome inside each Screen registration below.
           const m = STACK_META[route.name] ?? { title: route.name };
           return {
             headerShown: true,
@@ -665,31 +813,60 @@ function WorkerStack() {
         }}
       >
         <Stack.Screen name="WorkerHome" component={WorkerDrawer} />
-        <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
+
+        {/* Non-chat stack screens — TopBar + FloatingTabBar. */}
+        <Stack.Screen name="BookingDetail">
+          {() => <ScreenWithStackChrome Screen={BookingDetailScreen} />}
+        </Stack.Screen>
+        <Stack.Screen name="HirerPublicProfile">
+          {() => <ScreenWithStackChrome Screen={HirerPublicProfileScreen} />}
+        </Stack.Screen>
+        <Stack.Screen name="WorkerJobDetail">
+          {() => <ScreenWithStackChrome Screen={JobDetailScreen} />}
+        </Stack.Screen>
+        <Stack.Screen name="PostDetail">
+          {() => <ScreenWithStackChrome Screen={PostDetailScreen} />}
+        </Stack.Screen>
+        <Stack.Screen name="RefundDetail">
+          {() => <ScreenWithStackChrome Screen={RefundDetailScreen} />}
+        </Stack.Screen>
+        <Stack.Screen name="MyDisputes">
+          {() => <ScreenWithStackChrome Screen={MyDisputesScreen} />}
+        </Stack.Screen>
+        <Stack.Screen name="EditProfile">
+          {() => <ScreenWithStackChrome Screen={EditProfileScreen} />}
+        </Stack.Screen>
         <Stack.Screen
-          name="HirerPublicProfile"
-          component={HirerPublicProfileScreen}
-        />
-        <Stack.Screen name="WorkerJobDetail" component={JobDetailScreen} />
+          name="WorkerRetainedEmployerDetail"
+          options={{ headerShown: false }}
+        >
+          {() => (
+            <ScreenWithStackChrome
+              Screen={WorkerRetainedEmployerDetailScreen}
+            />
+          )}
+        </Stack.Screen>
+
+        {/* Chat surfaces — chrome-free, exactly like the hirer side. */}
         <Stack.Screen
           name="Chat"
           component={ChatScreen}
           options={{ headerShown: false }}
         />
-        <Stack.Screen name="PostDetail" component={PostDetailScreen} />
-        <Stack.Screen name="RefundDetail" component={RefundDetailScreen} />
-        <Stack.Screen name="MyDisputes" component={MyDisputesScreen} />
-        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-        <Stack.Screen name="VideoCall" component={VideoCallScreen} />
-        <Stack.Screen name="SupportChat" component={SupportChatScreen} />
+        <Stack.Screen
+          name="SupportChat"
+          component={SupportChatScreen}
+          options={{ headerShown: false }}
+        />
         <Stack.Screen
           name="SupportTicketThread"
           component={SupportTicketThreadScreen}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
-          name="WorkerRetainedEmployerDetail"
-          component={WorkerRetainedEmployerDetailScreen}
-          options={{ headerShown: false }}
+          name="VideoCall"
+          component={VideoCallScreen}
+          options={{ headerShown: false, presentation: "fullScreenModal" }}
         />
       </Stack.Navigator>
     </View>
