@@ -311,7 +311,7 @@ export default function LoginScreen() {
         ref={formScrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingBottom: 0,
+          paddingBottom: 32,
           flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
@@ -383,89 +383,90 @@ export default function LoginScreen() {
 
         {error && !block ? <AuthAlert type="error" message={error} /> : null}
 
-        <View style={{ gap: 14, marginBottom: keyboardHeight }}>
-          {/* Each field's onLayout fires with a y relative to the
-              scroll content — used by scrollToField(). Wrapping each
-              field in a plain View adds no extra offset because the
-              gap already comes from the parent's `gap: 14`. */}
-          <View
-            ref={emailRowRef}
-            onLayout={(e) => {
-              fieldY.current.email = e.nativeEvent.layout.y;
-            }}
-          >
-            <AuthField
-              label={t("auth.emailAddress")}
-              iconLeft="mail-outline"
-              placeholder={t("auth.emailPlaceholder")}
-              value={email}
-              onChangeText={(v) => {
-                setEmail(v);
-                setError("");
+        {/* Outer wrapper lifts the input group + footer together when the
+            keyboard opens — no giant empty gap between them, footer stays
+            visible just above the keyboard. */}
+        <View style={{ marginBottom: keyboardHeight }}>
+          <View style={{ gap: 14 }}>
+            <View
+              ref={emailRowRef}
+              onLayout={(e) => {
+                fieldY.current.email = e.nativeEvent.layout.y;
               }}
-              onFocus={() => scrollToField("email")}
-              keyboardType="email-address"
-              autoComplete="email"
-              textContentType="emailAddress"
-              editable={!loading}
-            />
-          </View>
-
-          <View
-            ref={passwordRowRef}
-            onLayout={(e) => {
-              fieldY.current.password = e.nativeEvent.layout.y;
-            }}
-          >
-            <AuthField
-              label={t("auth.password")}
-              iconLeft="lock-closed-outline"
-              placeholder={t("auth.passwordMinChars")}
-              value={password}
-              onChangeText={(v) => {
-                setPassword(v);
-                setError("");
-              }}
-              onFocus={() => scrollToField("password")}
-              secureTextEntry={!showPassword}
-              autoComplete="password"
-              textContentType="password"
-              editable={!loading}
-              iconRight={{
-                name: showPassword ? "eye-off-outline" : "eye-outline",
-                onPress: () => setShowPassword((v) => !v),
-              }}
-            />
-          </View>
-
-          <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-            <Pressable
-              onPress={() => navigation.navigate("ForgotPassword")}
-              hitSlop={6}
             >
-              <AppText
-                variant="small"
-                weight="semibold"
-                style={{ color: c.orange }}
+              <AuthField
+                label={t("auth.emailAddress")}
+                iconLeft="mail-outline"
+                placeholder={t("auth.emailPlaceholder")}
+                value={email}
+                onChangeText={(v) => {
+                  setEmail(v);
+                  setError("");
+                }}
+                onFocus={() => scrollToField("email")}
+                keyboardType="email-address"
+                autoComplete="email"
+                textContentType="emailAddress"
+                editable={!loading}
+              />
+            </View>
+
+            <View
+              ref={passwordRowRef}
+              onLayout={(e) => {
+                fieldY.current.password = e.nativeEvent.layout.y;
+              }}
+            >
+              <AuthField
+                label={t("auth.password")}
+                iconLeft="lock-closed-outline"
+                placeholder={t("auth.passwordMinChars")}
+                value={password}
+                onChangeText={(v) => {
+                  setPassword(v);
+                  setError("");
+                }}
+                onFocus={() => scrollToField("password")}
+                secureTextEntry={!showPassword}
+                autoComplete="password"
+                textContentType="password"
+                editable={!loading}
+                iconRight={{
+                  name: showPassword ? "eye-off-outline" : "eye-outline",
+                  onPress: () => setShowPassword((v) => !v),
+                }}
+              />
+            </View>
+
+            <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+              <Pressable
+                onPress={() => navigation.navigate("ForgotPassword")}
+                hitSlop={6}
               >
-                {t("auth.forgot")}
-              </AppText>
-            </Pressable>
+                <AppText
+                  variant="small"
+                  weight="semibold"
+                  style={{ color: c.orange }}
+                >
+                  {t("auth.forgot")}
+                </AppText>
+              </Pressable>
+            </View>
+
+            <AuthButton
+              title={loading ? t("auth.signingIn") : t("auth.signIn")}
+              onPress={handleSubmit}
+              loading={loading}
+              disabled={!email || !password}
+            />
+
+            <AuthFooter
+              prompt={t("auth.noAccountYet")}
+              actionLabel={t("auth.createOneFree")}
+              onPress={() => navigation.navigate("Register")}
+            />
           </View>
-
-          <AuthButton
-            title={loading ? t("auth.signingIn") : t("auth.signIn")}
-            onPress={handleSubmit}
-            loading={loading}
-            disabled={!email || !password}
-          />
         </View>
-
-        <AuthFooter
-          prompt={t("auth.noAccountYet")}
-          actionLabel={t("auth.createOneFree")}
-          onPress={() => navigation.navigate("Register")}
-        />
       </ScrollView>
     </AuthShell>
   );
