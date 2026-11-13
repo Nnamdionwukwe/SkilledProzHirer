@@ -506,7 +506,7 @@ export default function SupportTicketThreadScreen() {
         <Pressable
           onPress={() => navigation.navigate("SupportHub")}
           style={{
-            marginTop: 8,
+            marginTop: 18,
             paddingHorizontal: 24,
             paddingVertical: 12,
             borderRadius: 12,
@@ -539,7 +539,7 @@ export default function SupportTicketThreadScreen() {
         <Pressable
           onPress={() => navigation.navigate("SupportHub")}
           hitSlop={10}
-          style={{ alignSelf: "flex-start", marginBottom: 10 }}
+          style={{ alignSelf: "flex-start", marginBottom: 10, marginTop: 22 }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Ionicons name="arrow-back" size={16} color={c.textMuted} />

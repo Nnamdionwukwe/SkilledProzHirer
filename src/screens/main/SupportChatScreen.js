@@ -44,6 +44,54 @@ const MAX_FILES = 5;
 const MAX_VIDEO_SECONDS = 60;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// normaliseFile — guarantees RN's FormData bridge can serialise the file.
+//   • uri must start with file:// | content:// | assets-library://
+//     (bare paths → prepend file://)
+//   • name must not contain spaces, quotes, parens, or unicode
+//     (RN's fetch crashes on these — the web browser auto-sanitises, RN
+//      does not)
+//   • type must be a real MIME type — application/octet-stream is treated
+//     as "unknown" by some server-side multipart parsers and by RN's XHR
+//     bridge on Android, causing a silent drop that surfaces as
+//     `Network Error`.
+// ─────────────────────────────────────────────────────────────────────────────
+function normaliseFile(raw, fallbackExt = "jpg") {
+  if (!raw?.uri) return null;
+
+  let uri = String(raw.uri);
+  if (uri.startsWith("http://") || uri.startsWith("https://")) {
+    // Remote URLs are never pickable attachments — reject.
+    return null;
+  }
+  if (
+    !uri.startsWith("file://") &&
+    !uri.startsWith("content://") &&
+    !uri.startsWith("assets-library://")
+  ) {
+    uri = `file://${uri}`;
+  }
+
+  const extMatch = /\.[a-zA-Z0-9]+$/.exec(raw.name || "");
+  const ext = extMatch ? extMatch[0] : `.${fallbackExt}`;
+  const base = (raw.name || `upload_${Date.now()}`).replace(/[^\w.\-]/g, "_");
+  const safeName = /\.[a-zA-Z0-9]+$/.test(base) ? base : `${base}${ext}`;
+
+  const type =
+    raw.mimeType && raw.mimeType !== "application/octet-stream"
+      ? raw.mimeType
+      : raw.type === "video"
+        ? "video/mp4"
+        : "image/jpeg";
+
+  return {
+    uri,
+    name: safeName,
+    mimeType: type,
+    size: raw.size,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // useKeyboardHeight — tracks the on-screen keyboard height.
 // Only the footer uses this, so the chat list is never pushed up.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -240,21 +288,22 @@ export default function SupportChatScreen() {
     if (!incoming?.length) return;
     setFiles((prev) => {
       const next = [...prev];
-      for (const f of incoming) {
+      for (const raw of incoming) {
         if (next.length >= MAX_FILES) {
           toast.error(t("support.chat.maxFiles", { count: MAX_FILES }));
           break;
         }
-        if (f.size && f.size > MAX_FILE_BYTES) {
+        if (raw.size && raw.size > MAX_FILE_BYTES) {
           toast.error(
             t("support.chat.fileTooLarge", {
-              name: f.name,
+              name: raw.name,
               size: Math.round(MAX_FILE_BYTES / 1024 / 1024),
             }),
           );
           continue;
         }
-        next.push(f);
+        const normalised = normaliseFile(raw);
+        if (normalised) next.push(normalised);
       }
       return next;
     });
@@ -300,6 +349,7 @@ export default function SupportChatScreen() {
           name: a.fileName || `camera_${Date.now()}.${isVideo ? "mp4" : "jpg"}`,
           mimeType: a.mimeType || (isVideo ? "video/mp4" : "image/jpeg"),
           size: a.fileSize,
+          type: a.type,
         },
       ]);
     } catch (err) {
@@ -334,6 +384,7 @@ export default function SupportChatScreen() {
               `media_${Date.now()}_${idx}.${isVideo ? "mp4" : "jpg"}`,
             mimeType: a.mimeType || (isVideo ? "video/mp4" : "image/jpeg"),
             size: a.fileSize,
+            type: a.type,
           };
         }),
       );
@@ -388,7 +439,42 @@ export default function SupportChatScreen() {
       if (filesSnapshot.length > 0) {
         setIsUploading(true);
         try {
-          attachments = await uploadChatAttachments(filesSnapshot);
+          // Build a proper FormData — axios/RN cannot serialise a plain
+          // array of files as multipart. The previous code passed
+          // `filesSnapshot` directly, which axios saw as a non-FormData
+          // body with a `Content-Type: multipart/form-data` header and
+          // threw "Network Error" before the request left the device.
+          const form = new FormData();
+          filesSnapshot.forEach((f, i) => {
+            // Re-normalise defensively — if a file got into state through
+            // any path that skipped pushFiles, sanitise it here too.
+            const n = normaliseFile(f) || f;
+
+            // Force file:// on bare paths; keep content:// as-is
+            // (RN's Android bridge supports content:// natively).
+            let uri = n.uri;
+            if (uri.startsWith("content://")) {
+              // keep as-is
+            } else if (
+              !uri.startsWith("file://") &&
+              !uri.startsWith("assets-library://") &&
+              !uri.startsWith("http")
+            ) {
+              uri = `file://${uri}`;
+            }
+
+            const extMatch = /\.[a-zA-Z0-9]+$/.exec(n.name || "");
+            const ext = extMatch ? extMatch[0] : ".bin";
+            const safeName = `attachment_${Date.now()}_${i}${ext}`;
+
+            form.append("attachments", {
+              uri,
+              name: safeName,
+              type: n.mimeType || "application/octet-stream",
+            });
+          });
+
+          attachments = await uploadChatAttachments(form);
         } finally {
           setIsUploading(false);
         }

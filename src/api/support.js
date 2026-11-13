@@ -11,6 +11,7 @@
 //   GET  /support/tickets · POST /support/tickets · etc.
 
 import client from "./client";
+import { useAuthStore } from "../store/authStore";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper — pull a value from any of the plausible response envelopes
@@ -30,6 +31,31 @@ function pick(body, keys) {
     if (ok && cur !== undefined && cur !== null) return cur;
   }
   return undefined;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resolve the auth token synchronously from the auth store.
+// `client`'s request interceptor normally attaches this to every request —
+// but axios SKIPS the interceptor when the caller sets an explicit
+// `Content-Type: multipart/form-data` header. That's why the chat upload
+// (which must not set that header, since RN's fetch sets it with a
+// boundary) bypasses `client` and calls `fetch` directly with the token
+// read here.
+// ─────────────────────────────────────────────────────────────────────────────
+function readAuthToken() {
+  try {
+    const state = useAuthStore.getState?.() ?? {};
+    return (
+      state.token ||
+      state.accessToken ||
+      state.authToken ||
+      state.user?.token ||
+      state.user?.accessToken ||
+      null
+    );
+  } catch {
+    return null;
+  }
 }
 
 // ── Tickets ──────────────────────────────────────────────────────────────
@@ -58,10 +84,12 @@ export const getTicket = (id) =>
   });
 
 // ── Multipart Uploads ────────────────────────────────────────────────────
-// NOTE: we explicitly set "multipart/form-data" here (matching the website).
-// Do NOT set this to `undefined` — axios will strip the boundary and the
-// request will hang with a "Network Error" on Android. RN + axios 1.7+
-// correctly auto-appends the boundary when you pass "multipart/form-data".
+// NOTE: for the ticket endpoints we keep the explicit "multipart/form-data"
+// header (matching the website). The chat upload uses `fetch` directly
+// because axios's interceptor is skipped when that header is set, which
+// causes the Authorization header to be dropped before the request leaves
+// the device — the failure surfaces as a 401 "Not authorized" / "token
+// missing" from the backend.
 
 export const createTicket = (formData) =>
   client
@@ -83,15 +111,50 @@ export const replyToTicket = (id, formData) =>
       return { message, ticketStatus };
     });
 
-export const uploadChatAttachments = (formData) =>
-  client
-    .post("/support/chat/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })
-    .then((r) => {
-      const d = r.data;
-      return d?.attachments ?? d?.data?.attachments ?? [];
-    });
+/**
+ * uploadChatAttachments — direct fetch to keep the Authorization header
+ * attached. `client.post` with an explicit `Content-Type: multipart/form-data`
+ * skips the axios interceptor that adds the token, so the request reaches
+ * the backend without auth and returns 401. Sending the token explicitly
+ * with `fetch` fixes that.
+ */
+export const uploadChatAttachments = async (formData) => {
+  const baseURL = client.defaults.baseURL || "";
+  const url = `${baseURL.replace(/\/+$/, "")}/support/chat/upload`;
+
+  const token = readAuthToken();
+  if (!token) {
+    const err = new Error("Authentication token missing");
+    err.response = { status: 401, data: { message: "Not authorized" } };
+    throw err;
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    // Do NOT set Content-Type — fetch derives multipart + boundary from FormData
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  const text = await res.text();
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    /* non-json response */
+  }
+
+  if (!res.ok) {
+    const err = new Error(json?.message || `Upload failed (${res.status})`);
+    err.response = { status: res.status, data: json ?? text };
+    throw err;
+  }
+
+  return json?.attachments ?? json?.data?.attachments ?? [];
+};
 
 // ── Standard Ticket Actions ──────────────────────────────────────────────
 export const closeTicket = (id) =>
