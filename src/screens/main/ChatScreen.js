@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   Keyboard,
   Linking,
@@ -380,6 +381,27 @@ function Avatar({ user, size = 28 }) {
 }
 
 function SkeletonBubble({ c, mine }) {
+  const shimmer = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, {
+          toValue: 0.85,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmer, {
+          toValue: 0.35,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+
   return (
     <View
       style={{
@@ -389,16 +411,21 @@ function SkeletonBubble({ c, mine }) {
         marginBottom: 10,
       }}
     >
-      <View
-        style={{
-          width: mine ? 0 : 28,
-          height: 28,
-          borderRadius: 14,
-          backgroundColor: mine ? "transparent" : c.bgCard,
-          marginRight: mine ? 0 : 6,
-        }}
-      />
-      <View
+      {!mine && (
+        <Animated.View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: c.bgCard,
+            borderWidth: 1,
+            borderColor: c.border,
+            marginRight: 6,
+            opacity: shimmer,
+          }}
+        />
+      )}
+      <Animated.View
         style={{
           width: mine ? "55%" : "65%",
           height: 36,
@@ -406,13 +433,12 @@ function SkeletonBubble({ c, mine }) {
           backgroundColor: c.bgCard,
           borderWidth: 1,
           borderColor: c.border,
-          opacity: 0.6,
+          opacity: shimmer,
         }}
       />
     </View>
   );
 }
-
 export default function ChatScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -455,7 +481,22 @@ export default function ChatScreen() {
   const markingReadRef = useRef(false);
   const { toast } = useToast();
 
+  // Track which (conversationId, withUserId) pair we've already reset for.
+  // Returning from VideoCall re-navigates to Chat with the SAME params, which
+  // re-runs this effect — but there's nothing to reset if the pair hasn't
+  // changed, and resetting would wipe convoMeta/withUser (avatar + name go
+  // blank until the next fetch effect runs — which it won't, since its own
+  // dependency `activeConvoId` is unchanged).
+  const lastRouteKeyRef = useRef(null);
+
   useEffect(() => {
+    const nextKey = `${routeConvoId || ""}|${routeWithId || ""}`;
+    if (lastRouteKeyRef.current === nextKey) {
+      // Same chat — do not reset. Returning from VideoCall lands here.
+      return;
+    }
+    lastRouteKeyRef.current = nextKey;
+
     setMessages([]);
     setSendingMessage(null);
     setConvoMeta(null);
@@ -476,8 +517,13 @@ export default function ChatScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeConvoId, routeWithId, routeDraft, routePrefill]);
 
+  // Re-run when activeConvoId changes OR when convoMeta has been cleared
+  // (e.g. by a route reset, a session refresh, or a remount from VideoCall
+  // return). Guarding on `!convoMeta` ensures the header avatar + name
+  // recover without needing a full hot reload.
   useEffect(() => {
     if (!activeConvoId) return;
+    if (convoMeta && convoMeta.id === activeConvoId) return; // already loaded
     let cancelled = false;
     (async () => {
       try {
@@ -492,7 +538,8 @@ export default function ChatScreen() {
     return () => {
       cancelled = true;
     };
-  }, [activeConvoId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConvoId, convoMeta]);
 
   useEffect(() => {
     if (!withUserId) {
@@ -1110,34 +1157,106 @@ export default function ChatScreen() {
         >
           <FaArrowLeft size={18} color={c.textDim} />
         </Pressable>
-        {activeOther && <Avatar user={activeOther} size={34} />}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <AppText
-            numberOfLines={1}
-            style={{ fontSize: 14, fontWeight: "600", color: c.text }}
-          >
-            {activeOther?.firstName} {activeOther?.lastName}
-          </AppText>
-          <AppText numberOfLines={1} style={{ fontSize: 11, color: c.textDim }}>
-            {convoMeta?.booking?.title ||
-              t("messages.directMessage", "Direct message")}
-          </AppText>
-        </View>
-        {otherProfileUrl && (
+
+        {/* Avatar + name are now a single Pressable that opens the profile.
+            When activeOther hasn't resolved yet (convoMeta / withUser still
+            fetching), we show pulsing skeleton blocks instead of empty space. */}
+        <Pressable
+          onPress={() => {
+            if (!otherProfileUrl) return;
+            const [screen, id] = otherProfileUrl.split(":");
+            navigation.navigate(screen, { userId: id });
+          }}
+          disabled={!otherProfileUrl}
+          hitSlop={6}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+          }}
+          accessibilityLabel={t("messages.viewProfile", "View profile")}
+        >
+          {activeOther ? (
+            <>
+              <Avatar user={activeOther} size={34} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <AppText
+                  numberOfLines={1}
+                  style={{ fontSize: 14, fontWeight: "600", color: c.text }}
+                >
+                  {activeOther.firstName} {activeOther.lastName}
+                </AppText>
+                <AppText
+                  numberOfLines={1}
+                  style={{ fontSize: 11, color: c.textDim }}
+                >
+                  {convoMeta?.booking?.title ||
+                    t("messages.directMessage", "Direct message")}
+                </AppText>
+              </View>
+            </>
+          ) : (
+            <>
+              <HeaderSkeletonCircle c={c} size={34} />
+              <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+                <HeaderSkeletonBar c={c} width="55%" height={13} />
+                <HeaderSkeletonBar c={c} width="40%" height={10} />
+              </View>
+            </>
+          )}
+        </Pressable>
+
+        {/* Attach / voice / video — moved up from the composer. */}
+        <View style={{ flexDirection: "row", gap: 4 }}>
           <Pressable
-            onPress={() => {
-              const [screen, id] = otherProfileUrl.split(":");
-              navigation.navigate(screen, { userId: id });
-            }}
-            hitSlop={8}
+            onPress={handlePickFile}
+            disabled={uploadingFile}
+            accessibilityLabel={t("messages.attachFile", "Attach file")}
+            style={[
+              styles.toolBtn,
+              { backgroundColor: c.bgCard, borderColor: c.border },
+            ]}
+            hitSlop={4}
           >
-            <AppText
-              style={{ fontSize: 11, fontWeight: "600", color: c.orange }}
-            >
-              {t("messages.viewProfile", "Profile →")}
-            </AppText>
+            {uploadingFile ? (
+              <ActivityIndicator size="small" color={c.textDim} />
+            ) : (
+              <FaPaperclip size={14} color={c.textDim} />
+            )}
           </Pressable>
-        )}
+          <Pressable
+            onPress={() => !isOnCall && setPendingCallType("voice")}
+            disabled={!activeConvoId || startingCall || isOnCall}
+            style={[
+              styles.toolBtn,
+              {
+                backgroundColor: c.bgCard,
+                borderColor: c.border,
+                opacity: !activeConvoId || isOnCall ? 0.4 : 1,
+              },
+            ]}
+            hitSlop={4}
+          >
+            <FaPhone size={14} color={c.textDim} />
+          </Pressable>
+          <Pressable
+            onPress={() => !isOnCall && setPendingCallType("video")}
+            disabled={!activeConvoId || startingCall || isOnCall}
+            style={[
+              styles.toolBtn,
+              {
+                backgroundColor: c.bgCard,
+                borderColor: c.border,
+                opacity: !activeConvoId || isOnCall ? 0.4 : 1,
+              },
+            ]}
+            hitSlop={4}
+          >
+            <FaVideo size={14} color={c.textDim} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={{ flex: 1, position: "relative" }}>
@@ -1145,12 +1264,17 @@ export default function ChatScreen() {
           <View style={{ flex: 1, padding: 16 }}>
             {[
               { mine: false },
+              { mine: true },
               { mine: false },
+              { mine: false },
+              { mine: true },
               { mine: true },
               { mine: false },
               { mine: true },
-              { mine: true },
               { mine: false },
+              { mine: false },
+              { mine: true },
+              { mine: true },
             ].map((b, i) => (
               <SkeletonBubble key={i} c={c} mine={b.mine} />
             ))}
@@ -1245,55 +1369,6 @@ export default function ChatScreen() {
           marginBottom: keyboardHeight,
         }}
       >
-        <View style={{ flexDirection: "row", gap: 4, paddingBottom: 6 }}>
-          <Pressable
-            onPress={handlePickFile}
-            disabled={uploadingFile}
-            accessibilityLabel={t("messages.attachFile", "Attach file")}
-            style={[
-              styles.toolBtn,
-              { backgroundColor: c.bgCard, borderColor: c.border },
-            ]}
-            hitSlop={4}
-          >
-            {uploadingFile ? (
-              <ActivityIndicator size="small" color={c.textDim} />
-            ) : (
-              <FaPaperclip size={14} color={c.textDim} />
-            )}
-          </Pressable>
-          <Pressable
-            onPress={() => !isOnCall && setPendingCallType("voice")}
-            disabled={!activeConvoId || startingCall || isOnCall}
-            style={[
-              styles.toolBtn,
-              {
-                backgroundColor: c.bgCard,
-                borderColor: c.border,
-                opacity: !activeConvoId || isOnCall ? 0.4 : 1,
-              },
-            ]}
-            hitSlop={4}
-          >
-            <FaPhone size={14} color={c.textDim} />
-          </Pressable>
-          <Pressable
-            onPress={() => !isOnCall && setPendingCallType("video")}
-            disabled={!activeConvoId || startingCall || isOnCall}
-            style={[
-              styles.toolBtn,
-              {
-                backgroundColor: c.bgCard,
-                borderColor: c.border,
-                opacity: !activeConvoId || isOnCall ? 0.4 : 1,
-              },
-            ]}
-            hitSlop={4}
-          >
-            <FaVideo size={14} color={c.textDim} />
-          </Pressable>
-        </View>
-
         <View
           style={{
             flexDirection: "row",
@@ -1751,6 +1826,76 @@ export default function ChatScreen() {
         </View>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+function HeaderSkeletonCircle({ c, size = 34 }) {
+  const shimmer = useRef(new Animated.Value(0.35)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, {
+          toValue: 0.85,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmer, {
+          toValue: 0.35,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+  return (
+    <Animated.View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: c.bgCard,
+        borderWidth: 1,
+        borderColor: c.border,
+        opacity: shimmer,
+      }}
+    />
+  );
+}
+
+function HeaderSkeletonBar({ c, width = "50%", height = 12 }) {
+  const shimmer = useRef(new Animated.Value(0.35)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, {
+          toValue: 0.85,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmer, {
+          toValue: 0.35,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+  return (
+    <Animated.View
+      style={{
+        width,
+        height,
+        borderRadius: 4,
+        backgroundColor: c.bgCard,
+        borderWidth: 1,
+        borderColor: c.border,
+        opacity: shimmer,
+      }}
+    />
   );
 }
 
