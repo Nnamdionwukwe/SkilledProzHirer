@@ -3,9 +3,6 @@
 // Shared auth screen primitives — mirrors the website's AuthLayout
 // + form.module.css. Every auth screen composes these so all look
 // identical and match the website 1:1.
-//
-// Safe-area aware — the back button always clears the notch/status bar
-// by a generous margin on every device, including the S22.
 
 import React, { useEffect, useRef } from "react";
 import {
@@ -76,8 +73,9 @@ export function AuthShell({ children, showBack = true, backTo = "Login" }) {
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 16,
-          // Increased top padding to push the back button lower from the screen edge
-          paddingTop: Math.max(insets.top, 24) + 56,
+          // Small cushion below the safe-area boundary so the back
+          // button / eyebrow aren't glued to the status bar.
+          paddingTop: insets.top + 36,
           paddingBottom: Math.max(insets.bottom, 24) + 24,
         }}
         keyboardShouldPersistTaps="handled"
@@ -427,7 +425,7 @@ export function AuthFooter({ prompt, actionLabel, onPress }) {
           weight="semibold"
           style={{ color: c.orange, fontSize: 13.5 }}
         >
-          {actionLabel}
+          {actionLabel} →
         </AppText>
       </Pressable>
     </View>
@@ -440,9 +438,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    marginTop: 8,
-    marginBottom: 24,
-    paddingVertical: 6,
+    marginTop: 0,
+    marginBottom: 12,
+    paddingVertical: 4,
     paddingHorizontal: 4,
   },
   inputWrap: {

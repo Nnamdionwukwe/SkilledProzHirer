@@ -123,7 +123,7 @@
     "findNextProz": "Find your next professional",
     "firstName": "First Name",
     "firstNamePlaceholder": "John",
-    "forgot": "Forgot?",
+    "forgot": "Forgot password?",
     "forgotPasswordBody": "Enter your email and we'll send you a reset link.",
     "forgotPasswordTitle": "Forgot password?",
     "getStartedFree": "GET STARTED — IT'S FREE",
@@ -170,7 +170,7 @@
     "verifyEmailBody": "We sent a verification link to {{email}}. Check your inbox.",
     "verifyEmailTitle": "Verify your email",
     "welcomeBack": "WELCOME BACK",
-    "workerDescription": "Offer your services and earn clients."
+    "workerDescription": "Offer your services and earn, get booked by clients."
   },
   "retainedStaff": {
     "eyebrow": "Retained Staff",

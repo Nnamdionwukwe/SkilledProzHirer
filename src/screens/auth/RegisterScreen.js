@@ -110,7 +110,7 @@ export default function RegisterScreen() {
           <AppText
             variant="small"
             tone="muted"
-            style={{ fontSize: 12.5, lineHeight: 18 }}
+            style={{ fontSize: 11.5, lineHeight: 18 }}
           >
             {t("auth.hirerDescription", {
               defaultValue: "Find and book skilled professionals for any job.",
@@ -149,10 +149,10 @@ export default function RegisterScreen() {
           <AppText
             variant="small"
             tone="muted"
-            style={{ fontSize: 12.5, lineHeight: 18 }}
+            style={{ fontSize: 11.5, lineHeight: 18 }}
           >
             {t("auth.workerDescription", {
-              defaultValue: "Offer your skills and get booked by clients.",
+              defaultValue: "Offer your services and get booked by clients.",
             })}
           </AppText>
         </Pressable>
