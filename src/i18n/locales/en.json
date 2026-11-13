@@ -5255,7 +5255,9 @@
     },
     "workerWithdrawals": {
       "title": "Wallet",
-      "subtitle": "Earnings & payouts"
+      "subtitle": "Earnings & payouts",
+      "success": "Withdrawal of {{amount}} submitted for admin approval.",
+      "successWithDebt": "Withdrawal of {{amount}} submitted for admin approval. {{debt}} will be applied to your outstanding balance once approved."
     },
     "refundHistory": {
       "title": "Refund History",
@@ -5850,7 +5852,10 @@
       "free": "Free",
       "receive": "You receive",
       "close": "Close",
-      "footer": "SkilledProz · Global Skills Marketplace"
+      "footer": "SkilledProz · Global Skills Marketplace",
+      "pendingRetry": "This withdrawal is awaiting admin approval. The provider declined the first attempt — our team is retrying with the details on file. No action needed from you unless the admin reaches out.",
+      "failedReason": "This withdrawal could not be completed. Contact support with your reference number so we can resolve it.",
+      "receipt": "Receipt"
     },
 
     "pin": {
@@ -5898,12 +5903,13 @@
       "withdrawFailed": "Withdrawal failed. Please try again."
     },
 
-    "card": {
-      "receipt": "Receipt"
-    },
-
     "withdraw": {
-      "success": "Withdrawal of {{amount}} submitted. Processing within 1–3 business days."
+      "success": "Withdrawal of {{amount}} submitted for admin approval.",
+      "successWithDebt": "Withdrawal of {{amount}} submitted for admin approval. {{debt}} will be applied to your outstanding balance once approved."
+    },
+    "card": {
+      "retrying": "Awaiting admin approval — will retry automatically.",
+      "retryCount": "attempt {{count}}"
     },
 
     "time": {

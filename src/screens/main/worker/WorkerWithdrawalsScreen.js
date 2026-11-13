@@ -989,6 +989,90 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
                   }}
                 />
 
+                {withdrawal.status === "PENDING" &&
+                (withdrawal.failureNote ||
+                  withdrawal.details?.retryCount > 0) ? (
+                  <View
+                    style={{
+                      padding: 12,
+                      borderRadius: 10,
+                      backgroundColor: "rgba(245,158,11,0.08)",
+                      borderWidth: 1,
+                      borderColor: "rgba(245,158,11,0.25)",
+                      marginBottom: 16,
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <Ionicons
+                      name="time-outline"
+                      size={16}
+                      color="#f59e0b"
+                      style={{ marginTop: 1 }}
+                    />
+                    <AppText
+                      style={{
+                        flex: 1,
+                        fontSize: 12,
+                        color: "#f59e0b",
+                        lineHeight: 17,
+                      }}
+                    >
+                      {t("workerWithdrawals.receipt.pendingRetry", {
+                        defaultValue:
+                          "This withdrawal is awaiting admin approval. The provider declined the first attempt — our team is retrying with the details on file. No action needed from you unless the admin reaches out.",
+                      })}
+                    </AppText>
+                  </View>
+                ) : null}
+
+                {withdrawal.status === "FAILED" && withdrawal.failureNote ? (
+                  <View
+                    style={{
+                      padding: 12,
+                      borderRadius: 10,
+                      backgroundColor: "rgba(239,68,68,0.08)",
+                      borderWidth: 1,
+                      borderColor: "rgba(239,68,68,0.25)",
+                      marginBottom: 16,
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={16}
+                      color="#ef4444"
+                      style={{ marginTop: 1 }}
+                    />
+                    <AppText
+                      style={{
+                        flex: 1,
+                        fontSize: 12,
+                        color: "#ef4444",
+                        lineHeight: 17,
+                      }}
+                    >
+                      {t("workerWithdrawals.receipt.failedReason", {
+                        defaultValue:
+                          "This withdrawal could not be completed. Contact support with your reference number so we can resolve it.",
+                      })}
+                    </AppText>
+                  </View>
+                ) : null}
+
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: c.border,
+                    marginVertical: 16,
+                  }}
+                />
+
+                {/* Paid To */}
+
                 {/* Breakdown */}
                 <View style={{ gap: 10 }}>
                   <View
@@ -1044,7 +1128,7 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
                 >
                   <AppText
                     weight="semibold"
-                    style={{ color: c.text, fontSize: 15 }}
+                    style={{ color: c.text, fontSize: 12 }}
                   >
                     {t("workerWithdrawals.receipt.receive")}
                   </AppText>
@@ -1052,7 +1136,7 @@ function ReceiptModal({ withdrawal, onClose, c, modalBg }) {
                     weight="displayBlack"
                     style={{
                       color: c.orange,
-                      fontSize: 24,
+                      fontSize: 12,
                       letterSpacing: -0.5,
                     }}
                   >
@@ -1341,14 +1425,37 @@ function WithdrawalModal({
 
     setSubmitting(true);
     try {
-      await client.post("/payments/withdraw", payload);
+      const resp = await client.post("/payments/withdraw", payload);
+      const resData = resp?.data?.data ?? {};
+      const debtDeducted = Number(resData.debtDeducted) || 0;
+
+      // Backend now returns PENDING — the withdrawal sits in the admin's
+      // queue until approved. Reflect that clearly in the success card.
       setSuccess(
-        t("workerWithdrawals.withdraw.success", {
-          amount: `${currMeta.symbol} ${Number(amt).toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}`,
-        }),
+        debtDeducted > 0
+          ? t("workerWithdrawals.withdraw.successWithDebt", {
+              defaultValue:
+                "Withdrawal of {{amount}} submitted for admin approval. {{debt}} will be applied to your outstanding balance once approved.",
+              amount: `${currMeta.symbol} ${Number(amt).toLocaleString(
+                "en-US",
+                { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+              )}`,
+              debt: `${currMeta.symbol} ${Number(debtDeducted).toLocaleString(
+                "en-US",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                },
+              )}`,
+            })
+          : t("workerWithdrawals.withdraw.success", {
+              defaultValue:
+                "Withdrawal of {{amount}} submitted for admin approval.",
+              amount: `${currMeta.symbol} ${Number(amt).toLocaleString(
+                "en-US",
+                { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+              )}`,
+            }),
       );
       onSuccess();
     } catch (err) {
@@ -2590,7 +2697,7 @@ function WithdrawalCard({ w, onReceipt, c }) {
           color: c.text,
           fontSize: 15,
           letterSpacing: -0.5,
-          marginBottom: 10,
+          marginBottom: 6,
         }}
       >
         {`${cm.symbol} ${Number(w.amount || 0).toLocaleString("en-US", {
@@ -2598,6 +2705,44 @@ function WithdrawalCard({ w, onReceipt, c }) {
           maximumFractionDigits: 2,
         })}`}
       </AppText>
+
+      {w.status === "PENDING" &&
+      (w.failureNote || w.details?.retryCount > 0) ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: 6,
+            padding: 8,
+            borderRadius: 8,
+            backgroundColor: "rgba(245,158,11,0.08)",
+            borderWidth: 1,
+            borderColor: "rgba(245,158,11,0.25)",
+            marginBottom: 10,
+          }}
+        >
+          <Ionicons
+            name="refresh-circle-outline"
+            size={14}
+            color="#f59e0b"
+            style={{ marginTop: 1 }}
+          />
+          <AppText
+            style={{ flex: 1, fontSize: 11, color: "#f59e0b", lineHeight: 16 }}
+          >
+            {t("workerWithdrawals.card.retrying", {
+              defaultValue:
+                "Awaiting admin approval — will retry automatically.",
+            })}
+            {w.details?.retryCount
+              ? ` (${t("workerWithdrawals.card.retryCount", {
+                  defaultValue: "attempt {{count}}",
+                  count: w.details.retryCount,
+                })})`
+              : ""}
+          </AppText>
+        </View>
+      ) : null}
       <Pressable
         onPress={() => onReceipt(w)}
         style={{
