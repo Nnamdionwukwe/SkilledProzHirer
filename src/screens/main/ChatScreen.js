@@ -33,6 +33,7 @@ import {
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { hasRoute } from "../../navigation/navigationRef";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -810,36 +811,76 @@ export default function ChatScreen() {
     return out;
   }, [messages, sendingMessage]);
 
-  const otherProfileUrl = activeOther
-    ? activeOther.role === "WORKER"
-      ? `WorkerProfile:${activeOther.id}`
-      : `HirerProfile:${activeOther.id}`
+  // Detect which navigator we're running inside. `WorkerHome` only exists
+  // on the worker side; HirerNavigator never registers it. This is the same
+  // probe TopBar.js uses.
+  const isWorkerSide = (() => {
+    try {
+      return hasRoute(navigation, "WorkerHome");
+    } catch {
+      return false;
+    }
+  })();
+
+  // Resolve the public-profile route that actually exists in the current
+  // navigator:
+  //   • Worker side — hirers live at "HirerPublicProfile" (stack screen).
+  //                   Workers viewing a worker (rare) fall back to the
+  //                   drawer's "WorkerProfile".
+  //   • Hirer side  — workers live at "WorkerProfile"; the hirer's own
+  //                   public profile is "HirerDetail".
+  const publicProfileRoute = !activeOther
+    ? null
+    : activeOther.role === "WORKER"
+      ? isWorkerSide
+        ? "WorkerProfile" // worker app: drawer route for other workers
+        : "WorkerProfile" // hirer app: opens WorkerPublicProfileScreen
+      : isWorkerSide
+        ? "HirerPublicProfile" // worker app: opens HirerPublicProfileScreen
+        : "HirerDetail"; // hirer app: opens HirerPublicProfileScreen
+
+  const otherProfileUrl = publicProfileRoute
+    ? `${publicProfileRoute}:${activeOther.id}`
     : null;
 
+  // ── Role-aware back ──────────────────────────────────────────────────────
+  // Worker side — Chat is a stack screen pushed on top of WorkerHome →
+  // Messages. goBack() pops correctly.
+  //
+  // Hirer side — Chat is a drawer screen (component={ChatScreen}). A drawer
+  // keeps ALL registered screens in its state.routes array, not the
+  // navigation history, so goBack() lands on whichever drawer screen was
+  // focused last (usually Dashboard). The only reliable way to land on
+  // Messages is to explicitly navigate there.
   const handleBack = () => {
-    // 1. Prefer real back navigation — returns to whichever screen opened
-    //    Chat (Messages, employer detail, refund list, etc.).
-    if (navigation.canGoBack?.()) {
-      navigation.goBack();
+    if (isWorkerSide) {
+      if (navigation.canGoBack?.()) {
+        navigation.goBack();
+        return;
+      }
+      try {
+        const parent = navigation.getParent?.();
+        if (parent) {
+          parent.navigate("WorkerHome", { screen: "Messages" });
+          return;
+        }
+      } catch {}
+      try {
+        navigation.navigate("Messages");
+      } catch {}
       return;
     }
 
-    // 2. Deep-linked / cold-start: no history to pop. Climb to the parent
-    //    navigator (WorkerHome / Drawer) and open Messages there.
+    // Hirer side — always go straight to Messages. Never call goBack() here:
+    // it lands on the previous drawer screen, which is usually Dashboard.
     try {
-      const parent = navigation.getParent?.();
-      if (parent) {
-        parent.navigate("Messages");
-        return;
-      }
+      navigation.navigate("Messages");
     } catch {
-      // fall through
+      try {
+        const parent = navigation.getParent?.();
+        if (parent) parent.navigate("Messages");
+      } catch {}
     }
-
-    // 3. Last resort — nothing else worked, try to pop anyway.
-    try {
-      navigation.goBack();
-    } catch {}
   };
 
   const renderItem = ({ item }) => {
@@ -1201,6 +1242,7 @@ export default function ChatScreen() {
           paddingBottom: Math.max(insets.bottom, 8),
           paddingHorizontal: 12,
           paddingTop: 8,
+          marginBottom: keyboardHeight,
         }}
       >
         <View style={{ flexDirection: "row", gap: 4, paddingBottom: 6 }}>
