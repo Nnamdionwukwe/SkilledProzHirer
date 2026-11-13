@@ -257,7 +257,12 @@ export default function RegisterHirerScreen() {
           <AppText
             variant="display"
             weight="displayBlack"
-            style={{ marginTop: 4, marginBottom: 4, lineHeight: 34 }}
+            style={{
+              marginTop: 10,
+              marginBottom: 4,
+              lineHeight: 20,
+              fontSize: 24,
+            }}
           >
             {t("auth.findNextProz", {
               defaultValue: "Find your next\nskilled proz",

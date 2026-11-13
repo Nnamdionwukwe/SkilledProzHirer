@@ -79,7 +79,7 @@ export function AuthShell({ children, showBack = true, backTo = "Login" }) {
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 16,
-          paddingTop: Math.max(insets.top, 24) + 2,
+          paddingTop: insets.top,
           paddingBottom: 40,
         }}
         keyboardShouldPersistTaps="handled"
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "flex-start",
     marginTop: 0,
-    marginBottom: 4,
+    marginBottom: 0,
   },
   inputWrap: {
     flexDirection: "row",

@@ -147,7 +147,7 @@ export function AuthHeader({ eyebrow, title, subtitle }) {
       <AppText
         variant="display"
         weight="displayBlack"
-        style={{ letterSpacing: -1.2, lineHeight: 34 }}
+        style={{ letterSpacing: -0.6, lineHeight: 20, fontSize: 24 }}
       >
         {title}
       </AppText>
@@ -155,7 +155,7 @@ export function AuthHeader({ eyebrow, title, subtitle }) {
         <AppText
           variant="body"
           tone="dim"
-          style={{ marginTop: 4, lineHeight: 20 }}
+          style={{ marginTop: 10, lineHeight: 20 }}
         >
           {subtitle}
         </AppText>

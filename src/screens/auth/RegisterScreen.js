@@ -56,7 +56,7 @@ export default function RegisterScreen() {
           variant="display"
           weight="displayBlack"
           style={{
-            fontSize: 34,
+            fontSize: 24,
             letterSpacing: -1.5,
             lineHeight: 38,
             marginBottom: 4,
@@ -99,7 +99,7 @@ export default function RegisterScreen() {
             variant="body"
             weight="displayBlack"
             style={{
-              fontSize: 15,
+              fontSize: 12,
               letterSpacing: -0.3,
               marginTop: 10,
               marginBottom: 4,
@@ -138,7 +138,7 @@ export default function RegisterScreen() {
             variant="body"
             weight="displayBlack"
             style={{
-              fontSize: 15,
+              fontSize: 12,
               letterSpacing: -0.3,
               marginTop: 10,
               marginBottom: 4,
