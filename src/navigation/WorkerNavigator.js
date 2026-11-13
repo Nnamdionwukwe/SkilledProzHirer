@@ -671,7 +671,11 @@ function WorkerStack() {
           component={HirerPublicProfileScreen}
         />
         <Stack.Screen name="WorkerJobDetail" component={JobDetailScreen} />
-        <Stack.Screen name="Chat" component={ChatScreen} />
+        <Stack.Screen
+          name="Chat"
+          component={ChatScreen}
+          options={{ headerShown: false }}
+        />
         <Stack.Screen name="PostDetail" component={PostDetailScreen} />
         <Stack.Screen name="RefundDetail" component={RefundDetailScreen} />
         <Stack.Screen name="MyDisputes" component={MyDisputesScreen} />
