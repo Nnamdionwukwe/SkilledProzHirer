@@ -1618,6 +1618,12 @@
     "thisUser": "This user",
     "call": "Call"
   },
+  "drawer": {
+    "logoutTitle": "Log out of SkilledProz?",
+    "logoutMessage": "You will need to sign in again to access your account.",
+    "logoutConfirm": "Log out",
+    "loggingOut": "Logging out…"
+  },
   "messages.directMessage": "Messages Direct Message",
   "messages.noConversations": "Messages No Conversations",
   "messages.noConversationsSub": "Messages No Conversations Sub",
