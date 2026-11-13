@@ -1,6 +1,14 @@
 // src/screens/auth/LoginScreen.js
-import React, { useEffect, useState } from "react";
-import { View, Pressable, ActivityIndicator, Linking } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import {
+  View,
+  Pressable,
+  ActivityIndicator,
+  Linking,
+  Keyboard,
+  Platform,
+  ScrollView,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -35,12 +43,69 @@ if (GOOGLE_WEB_CLIENT_ID) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// useKeyboardHeight — tracks the on-screen keyboard height so the input
+// group can lift above it, matching ChatScreen's composer behaviour.
+// ─────────────────────────────────────────────────────────────────────────────
+function useKeyboardHeight() {
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setHeight(e?.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  return height;
+}
+
 export default function LoginScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { theme: th } = useTheme();
   const c = th.colors;
   const { login, googleSignIn } = useAuthStore();
+  const keyboardHeight = useKeyboardHeight();
+
+  // ScrollView ref + the absolute y-offset of each field within the
+  // scroll content. Measured via onLayout on a View that is a direct
+  // child of the ScrollView content (not wrapped one extra level), so
+  // `e.nativeEvent.layout.y` gives us the correct scroll target.
+  const formScrollRef = useRef(null);
+  const emailRowRef = useRef(null);
+  const passwordRowRef = useRef(null);
+  const fieldY = useRef({ email: 0, password: 0 });
+
+  // Scroll so the given field sits right at the top of the visible area
+  // — which, thanks to the input group's `marginBottom: keyboardHeight`,
+  // is just above the keyboard. Waits one frame so the keyboard has
+  // fully expanded and the ScrollView's content size reflects the lift.
+  const scrollToField = (key) => {
+    const y = fieldY.current[key] ?? 0;
+    const target = Math.max(0, y - 16);
+    // One frame is enough on both platforms — the keyboard height update
+    // from `keyboardDidShow`/`keyboardWillShow` lands before the next frame.
+    requestAnimationFrame(() => {
+      try {
+        formScrollRef.current?.scrollTo({ y: target, animated: true });
+      } catch {
+        /* non-fatal */
+      }
+    });
+  };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -242,130 +307,166 @@ export default function LoginScreen() {
 
   return (
     <AuthShell showBack={false}>
-      <AuthHeader
-        eyebrow={t("auth.welcomeBack", { defaultValue: "Welcome back" })}
-        title={t("auth.signInTitle")}
-        subtitle={
-          <>
-            {t("auth.noAccountYet")}{" "}
-            <AppText
-              variant="body"
-              weight="semibold"
-              style={{ color: c.orange }}
-              onPress={() => navigation.navigate("Register")}
-            >
-              {t("auth.createOneFree")} →
-            </AppText>
-          </>
-        }
-      />
+      <ScrollView
+        ref={formScrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingBottom: 24 + keyboardHeight,
+          flexGrow: 1,
+        }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+      >
+        <AuthHeader
+          eyebrow={t("auth.welcomeBack", { defaultValue: "Welcome back" })}
+          title={t("auth.signInTitle")}
+          subtitle={
+            <>
+              {t("auth.noAccountYet")}{" "}
+              <AppText
+                variant="body"
+                weight="semibold"
+                style={{ color: c.orange }}
+                onPress={() => navigation.navigate("Register")}
+              >
+                {t("auth.createOneFree")} →
+              </AppText>
+            </>
+          }
+        />
 
-      {block && blockContent ? (
-        <View style={{ marginBottom: 16 }}>
-          <AuthAlert
-            type="error"
-            message={`${blockContent.title}. ${blockContent.body}`}
-          />
-          <Pressable
-            onPress={() => Linking.openURL("mailto:support@skilledproz.com")}
-            style={{
-              marginTop: 8,
-              paddingVertical: 10,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: c.border,
-              alignItems: "center",
+        {block && blockContent ? (
+          <View style={{ marginBottom: 16 }}>
+            <AuthAlert
+              type="error"
+              message={`${blockContent.title}. ${blockContent.body}`}
+            />
+            <Pressable
+              onPress={() => Linking.openURL("mailto:support@skilledproz.com")}
+              style={{
+                marginTop: 8,
+                paddingVertical: 10,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: c.border,
+                alignItems: "center",
+              }}
+            >
+              <AppText variant="small" weight="semibold" tone="dim">
+                {t("auth.contactSupport", { defaultValue: "Contact support" })}
+              </AppText>
+            </Pressable>
+          </View>
+        ) : null}
+
+        <GoogleSignInButton
+          loading={googleLoading}
+          onPress={handleGooglePress}
+        />
+
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            marginVertical: 18,
+          }}
+        >
+          <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+          <AppText variant="small" tone="muted">
+            {t("auth.or", { defaultValue: "or" })}
+          </AppText>
+          <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+        </View>
+
+        {error && !block ? <AuthAlert type="error" message={error} /> : null}
+
+        <View style={{ gap: 14, marginBottom: keyboardHeight }}>
+          {/* Each field's onLayout fires with a y relative to the
+              scroll content — used by scrollToField(). Wrapping each
+              field in a plain View adds no extra offset because the
+              gap already comes from the parent's `gap: 14`. */}
+          <View
+            ref={emailRowRef}
+            onLayout={(e) => {
+              fieldY.current.email = e.nativeEvent.layout.y;
             }}
           >
-            <AppText variant="small" weight="semibold" tone="dim">
-              {t("auth.contactSupport", { defaultValue: "Contact support" })}
-            </AppText>
-          </Pressable>
-        </View>
-      ) : null}
+            <AuthField
+              label={t("auth.emailAddress")}
+              iconLeft="mail-outline"
+              placeholder={t("auth.emailPlaceholder")}
+              value={email}
+              onChangeText={(v) => {
+                setEmail(v);
+                setError("");
+              }}
+              onFocus={() => scrollToField("email")}
+              keyboardType="email-address"
+              autoComplete="email"
+              textContentType="emailAddress"
+              editable={!loading}
+            />
+          </View>
 
-      <GoogleSignInButton loading={googleLoading} onPress={handleGooglePress} />
-
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          marginVertical: 18,
-        }}
-      >
-        <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-        <AppText variant="small" tone="muted">
-          {t("auth.or", { defaultValue: "or" })}
-        </AppText>
-        <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-      </View>
-
-      {error && !block ? <AuthAlert type="error" message={error} /> : null}
-
-      <View style={{ gap: 14 }}>
-        <AuthField
-          label={t("auth.emailAddress")}
-          iconLeft="mail-outline"
-          placeholder={t("auth.emailPlaceholder")}
-          value={email}
-          onChangeText={(v) => {
-            setEmail(v);
-            setError("");
-          }}
-          keyboardType="email-address"
-          autoComplete="email"
-          textContentType="emailAddress"
-          editable={!loading}
-        />
-
-        <AuthField
-          label={t("auth.password")}
-          iconLeft="lock-closed-outline"
-          placeholder={t("auth.passwordMinChars")}
-          value={password}
-          onChangeText={(v) => {
-            setPassword(v);
-            setError("");
-          }}
-          secureTextEntry={!showPassword}
-          autoComplete="password"
-          textContentType="password"
-          editable={!loading}
-          iconRight={{
-            name: showPassword ? "eye-off-outline" : "eye-outline",
-            onPress: () => setShowPassword((v) => !v),
-          }}
-        />
-
-        <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-          <Pressable
-            onPress={() => navigation.navigate("ForgotPassword")}
-            hitSlop={6}
+          <View
+            ref={passwordRowRef}
+            onLayout={(e) => {
+              fieldY.current.password = e.nativeEvent.layout.y;
+            }}
           >
-            <AppText
-              variant="small"
-              weight="semibold"
-              style={{ color: c.orange }}
+            <AuthField
+              label={t("auth.password")}
+              iconLeft="lock-closed-outline"
+              placeholder={t("auth.passwordMinChars")}
+              value={password}
+              onChangeText={(v) => {
+                setPassword(v);
+                setError("");
+              }}
+              onFocus={() => scrollToField("password")}
+              secureTextEntry={!showPassword}
+              autoComplete="password"
+              textContentType="password"
+              editable={!loading}
+              iconRight={{
+                name: showPassword ? "eye-off-outline" : "eye-outline",
+                onPress: () => setShowPassword((v) => !v),
+              }}
+            />
+          </View>
+
+          <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+            <Pressable
+              onPress={() => navigation.navigate("ForgotPassword")}
+              hitSlop={6}
             >
-              {t("auth.forgot")}
-            </AppText>
-          </Pressable>
+              <AppText
+                variant="small"
+                weight="semibold"
+                style={{ color: c.orange }}
+              >
+                {t("auth.forgot")}
+              </AppText>
+            </Pressable>
+          </View>
+
+          <AuthButton
+            title={loading ? t("auth.signingIn") : t("auth.signIn")}
+            onPress={handleSubmit}
+            loading={loading}
+            disabled={!email || !password}
+          />
         </View>
 
-        <AuthButton
-          title={loading ? t("auth.signingIn") : t("auth.signIn")}
-          onPress={handleSubmit}
-          loading={loading}
-          disabled={!email || !password}
+        <AuthFooter
+          prompt={t("auth.noAccountYet")}
+          actionLabel={t("auth.createOneFree")}
+          onPress={() => navigation.navigate("Register")}
         />
-      </View>
-
-      <AuthFooter
-        prompt={t("auth.noAccountYet")}
-        actionLabel={t("auth.createOneFree")}
-        onPress={() => navigation.navigate("Register")}
-      />
+      </ScrollView>
     </AuthShell>
   );
 }
