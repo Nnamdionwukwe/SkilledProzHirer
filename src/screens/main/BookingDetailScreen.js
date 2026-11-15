@@ -766,18 +766,11 @@ export default function BookingDetailScreen() {
   // Back to Bookings list — route differs by role
   const handleBack = () => {
     if (user?.role === "WORKER") {
-      if (
-        safeNavigate(
-          navigation,
-          "WorkerHome",
-          { screen: "WorkerBookings" },
-          "Bookings",
-        )
-      ) {
+      if (safeNavigate(navigation, "WorkerBookings")) {
         return;
       }
     }
-    if (safeNavigate(navigation, "Bookings", null, "Dashboard")) {
+    if (safeNavigate(navigation, "Bookings")) {
       return;
     }
     if (navigation.canGoBack?.()) navigation.goBack();
