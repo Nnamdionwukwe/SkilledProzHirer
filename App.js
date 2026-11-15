@@ -5,6 +5,7 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
+import * as Notifications from "expo-notifications";
 import {
   useFonts,
   Syne_700Bold,
@@ -35,6 +36,12 @@ import useOTAUpdates from "./src/hooks/useOTAUpdates";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import VideoCallBanner from "./src/components/video/VideoCallBanner";
 
+// ✅ NEW — push + native call UI
+import { useAuthStore } from "./src/store/authStore";
+import { registerPushToken } from "./src/services/pushRegistration";
+import { initCallKeep } from "./src/services/callKeepBridge";
+import { BACKGROUND_CALL_TASK } from "./src/services/pushHandler";
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
@@ -42,6 +49,9 @@ export default function App() {
   const [langKey, setLangKey] = useState("en");
 
   useOTAUpdates();
+
+  // ✅ NEW — read the current user so we can re-register the token per login
+  const { user, isHydrated } = useAuthStore();
 
   const [fontsLoaded, fontError] = useFonts({
     Syne_700Bold,
@@ -70,6 +80,32 @@ export default function App() {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, i18nReady, fontError]);
+
+  // ✅ NEW — initialise CallKeep once at app start
+  useEffect(() => {
+    try {
+      initCallKeep();
+    } catch (err) {
+      console.warn("CallKeep init failed:", err?.message);
+    }
+  }, []);
+
+  // ✅ NEW — re-register the background push task on every launch
+  useEffect(() => {
+    Notifications.registerTaskAsync(BACKGROUND_CALL_TASK).catch(() => {});
+  }, []);
+
+  // ✅ NEW — register the device's push token once the user is hydrated
+  // and logged in. Runs every time the user changes (login/logout/switch
+  // account) so the backend always has the correct token for the current
+  // session.
+  useEffect(() => {
+    if (isHydrated && user?.id) {
+      registerPushToken().catch((err) =>
+        console.warn("Push token registration failed:", err?.message),
+      );
+    }
+  }, [isHydrated, user?.id]);
 
   if (!fontsLoaded || !i18nReady) {
     return <LoadingScreen />;
