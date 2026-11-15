@@ -73,6 +73,7 @@ import SupportTicketThreadScreen from "../screens/main/SupportTicketThreadScreen
 import ReleasePaymentScreen from "../screens/main/ReleasePaymentScreen";
 import CreateBookingFromJobScreen from "../screens/main/CreateBookingFromJobScreen";
 import { UnreadProvider } from "../contexts/UnreadContext";
+import InterviewCallRoomScreen from "../screens/main/InterviewCallRoomScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -572,6 +573,7 @@ export default function HirerNavigator() {
               swipeEnabled: false,
             }}
           />
+
           <Drawer.Screen
             name="SupportHub"
             options={{ drawerItemStyle: { display: "none" } }}

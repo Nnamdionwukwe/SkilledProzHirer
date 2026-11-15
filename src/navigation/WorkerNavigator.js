@@ -71,6 +71,7 @@ import WorkerRetainedEarningsScreen from "../screens/main/worker/WorkerRetainedE
 import WorkerRetainedCyclesScreen from "../screens/main/worker/WorkerRetainedCyclesScreen";
 import CommunityFeedScreen from "../screens/main/CommunityFeedScreen";
 import SupportHubScreen from "../screens/main/SupportHubScreen";
+import InterviewCallRoomScreen from "../screens/main/InterviewCallRoomScreen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -590,6 +591,11 @@ function WorkerDrawer() {
           />
         )}
       </Drawer.Screen>
+      <Stack.Screen
+        name="InterviewCallRoom"
+        component={InterviewCallRoomScreen}
+        options={{ headerShown: false, presentation: "fullScreenModal" }}
+      />
       <Drawer.Screen name="WorkerAvailability">
         {() => (
           <ScreenWithChrome
@@ -866,6 +872,12 @@ function WorkerStack() {
         <Stack.Screen
           name="VideoCall"
           component={VideoCallScreen}
+          options={{ headerShown: false, presentation: "fullScreenModal" }}
+        />
+
+        <Stack.Screen
+          name="InterviewCallRoom"
+          component={InterviewCallRoomScreen}
           options={{ headerShown: false, presentation: "fullScreenModal" }}
         />
       </Stack.Navigator>

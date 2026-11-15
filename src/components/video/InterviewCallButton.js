@@ -1,149 +1,260 @@
 // src/components/video/InterviewCallButton.js
 //
-// Interview video call — 3-button widget:
-//   • Start Interview Call  → opens the room in the system browser
-//   • Message link          → opens chat with worker, pre-fills composer
-//   • Copy link             → copies the room URL to clipboard
+// Mobile equivalent of the web's InterviewCallButton.jsx.
 //
-// Room id is deterministic from (jobPostId, workerId) so both parties
-// always land in the same room.
+// On "Start Interview":
+//   1. POST /jobs/applications/:applicationId/call
+//   2. Navigate to InterviewCallRoom with { applicationId, jobPostId }
 //
-// Ported from web src/components/video/InterviewCallButton.jsx.
+// On "Message link":
+//   Opens (or creates) a chat with the worker, prefilled with a friendly
+//   invitation. No room URL is included — the room only exists once the
+//   call is actually started.
+//
+// Both buttons are disabled while a request is in flight so double-tap
+// can't fire two calls.
 
 import { useState } from "react";
-import { Linking, Pressable, StyleSheet, View } from "react-native";
-import * as Clipboard from "expo-clipboard";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
+
 import AppText from "../AppText";
 import { useTheme } from "../../contexts/ThemeContext";
-import { FaVideo, FaCheck, FaLink, FaCommentDots } from "../../icons/fa";
-
-const CALL_BASE_URL = "https://call.skilledproz.com";
-
-function buildRoomId(jobPostId, workerId) {
-  const safeJob = String(jobPostId || "").replace(/[^a-zA-Z0-9-]/g, "");
-  const safeWorker = String(workerId || "").replace(/[^a-zA-Z0-9-]/g, "");
-  return `interview-${safeJob}-${safeWorker}`.slice(0, 60);
-}
+import { useToast } from "../../contexts/ToastContext";
+import client from "../../api/client";
+import { FaVideo, FaCommentDots } from "../../icons/fa";
 
 export default function InterviewCallButton({
+  applicationId,
   jobPostId,
   workerId,
   workerName = "",
   jobTitle = "",
+  // Optional override — when rendered outside a screen that has a
+  // navigation prop, the caller can pass it explicitly.
+  navigation: navigationProp,
 }) {
-  const navigation = useNavigation();
+  const { t } = useTranslation();
   const { theme } = useTheme();
+  const { toast } = useToast();
+  const navigationHook = useNavigation();
+  const navigation = navigationProp || navigationHook;
   const c = theme.colors;
-  const [copied, setCopied] = useState(false);
 
-  if (!jobPostId || !workerId) return null;
+  const [creating, setCreating] = useState(false);
+  const [messageing, setMessageing] = useState(false);
+  const [error, setError] = useState("");
 
-  const roomId = buildRoomId(jobPostId, workerId);
-  const roomUrl = `${CALL_BASE_URL}/${roomId}`;
-
-  async function handleStart() {
+  // ── Start Interview ────────────────────────────────────────────────
+  async function handleStartInterview() {
+    if (!applicationId) {
+      setError(
+        t(
+          "jobApplications.interview.missingApplication",
+          "Missing application ID",
+        ),
+      );
+      return;
+    }
+    setCreating(true);
+    setError("");
     try {
-      await Linking.openURL(roomUrl);
-    } catch {}
+      // 1. Create/reuse the interview VideoCall row on the backend.
+      //    Same endpoint the web uses. It emits video-call:incoming to
+      //    the worker, so their mobile VideoCallBanner picks it up.
+      await client.post(`/jobs/applications/${applicationId}/call`);
+
+      // 2. Navigate into the interview room.
+      navigation.navigate("InterviewCallRoom", {
+        applicationId,
+        jobPostId,
+      });
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          t(
+            "jobApplications.interview.startFailed",
+            "Failed to start interview.",
+          ),
+      );
+    } finally {
+      setCreating(false);
+    }
   }
 
-  async function handleCopy() {
+  // ── Message link ───────────────────────────────────────────────────
+  async function handleMessageLink() {
+    if (!workerId) return;
+    setMessageing(true);
+    setError("");
     try {
-      await Clipboard.setStringAsync(roomUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
+      // Find or create a conversation with the worker.
+      let conversationId = null;
+      try {
+        const res = await client.get("/messages/conversations", {
+          params: { page: 1, limit: 100, _t: Date.now() },
+        });
+        const list = res.data?.data?.conversations || [];
+        const peerIdStr = String(workerId);
+        const found = list.find((convo) =>
+          (convo.users || []).some((u) => {
+            const uid = String(u.userId || u.user?.id || u.id);
+            return uid === peerIdStr;
+          }),
+        );
+        if (found?.id) conversationId = found.id;
+      } catch {}
+
+      if (!conversationId) {
+        const res = await client.post("/messages", {
+          receiverId: workerId,
+          content: t("jobApplications.interview.chatSeed", {
+            jobTitle: jobTitle || t("jobApplications.interview.theRole"),
+            defaultValue: `Hi! I'd like to schedule a quick video interview for "${jobTitle}".`,
+          }),
+        });
+        conversationId = res.data?.data?.conversationId;
+      }
+
+      const prefill = t("jobApplications.interview.messageBodyNoUrl", {
+        workerName: workerName || t("jobApplications.interview.there"),
+        jobTitle: jobTitle || t("jobApplications.interview.theRole"),
+        defaultValue: `Hi ${workerName || "there"},\n\nI'd like to do a quick video interview for "${jobTitle}".\n\n— sent from SkilledProz`,
+      });
+
+      navigation.navigate("Chat", {
+        conversationId,
+        withUserId: workerId,
+        prefillMessage: prefill,
+      });
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          t("jobApplications.interview.chatFailed", "Could not open chat."),
+      );
+      toast.error(
+        t("jobApplications.interview.chatFailed", "Could not open chat."),
+      );
+    } finally {
+      setMessageing(false);
+    }
   }
 
-  function handleMessage() {
-    const draft = [
-      `Hi ${workerName || "there"},`,
-      "",
-      jobTitle
-        ? `I'd like to do a quick video interview for "${jobTitle}".`
-        : "I'd like to do a quick video interview.",
-      "",
-      `Join here when you're free: ${roomUrl}`,
-      "",
-      "— sent from SkilledProz",
-    ].join("\n");
-
-    navigation.navigate("Messages", {
-      withUserId: workerId,
-      draft,
-    });
-  }
+  const busy = creating || messageing;
 
   return (
     <View style={styles.wrap}>
-      <Pressable onPress={handleStart} style={styles.startBtn} hitSlop={4}>
-        <FaVideo size={13} color="#fff" />
-        <AppText style={styles.startText}>Start Interview</AppText>
-      </Pressable>
+      <View style={styles.buttonRow}>
+        {/* Start Interview */}
+        <Pressable
+          onPress={handleStartInterview}
+          disabled={busy}
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            {
+              backgroundColor: c.orange,
+              opacity: creating ? 0.6 : pressed ? 0.9 : 1,
+            },
+          ]}
+        >
+          {creating ? (
+            <ActivityIndicator size="small" color={c.bg} />
+          ) : (
+            <View style={styles.btnInner}>
+              <FaVideo size={12} color={c.bg} />
+              <AppText style={[styles.primaryLabel, { color: c.bg }]}>
+                {t("jobApplications.interview.startCta", "Start Interview")}
+              </AppText>
+            </View>
+          )}
+        </Pressable>
 
-      <Pressable onPress={handleMessage} style={styles.messageBtn} hitSlop={4}>
-        <FaCommentDots size={13} color="#f97316" />
-        <AppText style={styles.messageText}>Message link</AppText>
-      </Pressable>
+        {/* Message link */}
+        <Pressable
+          onPress={handleMessageLink}
+          disabled={busy}
+          style={({ pressed }) => [
+            styles.secondaryBtn,
+            {
+              borderColor: c.orangeGlow || c.orange,
+              backgroundColor: c.orangeDim || "rgba(249,115,22,0.12)",
+              opacity: messageing ? 0.6 : pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          {messageing ? (
+            <ActivityIndicator size="small" color={c.orange} />
+          ) : (
+            <View style={styles.btnInner}>
+              <FaCommentDots size={11} color={c.orange} />
+              <AppText style={[styles.secondaryLabel, { color: c.orange }]}>
+                {t("jobApplications.interview.messageLinkCta", "Message link")}
+              </AppText>
+            </View>
+          )}
+        </Pressable>
+      </View>
 
-      <Pressable onPress={handleCopy} style={styles.copyBtn} hitSlop={4}>
-        {copied ? (
-          <>
-            <FaCheck size={13} color={c.text} />
-            <AppText style={styles.copyText}>Copied</AppText>
-          </>
-        ) : (
-          <>
-            <FaLink size={13} color={c.text} />
-            <AppText style={styles.copyText}>Copy link</AppText>
-          </>
-        )}
-      </Pressable>
+      {error ? (
+        <AppText
+          style={{
+            fontSize: 10,
+            color: c.red,
+            marginTop: 4,
+          }}
+        >
+          {error}
+        </AppText>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
+    width: "100%",
+  },
+  buttonRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 4,
     flexWrap: "wrap",
+    gap: 6,
+    alignItems: "center",
   },
-  startBtn: {
+  btnInner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 10,
-    backgroundColor: "#f97316",
+    gap: 5,
   },
-  startText: { fontSize: 12, fontWeight: "700", color: "#fff" },
-  messageBtn: {
+  primaryBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "center",
     paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 10,
-    backgroundColor: "rgba(249,115,22,0.1)",
+    borderRadius: 8,
+    minWidth: 120,
+    minHeight: 36,
+  },
+  primaryLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  secondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(249,115,22,0.35)",
+    minHeight: 36,
   },
-  messageText: { fontSize: 12, fontWeight: "700", color: "#f97316" },
-  copyBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+  secondaryLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 5,
   },
-  copyText: { fontSize: 12, fontWeight: "700" },
 });
