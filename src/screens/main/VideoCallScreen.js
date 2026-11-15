@@ -40,9 +40,17 @@ export default function VideoCallScreen() {
   const route = useRoute();
   const { user } = useAuthStore();
 
+  // ── Params ────────────────────────────────────────────────────────────
+  // Booking calls pass { bookingId, returnTo, returnParams }.
+  // Conversation calls pass { conversationId, returnTo, returnParams }.
   const conversationId = route.params?.conversationId;
+  const bookingId = route.params?.bookingId;
   const returnTo = route.params?.returnTo;
   const returnParams = route.params?.returnParams || {};
+
+  const isBookingCall = !conversationId && !!bookingId;
+  const callScopeId = isBookingCall ? bookingId : conversationId;
+  const callBasePath = isBookingCall ? "/video-calls" : "/voice-calls";
 
   const [call, setCall] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -51,6 +59,12 @@ export default function VideoCallScreen() {
   const [ended, setEnded] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [webViewKey, setWebViewKey] = useState(0);
+
+  // Booking calls receive a pre-built room URL from the backend
+  // (POST /video-calls/:id/initiate and GET /video-calls/:id both return
+  // `callUrl`). Conversation calls build the URL deterministically from
+  // the conversationId.
+  const [bookingRoomUrl, setBookingRoomUrl] = useState(null);
 
   // Track whether the call was ACTIVE at any point this session.
   // The "ended" modal MUST only show if this is true.
@@ -77,9 +91,11 @@ export default function VideoCallScreen() {
     return user.name || user.fullName || user.username || "";
   })();
 
-  const roomUrl = conversationId
-    ? buildConversationVideoUrl(conversationId, displayName)
-    : null;
+  const roomUrl = isBookingCall
+    ? bookingRoomUrl
+    : conversationId
+      ? buildConversationVideoUrl(conversationId, displayName)
+      : null;
 
   const goBack = useCallback(() => {
     if (returnTo) {
@@ -92,10 +108,12 @@ export default function VideoCallScreen() {
     }
     if (conversationId) {
       navigation.navigate("Chat", { conversationId });
+    } else if (bookingId) {
+      navigation.navigate("BookingDetail", { bookingId });
     } else {
       navigation.goBack();
     }
-  }, [returnTo, returnParams, conversationId, navigation]);
+  }, [returnTo, returnParams, conversationId, bookingId, navigation]);
 
   const killWebView = () => {
     try {
@@ -109,10 +127,10 @@ export default function VideoCallScreen() {
   };
 
   const patchEnd = async () => {
-    if (!conversationId) return;
+    if (!callScopeId) return;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        await client.patch(`/voice-calls/${conversationId}/end`);
+        await client.patch(`${callBasePath}/${callScopeId}/end`);
         return;
       } catch {
         if (attempt < 3) await sleep(400);
@@ -143,40 +161,52 @@ export default function VideoCallScreen() {
       setEndedByRemote(false);
       setError("");
       setCall(null);
+      if (isBookingCall) setBookingRoomUrl(null);
     }
   };
 
   // ──────────────────────────────────────────────────────────────────────
-  // initiateWithRetry — retries until backend returns PENDING or ACTIVE
+  // initiateWithRetry — retries until backend returns PENDING or ACTIVE.
+  // Booking calls: POST /video-calls/:bookingId/initiate (no body).
+  // Conversation calls: POST /voice-calls/:conversationId/initiate with
+  // the callType/returnTo/returnParams body.
   // ──────────────────────────────────────────────────────────────────────
   const initiateWithRetry = useCallback(
     async ({
       maxAttempts = INITIATE_RETRIES,
       delayMs = INITIATE_DELAY_MS,
     } = {}) => {
-      if (!conversationId) throw new Error("Missing conversation");
+      if (!callScopeId) throw new Error("Missing call scope id");
 
       let lastError = null;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-          const res = await client.post(
-            `/voice-calls/${conversationId}/initiate`,
-            {
-              callType: "video",
-              returnTo,
-              returnParams,
-            },
-          );
+          const res = isBookingCall
+            ? await client.post(`${callBasePath}/${callScopeId}/initiate`)
+            : await client.post(`${callBasePath}/${callScopeId}/initiate`, {
+                callType: "video",
+                returnTo,
+                returnParams,
+              });
 
           // ✅ DEBUG: log what the backend returned
           console.log("[VCS INITIATE] attempt", attempt, {
+            scope: isBookingCall ? "booking" : "conversation",
             status: res.status,
             body: JSON.stringify(res.data, null, 2),
             newCallStatus: res.data?.data?.call?.status,
             newCallReceiverId: res.data?.data?.call?.receiverId,
             newCallCallType: res.data?.data?.call?.callType,
+            newCallUrl: res.data?.data?.callUrl,
           });
+
+          // For booking calls, remember the room URL.
+          if (isBookingCall && res.data?.data?.callUrl) {
+            if (mountedRef.current) {
+              setBookingRoomUrl(res.data.data.callUrl);
+            }
+          }
 
           const newCall = res.data?.data?.call;
 
@@ -203,19 +233,28 @@ export default function VideoCallScreen() {
 
       throw lastError || new Error("Could not start call after retries");
     },
-    [conversationId, returnTo, returnParams],
+    [callScopeId, isBookingCall, callBasePath, returnTo, returnParams],
   );
 
   // ──────────────────────────────────────────────────────────────────────
   // startPolling — only flags "ended" if wasActiveRef is TRUE
   // ──────────────────────────────────────────────────────────────────────
   const startPolling = useCallback(() => {
-    if (!conversationId) return;
+    if (!callScopeId) return;
     if (pollRef.current) clearInterval(pollRef.current);
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await client.get(`/voice-calls/${conversationId}`);
+        const res = await client.get(`${callBasePath}/${callScopeId}`);
+
+        // For booking calls the backend includes a callUrl on every poll.
+        // Cache it so the WebView knows where to point.
+        if (isBookingCall && res.data?.data?.callUrl && !bookingRoomUrl) {
+          if (mountedRef.current) {
+            setBookingRoomUrl(res.data.data.callUrl);
+          }
+        }
+
         const c0 = res.data.data?.call;
         if (!c0) return;
 
@@ -252,14 +291,14 @@ export default function VideoCallScreen() {
         }
       } catch {}
     }, POLL_MS);
-  }, [conversationId, user?.id]);
+  }, [callScopeId, isBookingCall, callBasePath, user?.id, bookingRoomUrl]);
 
   // ══════════════════════════════════════════════════════════════════════
   // Initial load
   // ══════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    if (!conversationId) {
-      setError("Missing conversation");
+    if (!callScopeId) {
+      setError("Missing call id");
       setLoading(false);
       return;
     }
@@ -268,9 +307,16 @@ export default function VideoCallScreen() {
 
     (async () => {
       try {
-        const res = await client.get(`/voice-calls/${conversationId}`);
+        const res = await client.get(`${callBasePath}/${callScopeId}`);
         const data = res.data.data;
         const c0 = data?.call;
+
+        // For booking calls: seed the room URL from the response.
+        if (isBookingCall && data?.callUrl) {
+          if (!cancelled && mountedRef.current) {
+            setBookingRoomUrl(data.callUrl);
+          }
+        }
 
         // No call exists OR stale call exists → initiate a fresh one
         const isTerminal =
@@ -323,7 +369,15 @@ export default function VideoCallScreen() {
       cancelled = true;
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [conversationId, initiateWithRetry, startPolling, goBack]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    callScopeId,
+    isBookingCall,
+    callBasePath,
+    initiateWithRetry,
+    startPolling,
+    goBack,
+  ]);
 
   // ── End call (user pressed End Call) ──────────────────────────────────
   async function handleEnd() {

@@ -33,6 +33,7 @@ import { initI18n } from "./src/i18n";
 import i18n from "./src/i18n";
 import useOTAUpdates from "./src/hooks/useOTAUpdates";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import VideoCallBanner from "./src/components/video/VideoCallBanner";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -90,6 +91,7 @@ export default function App() {
                       <VoiceCallProviderUI />
                       {/* ✅ Root-level incoming-call banner */}
                       <VoiceCallBanner />
+                      <VideoCallBanner />
                     </PlatformPollerProvider>
                   </VoiceCallProvider>
                 </SubscriptionProvider>
