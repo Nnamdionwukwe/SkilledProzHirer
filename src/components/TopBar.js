@@ -316,8 +316,23 @@ export default function TopBar({
     subtitleProp ?? (keys.subtitleKey ? t(keys.subtitleKey) : null);
 
   // ── Smart hamburger ─────────────────────────────────────────────
+  // Order of attempts:
+  //   1. Ask the current screen's parent to open the drawer. On the worker
+  //      side this is the Drawer.Navigator's context, which is always
+  //      available for both the initial screen (WorkerHome) and every
+  //      pushed stack screen — so tapping the hamburger slides the drawer
+  //      open without disturbing the current screen.
+  //   2. If the current screen has no parent drawer (rare — cold-start,
+  //      deep-link, chat full-screen modal), fall back to dispatching a
+  //      drawer action through navigationRef so the root drawer handles
+  //      it. This also opens the drawer without navigating.
+  //   3. Never navigate to WorkerHome / Dashboard here. That was the bug:
+  //      navigate("WorkerHome", { screen: "Dashboard" }) pops the current
+  //      stack screen before the drawer opens, which threw the user back
+  //      to the Dashboard tab.
   const handleMenu = () => {
-    const parent = navigation.getParent();
+    // 1. Parent drawer, if the current screen is inside one.
+    const parent = navigation.getParent?.();
     if (parent) {
       try {
         parent.openDrawer();
@@ -325,18 +340,27 @@ export default function TopBar({
       } catch (e) {}
     }
 
-    if (hasRoute(navigation, "WorkerHome")) {
+    // 2. Try the nearest ancestor that actually owns the drawer — this
+    //    covers nested navigators (stack → drawer → tab etc.) without
+    //    collapsing the current stack.
+    let ancestor = navigation;
+    while (ancestor) {
       try {
-        navigation.navigate("WorkerHome", { screen: "Dashboard" });
-        setTimeout(() => {
-          try {
-            navigationRef.dispatch({ type: "OPEN_DRAWER" });
-          } catch (e3) {}
-        }, 80);
-        return;
+        if (ancestor.openDrawer) {
+          ancestor.openDrawer();
+          return;
+        }
       } catch (e) {}
+      try {
+        ancestor = ancestor.getParent?.();
+      } catch (e) {
+        ancestor = null;
+      }
     }
 
+    // 3. Last resort — dispatch a drawer action on the root navigator.
+    //    This opens the drawer without navigating, so the current screen
+    //    stays on the stack underneath.
     try {
       if (navigationRef.isReady?.()) {
         navigationRef.dispatch({ type: "OPEN_DRAWER" });
