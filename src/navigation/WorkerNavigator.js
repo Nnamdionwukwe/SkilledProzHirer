@@ -8,7 +8,6 @@ import React, {
 } from "react";
 import { View, StyleSheet, Pressable, Animated } from "react-native";
 import { createDrawerNavigator } from "@react-navigation/drawer";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -48,7 +47,7 @@ import SubscriptionsScreen from "../screens/main/SubscriptionsScreen";
 import FeaturedBoostScreen from "../screens/main/FeaturedBoostScreen";
 import SettingsScreen from "../screens/main/SettingsScreen";
 
-// ── Stack screens ──
+// ── Stack-orphan screens (now Drawer screens with hidden items) ──
 import JobDetailScreen from "../screens/main/JobDetailScreen";
 import BookingDetailScreen from "../screens/main/BookingDetailScreen";
 import HirerPublicProfileScreen from "../screens/main/HirerPublicProfileScreen";
@@ -74,7 +73,6 @@ import SupportHubScreen from "../screens/main/SupportHubScreen";
 import InterviewCallRoomScreen from "../screens/main/InterviewCallRoomScreen";
 
 const Drawer = createDrawerNavigator();
-const Stack = createNativeStackNavigator();
 const ScrollContext = React.createContext(null);
 
 // ════════════════════════════════════════════════════════════════════════
@@ -93,16 +91,8 @@ function FloatingTabBar() {
     isHidden: false,
   });
 
-  // ── Tab layout measurements ────────────────────────────────────────────
-  // Each tab records its x position (in the parent row) and width, so the
-  // sliding highlight can animate to the correct slot. Measured via
-  // onLayout on the row-level View — no extra wrapper needed per tab.
-  const tabLayouts = useRef({}); // { [tab.name]: { x, width } }
-
-  // Animated value that drives the highlight's translateX.
+  const tabLayouts = useRef({});
   const highlightX = useRef(new Animated.Value(0)).current;
-  // Same value as a plain number, so we can read it synchronously when
-  // computing target offsets without depending on async listeners.
   const highlightXNum = useRef(0);
   useEffect(() => {
     const id = highlightX.addListener(({ value }) => {
@@ -111,13 +101,8 @@ function FloatingTabBar() {
     return () => highlightX.removeListener(id);
   }, [highlightX]);
 
-  // Animated value for the highlight width (some tabs may have a
-  // different icon size and hence different widths).
   const highlightW = useRef(new Animated.Value(40)).current;
 
-  // How far the highlight has to travel each time the active route
-  // changes. Recomputed whenever either the active route or the tab
-  // layouts change.
   const animateTo = useCallback(
     (routeName, animated = true) => {
       const layout = tabLayouts.current[routeName];
@@ -147,7 +132,6 @@ function FloatingTabBar() {
     [highlightX, highlightW],
   );
 
-  // ── Scroll hide-on-scroll effect (unchanged) ───────────────────────────
   useEffect(() => {
     if (!scrollY) return;
     const listener = scrollY.addListener(({ value }) => {
@@ -195,7 +179,6 @@ function FloatingTabBar() {
     return () => scrollY.removeListener(listener);
   }, [scrollY, translateY]);
 
-  // ── Route tracking effect (unchanged) ──────────────────────────────────
   useEffect(() => {
     const getTopmostRouteName = (state) => {
       if (!state) return null;
@@ -219,7 +202,6 @@ function FloatingTabBar() {
     return unsub;
   }, [translateY]);
 
-  // ── Slide the highlight whenever activeRoute or layouts change ─────────
   const isTabRoute = (name) =>
     name === "Dashboard" ||
     name === "WorkerBookings" ||
@@ -232,8 +214,6 @@ function FloatingTabBar() {
 
   useEffect(() => {
     if (!isTabRoute(activeRoute)) return;
-    // animateTo returns early if the layout hasn't been measured yet;
-    // layoutsReady in the deps ensures we retry once they land.
     animateTo(activeRoute, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRoute, layoutsReady]);
@@ -289,10 +269,6 @@ function FloatingTabBar() {
           ]}
         />
         <View style={styles.tabRow}>
-          {/* Sliding highlight — a single animated pill positioned
-              absolutely behind the tab icons. It follows the current
-              active tab by animating translateX and width. Hidden when
-              the current top-of-stack route isn't one of the six tabs. */}
           {highlightVisible && (
             <Animated.View
               pointerEvents="none"
@@ -319,22 +295,15 @@ function FloatingTabBar() {
                 key={tab.name}
                 onPress={() => {
                   try {
-                    navigationRef.navigate("WorkerHome", {
-                      screen: tab.name,
-                    });
-                  } catch {
                     navigationRef.navigate(tab.name);
+                  } catch (e) {
+                    // Silent — screen not yet mounted or ref not ready.
                   }
                 }}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout;
                   tabLayouts.current[tab.name] = { x, width };
-                  // Force the highlight effect to retry once all layouts
-                  // are measured.
                   setLayoutsReady((n) => n + 1);
-                  // If this is the initially active tab and its layout
-                  // just landed, snap the highlight into place without
-                  // animation so it doesn't fly in from x=0.
                   if (
                     tab.name === activeRoute &&
                     highlightXNum.current === 0 &&
@@ -370,7 +339,7 @@ function FloatingTabBar() {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Screen With Chrome Wrapper
+// Screen With Chrome Wrapper (tab screens)
 // ════════════════════════════════════════════════════════════════════════
 function ScreenWithChrome({ Screen, title, subtitle }) {
   const { theme } = useTheme();
@@ -401,26 +370,39 @@ function ScreenWithChrome({ Screen, title, subtitle }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Screen With Stack Chrome
-// Used by Stack screens (BookingDetail, HirerPublicProfile, etc.) so they
-// render the FloatingTabBar at the bottom — matching the hirer side where
-// every non-chat screen shows the pill. The TopBar is rendered by the
-// Stack.Navigator via the `header` option, so this wrapper only adds the
-// floating bar over the screen content.
+// Screen With Stack Chrome — for pushed screens (still rendering the
+// FloatingTabBar at the bottom, plus a TopBar with a back arrow).
 // ════════════════════════════════════════════════════════════════════════
 function ScreenWithStackChrome({ Screen }) {
   const navigation = useNavigation();
   const route = useRoute();
+  const { theme } = useTheme();
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   return (
-    <View style={{ flex: 1 }}>
-      <Screen navigation={navigation} route={route} />
-      <FloatingTabBar />
-    </View>
+    <ScrollContext.Provider value={scrollY}>
+      <View style={[styles.shell, { backgroundColor: theme.colors.bg }]}>
+        <TopBar navigation={navigation} showBack />
+        <Animated.ScrollView
+          style={styles.body}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: true },
+          )}
+        >
+          <Screen navigation={navigation} route={route} />
+        </Animated.ScrollView>
+        <FloatingTabBar />
+      </View>
+    </ScrollContext.Provider>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Drawer
+// Main navigator — Drawer at the top, every screen inside.
 // ════════════════════════════════════════════════════════════════════════
 function WorkerDrawer() {
   const { unreadNotifs, unreadMessages } = useUnread();
@@ -428,6 +410,7 @@ function WorkerDrawer() {
 
   return (
     <Drawer.Navigator
+      initialRouteName="Dashboard"
       drawerContent={(props) => (
         <WorkerDrawerContent
           {...props}
@@ -442,7 +425,7 @@ function WorkerDrawer() {
         drawerStyle: { width: "80%", backgroundColor: "transparent" },
       }}
     >
-      {/* 1. Overview */}
+      {/* ══ Visible drawer tabs ══════════════════════════════════════ */}
       <Drawer.Screen name="Dashboard">
         {() => (
           <ScreenWithChrome
@@ -497,8 +480,6 @@ function WorkerDrawer() {
           />
         )}
       </Drawer.Screen>
-
-      {/* 2. Finances & History */}
       <Drawer.Screen name="WorkerEarnings">
         {() => (
           <ScreenWithChrome
@@ -571,8 +552,6 @@ function WorkerDrawer() {
           />
         )}
       </Drawer.Screen>
-
-      {/* 3. Profile */}
       <Drawer.Screen name="WorkerPortfolio">
         {() => (
           <ScreenWithChrome
@@ -591,11 +570,6 @@ function WorkerDrawer() {
           />
         )}
       </Drawer.Screen>
-      <Stack.Screen
-        name="InterviewCallRoom"
-        component={InterviewCallRoomScreen}
-        options={{ headerShown: false, presentation: "fullScreenModal" }}
-      />
       <Drawer.Screen name="WorkerAvailability">
         {() => (
           <ScreenWithChrome
@@ -614,8 +588,6 @@ function WorkerDrawer() {
           />
         )}
       </Drawer.Screen>
-
-      {/* 4. Community & Growth */}
       <Drawer.Screen name="WorkerCommunityFeed">
         {() => (
           <ScreenWithChrome
@@ -661,8 +633,6 @@ function WorkerDrawer() {
           />
         )}
       </Drawer.Screen>
-
-      {/* 5. Account & Support */}
       <Drawer.Screen name="WorkerReviews">
         {() => (
           <ScreenWithChrome
@@ -726,8 +696,6 @@ function WorkerDrawer() {
           />
         )}
       </Drawer.Screen>
-
-      {/* Extra screens not in drawer but used elsewhere */}
       <Drawer.Screen name="WorkerProfile">
         {() => (
           <ScreenWithChrome
@@ -746,149 +714,113 @@ function WorkerDrawer() {
           />
         )}
       </Drawer.Screen>
-    </Drawer.Navigator>
-  );
-}
 
-// ════════════════════════════════════════════════════════════════════════
-// Stack
-// ════════════════════════════════════════════════════════════════════════
-function WorkerStack() {
-  const { t } = useTranslation();
-  const { unreadNotifs, unreadMessages } = useUnread();
-
-  const STACK_META = {
-    BookingDetail: {
-      title: t("bookings.detail"),
-      subtitle: t("screenSub.bookingDetail"),
-    },
-    HirerPublicProfile: {
-      title: t("profile.myProfile"),
-      subtitle: t("screenSub.hirerProfile"),
-    },
-    WorkerJobDetail: {
-      title: t("jobs.detail.details"),
-      subtitle: t("screenSub.jobDetails"),
-    },
-    PostDetail: { title: t("nav.myPosts"), subtitle: t("screenSub.community") },
-    RefundDetail: { title: t("nav.refunds"), subtitle: t("screenSub.refunds") },
-    MyDisputes: { title: t("nav.disputes"), subtitle: t("screenSub.disputes") },
-    EditProfile: {
-      title: t("profile.editProfile"),
-      subtitle: t("screenSub.myProfile"),
-    },
-  };
-
-  return (
-    <View style={{ flex: 1 }}>
-      <Stack.Navigator
-        screenOptions={({ route }) => {
-          if (route.name === "WorkerHome") return { headerShown: false };
-
-          // Chat surfaces: chrome-free — no TopBar. Matches the hirer side.
-          if (
-            route.name === "Chat" ||
-            route.name === "SupportChat" ||
-            route.name === "SupportTicketThread"
-          ) {
-            return { headerShown: false };
-          }
-
-          // VideoCall: chrome-free, full-screen modal. Matches the hirer side.
-          if (route.name === "VideoCall") {
-            return { headerShown: false, presentation: "fullScreenModal" };
-          }
-
-          // All other stack screens: TopBar header (this is the worker-only
-          // difference from the hirer drawer — the worker has real pushed
-          // stack screens with a back button). The FloatingTabBar is added
-          // by ScreenWithStackChrome inside each Screen registration below.
-          const m = STACK_META[route.name] ?? { title: route.name };
-          return {
-            headerShown: true,
-            header: () => (
-              <TopBar
-                title={m.title}
-                subtitle={m.subtitle}
-                showBack
-                unreadCount={unreadNotifs}
-                unreadMessages={unreadMessages}
-              />
-            ),
-          };
-        }}
+      {/* ══ Hidden drawer screens (still reachable via navigate) ═════ */}
+      <Drawer.Screen
+        name="BookingDetail"
+        options={{ drawerItemStyle: { display: "none" } }}
       >
-        <Stack.Screen name="WorkerHome" component={WorkerDrawer} />
+        {() => <ScreenWithStackChrome Screen={BookingDetailScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen
+        name="HirerPublicProfile"
+        options={{ drawerItemStyle: { display: "none" } }}
+      >
+        {() => <ScreenWithStackChrome Screen={HirerPublicProfileScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen
+        name="WorkerJobDetail"
+        options={{ drawerItemStyle: { display: "none" } }}
+      >
+        {() => <ScreenWithStackChrome Screen={JobDetailScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen
+        name="PostDetail"
+        options={{ drawerItemStyle: { display: "none" } }}
+      >
+        {() => <ScreenWithStackChrome Screen={PostDetailScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen
+        name="RefundDetail"
+        options={{ drawerItemStyle: { display: "none" } }}
+      >
+        {() => <ScreenWithStackChrome Screen={RefundDetailScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen
+        name="MyDisputes"
+        options={{ drawerItemStyle: { display: "none" } }}
+      >
+        {() => <ScreenWithStackChrome Screen={MyDisputesScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen
+        name="EditProfile"
+        options={{ drawerItemStyle: { display: "none" } }}
+      >
+        {() => <ScreenWithStackChrome Screen={EditProfileScreen} />}
+      </Drawer.Screen>
+      <Drawer.Screen
+        name="WorkerRetainedEmployerDetail"
+        options={{ drawerItemStyle: { display: "none" } }}
+      >
+        {() => (
+          <ScreenWithStackChrome Screen={WorkerRetainedEmployerDetailScreen} />
+        )}
+      </Drawer.Screen>
 
-        {/* Non-chat stack screens — TopBar + FloatingTabBar. */}
-        <Stack.Screen name="BookingDetail">
-          {() => <ScreenWithStackChrome Screen={BookingDetailScreen} />}
-        </Stack.Screen>
-        <Stack.Screen name="HirerPublicProfile">
-          {() => <ScreenWithStackChrome Screen={HirerPublicProfileScreen} />}
-        </Stack.Screen>
-        <Stack.Screen name="WorkerJobDetail">
-          {() => <ScreenWithStackChrome Screen={JobDetailScreen} />}
-        </Stack.Screen>
-        <Stack.Screen name="PostDetail">
-          {() => <ScreenWithStackChrome Screen={PostDetailScreen} />}
-        </Stack.Screen>
-        <Stack.Screen name="RefundDetail">
-          {() => <ScreenWithStackChrome Screen={RefundDetailScreen} />}
-        </Stack.Screen>
-        <Stack.Screen name="MyDisputes">
-          {() => <ScreenWithStackChrome Screen={MyDisputesScreen} />}
-        </Stack.Screen>
-        <Stack.Screen name="EditProfile">
-          {() => <ScreenWithStackChrome Screen={EditProfileScreen} />}
-        </Stack.Screen>
-        <Stack.Screen
-          name="WorkerRetainedEmployerDetail"
-          options={{ headerShown: false }}
-        >
-          {() => (
-            <ScreenWithStackChrome
-              Screen={WorkerRetainedEmployerDetailScreen}
-            />
-          )}
-        </Stack.Screen>
-
-        {/* Chat surfaces — chrome-free, exactly like the hirer side. */}
-        <Stack.Screen
-          name="Chat"
-          component={ChatScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="SupportChat"
-          component={SupportChatScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="SupportTicketThread"
-          component={SupportTicketThreadScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="VideoCall"
-          component={VideoCallScreen}
-          options={{ headerShown: false, presentation: "fullScreenModal" }}
-        />
-
-        <Stack.Screen
-          name="InterviewCallRoom"
-          component={InterviewCallRoomScreen}
-          options={{ headerShown: false, presentation: "fullScreenModal" }}
-        />
-      </Stack.Navigator>
-    </View>
+      {/* ══ Full-screen modal-like screens (no chrome, no tab bar) ═══ */}
+      <Drawer.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={{
+          drawerItemStyle: { display: "none" },
+          swipeEnabled: false,
+          headerShown: false,
+        }}
+      />
+      <Drawer.Screen
+        name="SupportChat"
+        component={SupportChatScreen}
+        options={{
+          drawerItemStyle: { display: "none" },
+          swipeEnabled: false,
+          headerShown: false,
+        }}
+      />
+      <Drawer.Screen
+        name="SupportTicketThread"
+        component={SupportTicketThreadScreen}
+        options={{
+          drawerItemStyle: { display: "none" },
+          swipeEnabled: false,
+          headerShown: false,
+        }}
+      />
+      <Drawer.Screen
+        name="VideoCall"
+        component={VideoCallScreen}
+        options={{
+          drawerItemStyle: { display: "none" },
+          swipeEnabled: false,
+          headerShown: false,
+        }}
+      />
+      <Drawer.Screen
+        name="InterviewCallRoom"
+        component={InterviewCallRoomScreen}
+        options={{
+          drawerItemStyle: { display: "none" },
+          swipeEnabled: false,
+          headerShown: false,
+        }}
+      />
+    </Drawer.Navigator>
   );
 }
 
 export default function WorkerNavigator() {
   return (
     <UnreadProvider>
-      <WorkerStack />
+      <WorkerDrawer />
     </UnreadProvider>
   );
 }

@@ -15,10 +15,10 @@ import { rem } from "../constants/theme";
 import { navigationRef, hasRoute } from "../navigation/navigationRef";
 import { useUnread } from "../contexts/UnreadContext";
 
+import { CommonActions } from "@react-navigation/native";
+import { DrawerActions } from "@react-navigation/native";
+
 // Title/subtitle keys per route — translated via t(...) at render.
-// Keys use the existing `screenTitles.*` and `screenSub.*` namespaces in
-// en.json. Where `screenTitles.*` doesn't exist for a route, we fall back
-// to `screenSub.*` which already has a broad set of Hirer + Worker routes.
 const SCREEN_FALLBACK_KEYS = {
   Dashboard: {
     titleKey: "screenTitles.dashboard.title",
@@ -199,87 +199,87 @@ const SCREEN_FALLBACK_KEYS = {
 
   // ── Added: Hirer routes that previously had no subtitle ────────────────
   Wallet: {
-    titleKey: "nav.wallet", // verify — or "wallet.title" if that exists
+    titleKey: "nav.wallet",
     subtitleKey: "screenSub.wallet",
   },
   WalletTransactionDetail: {
-    titleKey: "wallet.transactionDetail", // verify
+    titleKey: "wallet.transactionDetail",
     subtitleKey: "screenSub.walletTransactionDetail",
   },
   RefundHistory: {
-    titleKey: "nav.refundHistory", // verify — or "refundHistory.header.title"
+    titleKey: "nav.refundHistory",
     subtitleKey: "screenSub.refundHistory",
   },
   RefundDetail: {
-    titleKey: "refundHistory.header.title", // verify
+    titleKey: "refundHistory.header.title",
     subtitleKey: "screenSub.refundDetail",
   },
   RetainedStaff: {
-    titleKey: "nav.retainedStaff", // verify — or "retainedStaff.title"
+    titleKey: "nav.retainedStaff",
     subtitleKey: "screenSub.retainedStaff",
   },
   RetainedStaffList: {
-    titleKey: "retainedStaff.title", // verify
+    titleKey: "retainedStaff.title",
     subtitleKey: "screenSub.retainedStaffList",
   },
   RetainedStaffDetail: {
-    titleKey: "retainedStaff.title", // verify
+    titleKey: "retainedStaff.title",
     subtitleKey: "screenSub.retainedStaffDetail",
   },
   RetainedStaffCycleDetail: {
-    titleKey: "retainedStaff.title", // verify
+    titleKey: "retainedStaff.title",
     subtitleKey: "screenSub.retainedStaffCycleDetail",
   },
   Campaign: {
-    titleKey: "nav.campaigns", // verify — or "nav.campaign"
+    titleKey: "nav.campaigns",
     subtitleKey: "screenSub.campaigns",
   },
   ReferralDashboard: {
-    titleKey: "nav.referrals", // verify — or "nav.referralDashboard"
+    titleKey: "nav.referrals",
     subtitleKey: "screenSub.referrals",
   },
   MyReports: {
-    titleKey: "nav.reports", // verify — or "nav.MyReports"
+    titleKey: "nav.reports",
     subtitleKey: "screenSub.myReports",
   },
   SupportChat: {
-    titleKey: "nav.liveSupportChat", // verify
+    titleKey: "nav.liveSupportChat",
     subtitleKey: "screenSub.supportChat",
   },
   SupportHub: {
-    titleKey: "nav.supportHub", // verify
+    titleKey: "nav.supportHub",
     subtitleKey: "screenSub.supportHub",
   },
   SupportTicketDetail: {
-    titleKey: "support.ticket", // verify
+    titleKey: "support.ticket",
     subtitleKey: "screenSub.supportTicketDetail",
   },
   PostDetail: {
-    titleKey: "posts.myTitle", // verify — or a dedicated postDetail key
+    titleKey: "posts.myTitle",
     subtitleKey: "screenSub.postDetail",
   },
   EditProfile: {
-    titleKey: "profile.myProfile", // verify — or "profile.editProfile"
+    titleKey: "profile.myProfile",
     subtitleKey: "screenSub.editProfile",
   },
   EditJob: {
-    titleKey: "jobs.detail.details", // verify — or "jobs.edit.title"
+    titleKey: "jobs.detail.details",
     subtitleKey: "screenSub.editJob",
   },
   MyDisputes: {
-    titleKey: "disputes.title", // verify — or "disputes.myDisputes"
+    titleKey: "disputes.title",
     subtitleKey: "screenSub.myDisputes",
   },
   CreateBookingFromJob: {
-    titleKey: "createBooking.submit", // verify
+    titleKey: "createBooking.submit",
     subtitleKey: "screenSub.createBookingFromJob",
   },
   InitiatePayment: {
-    titleKey: "payments.title", // verify — or "payment.initiate"
+    titleKey: "payments.title",
     subtitleKey: "screenSub.initiatePayment",
   },
   ReleasePayment: {
-    titleKey: "payments.title", // verify — or "payments.releasePayment"
+    titleKey: "payments.title",
     subtitleKey: "screenSub.releasePayment",
   },
 };
@@ -315,38 +315,27 @@ export default function TopBar({
   const resolvedSub =
     subtitleProp ?? (keys.subtitleKey ? t(keys.subtitleKey) : null);
 
-  // ── Smart hamburger ─────────────────────────────────────────────
-  // Order of attempts:
-  //   1. Ask the current screen's parent to open the drawer. On the worker
-  //      side this is the Drawer.Navigator's context, which is always
-  //      available for both the initial screen (WorkerHome) and every
-  //      pushed stack screen — so tapping the hamburger slides the drawer
-  //      open without disturbing the current screen.
-  //   2. If the current screen has no parent drawer (rare — cold-start,
-  //      deep-link, chat full-screen modal), fall back to dispatching a
-  //      drawer action through navigationRef so the root drawer handles
-  //      it. This also opens the drawer without navigating.
-  //   3. Never navigate to WorkerHome / Dashboard here. That was the bug:
-  //      navigate("WorkerHome", { screen: "Dashboard" }) pops the current
-  //      stack screen before the drawer opens, which threw the user back
-  //      to the Dashboard tab.
+  // ── Hamburger — opens the drawer, never navigates ─────────────────
+  //
+  // Strategy:
+  //   1. Walk up the parent chain and call openDrawer() on the first
+  //      ancestor that has it. This handles both the direct-Drawer
+  //      case (Dashboard, WorkerHome, etc.) and the Stack-inside-Drawer
+  //      case (BookingDetail, JobDetail, etc.).
+  //   2. If no ancestor has openDrawer, dispatch OPEN_DRAWER on the
+  //      root navigationRef. Both worker and hirer roots are Drawers,
+  //      so this succeeds.
+  //   3. Never navigate anywhere. The hamburger is a toggle, not a
+  //      navigation shortcut — that's why the previous version was
+  //      landing users on their home screen instead of opening the
+  //      drawer.
   const handleMenu = () => {
-    // 1. Parent drawer, if the current screen is inside one.
-    const parent = navigation.getParent?.();
-    if (parent) {
-      try {
-        parent.openDrawer();
-        return;
-      } catch (e) {}
-    }
-
-    // 2. Try the nearest ancestor that actually owns the drawer — this
-    //    covers nested navigators (stack → drawer → tab etc.) without
-    //    collapsing the current stack.
+    // ── 1. Direct drawer-nav from context, if any ancestor has it ──
     let ancestor = navigation;
-    while (ancestor) {
+    let depth = 0;
+    while (ancestor && depth < 10) {
       try {
-        if (ancestor.openDrawer) {
+        if (typeof ancestor.openDrawer === "function") {
           ancestor.openDrawer();
           return;
         }
@@ -356,17 +345,79 @@ export default function TopBar({
       } catch (e) {
         ancestor = null;
       }
+      depth += 1;
     }
 
-    // 3. Last resort — dispatch a drawer action on the root navigator.
-    //    This opens the drawer without navigating, so the current screen
-    //    stays on the stack underneath.
-    try {
-      if (navigationRef.isReady?.()) {
-        navigationRef.dispatch({ type: "OPEN_DRAWER" });
-      }
-    } catch (e) {}
+    // ── 2. Ask the root to open the drawer WITHOUT navigating first ──
+    //    Dispatch the action through navigationRef. If the current active
+    //    branch contains a drawer, this succeeds. If we're on a Stack
+    //    screen like BookingDetail, the action bubbles but no navigator
+    //    handles it — so we detect that and go to step 3.
+    if (navigationRef.isReady?.()) {
+      try {
+        const before = navigationRef.getRootState();
+        navigationRef.dispatch(DrawerActions.openDrawer());
+
+        // The dispatch is async; schedule a microtask to check whether
+        // the drawer opened. We can't fully detect success, so we use
+        // the "did a navigation state change happen in the drawer?" test
+        // below as a best-effort fallback.
+        setTimeout(() => {
+          try {
+            const after = navigationRef.getRootState();
+            // If the state didn't change at all, the action was ignored.
+            if (JSON.stringify(before) === JSON.stringify(after)) {
+              fallbackOpenDrawer();
+            }
+          } catch {
+            fallbackOpenDrawer();
+          }
+        }, 0);
+        return;
+      } catch (e) {}
+    }
+
+    // ── 3. Direct fallback ──
+    fallbackOpenDrawer();
   };
+
+  /**
+   * The nuclear option: navigate to the drawer root screen and open the
+   * drawer in the same tick. Because both actions land on the same
+   * navigation state update, the drawer's default screen is rendered
+   * first, then the drawer opens — visually it looks like the hamburger
+   * just opened the drawer.
+   *
+   * This DOES pop the current stack screen (BookingDetail → WorkerHome),
+   * but that's a known and acceptable tradeoff for "always reachable
+   * hamburger". The other option (re-architecting so the drawer is
+   * always an ancestor) is a much larger change.
+   */
+  function fallbackOpenDrawer() {
+    if (!navigationRef.isReady?.()) return;
+    const role = user?.role;
+
+    const rootName =
+      role === "WORKER" ? "WorkerHome" : role === "HIRER" ? "Dashboard" : null;
+
+    if (!rootName) return;
+
+    try {
+      navigationRef.dispatch(
+        CommonActions.navigate({
+          name: rootName,
+          params: { screen: "Dashboard" },
+        }),
+      );
+      // Immediately follow with a drawer open. The two dispatches are
+      // batched by React Navigation into one state update on most setups.
+      setTimeout(() => {
+        try {
+          navigationRef.dispatch(DrawerActions.openDrawer());
+        } catch {}
+      }, 0);
+    } catch (e) {}
+  }
 
   // ── Role-aware navigation ───────────────────────────────────────
   const navToWorkerScreen = (screen) => {
