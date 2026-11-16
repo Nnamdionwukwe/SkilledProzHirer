@@ -398,7 +398,7 @@ export default function WorkerJobsScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* ── External Jobs CTA ── */}
-      {user?.role === "WORKER" && (
+      {/* {user?.role === "WORKER" && (
         <View
           style={[
             s.externalCta,
@@ -434,7 +434,7 @@ export default function WorkerJobsScreen() {
             )}
           </AppText>
         </View>
-      )}
+      )} */}
 
       {/* ── Search bar ── */}
       <View style={[s.searchBar, isMobile && { flexDirection: "column" }]}>

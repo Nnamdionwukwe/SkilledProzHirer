@@ -15,9 +15,6 @@ import { rem } from "../constants/theme";
 import { navigationRef, hasRoute } from "../navigation/navigationRef";
 import { useUnread } from "../contexts/UnreadContext";
 
-import { CommonActions } from "@react-navigation/native";
-import { DrawerActions } from "@react-navigation/native";
-
 // Title/subtitle keys per route — translated via t(...) at render.
 const SCREEN_FALLBACK_KEYS = {
   Dashboard: {
@@ -317,20 +314,19 @@ export default function TopBar({
 
   // ── Hamburger — opens the drawer, never navigates ─────────────────
   //
-  // Strategy:
-  //   1. Walk up the parent chain and call openDrawer() on the first
-  //      ancestor that has it. This handles both the direct-Drawer
-  //      case (Dashboard, WorkerHome, etc.) and the Stack-inside-Drawer
-  //      case (BookingDetail, JobDetail, etc.).
-  //   2. If no ancestor has openDrawer, dispatch OPEN_DRAWER on the
-  //      root navigationRef. Both worker and hirer roots are Drawers,
-  //      so this succeeds.
-  //   3. Never navigate anywhere. The hamburger is a toggle, not a
-  //      navigation shortcut — that's why the previous version was
-  //      landing users on their home screen instead of opening the
-  //      drawer.
+  // Since the Drawer is the top-level navigator, the current navigation
+  // object itself has openDrawer(). We try it directly first. If that
+  // fails, we walk up the parent chain looking for it.
   const handleMenu = () => {
-    // ── 1. Direct drawer-nav from context, if any ancestor has it ──
+    // 1. Try the current navigation object first
+    try {
+      if (typeof navigation?.openDrawer === "function") {
+        navigation.openDrawer();
+        return;
+      }
+    } catch (e) {}
+
+    // 2. Walk up the ancestor chain looking for a drawer
     let ancestor = navigation;
     let depth = 0;
     while (ancestor && depth < 10) {
@@ -348,90 +344,18 @@ export default function TopBar({
       depth += 1;
     }
 
-    // ── 2. Ask the root to open the drawer WITHOUT navigating first ──
-    //    Dispatch the action through navigationRef. If the current active
-    //    branch contains a drawer, this succeeds. If we're on a Stack
-    //    screen like BookingDetail, the action bubbles but no navigator
-    //    handles it — so we detect that and go to step 3.
-    if (navigationRef.isReady?.()) {
-      try {
-        const before = navigationRef.getRootState();
-        navigationRef.dispatch(DrawerActions.openDrawer());
-
-        // The dispatch is async; schedule a microtask to check whether
-        // the drawer opened. We can't fully detect success, so we use
-        // the "did a navigation state change happen in the drawer?" test
-        // below as a best-effort fallback.
-        setTimeout(() => {
-          try {
-            const after = navigationRef.getRootState();
-            // If the state didn't change at all, the action was ignored.
-            if (JSON.stringify(before) === JSON.stringify(after)) {
-              fallbackOpenDrawer();
-            }
-          } catch {
-            fallbackOpenDrawer();
-          }
-        }, 0);
-        return;
-      } catch (e) {}
-    }
-
-    // ── 3. Direct fallback ──
-    fallbackOpenDrawer();
-  };
-
-  /**
-   * The nuclear option: navigate to the drawer root screen and open the
-   * drawer in the same tick. Because both actions land on the same
-   * navigation state update, the drawer's default screen is rendered
-   * first, then the drawer opens — visually it looks like the hamburger
-   * just opened the drawer.
-   *
-   * This DOES pop the current stack screen (BookingDetail → WorkerHome),
-   * but that's a known and acceptable tradeoff for "always reachable
-   * hamburger". The other option (re-architecting so the drawer is
-   * always an ancestor) is a much larger change.
-   */
-  function fallbackOpenDrawer() {
-    if (!navigationRef.isReady?.()) return;
-    const role = user?.role;
-
-    const rootName =
-      role === "WORKER" ? "WorkerHome" : role === "HIRER" ? "Dashboard" : null;
-
-    if (!rootName) return;
-
+    // 3. Last resort — dispatch on the root ref
     try {
-      navigationRef.dispatch(
-        CommonActions.navigate({
-          name: rootName,
-          params: { screen: "Dashboard" },
-        }),
-      );
-      // Immediately follow with a drawer open. The two dispatches are
-      // batched by React Navigation into one state update on most setups.
-      setTimeout(() => {
-        try {
-          navigationRef.dispatch(DrawerActions.openDrawer());
-        } catch {}
-      }, 0);
+      if (navigationRef.isReady?.()) {
+        navigationRef.dispatch({ type: "OPEN_DRAWER" });
+      }
     } catch (e) {}
-  }
+  };
 
   // ── Role-aware navigation ───────────────────────────────────────
-  const navToWorkerScreen = (screen) => {
-    if (user?.role === "WORKER" && hasRoute(navigation, "WorkerHome")) {
-      try {
-        navigation.navigate("WorkerHome", { screen });
-        return true;
-      } catch (e1) {}
-    }
-    return false;
-  };
-
+  // Navigate to a screen by name. The screen must be a registered
+  // top-level route in the current drawer.
   const safeNavigate = (screen) => {
-    if (navToWorkerScreen(screen)) return;
     try {
       if (hasRoute(navigation, screen)) {
         navigation.navigate(screen);

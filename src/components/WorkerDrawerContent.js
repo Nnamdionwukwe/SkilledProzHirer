@@ -250,13 +250,9 @@ export default function WorkerDrawerContent(props) {
   // Route through WorkerHome first so this works whether the
   // drawer is opened from inside the Drawer or from a Stack screen.
   const goTo = (screen) => {
-    try {
-      props.navigation.navigate(screen);
-    } catch {
-      try {
-        props.navigation.navigate("WorkerHome", { screen });
-      } catch {}
-    }
+    // Since every screen is a top-level drawer screen now, we just navigate
+    // directly and close the drawer.
+    props.navigation.navigate(screen);
     props.navigation.closeDrawer();
   };
 

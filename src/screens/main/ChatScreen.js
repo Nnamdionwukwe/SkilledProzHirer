@@ -861,31 +861,17 @@ export default function ChatScreen() {
   // Detect which navigator we're running inside. `WorkerHome` only exists
   // on the worker side; HirerNavigator never registers it. This is the same
   // probe TopBar.js uses.
-  const isWorkerSide = (() => {
-    try {
-      return hasRoute(navigation, "WorkerHome");
-    } catch {
-      return false;
-    }
-  })();
+  const isWorkerSide = user?.role === "WORKER";
 
-  // Resolve the public-profile route that actually exists in the current
-  // navigator:
-  //   • Worker side — hirers live at "HirerPublicProfile" (stack screen).
-  //                   Workers viewing a worker (rare) fall back to the
-  //                   drawer's "WorkerProfile".
-  //   • Hirer side  — workers live at "WorkerProfile"; the hirer's own
-  //                   public profile is "HirerDetail".
+  // ── Role-aware Public Profile Route ──────────────────────────────────────
+  // Determine the correct route name based on the user's role.
+  // Both WorkerPublicProfileScreen and HirerPublicProfileScreen are registered
+  // as hidden screens in their respective Drawers.
   const publicProfileRoute = !activeOther
     ? null
     : activeOther.role === "WORKER"
-      ? isWorkerSide
-        ? "WorkerProfile" // worker app: drawer route for other workers
-        : "WorkerProfile" // hirer app: opens WorkerPublicProfileScreen
-      : isWorkerSide
-        ? "HirerPublicProfile" // worker app: opens HirerPublicProfileScreen
-        : "HirerDetail"; // hirer app: opens HirerPublicProfileScreen
-
+      ? "WorkerProfile" // Both apps use "WorkerProfile" for the worker's public view
+      : "HirerDetail"; // Both apps use "HirerDetail" for the hirer's public view
   const otherProfileUrl = publicProfileRoute
     ? `${publicProfileRoute}:${activeOther.id}`
     : null;
@@ -900,33 +886,12 @@ export default function ChatScreen() {
   // focused last (usually Dashboard). The only reliable way to land on
   // Messages is to explicitly navigate there.
   const handleBack = () => {
-    if (isWorkerSide) {
-      if (navigation.canGoBack?.()) {
-        navigation.goBack();
-        return;
-      }
-      try {
-        const parent = navigation.getParent?.();
-        if (parent) {
-          parent.navigate("WorkerHome", { screen: "Messages" });
-          return;
-        }
-      } catch {}
-      try {
-        navigation.navigate("Messages");
-      } catch {}
-      return;
-    }
-
-    // Hirer side — always go straight to Messages. Never call goBack() here:
-    // it lands on the previous drawer screen, which is usually Dashboard.
+    // Chat is a top-level drawer screen. Going back always means
+    // navigating to the Messages list.
     try {
       navigation.navigate("Messages");
-    } catch {
-      try {
-        const parent = navigation.getParent?.();
-        if (parent) parent.navigate("Messages");
-      } catch {}
+    } catch (err) {
+      console.warn("Failed to navigate to Messages:", err);
     }
   };
 

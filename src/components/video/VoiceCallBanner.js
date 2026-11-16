@@ -53,22 +53,14 @@ function isSuppressedRoute() {
   }
 }
 
-function goToMessages(conversationId, role) {
+function goToMessages(conversationId) {
   if (!navigationRef.isReady()) {
     dlog("goToMessages: navigationRef not ready");
     return;
   }
   try {
-    if (role === "WORKER") {
-      dlog("goToMessages via WorkerHome", { conversationId });
-      navigationRef.navigate("WorkerHome", {
-        screen: "Messages",
-        params: { conversationId },
-      });
-    } else {
-      dlog("goToMessages direct", { conversationId });
-      navigationRef.navigate("Messages", { conversationId });
-    }
+    dlog("goToMessages", { conversationId });
+    navigationRef.navigate("Messages", { conversationId });
   } catch (err) {
     dlog("goToMessages failed:", err.message);
   }
@@ -291,7 +283,7 @@ export default function VoiceCallBanner() {
       } else {
         openCall(updatedCall || { ...incoming, status: "ACTIVE" });
         setIncoming(null);
-        goToMessages(incoming.conversationId, user?.role);
+        goToMessages(incoming.conversationId);
       }
     } catch (err) {
       dlog("accept FAILED", {
