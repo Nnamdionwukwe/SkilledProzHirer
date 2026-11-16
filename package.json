@@ -19,6 +19,7 @@
     "audit-translations": "node translation-audit.js"
   },
   "dependencies": {
+    "@config-plugins/react-native-callkeep": "^12.0.0",
     "@expo-google-fonts/dm-sans": "^0.4.1",
     "@expo-google-fonts/syne": "^0.4.1",
     "@expo/metro-runtime": "~6.1.2",

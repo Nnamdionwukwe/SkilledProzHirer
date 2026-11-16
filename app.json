@@ -44,13 +44,34 @@
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.CALL_PHONE",
+        "android.permission.READ_PHONE_NUMBERS",
+        "android.permission.MANAGE_OWN_CALLS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE"
       ]
     },
     "web": {
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "@config-plugins/react-native-callkeep",
+        {
+          "ios": {
+            "appName": "SkilledProz"
+          },
+          "android": {
+            "alertTitle": "Permissions required",
+            "alertDescription": "This application needs access to your phone accounts to show incoming calls.",
+            "cancelButton": "Cancel",
+            "okButton": "OK"
+          }
+        }
+      ],
       [
         "expo-speech-recognition",
         {
