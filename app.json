@@ -29,6 +29,7 @@
     "android": {
       "package": "com.skilledproz.hirer",
       "versionCode": 2,
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/icon.png",

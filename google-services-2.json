@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "541973933569",
+    "project_id": "skilledproz-51b42",
+    "storage_bucket": "skilledproz-51b42.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:541973933569:android:a5c6a6a129882d5cae1a00",
+        "android_client_info": {
+          "package_name": "com.skilledproz.hirer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_k1u3kHXc_Rc0SuqweT1Hudo3rgCdfzA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
