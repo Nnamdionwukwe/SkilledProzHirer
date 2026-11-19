@@ -304,7 +304,14 @@ export default function ProfileScreen() {
 
             <View style={styles.heroNameRow}>
               <AppText
-                style={[styles.heroName, { color: c.text }]}
+                // style={[styles.heroName, { color: c.text }]}
+                weight="displayBlack"
+                style={{
+                  fontSize: 12,
+                  letterSpacing: -0.5,
+                  marginBottom: 4,
+                  color: c.text,
+                }}
                 numberOfLines={2}
               >
                 {user.firstName} {user.lastName}
@@ -313,24 +320,48 @@ export default function ProfileScreen() {
                 "VERIFIED" && <FaShieldAlt size={14} color={c.orange} />}
             </View>
 
-            <ProBadge isEnterprise={isEnterprise} isProTier={isProTier} c={c} />
+            {/* Inline Row: Pro Badge, Verified Badge, Role Pill */}
+            <View style={styles.pillsRow}>
+              <ProBadge
+                isEnterprise={isEnterprise}
+                isProTier={isProTier}
+                c={c}
+              />
 
-            {(wp?.verificationStatus ?? hp?.verificationStatus) ===
-              "VERIFIED" && (
+              {(wp?.verificationStatus ?? hp?.verificationStatus) ===
+                "VERIFIED" && (
+                <View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: c.greenDim, borderColor: c.green },
+                  ]}
+                >
+                  <FaShieldAlt size={9} color={c.green} />
+                  <AppText
+                    style={{ color: c.green, fontSize: 10, marginLeft: 4 }}
+                  >
+                    {isWorker ? "Verified Worker" : "Verified Hirer"}
+                  </AppText>
+                </View>
+              )}
+
               <View
                 style={[
-                  styles.badge,
-                  { backgroundColor: c.greenDim, borderColor: c.green },
+                  styles.rolePill,
+                  { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
                 ]}
               >
-                <FaShieldAlt size={9} color={c.green} />
-                <AppText
-                  style={{ color: c.green, fontSize: 10, marginLeft: 4 }}
-                >
-                  {isWorker ? "Verified Worker" : "Verified Hirer"}
+                {isWorker ? (
+                  <FaHardHat size={11} color={c.orange} />
+                ) : (
+                  <FaBriefcase size={11} color={c.orange} />
+                )}
+                <AppText style={[styles.rolePillText, { color: c.orange }]}>
+                  {isWorker ? "Worker" : "Hirer"}
                 </AppText>
               </View>
-            )}
+            </View>
+
             {wp?.backgroundCheck === true && (
               <View
                 style={[
@@ -349,22 +380,6 @@ export default function ProfileScreen() {
                 </AppText>
               </View>
             )}
-
-            <View
-              style={[
-                styles.rolePill,
-                { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
-              ]}
-            >
-              {isWorker ? (
-                <FaHardHat size={11} color={c.orange} />
-              ) : (
-                <FaBriefcase size={11} color={c.orange} />
-              )}
-              <AppText style={[styles.rolePillText, { color: c.orange }]}>
-                {isWorker ? "Worker" : "Hirer"}
-              </AppText>
-            </View>
 
             {wp?.title ? (
               <AppText
@@ -606,7 +621,11 @@ export default function ProfileScreen() {
                 { backgroundColor: c.bgPanel, borderColor: c.border },
               ]}
             >
-              <AppText style={[styles.cardLabel, { color: theme.colors.textMuted }]}>Specialities</AppText>
+              <AppText
+                style={[styles.cardLabel, { color: theme.colors.textMuted }]}
+              >
+                Specialities
+              </AppText>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                 {wp.categories.map((cat) => (
                   <View
@@ -669,7 +688,14 @@ export default function ProfileScreen() {
                     { backgroundColor: c.bgPanel, borderColor: c.border },
                   ]}
                 >
-                  <AppText style={[styles.cardLabel, { color: theme.colors.textMuted }]}>About</AppText>
+                  <AppText
+                    style={[
+                      styles.cardLabel,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    About
+                  </AppText>
                   <AppText
                     style={{ fontSize: 13, color: c.textDim, lineHeight: 20 }}
                   >
@@ -713,7 +739,14 @@ export default function ProfileScreen() {
                     { backgroundColor: c.bgPanel, borderColor: c.border },
                   ]}
                 >
-                  <AppText style={[styles.cardLabel, { color: theme.colors.textMuted }]}>Availability</AppText>
+                  <AppText
+                    style={[
+                      styles.cardLabel,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    Availability
+                  </AppText>
                   <View
                     style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
                   >
@@ -1562,5 +1595,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,
+  },
+  pillsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 2,
+    marginBottom: 2,
   },
 });
