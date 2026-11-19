@@ -23,7 +23,7 @@
 //
 // Backend: GET /hirers/me/dashboard (via getHirerDashboard)
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -61,6 +61,10 @@ export default function DashboardScreen() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Theme-aware dynamic styles (only overrides the hardcoded dark rgba values;
+  // dark mode output is byte-identical to the original).
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   // Breakpoints — mirror website media queries exactly.
   const statsRowSingle = width >= 768;
@@ -105,7 +109,7 @@ export default function DashboardScreen() {
 
   if (loading) {
     return (
-      <AppScreen scroll={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <AppScreen scroll={false} contentContainerStyle={{ paddingBottom: 16 }}>
         <DashboardSkeleton />
       </AppScreen>
     );
@@ -130,7 +134,7 @@ export default function DashboardScreen() {
 
   return (
     <AppScreen
-      contentContainerStyle={{ paddingBottom: 40 }}
+      contentContainerStyle={{ paddingBottom: 0 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -312,6 +316,7 @@ export default function DashboardScreen() {
 
 function StatCard({ icon, label, value, footer, fontSize, color, bg, border }) {
   const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View
       style={[styles.statCard, { backgroundColor: bg, borderColor: border }]}
@@ -353,6 +358,7 @@ function StatCard({ icon, label, value, footer, fontSize, color, bg, border }) {
 
 function EmptyState({ icon, text }) {
   const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View style={styles.empty}>
       <Ionicons name={icon} size={28} color={theme.colors.textMuted} />
@@ -367,200 +373,221 @@ function EmptyState({ icon, text }) {
 }
 
 // ─── Styles (modern glass + layered depth, phone root=14) ─────────────────────
-const styles = StyleSheet.create({
-  // .header — sits on a card with soft ambient shadow
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 14,
-    marginBottom: 24,
-    padding: 18,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.02)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    // layered shadow — reads as "lifted card"
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    elevation: 6,
-  },
-  headerStacked: {
-    flexDirection: "column",
-    alignItems: "stretch",
-  },
-  headerTitleBlock: { flexShrink: 1, minWidth: 0 },
+// Light-mode-aware: the only values that change between modes are the
+// previously-hardcoded dark rgba whites (#fff-a) and the heavy black shadows.
+// On dark mode every value is byte-identical to the original.
+function makeStyles(theme) {
+  const isLight = theme.mode === "light";
 
-  // .eyebrow — pill badge with tinted bg
-  eyebrow: {
-    fontFamily: "DMSans_600SemiBold",
-    fontSize: 9.63,
-    lineHeight: 12,
-    fontWeight: "600",
-    letterSpacing: 1.156,
-    textTransform: "uppercase",
-    marginBottom: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(249,115,22,0.10)",
-    overflow: "hidden",
-  },
+  // Header card surface
+  const headerBg = isLight ? "rgba(0,0,0,0.02)" : "rgba(255,255,255,0.02)";
+  const headerBorder = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.06)";
+  const headerShadowColor = isLight ? "rgba(0,0,0,0.06)" : "#000";
+  const headerShadowOpacity = isLight ? 0.6 : 0.18;
 
-  // .title — larger, tracking tighter, more weight
-  title: {
-    fontFamily: "Syne_700Bold",
-    fontSize: 22,
-    lineHeight: 26,
-    fontWeight: "700",
-    letterSpacing: -0.5,
-  },
+  // Stat card inner top highlight
+  const statTopGlow = isLight ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.08)";
+  const statShadowColor = isLight ? "rgba(0,0,0,0.06)" : "#000";
+  const statShadowOpacity = isLight ? 0.5 : 0.14;
 
-  // .headerActions
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  headerActionsStacked: { justifyContent: "flex-start" },
+  // Empty state fill
+  const emptyBg = isLight ? "rgba(0,0,0,0.02)" : "rgba(255,255,255,0.015)";
 
-  // .ctaBtn — modern: gradient feel via tint + soft shadow + hover-lift radius
-  ctaBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    minHeight: 42,
-    shadowColor: "#f97316",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  ctaBtnStacked: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  ctaBtnText: {
-    fontFamily: "DMSans_600SemiBold",
-    fontSize: 12.25,
-    lineHeight: 16,
-    fontWeight: "700",
-  },
+  return StyleSheet.create({
+    // .header — sits on a card with soft ambient shadow
+    header: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 14,
+      marginBottom: 24,
+      padding: 18,
+      borderRadius: 18,
+      backgroundColor: headerBg,
+      borderWidth: 1,
+      borderColor: headerBorder,
+      // layered shadow — reads as "lifted card"
+      shadowColor: headerShadowColor,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: headerShadowOpacity,
+      shadowRadius: 20,
+      elevation: 6,
+    },
+    headerStacked: {
+      flexDirection: "column",
+      alignItems: "stretch",
+    },
+    headerTitleBlock: { flexShrink: 1, minWidth: 0 },
 
-  // .statsGrid — wider gutter so the cards breathe
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 24,
-    marginHorizontal: -7,
-  },
-  // Row 1 — three flexed cards
-  statsRowThree: {
-    flexDirection: "row",
-    marginBottom: 16,
-    marginHorizontal: -8,
-  },
-  statCellThird: {
-    flex: 1,
-    minWidth: 0,
-    paddingHorizontal: 8,
-  },
+    // .eyebrow — pill badge with tinted bg
+    eyebrow: {
+      fontFamily: "DMSans_600SemiBold",
+      fontSize: 9.63,
+      lineHeight: 12,
+      fontWeight: "600",
+      letterSpacing: 1.156,
+      textTransform: "uppercase",
+      marginBottom: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      alignSelf: "flex-start",
+      backgroundColor: "rgba(249,115,22,0.10)",
+      overflow: "hidden",
+    },
 
-  // Row 2 — full-width row
-  statsRowFull: {
-    marginBottom: 28,
-  },
-  statsGridSingleRow: {},
+    // .title — larger, tracking tighter, more weight
+    title: {
+      fontFamily: "Syne_700Bold",
+      fontSize: 22,
+      lineHeight: 26,
+      fontWeight: "700",
+      letterSpacing: -0.5,
+    },
 
-  statCellTwoCol: {
-    width: "50%",
-    paddingHorizontal: 7,
-    paddingBottom: 14,
-  },
-  statCellSingleRow: {
-    width: "25%",
-    paddingHorizontal: 7,
-    paddingBottom: 0,
-  },
-  statCell: {},
+    // .headerActions
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    headerActionsStacked: { justifyContent: "flex-start" },
 
-  // .statCard — modern: 16 radius, deep shadow, inner top highlight
-  statCard: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    minWidth: 0,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 14,
-    elevation: 4,
-    // subtle top-border glow — reads as a glass card catching light
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.08)",
-  },
+    // .ctaBtn — modern: gradient feel via tint + soft shadow + hover-lift radius
+    ctaBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+      minHeight: 42,
+      shadowColor: "#f97316",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    ctaBtnStacked: {
+      flex: 1,
+      justifyContent: "center",
+    },
+    ctaBtnText: {
+      fontFamily: "DMSans_600SemiBold",
+      fontSize: 12.25,
+      lineHeight: 16,
+      fontWeight: "700",
+    },
 
-  statIcon: {
-    fontSize: 26,
-    lineHeight: 26,
-    marginBottom: 8,
-  },
+    // .statsGrid — wider gutter so the cards breathe
+    statsGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      marginBottom: 24,
+      marginHorizontal: -7,
+    },
+    // Row 1 — three flexed cards
+    statsRowThree: {
+      flexDirection: "row",
+      marginBottom: 16,
+      marginHorizontal: -8,
+    },
+    statCellThird: {
+      flex: 1,
+      minWidth: 0,
+      paddingHorizontal: 8,
+    },
 
-  statValue: {
-    fontFamily: "Syne_700Bold",
-    fontWeight: "700",
-    letterSpacing: -0.6,
-    marginBottom: 4,
-  },
+    // Row 2 — full-width row
+    statsRowFull: {
+      marginBottom: 28,
+    },
+    statsGridSingleRow: {},
 
-  statLabel: {
-    fontFamily: "DMSans_500Medium",
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "500",
-  },
+    statCellTwoCol: {
+      width: "50%",
+      paddingHorizontal: 7,
+      paddingBottom: 14,
+    },
+    statCellSingleRow: {
+      width: "25%",
+      paddingHorizontal: 7,
+      paddingBottom: 0,
+    },
+    statCell: {},
 
-  statFooter: {
-    fontFamily: "DMSans_500Medium",
-    fontSize: 9.1,
-    lineHeight: 12.3,
-    fontWeight: "500",
-    marginTop: 6,
-  },
+    // .statCard — modern: 16 radius, deep shadow, inner top highlight
+    statCard: {
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 16,
+      minWidth: 0,
+      overflow: "hidden",
+      shadowColor: statShadowColor,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: statShadowOpacity,
+      shadowRadius: 14,
+      elevation: 4,
+      // subtle top-border glow — reads as a glass card catching light
+      borderTopWidth: 1,
+      borderTopColor: statTopGlow,
+    },
 
-  // .grid2 — larger gap so panels separate cleanly
-  grid2: {
-    gap: 18,
-  },
-  grid2TwoCol: {
-    flexDirection: "row",
-    gap: 20,
-  },
-  grid2Cell: { flex: 1, minWidth: 0 },
+    statIcon: {
+      fontSize: 26,
+      lineHeight: 26,
+      marginBottom: 8,
+    },
 
-  // .empty — bigger tap area, softer icon treatment
-  empty: {
-    paddingVertical: 28,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.015)",
-  },
-  emptyText: {
-    fontFamily: "DMSans_400Regular",
-    fontSize: 11.38,
-    lineHeight: 16,
-    textAlign: "center",
-  },
-});
+    statValue: {
+      fontFamily: "Syne_700Bold",
+      fontWeight: "700",
+      letterSpacing: -0.6,
+      marginBottom: 4,
+    },
+
+    statLabel: {
+      fontFamily: "DMSans_500Medium",
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: "500",
+    },
+
+    statFooter: {
+      fontFamily: "DMSans_500Medium",
+      fontSize: 9.1,
+      lineHeight: 12.3,
+      fontWeight: "500",
+      marginTop: 6,
+    },
+
+    // .grid2 — larger gap so panels separate cleanly
+    grid2: {
+      gap: 18,
+    },
+    grid2TwoCol: {
+      flexDirection: "row",
+      gap: 20,
+    },
+    grid2Cell: { flex: 1, minWidth: 0 },
+
+    // .empty — bigger tap area, softer icon treatment
+    empty: {
+      paddingVertical: 28,
+      paddingHorizontal: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      borderRadius: 14,
+      backgroundColor: emptyBg,
+    },
+    emptyText: {
+      fontFamily: "DMSans_400Regular",
+      fontSize: 11.38,
+      lineHeight: 16,
+      textAlign: "center",
+    },
+  });
+}
