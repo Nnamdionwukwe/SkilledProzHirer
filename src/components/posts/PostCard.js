@@ -9,12 +9,11 @@
 //   • Tapping any avatar navigates to that user's public profile
 //     (Worker → WorkerProfile, Hirer → HirerPublicProfile)
 //   • Post images render via resolveUrl
-//   • Lightbox is fullscreen, swipeable via prev/next buttons, and
-//     dismisses on backdrop tap — mirrors the website modal exactly
+//   • Lightbox is fullscreen, swipeable, and dismisses on backdrop tap
 //   • Modal uses presentationStyle="overFullScreen" + statusBarTranslucent
 //     so it renders above the Android nav bar (matches web z-index behavior)
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Pressable,
@@ -40,10 +39,6 @@ import ReportButton from "../ReportButton";
 import ReactionsModal from "./ReactionsModal";
 
 // ─── URL resolver ───────────────────────────────────────
-// The web browser resolves relative <img src="/uploads/..."> against the
-// web domain (skilledproz.com). In RN there's no base origin, so we must
-// do it manually — use the web domain for /uploads paths, the API domain
-// for everything else.
 const API_BASE = (
   client?.defaults?.baseURL || "https://api.skilledproz.com"
 ).replace(/\/api\/?$/, "");
@@ -159,6 +154,8 @@ export default function PostCard({ post: initialPost, onDelete }) {
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const imageScrollRef = useRef(null);
+
   const rem = (n) => n * 16 * fontScale;
   const c = theme.colors;
 
@@ -216,9 +213,7 @@ export default function PostCard({ post: initialPost, onDelete }) {
     for (const arr of arrays) {
       if (Array.isArray(arr) && arr.length > 0) {
         const mapped = arr.map(pickUrl).filter(Boolean);
-        console.log("[PostCard] array matched:", mapped);
         if (mapped.length > 0) {
-          console.log("[PostCard] final URLs:", mapped.map(resolveUrl));
           return mapped;
         }
       }
@@ -233,7 +228,6 @@ export default function PostCard({ post: initialPost, onDelete }) {
     ];
     const mappedSingles = singles.map(pickUrl).filter(Boolean);
     if (mappedSingles.length > 0) {
-      console.log("[PostCard] singles final:", mappedSingles.map(resolveUrl));
       return mappedSingles;
     }
 
@@ -243,17 +237,15 @@ export default function PostCard({ post: initialPost, onDelete }) {
       if (Array.isArray(nested) && nested.length > 0) {
         const mapped = nested.map(pickUrl).filter(Boolean);
         if (mapped.length > 0) {
-          console.log("[PostCard] nested final:", mapped.map(resolveUrl));
           return mapped;
         }
       }
     }
 
-    console.log("[PostCard] NO IMAGES FOUND for post", post.id);
     return [];
   }, [post]);
 
-  // ─── Profile navigation (matches website profileUrlFor) ─────
+  // ─── Profile navigation ─────
   const profileNavigate = (target) => {
     if (!target?.id) return;
     if (target.role === "WORKER") {
@@ -429,8 +421,6 @@ export default function PostCard({ post: initialPost, onDelete }) {
   const displayComments = showAllComments ? allComments : post.comments;
 
   // ─── Reusable avatar renderer ─────────────────────────────────
-  // Uses the real image via resolveUrl when available;
-  // falls back to the first letter when no image exists.
   const renderAvatar = (target, size, fontSize) => {
     const uri = resolveUrl(target?.avatar);
     const initial = (target?.firstName || "?")[0]?.toUpperCase() || "?";
@@ -677,25 +667,63 @@ export default function PostCard({ post: initialPost, onDelete }) {
           ) : null}
         </AppText>
 
-        {/* ─── Post images — tap to open fullscreen ──── */}
+        {/* ─── Post images — swipeable ──── */}
         {postImages.length > 0 ? (
           <View style={styles.imageGrid}>
-            <Pressable
-              onPress={() => setLightboxIdx(imageIdx)}
-              style={styles.imagePressable}
-            >
-              <Image
-                source={{ uri: resolveUrl(postImages[imageIdx]) }}
-                style={[styles.mainImage, { maxHeight: isWide ? 400 : 280 }]}
-                resizeMode="cover"
-              />
-            </Pressable>
+            {postImages.length === 1 ? (
+              <Pressable
+                onPress={() => setLightboxIdx(0)}
+                style={styles.imagePressable}
+              >
+                <Image
+                  source={{ uri: resolveUrl(postImages[0]) }}
+                  style={[styles.mainImage, { maxHeight: isWide ? 400 : 280 }]}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            ) : (
+              <ScrollView
+                ref={imageScrollRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                  setImageIdx(idx);
+                }}
+                style={{ width: "100%" }}
+              >
+                {postImages.map((src, i) => (
+                  <Pressable
+                    key={i}
+                    onPress={() => setLightboxIdx(i)}
+                    style={{ width }}
+                  >
+                    <Image
+                      source={{ uri: resolveUrl(src) }}
+                      style={[
+                        styles.mainImage,
+                        { maxHeight: isWide ? 400 : 280 },
+                      ]}
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+
             {postImages.length > 1 ? (
               <View style={[styles.imageDots, { backgroundColor: c.bgCard }]}>
                 {postImages.map((_, i) => (
                   <Pressable
                     key={i}
-                    onPress={() => setImageIdx(i)}
+                    onPress={() => {
+                      setImageIdx(i);
+                      imageScrollRef.current?.scrollTo({
+                        x: i * width,
+                        animated: true,
+                      });
+                    }}
                     style={[
                       styles.imageDot,
                       i === imageIdx && { backgroundColor: c.orange },
@@ -1510,7 +1538,7 @@ export default function PostCard({ post: initialPost, onDelete }) {
         />
       ) : null}
 
-      {/* ─── Fullscreen image lightbox ─────────────────── */}
+      {/* ─── Fullscreen image lightbox (Swipeable) ─────────────────── */}
       {lightboxIdx !== null && postImages.length > 0 ? (
         <Modal
           visible
@@ -1522,43 +1550,39 @@ export default function PostCard({ post: initialPost, onDelete }) {
         >
           <View style={styles.lightboxOverlay}>
             <Pressable
-              style={StyleSheet.absoluteFill}
-              onPress={() => setLightboxIdx(null)}
-            />
-            <Pressable
               onPress={() => setLightboxIdx(null)}
               style={styles.lightboxClose}
               hitSlop={8}
             >
               <Ionicons name="close" size={22} color="#fff" />
             </Pressable>
-            {postImages.length > 1 ? (
-              <>
+
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              contentOffset={{ x: lightboxIdx * width, y: 0 }}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                setLightboxIdx(idx);
+              }}
+              style={{ flex: 1, width: "100%" }}
+            >
+              {postImages.map((src, i) => (
                 <Pressable
-                  onPress={() =>
-                    setLightboxIdx(
-                      (i) => (i - 1 + post.images.length) % post.images.length,
-                    )
-                  }
-                  style={[styles.lightboxNav, { left: 12 }]}
+                  key={i}
+                  style={{ width, flex: 1, justifyContent: "center" }}
+                  onPress={() => setLightboxIdx(null)}
                 >
-                  <Ionicons name="chevron-back" size={28} color="#fff" />
+                  <Image
+                    source={{ uri: resolveUrl(src) }}
+                    style={styles.lightboxImage}
+                    resizeMode="contain"
+                  />
                 </Pressable>
-                <Pressable
-                  onPress={() =>
-                    setLightboxIdx((i) => (i + 1) % post.images.length)
-                  }
-                  style={[styles.lightboxNav, { right: 12 }]}
-                >
-                  <Ionicons name="chevron-forward" size={28} color="#fff" />
-                </Pressable>
-              </>
-            ) : null}
-            <Image
-              source={{ uri: resolveUrl(postImages[lightboxIdx]) }}
-              style={styles.lightboxImage}
-              resizeMode="contain"
-            />
+              ))}
+            </ScrollView>
+
             {postImages.length > 1 ? (
               <View style={styles.lightboxCounter}>
                 <AppText

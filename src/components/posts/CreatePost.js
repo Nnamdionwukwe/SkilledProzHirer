@@ -29,7 +29,7 @@ import { useToast } from "../../contexts/ToastContext";
 import { useAuthStore } from "../../store/authStore";
 import client from "../../api/client";
 
-const FILES_FIELD = "images"; // ← matches src/api/posts.js and backend multer
+const FILES_FIELD = "files"; // ← matches src/api/posts.js and backend multer
 
 const POST_TYPES = [
   { value: "GENERAL", key: "posts.typeGeneral", icon: "chatbubble-outline" },
