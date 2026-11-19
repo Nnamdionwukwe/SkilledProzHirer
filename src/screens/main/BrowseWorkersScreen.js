@@ -255,15 +255,6 @@ export default function BrowseWorkersScreen() {
         .get("/search/filters")
         .then((r) => setFilterMeta(r.data.data || {})),
       client.get("/search/trending").then((r) => {
-        console.log("[trending] topWorkers:", r.data.data?.topWorkers?.length);
-        console.log(
-          "[trending] recentlyJoined:",
-          r.data.data?.recentlyJoined?.length,
-        );
-        console.log(
-          "[trending] categories:",
-          r.data.data?.trendingCategories?.length,
-        );
         setTrending(r.data.data || {});
       }),
     ])
