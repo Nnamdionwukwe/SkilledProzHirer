@@ -2121,24 +2121,25 @@ function StatPill({ icon, value, label, c }) {
       }}
     >
       <Ionicons name={icon} size={16} color={c.orange} />
-      <AppText
-        weight="displayBlack"
-        style={{ fontSize: 10, color: c.text, textAlign: "center" }}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-      >
-        {value}
-      </AppText>
-      <AppText
+      <View
         style={{
-          fontSize: 10,
-          color: c.textMuted,
-          textAlign: "center",
+          flexDirection: "row",
+          alignItems: "baseline",
+          justifyContent: "center",
+          gap: 4,
         }}
-        numberOfLines={1}
       >
-        {label}
-      </AppText>
+        <AppText
+          weight="displayBlack"
+          style={{ fontSize: 10, color: c.text }}
+          numberOfLines={1}
+        >
+          {value}
+        </AppText>
+        <AppText style={{ fontSize: 10, color: c.textMuted }} numberOfLines={1}>
+          {label}
+        </AppText>
+      </View>
     </View>
   );
 }
