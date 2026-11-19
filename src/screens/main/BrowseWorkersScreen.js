@@ -254,15 +254,23 @@ export default function BrowseWorkersScreen() {
       client
         .get("/search/filters")
         .then((r) => setFilterMeta(r.data.data || {})),
-      client
-        .get("/search/trending")
-        .then((r) => setTrending(r.data.data || {})),
+      client.get("/search/trending").then((r) => {
+        console.log("[trending] topWorkers:", r.data.data?.topWorkers?.length);
+        console.log(
+          "[trending] recentlyJoined:",
+          r.data.data?.recentlyJoined?.length,
+        );
+        console.log(
+          "[trending] categories:",
+          r.data.data?.trendingCategories?.length,
+        );
+        setTrending(r.data.data || {});
+      }),
     ])
       .catch(() => {})
       .finally(() => setInitialLoading(false));
 
     if (initialQuery) doSearch(initialQuery, DEFAULT_FILTERS, 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Debounced suggestions ──────────────────────────────────
@@ -285,7 +293,7 @@ export default function BrowseWorkersScreen() {
     setLoading(true);
     setTab("results");
     try {
-      const params = { q, type: "workers", page: p, limit: 12 };
+      const params = { q, type: "workers", page: p };
       [
         "category",
         "city",
@@ -664,7 +672,11 @@ export default function BrowseWorkersScreen() {
         <View style={{ gap: 24 }}>
           {trending.categories?.length > 0 ? (
             <View>
-              <AppText style={[styles.trendTitle, { color: theme.colors.text }]}>Popular Categories</AppText>
+              <AppText
+                style={[styles.trendTitle, { color: theme.colors.text }]}
+              >
+                Popular Categories
+              </AppText>
               <View style={styles.catGrid}>
                 {trending.categories.map((cat) => (
                   <Pressable
@@ -709,7 +721,11 @@ export default function BrowseWorkersScreen() {
           ) : null}
           {trending.topWorkers?.length > 0 ? (
             <View>
-              <AppText style={[styles.trendTitle, { color: theme.colors.text }]}>Top Rated Workers</AppText>
+              <AppText
+                style={[styles.trendTitle, { color: theme.colors.text }]}
+              >
+                Top Rated Workers
+              </AppText>
               <View style={styles.workerGrid}>
                 {trending.topWorkers.map((w, i) => (
                   <WorkerCard
@@ -725,7 +741,11 @@ export default function BrowseWorkersScreen() {
           ) : null}
           {trending.recentlyJoined?.length > 0 ? (
             <View>
-              <AppText style={[styles.trendTitle, { color: theme.colors.text }]}>New on SkilledProz</AppText>
+              <AppText
+                style={[styles.trendTitle, { color: theme.colors.text }]}
+              >
+                New on SkilledProz
+              </AppText>
               <View style={styles.workerGrid}>
                 {trending.recentlyJoined.map((w, i) => (
                   <WorkerCard
@@ -765,7 +785,9 @@ export default function BrowseWorkersScreen() {
             />
           ) : (
             <>
-              <AppText style={[styles.resultsMeta, { color: theme.colors.textDim }]}>
+              <AppText
+                style={[styles.resultsMeta, { color: theme.colors.textDim }]}
+              >
                 {total} worker{total !== 1 ? "s" : ""} found for "{query}"
               </AppText>
               <View style={styles.workerGrid}>
@@ -898,7 +920,9 @@ export default function BrowseWorkersScreen() {
                 </AppText>
               </View>
             ) : null}
-            <AppText style={[styles.resultsMeta, { color: theme.colors.textDim }]}>
+            <AppText
+              style={[styles.resultsMeta, { color: theme.colors.textDim }]}
+            >
               {nearbyWorkers.length} worker
               {nearbyWorkers.length !== 1 ? "s" : ""} within{" "}
               {filters.radius || 25} km
