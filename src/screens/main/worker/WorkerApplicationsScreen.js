@@ -208,7 +208,7 @@ function ApplicationCard({
           <AppText
             variant="title"
             weight="displayBlack"
-            style={s.jobTitle}
+            style={[s.jobTitle, { color: c.text }]}
             numberOfLines={isMobile ? 2 : 1}
           >
             {job?.title ?? t("workerApplications.job.removed", "Job removed")}
@@ -776,7 +776,7 @@ export default function WorkerApplicationsScreen() {
 const s = StyleSheet.create({
   page: {
     padding: rem(1.25),
-    paddingBottom: rem(6),
+    paddingBottom: rem(2),
     maxWidth: 1200,
     alignSelf: "center",
     width: "100%",
@@ -875,7 +875,6 @@ const s = StyleSheet.create({
 
   jobTitle: {
     fontSize: 15,
-    color: "#fff",
     letterSpacing: -0.3,
     lineHeight: 20,
     marginBottom: 8,

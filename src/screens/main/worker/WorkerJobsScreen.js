@@ -145,7 +145,7 @@ function JobCard({ job, isWorker }) {
       <AppText
         variant="title"
         weight="displayBlack"
-        style={s.cardTitle}
+        style={[s.cardTitle, { color: c.text }]}
         numberOfLines={2}
       >
         {job.title}
@@ -153,7 +153,7 @@ function JobCard({ job, isWorker }) {
 
       {/* Description */}
       {truncatedDesc ? (
-        <AppText style={s.cardDesc} numberOfLines={3}>
+        <AppText style={[s.cardDesc, { color: c.textDim }]} numberOfLines={3}>
           {truncatedDesc}
         </AppText>
       ) : null}
@@ -255,7 +255,7 @@ function JobCard({ job, isWorker }) {
           <AppText
             variant="title"
             weight="displayBlack"
-            style={{ fontSize: 12, color: "#000", textAlign: "center" }}
+            style={{ fontSize: 12, color: c.bg, textAlign: "center" }}
           >
             {t("workerJobs.job.viewApply", "View & Apply")} →
           </AppText>
@@ -415,13 +415,13 @@ export default function WorkerJobsScreen() {
             <AppText
               variant="title"
               weight="displayBlack"
-              style={{ fontSize: 13, color: "#000" }}
+              style={{ fontSize: 13, color: c.bg }}
             >
               🌐 {t("workerJobs.externalJobs", "Browse External Jobs")}
             </AppText>
-            <View style={[s.externalBadge, { backgroundColor: "#000" }]}>
+            <View style={[s.externalBadge, { backgroundColor: c.bg }]}>
               <AppText
-                style={{ fontSize: 9, fontWeight: "700", color: "#fff" }}
+                style={{ fontSize: 9, fontWeight: "700", color: c.text }}
               >
                 {t("workerJobs.newBadge", "New")}
               </AppText>
@@ -486,7 +486,7 @@ export default function WorkerJobsScreen() {
           <AppText
             variant="title"
             weight="displayBlack"
-            style={{ fontSize: 13, color: "#000" }}
+            style={{ fontSize: 13, color: c.bg }}
           >
             {t("workerJobs.search.button", "Search")}
           </AppText>
@@ -609,7 +609,10 @@ export default function WorkerJobsScreen() {
         >
           <Pressable
             onPress={(e) => e.stopPropagation?.()}
-            style={[s.modalBox, { backgroundColor: c.bgPanel }]}
+            style={[
+              s.modalBox,
+              { backgroundColor: c.bgPanel, borderColor: c.border },
+            ]}
           >
             <AppText
               variant="title"
@@ -670,7 +673,7 @@ export default function WorkerJobsScreen() {
 const s = StyleSheet.create({
   page: {
     padding: rem(1.25),
-    paddingBottom: rem(6),
+    paddingBottom: rem(2),
     gap: rem(1.5),
     maxWidth: 1200,
     alignSelf: "center",
@@ -776,12 +779,10 @@ const s = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 15,
-    color: "#fff",
     lineHeight: 20,
   },
   cardDesc: {
     fontSize: 12,
-    color: "rgba(255,255,255,0.55)",
     lineHeight: 19,
   },
   hirerRow: {
