@@ -50,7 +50,7 @@ function StatusBadge({ status, c, t }) {
     PENDING: { bg: "rgba(234,179,8,0.12)", color: "#eab308" },
     IN_PROGRESS: { bg: "rgba(59,130,246,0.12)", color: "#60a5fa" },
     COMPLETED: { bg: c.greenDim, color: c.green },
-    CANCELLED: { bg: "rgba(255,255,255,0.05)", color: c.textMuted },
+    CANCELLED: { bg: c.bgCard, color: c.textMuted },
     DISPUTED: { bg: c.redDim, color: c.red },
     ACCEPTED: { bg: "rgba(168,85,247,0.12)", color: "#c084fc" },
     RELEASED: { bg: c.greenDim, color: c.green },
@@ -76,10 +76,18 @@ function CurrencySwitch() {
 
   return (
     <>
-      <Pressable style={s.currWrap} onPress={() => setShowModal(true)}>
-        <AppText style={s.currLabel}>{t("workerDash.viewingIn")}</AppText>
+      <Pressable
+        style={[
+          s.currWrap,
+          { backgroundColor: c.bgInput, borderColor: c.border },
+        ]}
+        onPress={() => setShowModal(true)}
+      >
+        <AppText style={[s.currLabel, { color: c.textDim }]}>
+          {t("workerDash.viewingIn")}
+        </AppText>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <AppText style={s.currSelect}>
+          <AppText style={[s.currSelect, { color: c.orange }]}>
             {activeCurrency?.symbol} {dashboardCurrency}
           </AppText>
           <Ionicons name="chevron-down" size={12} color={c.textMuted} />
@@ -88,7 +96,12 @@ function CurrencySwitch() {
 
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable style={s.modalOverlay} onPress={() => setShowModal(false)}>
-          <View style={[s.modalBox, { backgroundColor: c.bgPanel }]}>
+          <View
+            style={[
+              s.modalBox,
+              { backgroundColor: c.bgPanel, borderColor: c.border },
+            ]}
+          >
             <AppText
               variant="title"
               weight="displayBlack"
@@ -100,7 +113,7 @@ function CurrencySwitch() {
               {CURRENCIES.map((cur) => (
                 <Pressable
                   key={cur.code}
-                  style={s.currRow}
+                  style={[s.currRow, { borderBottomColor: c.border }]}
                   onPress={() => {
                     changeDashboardCurrency(cur.code);
                     setShowModal(false);
@@ -274,7 +287,7 @@ export default function WorkerDashboardScreen() {
         <Ionicons name="warning-outline" size={48} color={c.orange} />
         <AppText
           style={{
-            color: "#fff",
+            color: c.text,
             marginTop: 12,
             fontSize: 16,
             fontWeight: "700",
@@ -340,17 +353,25 @@ export default function WorkerDashboardScreen() {
     >
       {/* ── Row 1: Greeting Header + Availability ── */}
       <View style={s.greetingRow}>
-        <View style={s.iconCircle}>
+        <View
+          style={[
+            s.iconCircle,
+            { backgroundColor: c.orangeDim, borderColor: c.orangeGlow },
+          ]}
+        >
           <Ionicons name="sunny" size={24} color={c.orange} />
         </View>
 
         <View style={s.greetingTextWrap}>
-          <AppText style={s.greetingText} numberOfLines={1}>
+          <AppText
+            style={[s.greetingText, { color: c.textDim }]}
+            numberOfLines={1}
+          >
             {t(`workerDash.${greeting}`)},
             <AppText
               variant="title"
               weight="displayBlack"
-              style={s.greetingName}
+              style={[s.greetingName, { color: c.text }]}
             >
               {user?.firstName || "Worker"}
             </AppText>
@@ -404,31 +425,32 @@ export default function WorkerDashboardScreen() {
         <View
           style={[
             s.card,
-            { backgroundColor: c.bgCard, borderColor: c.border },
             s.earningsCard,
             {
               width: "100%",
               flexDirection: "column",
               gap: 16,
               paddingVertical: 20,
+              backgroundColor: c.bgCard,
+              borderColor: c.border,
             },
           ]}
         >
-          <View style={s.earningsBlob} />
+          <View style={[s.earningsBlob, { backgroundColor: c.orangeDim }]} />
           <View style={{ zIndex: 1, width: "100%" }}>
-            <AppText style={s.earningsLabel}>
+            <AppText style={[s.earningsLabel, { color: c.textMuted }]}>
               {t("workerDash.thisMonth")}
             </AppText>
             <AppText
               variant="title"
               weight="displayBlack"
-              style={s.earningsValue}
+              style={[s.earningsValue, { color: c.text }]}
               numberOfLines={1}
               adjustsFontSizeToFit
             >
               {formatCurrency(earnings.thisMonth || 0, dashboardCurrency)}
             </AppText>
-            <AppText style={s.earningsMeta}>
+            <AppText style={[s.earningsMeta, { color: c.textMuted }]}>
               {t("workerDash.lastMonth", {
                 value: formatCurrency(
                   earnings.lastMonth || 0,
@@ -438,18 +460,30 @@ export default function WorkerDashboardScreen() {
             </AppText>
           </View>
 
-          <View style={[s.pendingBox, { width: "100%", minWidth: 0 }]}>
-            <AppText style={s.pendingLabel}>{t("workerDash.inEscrow")}</AppText>
+          <View
+            style={[
+              s.pendingBox,
+              {
+                width: "100%",
+                minWidth: 0,
+                backgroundColor: c.orangeDim,
+                borderColor: c.orangeGlow,
+              },
+            ]}
+          >
+            <AppText style={[s.pendingLabel, { color: c.orange }]}>
+              {t("workerDash.inEscrow")}
+            </AppText>
             <AppText
               variant="title"
               weight="displayBlack"
-              style={s.pendingValue}
+              style={[s.pendingValue, { color: c.orange }]}
               numberOfLines={1}
               adjustsFontSizeToFit
             >
               {formatCurrency(earnings.pendingPayout || 0, dashboardCurrency)}
             </AppText>
-            <AppText style={s.pendingSub}>
+            <AppText style={[s.pendingSub, { color: c.textDim }]}>
               {t("workerDash.awaitingRelease")}
             </AppText>
           </View>
@@ -465,11 +499,17 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>{t("workerDash.activeJobs")}</AppText>
-          <AppText variant="title" weight="displayBlack" style={s.statValue}>
+          <AppText style={[s.statLabel, { color: c.textMuted }]}>
+            {t("workerDash.activeJobs")}
+          </AppText>
+          <AppText
+            variant="title"
+            weight="displayBlack"
+            style={[s.statValue, { color: c.text }]}
+          >
             {bookings.active || 0}
           </AppText>
-          <AppText style={s.statSub}>
+          <AppText style={[s.statSub, { color: c.textDim }]}>
             {t("workerDash.pendingRequests", {
               count: bookings.pending || 0,
             })}
@@ -486,8 +526,14 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>{t("workerDash.rating")}</AppText>
-          <AppText variant="title" weight="displayBlack" style={s.statValue}>
+          <AppText style={[s.statLabel, { color: c.textMuted }]}>
+            {t("workerDash.rating")}
+          </AppText>
+          <AppText
+            variant="title"
+            weight="displayBlack"
+            style={[s.statValue, { color: c.text }]}
+          >
             {engagement?.avgRating
               ? Number(engagement.avgRating).toFixed(1)
               : "—"}
@@ -499,7 +545,7 @@ export default function WorkerDashboardScreen() {
               color={c.orange}
               style={{ marginRight: 4 }}
             />
-            <AppText style={s.statSub}>
+            <AppText style={[s.statSub, { color: c.textDim }]}>
               {t("workerDash.fromReviews", {
                 count: engagement?.totalReviews || 0,
               })}
@@ -517,11 +563,17 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>{t("workerDash.jobsDone")}</AppText>
-          <AppText variant="title" weight="displayBlack" style={s.statValue}>
+          <AppText style={[s.statLabel, { color: c.textMuted }]}>
+            {t("workerDash.jobsDone")}
+          </AppText>
+          <AppText
+            variant="title"
+            weight="displayBlack"
+            style={[s.statValue, { color: c.text }]}
+          >
             {engagement?.completedJobs || 0}
           </AppText>
-          <AppText style={s.statSub}>
+          <AppText style={[s.statSub, { color: c.textDim }]}>
             {t("workerDash.responseRate", {
               rate: engagement?.responseRate || 0,
             })}
@@ -538,8 +590,14 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>{t("workerDash.totalBookings")}</AppText>
-          <AppText variant="title" weight="displayBlack" style={s.statValue}>
+          <AppText style={[s.statLabel, { color: c.textMuted }]}>
+            {t("workerDash.totalBookings")}
+          </AppText>
+          <AppText
+            variant="title"
+            weight="displayBlack"
+            style={[s.statValue, { color: c.text }]}
+          >
             {bookings?.total || 0}
           </AppText>
           <View
@@ -549,7 +607,7 @@ export default function WorkerDashboardScreen() {
               alignItems: "center",
             }}
           >
-            <AppText style={s.statSub}>
+            <AppText style={[s.statSub, { color: c.textDim }]}>
               {t("workerDash.completedCancelled", {
                 completed: bookings?.completed || 0,
                 cancelled: bookings?.cancelled || 0,
@@ -575,13 +633,17 @@ export default function WorkerDashboardScreen() {
             },
           ]}
         >
-          <AppText style={s.statLabel}>
+          <AppText style={[s.statLabel, { color: c.textMuted }]}>
             {t("workerDash.unreadMessages")}
           </AppText>
-          <AppText variant="title" weight="displayBlack" style={s.statValue}>
+          <AppText
+            variant="title"
+            weight="displayBlack"
+            style={[s.statValue, { color: c.text }]}
+          >
             {engagement?.unreadMessages || 0}
           </AppText>
-          <AppText style={s.statSub}>
+          <AppText style={[s.statSub, { color: c.textDim }]}>
             {t("workerDash.unreadConversations")}
           </AppText>
         </View>
@@ -599,11 +661,15 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <View style={s.cardHeader}>
-            <AppText variant="title" weight="displayBlack" style={s.cardTitle}>
+            <AppText
+              variant="title"
+              weight="displayBlack"
+              style={[s.cardTitle, { color: c.text }]}
+            >
               {t("workerDash.earningsTrend")}
             </AppText>
             <Pressable onPress={() => navigation.navigate("WorkerEarnings")}>
-              <AppText style={s.cardLink}>
+              <AppText style={[s.cardLink, { color: c.orange }]}>
                 {t("workerDash.fullReport")} →
               </AppText>
             </Pressable>
@@ -615,11 +681,13 @@ export default function WorkerDashboardScreen() {
                   style={[
                     s.bar,
                     {
+                      backgroundColor: c.orangeDim,
+                      borderColor: c.orangeGlow,
                       height: `${Math.max(4, ((m?.earnings || 0) / maxEarning) * 100)}%`,
                     },
                   ]}
                 />
-                <AppText style={s.barLabel}>
+                <AppText style={[s.barLabel, { color: c.textMuted }]}>
                   {(m?.month || "").split(" ")[0]}
                 </AppText>
               </View>
@@ -631,7 +699,7 @@ export default function WorkerDashboardScreen() {
               { marginTop: 12, flexDirection: "row", gap: 12 },
             ]}
           >
-            <AppText style={s.earningsMeta}>
+            <AppText style={[s.earningsMeta, { color: c.textMuted }]}>
               {t("workerDash.thisYear", {
                 value: formatCurrency(
                   earnings.thisYear || 0,
@@ -639,7 +707,7 @@ export default function WorkerDashboardScreen() {
                 ),
               })}
             </AppText>
-            <AppText style={s.earningsMeta}>
+            <AppText style={[s.earningsMeta, { color: c.textMuted }]}>
               {t("workerDash.allTime", {
                 value: formatCurrency(earnings.allTime || 0, dashboardCurrency),
               })}
@@ -656,21 +724,26 @@ export default function WorkerDashboardScreen() {
               ]}
             >
               <View style={s.completionHeader}>
-                <AppText style={s.completionLabel}>
+                <AppText style={[s.completionLabel, { color: c.textDim }]}>
                   {t("workerDash.profileCompletion")}
                 </AppText>
                 <AppText
                   variant="title"
                   weight="displayBlack"
-                  style={s.completionPct}
+                  style={[s.completionPct, { color: c.orange }]}
                 >
                   {completion}%
                 </AppText>
               </View>
-              <View style={s.progressTrack}>
-                <View style={[s.progressFill, { width: `${completion}%` }]} />
+              <View style={[s.progressTrack, { backgroundColor: c.bgInput }]}>
+                <View
+                  style={[
+                    s.progressFill,
+                    { width: `${completion}%`, backgroundColor: c.orange },
+                  ]}
+                />
               </View>
-              <AppText style={s.completionHint}>
+              <AppText style={[s.completionHint, { color: c.textMuted }]}>
                 {t("workerDash.completeProfileHint")}
                 <AppText
                   style={{ color: c.orange, fontWeight: "600" }}
@@ -733,15 +806,15 @@ export default function WorkerDashboardScreen() {
                         paddingVertical: 2,
                         borderRadius: 10,
                         borderWidth: 1,
-                        borderColor: "rgba(251,191,36,0.3)",
-                        backgroundColor: "rgba(251,191,36,0.1)",
+                        borderColor: c.orangeGlow,
+                        backgroundColor: c.orangeDim,
                       }}
                     >
                       <AppText
                         style={{
                           fontSize: 10,
                           fontWeight: "700",
-                          color: "#fbbf24",
+                          color: c.orange,
                           textTransform: "uppercase",
                           letterSpacing: 0.4,
                         }}
@@ -765,19 +838,25 @@ export default function WorkerDashboardScreen() {
               <AppText
                 variant="title"
                 weight="displayBlack"
-                style={s.cardTitle}
+                style={[s.cardTitle, { color: c.text }]}
               >
                 {t("workerDash.upcomingJobs")}
               </AppText>
               <Pressable onPress={() => navigation.navigate("WorkerBookings")}>
-                <AppText style={s.cardLink}>{t("workerDash.seeAll")} →</AppText>
+                <AppText style={[s.cardLink, { color: c.orange }]}>
+                  {t("workerDash.seeAll")} →
+                </AppText>
               </Pressable>
             </View>
             {safeUpcoming.length === 0 ? (
               <AppText
                 style={[
                   s.statSub,
-                  { textAlign: "center", paddingVertical: 12 },
+                  {
+                    color: c.textDim,
+                    textAlign: "center",
+                    paddingVertical: 12,
+                  },
                 ]}
               >
                 {t("workerDash.noUpcomingJobs")}
@@ -788,24 +867,40 @@ export default function WorkerDashboardScreen() {
                 return (
                   <Pressable
                     key={b?.id || i}
-                    style={s.listItem}
+                    style={[s.listItem, { borderBottomColor: c.border }]}
                     onPress={() =>
                       navigation.navigate("BookingDetail", { bookingId: b?.id })
                     }
                   >
                     {d && (
-                      <View style={s.dateBox}>
-                        <AppText style={s.dateDay}>{d.getDate()}</AppText>
-                        <AppText style={s.dateMonth}>
+                      <View
+                        style={[
+                          s.dateBox,
+                          {
+                            backgroundColor: c.orangeDim,
+                            borderColor: c.orangeGlow,
+                          },
+                        ]}
+                      >
+                        <AppText style={[s.dateDay, { color: c.orange }]}>
+                          {d.getDate()}
+                        </AppText>
+                        <AppText style={[s.dateMonth, { color: c.orange }]}>
                           {d.toLocaleString("default", { month: "short" })}
                         </AppText>
                       </View>
                     )}
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <AppText style={s.listTitle} numberOfLines={1}>
+                      <AppText
+                        style={[s.listTitle, { color: c.text }]}
+                        numberOfLines={1}
+                      >
                         {b?.title || t("workerDash.untitled")}
                       </AppText>
-                      <AppText style={s.listMeta} numberOfLines={1}>
+                      <AppText
+                        style={[s.listMeta, { color: c.textDim }]}
+                        numberOfLines={1}
+                      >
                         {b?.hirer?.firstName} {b?.hirer?.lastName} ·{" "}
                         {b?.category?.name}
                       </AppText>
@@ -831,16 +926,25 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <View style={s.cardHeader}>
-            <AppText variant="title" weight="displayBlack" style={s.cardTitle}>
+            <AppText
+              variant="title"
+              weight="displayBlack"
+              style={[s.cardTitle, { color: c.text }]}
+            >
               {t("workerDash.recentBookings")}
             </AppText>
             <Pressable onPress={() => navigation.navigate("WorkerBookings")}>
-              <AppText style={s.cardLink}>{t("workerDash.viewAll")} →</AppText>
+              <AppText style={[s.cardLink, { color: c.orange }]}>
+                {t("workerDash.viewAll")} →
+              </AppText>
             </Pressable>
           </View>
           {safeBookings.length === 0 ? (
             <AppText
-              style={[s.statSub, { textAlign: "center", paddingVertical: 12 }]}
+              style={[
+                s.statSub,
+                { color: c.textDim, textAlign: "center", paddingVertical: 12 },
+              ]}
             >
               {t("workerDash.noBookings")}
             </AppText>
@@ -855,12 +959,17 @@ export default function WorkerDashboardScreen() {
               return (
                 <Pressable
                   key={b?.id || i}
-                  style={s.listItem}
+                  style={[s.listItem, { borderBottomColor: c.border }]}
                   onPress={() =>
                     navigation.navigate("BookingDetail", { bookingId: b?.id })
                   }
                 >
-                  <View style={s.avatar}>
+                  <View
+                    style={[
+                      s.avatar,
+                      { backgroundColor: c.bgInput, borderColor: c.border },
+                    ]}
+                  >
                     {b?.hirer?.avatar ? (
                       <Image
                         source={{ uri: b.hirer.avatar }}
@@ -879,10 +988,16 @@ export default function WorkerDashboardScreen() {
                     )}
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <AppText style={s.listTitle} numberOfLines={1}>
+                    <AppText
+                      style={[s.listTitle, { color: c.text }]}
+                      numberOfLines={1}
+                    >
                       {b?.title || t("workerDash.untitled")}
                     </AppText>
-                    <AppText style={s.listMeta} numberOfLines={1}>
+                    <AppText
+                      style={[s.listMeta, { color: c.textDim }]}
+                      numberOfLines={1}
+                    >
                       {b?.hirer?.firstName} {b?.hirer?.lastName} ·{" "}
                       {b?.category?.name}
                     </AppText>
@@ -944,16 +1059,25 @@ export default function WorkerDashboardScreen() {
           ]}
         >
           <View style={s.cardHeader}>
-            <AppText variant="title" weight="displayBlack" style={s.cardTitle}>
+            <AppText
+              variant="title"
+              weight="displayBlack"
+              style={[s.cardTitle, { color: c.text }]}
+            >
               {t("workerDash.recentReviews")}
             </AppText>
             <Pressable onPress={() => navigation.navigate("WorkerReviews")}>
-              <AppText style={s.cardLink}>{t("workerDash.seeAll")} →</AppText>
+              <AppText style={[s.cardLink, { color: c.orange }]}>
+                {t("workerDash.seeAll")} →
+              </AppText>
             </Pressable>
           </View>
           {safeReviews.length === 0 ? (
             <AppText
-              style={[s.statSub, { textAlign: "center", paddingVertical: 12 }]}
+              style={[
+                s.statSub,
+                { color: c.textDim, textAlign: "center", paddingVertical: 12 },
+              ]}
             >
               {t("workerDash.noReviews")}
             </AppText>
@@ -987,7 +1111,13 @@ export default function WorkerDashboardScreen() {
                     <View
                       style={[
                         s.avatar,
-                        { width: 34, height: 34, borderRadius: 17 },
+                        {
+                          width: 34,
+                          height: 34,
+                          borderRadius: 17,
+                          backgroundColor: c.bgInput,
+                          borderColor: c.border,
+                        },
                       ]}
                     >
                       {r?.giver?.avatar ? (
@@ -1007,7 +1137,10 @@ export default function WorkerDashboardScreen() {
                         </AppText>
                       )}
                     </View>
-                    <AppText style={s.listTitle} numberOfLines={1}>
+                    <AppText
+                      style={[s.listTitle, { color: c.text }]}
+                      numberOfLines={1}
+                    >
                       {r?.giver?.firstName} {r?.giver?.lastName}
                     </AppText>
                   </View>
@@ -1041,8 +1174,8 @@ export default function WorkerDashboardScreen() {
 const s = StyleSheet.create({
   page: {
     padding: rem(1.25),
-    paddingBottom: rem(6),
-    gap: rem(1.25),
+    paddingBottom: rem(0),
+    gap: rem(1),
     maxWidth: 1200,
     alignSelf: "center",
     width: "100%",
@@ -1058,9 +1191,7 @@ const s = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 24,
-    backgroundColor: "rgba(249,115,22,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(249,115,22,0.25)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -1074,12 +1205,10 @@ const s = StyleSheet.create({
   greetingText: {
     fontFamily: FONTS.body,
     fontSize: 11,
-    color: "rgba(255,255,255,0.55)",
     fontWeight: "500",
   },
   greetingName: {
     fontSize: 20,
-    color: "#fff",
     letterSpacing: -0.7,
   },
 
@@ -1112,9 +1241,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 7,
-    backgroundColor: "rgba(255,255,255,0.03)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -1122,10 +1249,9 @@ const s = StyleSheet.create({
   },
   currLabel: {
     fontSize: 12,
-    color: "rgba(255,255,255,0.55)",
     fontWeight: "600",
   },
-  currSelect: { fontSize: 13, fontWeight: "700", color: "#f97316" },
+  currSelect: { fontSize: 13, fontWeight: "700" },
 
   card: { borderWidth: 1, borderRadius: 12, padding: 24, minWidth: 0 },
   cardHeader: {
@@ -1136,9 +1262,8 @@ const s = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 15,
-    color: "#fff",
   },
-  cardLink: { fontSize: 13, fontWeight: "600", color: "#f97316" },
+  cardLink: { fontSize: 13, fontWeight: "600" },
 
   earningsCard: {
     justifyContent: "space-between",
@@ -1151,7 +1276,6 @@ const s = StyleSheet.create({
     right: -40,
     width: 160,
     height: 160,
-    backgroundColor: "rgba(249,115,22,0.12)",
     borderRadius: 80,
   },
   earningsLabel: {
@@ -1160,20 +1284,16 @@ const s = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 1,
     textTransform: "uppercase",
-    color: "rgba(255,255,255,0.28)",
     marginBottom: 6,
   },
   earningsValue: {
     fontSize: 20,
     letterSpacing: -1.5,
-    color: "#fff",
     marginBottom: 8,
   },
-  earningsMeta: { fontSize: 12, color: "rgba(255,255,255,0.28)" },
+  earningsMeta: { fontSize: 12 },
   pendingBox: {
-    backgroundColor: "rgba(249,115,22,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(249,115,22,0.25)",
     borderRadius: 10,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -1186,15 +1306,13 @@ const s = StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1.2,
-    color: "rgba(249,115,22,0.65)",
     marginBottom: 4,
   },
   pendingValue: {
     fontSize: 15,
     letterSpacing: -0.5,
-    color: "#f97316",
   },
-  pendingSub: { fontSize: 11, color: "rgba(249,115,22,0.55)", marginTop: 4 },
+  pendingSub: { fontSize: 11, marginTop: 4 },
 
   statLabel: {
     fontFamily: FONTS.bodyBold,
@@ -1202,15 +1320,13 @@ const s = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 1.6,
     textTransform: "uppercase",
-    color: "rgba(255,255,255,0.28)",
   },
   statValue: {
     fontSize: 20,
     letterSpacing: -1.2,
-    color: "#fff",
     lineHeight: 36,
   },
-  statSub: { fontSize: 10, color: "rgba(255,255,255,0.55)" },
+  statSub: { fontSize: 10 },
 
   listItem: {
     flexDirection: "row",
@@ -1218,16 +1334,13 @@ const s = StyleSheet.create({
     gap: 14,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
     minHeight: 52,
   },
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -1236,15 +1349,12 @@ const s = StyleSheet.create({
   listTitle: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#fff",
     marginBottom: 2,
   },
-  listMeta: { fontSize: 12, color: "rgba(255,255,255,0.28)" },
+  listMeta: { fontSize: 12 },
 
   dateBox: {
-    backgroundColor: "rgba(249,115,22,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(249,115,22,0.25)",
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -1254,13 +1364,11 @@ const s = StyleSheet.create({
   dateDay: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#f97316",
   },
   dateMonth: {
     fontSize: 9,
     fontWeight: "700",
     textTransform: "uppercase",
-    color: "rgba(249,115,22,0.6)",
   },
   barChart: {
     flexDirection: "row",
@@ -1277,9 +1385,7 @@ const s = StyleSheet.create({
   },
   bar: {
     width: "100%",
-    backgroundColor: "rgba(249,115,22,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(249,115,22,0.25)",
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
     minHeight: 4,
@@ -1287,7 +1393,6 @@ const s = StyleSheet.create({
   barLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "rgba(255,255,255,0.28)",
     textTransform: "uppercase",
     marginTop: 6,
   },
@@ -1301,27 +1406,22 @@ const s = StyleSheet.create({
   completionLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "rgba(255,255,255,0.55)",
   },
   completionPct: {
     fontSize: 20,
     letterSpacing: -0.5,
-    color: "#f97316",
   },
   progressTrack: {
     height: 6,
-    backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: 999,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    backgroundColor: "#f97316",
     borderRadius: 999,
   },
   completionHint: {
     fontSize: 12,
-    color: "rgba(255,255,255,0.28)",
     marginTop: 10,
   },
   badge: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: 999 },
@@ -1343,11 +1443,9 @@ const s = StyleSheet.create({
     padding: 24,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
   },
   currRow: {
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
   },
 });
