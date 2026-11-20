@@ -488,7 +488,14 @@ export default function DrawerContent({ state }) {
               { backgroundColor: c.bgPanel, borderColor: c.border },
             ]}
           >
-            <AppText style={[styles.modalTitle, { color: c.text }]}>
+            <AppText
+              weight="displayBlack"
+              style={{
+                fontSize: 15,
+                letterSpacing: -0.5,
+                marginBottom: 4,
+              }}
+            >
               {t("drawer.logoutTitle")}
             </AppText>
             <AppText style={[styles.modalMessage, { color: c.textDim }]}>
@@ -712,6 +719,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 420,
     borderRadius: RADII.modal,
+    borderRadius: 15,
     borderWidth: 1,
     padding: rem(1.8),
     shadowColor: "#000",
