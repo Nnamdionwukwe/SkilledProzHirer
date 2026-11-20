@@ -1,11 +1,4 @@
 // src/hooks/useVoiceCallWebRTC.js
-//
-// Manages one WebRTC voice-call session.
-//
-// Uses tokenStore-backed getVoiceSocket() (async). Buffers offer/answer
-// if they arrive before the PC exists. Logs ontrack details so we can see
-// whether the remote audio track is live.
-
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   RTCPeerConnection,
@@ -19,6 +12,11 @@ import { getVoiceSocket } from "../lib/voiceSocket";
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  {
+    urls: "turn:157.90.20.7:3478",
+    username: "skilledproz",
+    credential: "SkilledProz2026!", // Use the exact password you set in turnserver.conf
+  },
 ];
 
 const DEBUG_VOICE_CALL = true;
@@ -56,6 +54,7 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
   }, [getIsInitiator]);
 
   const cleanup = useCallback(() => {
+    log("cleanup()");
     if (pcRef.current) {
       try {
         pcRef.current.getSenders().forEach((s) => s.track?.stop());
@@ -81,8 +80,15 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
   }, []);
 
   useEffect(() => {
-    if (!conversationId) return;
-    if (startedRef.current) return;
+    log("useEffect fired", { conversationId, started: startedRef.current });
+    if (!conversationId) {
+      log("no conversationId — bailing");
+      return;
+    }
+    if (startedRef.current) {
+      log("already started — bailing");
+      return;
+    }
     startedRef.current = true;
 
     let cancelled = false;
@@ -108,6 +114,7 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
       const pcLocal = pcRef.current;
       if (!pcLocal) return;
       try {
+        log("📥 applying offer...");
         if (
           pcLocal.signalingState === "have-local-offer" ||
           pcLocal.signalingState === "have-remote-offer"
@@ -117,10 +124,16 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
           } catch {}
         }
         await pcLocal.setRemoteDescription(new RTCSessionDescription(sdp));
-        const answer = await pcLocal.createAnswer();
+
+        // Ensure answer explicitly receives audio
+        const answer = await pcLocal.createAnswer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: false,
+        });
         await pcLocal.setLocalDescription(answer);
         socket.emit("voice:answer", { conversationId, sdp: answer });
         log("✅ sent answer");
+
         for (const c of pendingIceRef.current) {
           try {
             await pcLocal.addIceCandidate(new RTCIceCandidate(c));
@@ -137,6 +150,7 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
       if (!pcLocal) return;
       try {
         if (pcLocal.signalingState === "have-local-offer") {
+          log("📥 applying answer...");
           await pcLocal.setRemoteDescription(new RTCSessionDescription(sdp));
           for (const c of pendingIceRef.current) {
             try {
@@ -160,13 +174,12 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
     async function start() {
       try {
         setStatus("requesting-mic");
+        log("requesting mic...");
 
+        // SIMPLIFIED CONSTRAINTS: Some native devices fail silently
+        // if echoCancellation/noiseSuppression are passed explicitly.
         const stream = await mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
+          audio: true,
           video: false,
         });
 
@@ -181,7 +194,11 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
           audioTracks: stream.getAudioTracks().length,
         });
 
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        // Use standard WebRTC configuration
+        const pc = new RTCPeerConnection({
+          iceServers: ICE_SERVERS,
+          sdpSemantics: "unified-plan",
+        });
         pcRef.current = pc;
 
         stream.getTracks().forEach((track) => {
@@ -193,33 +210,38 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
           }
         });
 
-        // ── Remote track ─────────────────────────────────────────────
+        // ── Remote Track Diagnostics ──
         pc.ontrack = (event) => {
           const incoming = event.streams[0];
-          log("📥 ontrack fired", {
+          log("📥 ontrack fired!", {
             kind: event.track.kind,
             enabled: event.track.enabled,
             muted: event.track.muted,
             readyState: event.track.readyState,
-            streamsCount: event.streams.length,
           });
+
+          // FORCE the incoming track to be enabled and unmuted
+          event.track.enabled = true;
 
           const current = remoteStreamRef.current;
           const next = new MediaStream();
           const tracks = current
             ? [...current.getTracks(), ...incoming.getTracks()]
             : [...incoming.getTracks()];
+
           const seen = new Set();
           for (const t of tracks) {
             if (seen.has(t.id)) continue;
             seen.add(t.id);
             next.addTrack(t);
           }
+
           remoteStreamRef.current = next;
           setRemoteStream(next);
-          log("📥 remoteStream ready", {
+
+          log("📥 remoteStream updated", {
             trackCount: next.getTracks().length,
-            audio: next.getAudioTracks().length,
+            audioTracks: next.getAudioTracks().length,
           });
         };
 
@@ -228,6 +250,7 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
             log("ICE gathering complete");
             return;
           }
+          log("ICE candidate generated");
           socketRef.current?.emit("voice:ice", {
             conversationId,
             candidate: event.candidate.toJSON(),
@@ -236,7 +259,7 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
 
         pc.onconnectionstatechange = () => {
           const s = pc.connectionState;
-          log("connectionState:", s);
+          log("⚠️ connectionState changed:", s);
           if (s === "connected") setStatus("connected");
           else if (s === "connecting") setStatus("connecting");
           else if (s === "disconnected") setStatus("disconnected");
@@ -244,10 +267,9 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
         };
 
         pc.oniceconnectionstatechange = () => {
-          log("iceConnectionState:", pc.iceConnectionState);
+          log("⚠️ iceConnectionState changed:", pc.iceConnectionState);
         };
 
-        // ── Socket (async now — tokenStore) ──────────────────────────
         socket = await getVoiceSocket();
         if (cancelled) return;
         if (!socket) {
@@ -256,17 +278,14 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
           return;
         }
         socketRef.current = socket;
-        log("socket acquired", {
-          connected: socket.connected,
-          id: socket.id,
-        });
+        log("socket acquired", { connected: socket.connected, id: socket.id });
 
         if (pendingOfferRef.current) {
-          log("applying buffered offer (post-PC creation)");
+          log("applying buffered offer");
           await applyOfferIfReady();
         }
         if (pendingAnswerRef.current) {
-          log("applying buffered answer (post-PC creation)");
+          log("applying buffered answer");
           await applyAnswerIfReady();
         }
 
@@ -308,8 +327,10 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
               } catch {}
             }
             setStatus("connecting");
+            log("creating offer...");
             const offer = await pcLocal.createOffer({
               offerToReceiveAudio: true,
+              offerToReceiveVideo: false,
             });
             await pcLocal.setLocalDescription(offer);
             socket.emit("voice:offer", { conversationId, sdp: offer });
@@ -409,6 +430,7 @@ export default function useVoiceCallWebRTC({ conversationId, getIsInitiator }) {
     start();
 
     return () => {
+      log("useEffect cleanup running");
       cancelled = true;
       if (socket) {
         try {
