@@ -141,12 +141,11 @@ function ConfirmationModal({
           }}
         >
           <AppText
+            weight="displayBlack"
             style={{
-              fontFamily: FONTS.displayBlack,
-              fontSize: rem(1.25),
-              fontWeight: "800",
-              color: c.text,
-              marginBottom: rem(0.5),
+              fontSize: 15,
+              letterSpacing: -0.5,
+              marginBottom: 4,
             }}
           >
             {title}
