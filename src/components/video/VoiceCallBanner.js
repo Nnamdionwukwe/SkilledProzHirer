@@ -271,8 +271,15 @@ export default function VoiceCallBanner() {
       dlog("accept OK", { callStatus: updatedCall?.status });
 
       // ✅ CHANGED: branch on callType. Voice → open full-screen voice UI
-      // via the context; video → navigate to the VideoCall screen so the
+      // via the context. Video → navigate to the VideoCall screen so the
       // receiver lands inside the WebView room.
+      //
+      // NOT CHANGED for voice: we no longer navigate to Messages after
+      // accepting. The receiver stays on whatever screen they were on
+      // (Dashboard, BrowseWorkers, etc.) and the voice-call overlay sits
+      // on top. Minimizing the call keeps them right where they were.
+      // When the call *ends*, VoiceCallContext.endCall() navigates the
+      // receiver into the chat with the caller so they see who called.
       if (incoming.callType === "video") {
         setIncoming(null);
         // Give the accept PATCH a beat to propagate on the backend before
@@ -283,7 +290,6 @@ export default function VoiceCallBanner() {
       } else {
         openCall(updatedCall || { ...incoming, status: "ACTIVE" });
         setIncoming(null);
-        goToMessages(incoming.conversationId);
       }
     } catch (err) {
       dlog("accept FAILED", {
