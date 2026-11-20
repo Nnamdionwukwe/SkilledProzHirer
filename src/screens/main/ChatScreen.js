@@ -870,8 +870,8 @@ export default function ChatScreen() {
   const publicProfileRoute = !activeOther
     ? null
     : activeOther.role === "WORKER"
-      ? "WorkerProfile" // Both apps use "WorkerProfile" for the worker's public view
-      : "HirerDetail"; // Both apps use "HirerDetail" for the hirer's public view
+      ? "WorkerProfile"
+      : "HirerPublicProfile";
   const otherProfileUrl = publicProfileRoute
     ? `${publicProfileRoute}:${activeOther.id}`
     : null;
