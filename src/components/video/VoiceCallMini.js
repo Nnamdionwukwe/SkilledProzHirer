@@ -1,9 +1,4 @@
 // src/components/video/VoiceCallMini.js
-//
-// Minimized voice-call widget. Docked bottom-right by default; user can
-// drag anywhere with PanResponder.
-// Ported from web src/components/video/VoiceCallMini.jsx.
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -37,6 +32,13 @@ function formatDuration(startedAt) {
   return `${m}:${s}`;
 }
 
+const DEBUG = true;
+function dlog(...args) {
+  if (!DEBUG) return;
+  const ts = new Date().toISOString().slice(11, 23);
+  console.log(`[VCM ${ts}]`, ...args);
+}
+
 export default function VoiceCallMini({ rtc }) {
   const { user } = useAuthStore();
   const { call, updateCall, endCall, expand } = useVoiceCall();
@@ -51,6 +53,14 @@ export default function VoiceCallMini({ rtc }) {
   const isPending = call?.status === "PENDING";
   const isReceiver = call?.receiverId === user?.id;
 
+  dlog("render", {
+    callId: call?.id ?? null,
+    status: call?.status,
+    isReceiver,
+    hasRtc: !!rtc,
+    busy,
+  });
+
   // ── Drag position ──
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const offsetRef = useRef({ x: 0, y: 0 });
@@ -59,8 +69,11 @@ export default function VoiceCallMini({ rtc }) {
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
+        // ✅ FIX: don't claim on touch-start (lets Pressables receive taps)
+        onStartShouldSetPanResponder: () => false,
+        // ✅ FIX: only claim once the finger has moved a bit (a real drag)
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6,
         onPanResponderGrant: () => {
           dragStartRef.current = { ...offsetRef.current };
         },
@@ -77,6 +90,9 @@ export default function VoiceCallMini({ rtc }) {
           pan.setValue({ x: nx, y: ny });
         },
         onPanResponderRelease: () => {
+          offsetRef.current = { x: pan.x._value, y: pan.y._value };
+        },
+        onPanResponderTerminate: () => {
           offsetRef.current = { x: pan.x._value, y: pan.y._value };
         },
       }),
@@ -121,13 +137,24 @@ export default function VoiceCallMini({ rtc }) {
 
   async function handleAccept() {
     if (!call) return;
+    dlog("ACCEPT tapped", { conversationId: call.conversationId });
     setBusy(true);
     try {
       const res = await client.patch(
         `/voice-calls/${call.conversationId}/accept`,
       );
-      updateCall(res.data.data.call);
-    } catch {
+      const updated = res.data?.data?.call;
+      dlog("accept OK", { status: updated?.status });
+      if (updated) updateCall(updated);
+      // Open full-screen voice UI — user tapped Accept, expect to see the call
+      try {
+        expand?.();
+      } catch {}
+    } catch (err) {
+      dlog("accept FAILED", {
+        status: err?.response?.status,
+        msg: err?.message,
+      });
     } finally {
       setBusy(false);
     }
@@ -135,10 +162,45 @@ export default function VoiceCallMini({ rtc }) {
 
   async function handleEnd() {
     if (!call) return;
+    dlog("END tapped", {
+      conversationId: call.conversationId,
+      status: call.status,
+    });
+    setBusy(true);
     try {
       await client.patch(`/voice-calls/${call.conversationId}/end`);
-    } catch {}
-    endCall();
+      dlog("end OK");
+    } catch (err) {
+      // ✅ FIX: still clear local state even if the API call fails —
+      // otherwise the widget gets stuck if the server already ended it.
+      dlog("end FAILED (clearing local state anyway)", {
+        status: err?.response?.status,
+        msg: err?.message,
+      });
+    } finally {
+      try {
+        endCall?.();
+      } catch {}
+      setBusy(false);
+    }
+  }
+
+  function handleMute() {
+    dlog("MUTE tapped", { hasRtc: !!rtc, isMuted: rtc?.isMuted });
+    try {
+      rtc?.toggleMute?.();
+    } catch (err) {
+      dlog("toggleMute failed", err?.message);
+    }
+  }
+
+  function handleExpand() {
+    dlog("EXPAND tapped");
+    try {
+      expand?.();
+    } catch (err) {
+      dlog("expand failed", err?.message);
+    }
   }
 
   if (!call) return null;
@@ -156,9 +218,7 @@ export default function VoiceCallMini({ rtc }) {
       style={[
         styles.widget,
         isActive ? styles.widgetCompact : null,
-        {
-          transform: pan.getTranslateTransform(),
-        },
+        { transform: pan.getTranslateTransform() },
       ]}
       {...panResponder.panHandlers}
     >
@@ -198,9 +258,9 @@ export default function VoiceCallMini({ rtc }) {
         {isActive ? (
           <>
             <Pressable
-              onPress={rtc?.toggleMute}
+              onPress={handleMute}
               style={[styles.iconBtn, rtc?.isMuted ? styles.iconBtnOn : null]}
-              hitSlop={6}
+              hitSlop={8}
             >
               {rtc?.isMuted ? (
                 <FaMicrophoneSlash
@@ -211,10 +271,23 @@ export default function VoiceCallMini({ rtc }) {
                 <FaMicrophone size={12} color="#fff" />
               )}
             </Pressable>
-            <Pressable onPress={handleEnd} style={styles.endBtn} hitSlop={6}>
-              <FaPhoneSlash size={12} color="#fff" />
+            <Pressable
+              onPress={handleEnd}
+              disabled={busy}
+              style={styles.endBtn}
+              hitSlop={8}
+            >
+              {busy ? (
+                <FaSpinner size={12} color="#fff" />
+              ) : (
+                <FaPhoneSlash size={12} color="#fff" />
+              )}
             </Pressable>
-            <Pressable onPress={expand} style={styles.iconBtn} hitSlop={6}>
+            <Pressable
+              onPress={handleExpand}
+              style={styles.iconBtn}
+              hitSlop={8}
+            >
               <FaExpand size={12} color="#fff" />
             </Pressable>
           </>
@@ -224,7 +297,7 @@ export default function VoiceCallMini({ rtc }) {
               onPress={handleEnd}
               disabled={busy}
               style={styles.endBtn}
-              hitSlop={6}
+              hitSlop={8}
             >
               {busy ? (
                 <FaSpinner size={12} color="#fff" />
@@ -236,7 +309,7 @@ export default function VoiceCallMini({ rtc }) {
               onPress={handleAccept}
               disabled={busy}
               style={styles.acceptBtn}
-              hitSlop={6}
+              hitSlop={8}
             >
               {busy ? (
                 <FaSpinner size={12} color="#fff" />
@@ -246,8 +319,17 @@ export default function VoiceCallMini({ rtc }) {
             </Pressable>
           </>
         ) : (
-          <Pressable onPress={handleEnd} style={styles.endBtn} hitSlop={6}>
-            <FaPhoneSlash size={12} color="#fff" />
+          <Pressable
+            onPress={handleEnd}
+            disabled={busy}
+            style={styles.endBtn}
+            hitSlop={8}
+          >
+            {busy ? (
+              <FaSpinner size={12} color="#fff" />
+            ) : (
+              <FaPhoneSlash size={12} color="#fff" />
+            )}
           </Pressable>
         )}
       </View>
