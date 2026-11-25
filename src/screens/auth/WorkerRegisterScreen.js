@@ -73,6 +73,24 @@ function useKeyboardHeight() {
   return height;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper to calculate password strength
+// ─────────────────────────────────────────────────────────────────────────────
+function getPasswordStrength(password) {
+  if (!password) return { level: 0, text: "", color: "" };
+
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (score <= 2) return { level: 1, text: "Weak", color: "#ef4444" }; // Red
+  if (score <= 4) return { level: 2, text: "Medium", color: "#f59e0b" }; // Orange
+  return { level: 3, text: "Strong", color: "#10b981" }; // Green
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STEPS = [
@@ -317,6 +335,8 @@ export default function WorkerRegisterScreen() {
     pricingNote: "",
   });
 
+  const passwordStrength = getPasswordStrength(account.password);
+
   useEffect(() => {
     let cancelled = false;
     client
@@ -438,8 +458,12 @@ export default function WorkerRegisterScreen() {
       if (!account.firstName || !account.lastName)
         return "First and last name required";
       if (!account.email) return "Email required";
-      if (account.password.length < 8)
-        return "Password must be at least 8 characters";
+
+      // Updated Password Validation Logic
+      if (!isStrongEnoughPassword(account.password)) {
+        return "Your password is too weak. Please use at least 8 characters, including a number, an uppercase letter, and a special character.";
+      }
+
       if (account.password !== account.confirm) return "Passwords do not match";
     }
     if (step === 1) {
@@ -469,7 +493,6 @@ export default function WorkerRegisterScreen() {
     Keyboard.dismiss();
     setStep((s) => s + 1);
   };
-
   const handleSubmit = async () => {
     const err = validateStep();
     if (err) return setError(err);
@@ -506,7 +529,28 @@ export default function WorkerRegisterScreen() {
         referralCode: account.referralCode?.trim().toUpperCase() || undefined,
       });
     } catch (e) {
-      setError(e.response?.data?.message || "Registration failed");
+      // 1. Check if Axios wrapped it in response, or if it's a flat error object
+      const status = e?.response?.status || e?.status;
+      const backendMessage =
+        e?.response?.data?.message || e?.message || e?.data?.message || "";
+
+      // 2. Check if the message itself contains "429" or "Too many"
+      const isRateLimited =
+        status === 429 ||
+        backendMessage.includes("429") ||
+        backendMessage.toLowerCase().includes("too many");
+
+      if (isRateLimited) {
+        setError(
+          "Too many attempts. Please wait a few minutes before trying to register again.",
+        );
+      } else {
+        // Show the backend's actual error message instead of overriding it
+        setError(
+          backendMessage ||
+            "Registration failed. Please choose a stronger password and try again.",
+        );
+      }
     }
   };
 
@@ -762,6 +806,47 @@ export default function WorkerRegisterScreen() {
                       onPress: () => setShowPassword((v) => !v),
                     }}
                   />
+
+                  {/* Password Strength Indicator */}
+                  {account.password.length > 0 && (
+                    <View style={s.strengthContainer}>
+                      <View style={s.strengthBars}>
+                        {[1, 2, 3].map((level) => (
+                          <View
+                            key={level}
+                            style={[
+                              s.strengthBar,
+                              {
+                                backgroundColor:
+                                  passwordStrength.level >= level
+                                    ? passwordStrength.color
+                                    : c.border,
+                              },
+                            ]}
+                          />
+                        ))}
+                      </View>
+                      <AppText
+                        variant="small"
+                        style={{ color: passwordStrength.color, fontSize: 11 }}
+                      >
+                        {passwordStrength.text}
+                      </AppText>
+                    </View>
+                  )}
+
+                  {/* Helper text for requirements */}
+                  {account.password.length > 0 &&
+                    passwordStrength.level < 3 && (
+                      <AppText
+                        variant="small"
+                        tone="dim"
+                        style={{ fontSize: 11, marginTop: 4, lineHeight: 14 }}
+                      >
+                        Include at least 8 characters, an uppercase letter, a
+                        number, and a special character.
+                      </AppText>
+                    )}
                 </View>
 
                 <View
@@ -1619,5 +1704,24 @@ const s = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // New styles for password strength
+  strengthContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 6,
+    paddingHorizontal: 2,
+  },
+  strengthBars: {
+    flexDirection: "row",
+    gap: 4,
+    flex: 1,
+    marginRight: 8,
+  },
+  strengthBar: {
+    height: 4,
+    flex: 1,
+    borderRadius: 2,
   },
 });

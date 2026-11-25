@@ -77,6 +77,24 @@ function useKeyboardHeight() {
   return height;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper to calculate password strength
+// ─────────────────────────────────────────────────────────────────────────────
+function getPasswordStrength(password) {
+  if (!password) return { level: 0, text: "", color: "" };
+
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (score <= 2) return { level: 1, text: "Weak", color: "#ef4444" }; // Red
+  if (score <= 4) return { level: 2, text: "Medium", color: "#f59e0b" }; // Orange
+  return { level: 3, text: "Strong", color: "#10b981" }; // Green
+}
+
 export default function RegisterHirerScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
@@ -121,8 +139,11 @@ export default function RegisterHirerScreen() {
   const [errors, setErrors] = useState({});
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  const passwordStrength = getPasswordStrength(form.password);
+
   const update = (key) => (value) => {
     setForm((f) => ({ ...f, [key]: value }));
+    // Clear error when user types, but let validation handle the rest on submit
     if (errors[key]) setErrors((p) => ({ ...p, [key]: "" }));
   };
 
@@ -198,7 +219,13 @@ export default function RegisterHirerScreen() {
     if (!isNonEmpty(form.lastName)) e.lastName = "Required";
     if (!isNonEmpty(form.email)) e.email = "Required";
     else if (!isEmail(form.email)) e.email = t("auth.validEmailRequired");
-    if (!isStrongEnoughPassword(form.password)) e.password = "Min 8 characters";
+
+    // Updated Password Validation Logic
+    if (!isStrongEnoughPassword(form.password)) {
+      e.password =
+        "Your password is too weak. Please use at least 8 characters, including a number, an uppercase letter, and a special character.";
+    }
+
     if (form.password !== form.confirm) e.confirm = "Doesn't match";
 
     if (!agree) e.agree = "You must accept the terms";
@@ -226,9 +253,31 @@ export default function RegisterHirerScreen() {
       });
       // No manual navigation needed; RootNavigator handles the redirect.
     } catch (err) {
-      setErrors({
-        api: err?.response?.data?.message || "Registration failed.",
-      });
+      // 1. Check if Axios wrapped it in response
+      const status = err?.response?.status || err?.status;
+      const backendMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        err?.data?.message ||
+        "";
+
+      // 2. Check if the message itself contains "429" or "Too many"
+      const isRateLimited =
+        status === 429 ||
+        backendMessage.includes("429") ||
+        backendMessage.toLowerCase().includes("too many");
+
+      if (isRateLimited) {
+        setErrors({
+          api: "Too many attempts. Please wait a few minutes before trying to register again.",
+        });
+      } else {
+        setErrors({
+          api:
+            backendMessage ||
+            "Registration failed. Please choose a stronger password and try again.",
+        });
+      }
     }
   };
 
@@ -500,6 +549,46 @@ export default function RegisterHirerScreen() {
                     onPress: () => setShowPw((v) => !v),
                   }}
                 />
+
+                {/* Password Strength Indicator */}
+                {form.password.length > 0 && (
+                  <View style={styles.strengthContainer}>
+                    <View style={styles.strengthBars}>
+                      {[1, 2, 3].map((level) => (
+                        <View
+                          key={level}
+                          style={[
+                            styles.strengthBar,
+                            {
+                              backgroundColor:
+                                passwordStrength.level >= level
+                                  ? passwordStrength.color
+                                  : c.border,
+                            },
+                          ]}
+                        />
+                      ))}
+                    </View>
+                    <AppText
+                      variant="small"
+                      style={{ color: passwordStrength.color, fontSize: 11 }}
+                    >
+                      {passwordStrength.text}
+                    </AppText>
+                  </View>
+                )}
+
+                {/* Helper text for requirements */}
+                {form.password.length > 0 && passwordStrength.level < 3 && (
+                  <AppText
+                    variant="small"
+                    tone="dim"
+                    style={{ fontSize: 11, marginTop: 4, lineHeight: 14 }}
+                  >
+                    Include at least 8 characters, an uppercase letter, a
+                    number, and a special character.
+                  </AppText>
+                )}
               </View>
               <View
                 style={{ flex: 1 }}
@@ -656,5 +745,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 28,
     flexWrap: "wrap",
+  },
+  // New styles for password strength
+  strengthContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 6,
+    paddingHorizontal: 2,
+  },
+  strengthBars: {
+    flexDirection: "row",
+    gap: 4,
+    flex: 1,
+    marginRight: 8,
+  },
+  strengthBar: {
+    height: 4,
+    flex: 1,
+    borderRadius: 2,
   },
 });
