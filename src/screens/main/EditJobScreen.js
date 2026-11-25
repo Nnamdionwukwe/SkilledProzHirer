@@ -15,7 +15,7 @@
 //   · toLocalDatetimeInput() converts ISO scheduledAt → local YYYY-MM-DDTHH:mm
 //   · Same recurring-budget preview helpers as PostJob
 //   · On success → navigation.replace("JobDetail", { jobId })
-//   · Cancel button → navigation.navigate("JobDetail", { jobId })
+//   · Cancel button → navigation.goBack()
 //   · Full skeleton loader matching form layout
 //
 // Register in HirerNavigator.js:
@@ -70,6 +70,7 @@ import {
 } from "../../icons/fa";
 
 // ── Same constants as PostJob ───────────────────────────────────────
+// Language labels are left as-is because they are proper nouns.
 const ALL_LANGUAGES = [
   { code: "en", label: "English" },
   { code: "fr", label: "French" },
@@ -99,93 +100,6 @@ const ALL_LANGUAGES = [
   { code: "zu", label: "Zulu" },
   { code: "af", label: "Afrikaans" },
   { code: "so", label: "Somali" },
-];
-
-const DURATION_UNITS = [
-  { value: "hours", label: "Hours", hint: "e.g. 3" },
-  { value: "days", label: "Days", hint: "e.g. 2" },
-  { value: "weeks", label: "Weeks", hint: "e.g. 1" },
-  { value: "months", label: "Months", hint: "e.g. 2" },
-  { value: "years", label: "Years", hint: "e.g. 1" },
-  { value: "custom", label: "Custom", hint: "e.g. Full project" },
-];
-
-const RECURRENCE_INTERVALS = [
-  { value: "DAILY", label: "Daily" },
-  { value: "WEEKLY", label: "Weekly" },
-  { value: "BIWEEKLY", label: "Every 2 weeks" },
-  { value: "MONTHLY", label: "Monthly" },
-  { value: "YEARLY", label: "Yearly" },
-];
-
-const RECURRENCE_DURATIONS = [
-  { value: "2_WEEKS", label: "For 2 weeks" },
-  { value: "1_MONTH", label: "For 1 month" },
-  { value: "3_MONTHS", label: "For 3 months" },
-  { value: "6_MONTHS", label: "For 6 months" },
-  { value: "1_YEAR", label: "For 1 year" },
-  { value: "ONGOING", label: "Ongoing" },
-];
-
-const JOB_TYPES = [
-  { value: "FULL_TIME", label: "Full-time", icon: FaBriefcase },
-  { value: "PART_TIME", label: "Part-time", icon: FaClock },
-  { value: "CONTRACT", label: "Contract", icon: FaFileAlt },
-  { value: "TEMPORARY", label: "Temporary", icon: FaClock },
-];
-
-const LOCATION_TYPES = [
-  { value: "REMOTE", label: "Remote", icon: FaGlobe },
-  { value: "ON_SITE", label: "On-site", icon: FaMapMarkerAlt },
-  { value: "HYBRID", label: "Hybrid", icon: FaRandom },
-];
-
-const BUDGET_TYPES = [
-  { value: "HOURLY", label: "Per Hour" },
-  { value: "DAILY", label: "Per Day" },
-  { value: "WEEKLY", label: "Per Week" },
-  { value: "MONTHLY", label: "Per Month" },
-  { value: "YEARLY", label: "Per Year" },
-  { value: "CUSTOM", label: "Custom" },
-];
-
-const SKILL_SUGGESTIONS = [
-  "Communication",
-  "Time Management",
-  "Problem Solving",
-  "Customer Service",
-  "Teamwork",
-  "Attention to Detail",
-  "Physical Stamina",
-  "Technical Skills",
-  "Safety Awareness",
-  "Driving License",
-  "Own Tools",
-  "Own Transport",
-];
-
-const WORK_CONDITION_OPTIONS = [
-  {
-    key: "providesAccommodation",
-    label: "Accommodation provided",
-    icon: FaHome,
-  },
-  { key: "providesMeals", label: "Meals provided", icon: FaCoffee },
-];
-
-const QUALIFICATION_PRESETS = [
-  "High School Diploma",
-  "Bachelor's Degree",
-  "Master's Degree",
-  "Doctorate (PhD)",
-  "Trade Certification",
-  "Professional License",
-  "Vocational Training",
-  "Driving License",
-  "Food Handling Certificate",
-  "Safety Certification",
-  "First Aid / CPR",
-  "Teaching Certificate",
 ];
 
 // ── Recurring helpers (same as PostJob) ────────────────────────────
@@ -301,6 +215,169 @@ export default function EditJobScreen() {
   const [form, setForm] = useState(null);
   const [originalJob, setOriginalJob] = useState(null);
 
+  // ── Localized Constants ──────────────────────────────────────────
+  const DURATION_UNITS = useMemo(
+    () => [
+      {
+        value: "hours",
+        label: t("editJob.durationHours"),
+        hint: t("editJob.durationHoursHint"),
+      },
+      {
+        value: "days",
+        label: t("editJob.durationDays"),
+        hint: t("editJob.durationDaysHint"),
+      },
+      {
+        value: "weeks",
+        label: t("editJob.durationWeeks"),
+        hint: t("editJob.durationWeeksHint"),
+      },
+      {
+        value: "months",
+        label: t("editJob.durationMonths"),
+        hint: t("editJob.durationMonthsHint"),
+      },
+      {
+        value: "years",
+        label: t("editJob.durationYears"),
+        hint: t("editJob.durationYearsHint"),
+      },
+      {
+        value: "custom",
+        label: t("editJob.durationCustom"),
+        hint: t("editJob.durationCustomHint"),
+      },
+    ],
+    [t],
+  );
+
+  const RECURRENCE_INTERVALS = useMemo(
+    () => [
+      { value: "DAILY", label: t("editJob.recurrenceDaily") },
+      { value: "WEEKLY", label: t("editJob.recurrenceWeekly") },
+      { value: "BIWEEKLY", label: t("editJob.recurrenceBiweekly") },
+      { value: "MONTHLY", label: t("editJob.recurrenceMonthly") },
+      { value: "YEARLY", label: t("editJob.recurrenceYearly") },
+    ],
+    [t],
+  );
+
+  const RECURRENCE_DURATIONS = useMemo(
+    () => [
+      { value: "2_WEEKS", label: t("editJob.recurrenceDuration2Weeks") },
+      { value: "1_MONTH", label: t("editJob.recurrenceDuration1Month") },
+      { value: "3_MONTHS", label: t("editJob.recurrenceDuration3Months") },
+      { value: "6_MONTHS", label: t("editJob.recurrenceDuration6Months") },
+      { value: "1_YEAR", label: t("editJob.recurrenceDuration1Year") },
+      { value: "ONGOING", label: t("editJob.recurrenceDurationOngoing") },
+    ],
+    [t],
+  );
+
+  const JOB_TYPES = useMemo(
+    () => [
+      {
+        value: "FULL_TIME",
+        label: t("editJob.jobTypeFullTime"),
+        icon: FaBriefcase,
+      },
+      {
+        value: "PART_TIME",
+        label: t("editJob.jobTypePartTime"),
+        icon: FaClock,
+      },
+      {
+        value: "CONTRACT",
+        label: t("editJob.jobTypeContract"),
+        icon: FaFileAlt,
+      },
+      {
+        value: "TEMPORARY",
+        label: t("editJob.jobTypeTemporary"),
+        icon: FaClock,
+      },
+    ],
+    [t],
+  );
+
+  const LOCATION_TYPES = useMemo(
+    () => [
+      { value: "REMOTE", label: t("editJob.locationRemote"), icon: FaGlobe },
+      {
+        value: "ON_SITE",
+        label: t("editJob.locationOnSite"),
+        icon: FaMapMarkerAlt,
+      },
+      { value: "HYBRID", label: t("editJob.locationHybrid"), icon: FaRandom },
+    ],
+    [t],
+  );
+
+  const BUDGET_TYPES = useMemo(
+    () => [
+      { value: "HOURLY", label: t("editJob.budgetHourly") },
+      { value: "DAILY", label: t("editJob.budgetDaily") },
+      { value: "WEEKLY", label: t("editJob.budgetWeekly") },
+      { value: "MONTHLY", label: t("editJob.budgetMonthly") },
+      { value: "YEARLY", label: t("editJob.budgetYearly") },
+      { value: "CUSTOM", label: t("editJob.budgetCustom") },
+    ],
+    [t],
+  );
+
+  const SKILL_SUGGESTIONS = useMemo(
+    () => [
+      t("editJob.skillCommunication"),
+      t("editJob.skillTimeManagement"),
+      t("editJob.skillProblemSolving"),
+      t("editJob.skillCustomerService"),
+      t("editJob.skillTeamwork"),
+      t("editJob.skillAttention"),
+      t("editJob.skillPhysicalStamina"),
+      t("editJob.skillTechnical"),
+      t("editJob.skillSafetyAwareness"),
+      t("editJob.skillDrivingLicense"),
+      t("editJob.skillOwnTools"),
+      t("editJob.skillOwnTransport"),
+    ],
+    [t],
+  );
+
+  const WORK_CONDITION_OPTIONS = useMemo(
+    () => [
+      {
+        key: "providesAccommodation",
+        label: t("editJob.accommodationProvided"),
+        icon: FaHome,
+      },
+      {
+        key: "providesMeals",
+        label: t("editJob.mealsProvided"),
+        icon: FaCoffee,
+      },
+    ],
+    [t],
+  );
+
+  const QUALIFICATION_PRESETS = useMemo(
+    () => [
+      t("editJob.qualHighSchool"),
+      t("editJob.qualBachelor"),
+      t("editJob.qualMaster"),
+      t("editJob.qualDoctorate"),
+      t("editJob.qualTrade"),
+      t("editJob.qualLicense"),
+      t("editJob.qualVocational"),
+      t("editJob.qualDriving"),
+      t("editJob.qualFoodHandling"),
+      t("editJob.qualSafety"),
+      t("editJob.qualFirstAid"),
+      t("editJob.qualTeaching"),
+    ],
+    [t],
+  );
+
   // ── Load categories ──────────────────────────────────────────────
   useEffect(() => {
     client
@@ -315,7 +392,7 @@ export default function EditJobScreen() {
   // ── Load job ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!jobId) {
-      setLoadError("Invalid job id.");
+      setLoadError(t("editJob.invalidJobId"));
       setLoading(false);
       return;
     }
@@ -385,14 +462,16 @@ export default function EditJobScreen() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setLoadError(err?.response?.data?.message || "Failed to load job.");
+        setLoadError(
+          err?.response?.data?.message || t("editJob.failedToLoadJob"),
+        );
         setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [jobId]);
+  }, [jobId, t]);
 
   // ── Derived ──────────────────────────────────────────────────────
   const normalizedSearch = catSearch.trim().toLowerCase();
@@ -450,7 +529,9 @@ export default function EditJobScreen() {
       setShowCustomCat(false);
       setCatSearch("");
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to add custom category");
+      setError(
+        err?.response?.data?.message || t("editJob.failedToAddCategory"),
+      );
     } finally {
       setAddingCat(false);
     }
@@ -464,7 +545,7 @@ export default function EditJobScreen() {
       return;
     }
     if (form.skills.length >= 20) {
-      setError("Maximum 20 skills");
+      setError(t("editJob.maxSkills"));
       return;
     }
     setForm((f) => ({ ...f, skills: [...f.skills, trimmed] }));
@@ -484,7 +565,7 @@ export default function EditJobScreen() {
       return;
     }
     if (form.qualifications.length >= 10) {
-      setError("Maximum 10 qualifications");
+      setError(t("editJob.maxQualifications"));
       return;
     }
     setForm((f) => ({ ...f, qualifications: [...f.qualifications, trimmed] }));
@@ -501,15 +582,13 @@ export default function EditJobScreen() {
 
   // ── Submit ───────────────────────────────────────────────────────
   async function handleSubmit() {
-    if (!form.categoryId) return setError("Please select a category.");
-    if (!form.title) return setError("Job title is required.");
-    if (!form.description) return setError("Description is required.");
+    if (!form.categoryId) return setError(t("editJob.errorSelectCategory"));
+    if (!form.title) return setError(t("editJob.errorTitleRequired"));
+    if (!form.description)
+      return setError(t("editJob.errorDescriptionRequired"));
     if (form.locationType !== "REMOTE" && !form.address)
-      return setError(
-        "Please enter a service address for on-site or hybrid jobs.",
-      );
-    if (!form.scheduledAt)
-      return setError("Please choose a scheduled date and time.");
+      return setError(t("editJob.errorAddressRequired"));
+    if (!form.scheduledAt) return setError(t("editJob.errorScheduledRequired"));
 
     if (form.scheduleMode === "ONE_OFF" && !form.estimatedValue) {
       const originalHasEstimated =
@@ -519,19 +598,19 @@ export default function EditJobScreen() {
       if (!originalHasEstimated) {
         return setError(
           form.durationUnit === "custom"
-            ? "Please describe the duration."
-            : "Please estimate how long the job will take.",
+            ? t("editJob.errorDurationCustom")
+            : t("editJob.errorDurationRequired"),
         );
       }
     }
 
-    if (!form.budget) return setError("Please enter a budget.");
+    if (!form.budget) return setError(t("editJob.errorBudgetRequired"));
     if (
       form.showRateOptions &&
       form.budgetType === "CUSTOM" &&
       !form.budgetCustomLabel.trim()
     )
-      return setError("Please describe your custom pay rate.");
+      return setError(t("editJob.errorCustomRateRequired"));
 
     const finalSkills = skillInput.trim()
       ? [...form.skills, skillInput.trim()].slice(0, 20)
@@ -586,9 +665,16 @@ export default function EditJobScreen() {
           RECURRENCE_DURATIONS.find(
             (d) => d.value === form.recurrenceDuration,
           )?.label?.toLowerCase() || form.recurrenceDuration;
-        noteParts.push(`Recurring: ${intervalLabel} ${durationLabel}.`);
+        noteParts.push(
+          t("editJob.recurringNote", {
+            interval: intervalLabel,
+            duration: durationLabel,
+          }),
+        );
       } else if (form.durationUnit === "custom" && form.estimatedValue) {
-        noteParts.push(`Duration: ${form.estimatedValue.trim()}.`);
+        noteParts.push(
+          t("editJob.durationNote", { value: form.estimatedValue.trim() }),
+        );
       }
       if (form.notes) noteParts.push(form.notes);
       const finalNotes = noteParts.join(" ");
@@ -618,10 +704,10 @@ export default function EditJobScreen() {
       };
 
       await client.put(`/jobs/${jobId}`, payload);
-      toast.success("Job updated successfully.");
+      toast.success(t("editJob.jobUpdatedSuccess"));
       navigation.replace("JobDetail", { jobId });
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to update job.");
+      setError(err?.response?.data?.message || t("editJob.failedToUpdateJob"));
     } finally {
       setSaving(false);
     }
@@ -664,7 +750,7 @@ export default function EditJobScreen() {
           >
             <FaArrowLeft size={12} color={c.textDim} />
             <AppText style={{ fontSize: 12, color: c.textDim, marginLeft: 6 }}>
-              Back to My Jobs
+              {t("editJob.backToMyJobs")}
             </AppText>
           </Pressable>
         </View>
@@ -690,7 +776,7 @@ export default function EditJobScreen() {
           marginBottom: 4,
         }}
       >
-        Editing
+        {t("editJob.eyebrow")}
       </AppText>
       <AppText
         style={{
@@ -701,7 +787,7 @@ export default function EditJobScreen() {
           letterSpacing: -0.4,
         }}
       >
-        Edit Job
+        {t("editJob.title")}
       </AppText>
       <AppText
         style={{
@@ -712,11 +798,11 @@ export default function EditJobScreen() {
           lineHeight: 19,
         }}
       >
-        Update the details of your job posting.
+        {t("editJob.subtitle")}
       </AppText>
 
       {/* ── Category ────────────────────────────────────────────── */}
-      <Field label="Category" required c={c}>
+      <Field label={t("editJob.category")} required c={c}>
         {selectedCat ? (
           <View
             style={[
@@ -737,7 +823,7 @@ export default function EditJobScreen() {
               }}
               numberOfLines={1}
             >
-              Selected:{" "}
+              {t("editJob.selected")}{" "}
               <AppText style={{ fontWeight: "700" }}>
                 {selectedCat.icon} {selectedCat.name}
               </AppText>
@@ -751,7 +837,7 @@ export default function EditJobScreen() {
             <TextInput
               value={catSearch}
               onChangeText={setCatSearch}
-              placeholder="Search categories..."
+              placeholder={t("editJob.searchCategories")}
               placeholderTextColor={c.textMuted}
               style={[
                 styles.input,
@@ -798,7 +884,7 @@ export default function EditJobScreen() {
               <AppText
                 style={{ fontSize: 11, color: c.textMuted, marginTop: 6 }}
               >
-                No categories match "{catSearch.trim()}"
+                {t("editJob.noCategoriesMatch", { query: catSearch.trim() })}
               </AppText>
             ) : null}
           </>
@@ -823,7 +909,7 @@ export default function EditJobScreen() {
                     marginLeft: 4,
                   }}
                 >
-                  Can't find your category? Add a custom one
+                  {t("editJob.addCustomCategory")}
                 </AppText>
               </Pressable>
             ) : (
@@ -831,7 +917,7 @@ export default function EditJobScreen() {
                 <TextInput
                   value={customCatName}
                   onChangeText={setCustomCatName}
-                  placeholder="Category name e.g. Solar Panel Installation"
+                  placeholder={t("editJob.customCategoryPlaceholder")}
                   placeholderTextColor={c.textMuted}
                   autoFocus
                   style={[
@@ -863,7 +949,9 @@ export default function EditJobScreen() {
                     <AppText
                       style={{ fontSize: 12, fontWeight: "700", color: c.bg }}
                     >
-                      {addingCat ? "Adding…" : "Add Category"}
+                      {addingCat
+                        ? t("editJob.adding")
+                        : t("editJob.addCategory")}
                     </AppText>
                   </Pressable>
                   <Pressable
@@ -883,7 +971,7 @@ export default function EditJobScreen() {
                         color: c.textDim,
                       }}
                     >
-                      Cancel
+                      {t("editJob.cancel")}
                     </AppText>
                   </Pressable>
                 </View>
@@ -894,11 +982,11 @@ export default function EditJobScreen() {
       </Field>
 
       {/* ── Title ───────────────────────────────────────────────── */}
-      <Field label="Job Title" required c={c}>
+      <Field label={t("editJob.jobTitle")} required c={c}>
         <TextInput
           value={form.title}
           onChangeText={(v) => set("title", v)}
-          placeholder="e.g. Fix leaking bathroom pipe"
+          placeholder={t("editJob.jobTitlePlaceholder")}
           placeholderTextColor={c.textMuted}
           style={[
             styles.input,
@@ -912,11 +1000,11 @@ export default function EditJobScreen() {
       </Field>
 
       {/* ── Description ─────────────────────────────────────────── */}
-      <Field label="Description" required c={c}>
+      <Field label={t("editJob.description")} required c={c}>
         <TextInput
           value={form.description}
           onChangeText={(v) => set("description", v)}
-          placeholder="Describe the job in detail..."
+          placeholder={t("editJob.descriptionPlaceholder")}
           placeholderTextColor={c.textMuted}
           multiline
           numberOfLines={4}
@@ -933,7 +1021,7 @@ export default function EditJobScreen() {
       </Field>
 
       {/* ── Job Type ────────────────────────────────────────────── */}
-      <Field label="Job Type" c={c}>
+      <Field label={t("editJob.jobType")} c={c}>
         <OptionGrid
           options={JOB_TYPES}
           value={form.jobType}
@@ -943,7 +1031,7 @@ export default function EditJobScreen() {
       </Field>
 
       {/* ── Location Type ───────────────────────────────────────── */}
-      <Field label="Work Location" c={c}>
+      <Field label={t("editJob.workLocation")} c={c}>
         <OptionGrid
           options={LOCATION_TYPES}
           value={form.locationType}
@@ -954,11 +1042,11 @@ export default function EditJobScreen() {
 
       {/* ── Address ─────────────────────────────────────────────── */}
       {form.locationType !== "REMOTE" ? (
-        <Field label="Service Address" required c={c}>
+        <Field label={t("editJob.serviceAddress")} required c={c}>
           <TextInput
             value={form.address}
             onChangeText={(v) => set("address", v)}
-            placeholder="Full address where work will be done"
+            placeholder={t("editJob.serviceAddressPlaceholder")}
             placeholderTextColor={c.textMuted}
             style={[
               styles.input,
@@ -973,7 +1061,7 @@ export default function EditJobScreen() {
             <TextInput
               value={form.latitude}
               onChangeText={(v) => set("latitude", v.replace(/[^0-9.-]/g, ""))}
-              placeholder="Latitude (optional)"
+              placeholder={t("editJob.latitudePlaceholder")}
               placeholderTextColor={c.textMuted}
               keyboardType="decimal-pad"
               style={[
@@ -989,7 +1077,7 @@ export default function EditJobScreen() {
             <TextInput
               value={form.longitude}
               onChangeText={(v) => set("longitude", v.replace(/[^0-9.-]/g, ""))}
-              placeholder="Longitude (optional)"
+              placeholder={t("editJob.longitudePlaceholder")}
               placeholderTextColor={c.textMuted}
               keyboardType="decimal-pad"
               style={[
@@ -1007,7 +1095,7 @@ export default function EditJobScreen() {
       ) : null}
 
       {/* ── Scheduled Date ──────────────────────────────────────── */}
-      <Field label="Scheduled Date & Time" required c={c}>
+      <Field label={t("editJob.scheduledDateTime")} required c={c}>
         <Pressable
           onPress={() => setShowDatePicker(true)}
           style={({ pressed }) => [
@@ -1028,7 +1116,7 @@ export default function EditJobScreen() {
           >
             {form.scheduledAt
               ? new Date(form.scheduledAt).toLocaleString()
-              : "Tap to choose a date and time"}
+              : t("editJob.tapToChooseDateTime")}
           </AppText>
         </Pressable>
         {showDatePicker ? (
@@ -1048,9 +1136,9 @@ export default function EditJobScreen() {
       </Field>
 
       {/* ── Language ────────────────────────────────────────────── */}
-      <Field label="Language Requirement" c={c}>
+      <Field label={t("editJob.languageRequirement")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          What language should the worker speak fluently?
+          {t("editJob.languageRequirementQuestion")}
         </AppText>
         <ScrollView
           horizontal
@@ -1086,22 +1174,27 @@ export default function EditJobScreen() {
           })}
         </ScrollView>
         <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 8 }}>
-          ✓ Workers must speak{" "}
-          <AppText style={{ fontWeight: "700", color: c.text }}>
-            {selectedLanguageLabel}
-          </AppText>
+          {t("editJob.languageRequired", { language: selectedLanguageLabel })}
         </AppText>
       </Field>
 
       {/* ── Schedule Mode ───────────────────────────────────────── */}
-      <Field label="Schedule" c={c}>
+      <Field label={t("editJob.schedule")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          Is this a one-off job, or something that repeats?
+          {t("editJob.scheduleQuestion")}
         </AppText>
         <OptionGrid
           options={[
-            { value: "ONE_OFF", label: "One-off job", icon: FaTarget },
-            { value: "RECURRING", label: "Recurring", icon: FaRefreshCw },
+            {
+              value: "ONE_OFF",
+              label: t("editJob.scheduleOneOff"),
+              icon: FaTarget,
+            },
+            {
+              value: "RECURRING",
+              label: t("editJob.scheduleRecurring"),
+              icon: FaRefreshCw,
+            },
           ]}
           value={form.scheduleMode}
           onChange={(v) => set("scheduleMode", v)}
@@ -1118,7 +1211,7 @@ export default function EditJobScreen() {
                 marginBottom: 8,
               }}
             >
-              Roughly how long will it take?
+              {t("editJob.durationQuestion")}
             </AppText>
             <View style={styles.unitPills}>
               {DURATION_UNITS.map((u) => {
@@ -1174,9 +1267,14 @@ export default function EditJobScreen() {
 
             {form.estimatedValue && form.durationUnit !== "custom" ? (
               <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 6 }}>
-                ✓ Est. {form.estimatedValue} {form.durationUnit} = approx.{" "}
-                {toEstimatedHours(form.durationUnit, form.estimatedValue)}h of
-                work
+                {t("editJob.estimatedWork", {
+                  value: form.estimatedValue,
+                  unit: form.durationUnit,
+                  hours: toEstimatedHours(
+                    form.durationUnit,
+                    form.estimatedValue,
+                  ),
+                })}
               </AppText>
             ) : null}
           </>
@@ -1190,7 +1288,7 @@ export default function EditJobScreen() {
                 marginBottom: 8,
               }}
             >
-              How often, and for how long?
+              {t("editJob.recurringQuestion")}
             </AppText>
             <AppText
               style={{
@@ -1200,7 +1298,7 @@ export default function EditJobScreen() {
                 marginBottom: 4,
               }}
             >
-              FREQUENCY
+              {t("editJob.frequency")}
             </AppText>
             <ScrollView
               horizontal
@@ -1245,7 +1343,7 @@ export default function EditJobScreen() {
                 marginBottom: 4,
               }}
             >
-              FOR HOW LONG
+              {t("editJob.forHowLong")}
             </AppText>
             <ScrollView
               horizontal
@@ -1285,15 +1383,15 @@ export default function EditJobScreen() {
       </Field>
 
       {/* ── Budget ──────────────────────────────────────────────── */}
-      <Field label="Budget" required c={c}>
+      <Field label={t("editJob.budget")} required c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          How much are you offering for this job?
+          {t("editJob.budgetQuestion")}
         </AppText>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TextInput
             value={form.budget}
             onChangeText={(v) => set("budget", v.replace(/[^0-9.]/g, ""))}
-            placeholder="0.00"
+            placeholder={t("editJob.budgetPlaceholder")}
             placeholderTextColor={c.textMuted}
             keyboardType="decimal-pad"
             style={[
@@ -1383,7 +1481,7 @@ export default function EditJobScreen() {
                 marginLeft: 4,
               }}
             >
-              Pay by the hour / day instead
+              {t("editJob.payByHourDay")}
             </AppText>
           </Pressable>
         ) : (
@@ -1391,15 +1489,15 @@ export default function EditJobScreen() {
             <AppText
               style={{ fontSize: 11, color: c.textMuted, marginBottom: 6 }}
             >
-              Pay rate:
+              {t("editJob.payRate")}
             </AppText>
             <View style={styles.unitPills}>
-              {BUDGET_TYPES.map((t) => {
-                const active = form.budgetType === t.value;
+              {BUDGET_TYPES.map((tVal) => {
+                const active = form.budgetType === tVal.value;
                 return (
                   <Pressable
-                    key={t.value}
-                    onPress={() => set("budgetType", t.value)}
+                    key={tVal.value}
+                    onPress={() => set("budgetType", tVal.value)}
                     style={({ pressed }) => [
                       styles.pill,
                       {
@@ -1416,7 +1514,7 @@ export default function EditJobScreen() {
                         color: active ? c.orange : c.textDim,
                       }}
                     >
-                      {t.label}
+                      {tVal.label}
                     </AppText>
                   </Pressable>
                 );
@@ -1427,7 +1525,7 @@ export default function EditJobScreen() {
               <TextInput
                 value={form.budgetCustomLabel}
                 onChangeText={(v) => set("budgetCustomLabel", v)}
-                placeholder="Describe your rate (e.g. 'Per session')"
+                placeholder={t("editJob.budgetCustomPlaceholder")}
                 placeholderTextColor={c.textMuted}
                 style={[
                   styles.input,
@@ -1461,7 +1559,7 @@ export default function EditJobScreen() {
                   marginLeft: 4,
                 }}
               >
-                Back to total budget
+                {t("editJob.backToTotalBudget")}
               </AppText>
             </Pressable>
           </View>
@@ -1469,14 +1567,14 @@ export default function EditJobScreen() {
 
         {/* Total preview */}
         {form.budget && form.showRateOptions && form.budgetType !== "CUSTOM" ? (
-          <BudgetPreview form={form} c={c} />
+          <BudgetPreview form={form} c={c} t={t} />
         ) : null}
       </Field>
 
       {/* ── Work Conditions ─────────────────────────────────────── */}
-      <Field label="Work Conditions" c={c}>
+      <Field label={t("editJob.workConditions")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          Does this job come with accommodation or meals?
+          {t("editJob.workConditionsQuestion")}
         </AppText>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {WORK_CONDITION_OPTIONS.map((opt) => {
@@ -1514,9 +1612,9 @@ export default function EditJobScreen() {
       </Field>
 
       {/* ── Qualifications ──────────────────────────────────────── */}
-      <Field label="Required Qualifications" c={c}>
+      <Field label={t("editJob.qualifications")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          Add any specific qualifications this job requires. Optional.
+          {t("editJob.qualificationsQuestion")}
         </AppText>
         <View
           style={[
@@ -1550,7 +1648,9 @@ export default function EditJobScreen() {
                 addQualification(qualificationInput);
             }}
             placeholder={
-              form.qualifications.length === 0 ? "Type a qualification…" : ""
+              form.qualifications.length === 0
+                ? t("editJob.qualificationPlaceholder")
+                : ""
             }
             placeholderTextColor={c.textMuted}
             style={{
@@ -1583,7 +1683,7 @@ export default function EditJobScreen() {
                       marginLeft: 4,
                     }}
                   >
-                    Hide common qualifications
+                    {t("editJob.hideQualificationPresets")}
                   </AppText>
                 </>
               ) : (
@@ -1597,7 +1697,7 @@ export default function EditJobScreen() {
                       marginLeft: 4,
                     }}
                   >
-                    Show common qualifications
+                    {t("editJob.showQualificationPresets")}
                   </AppText>
                 </>
               )}
@@ -1638,9 +1738,9 @@ export default function EditJobScreen() {
       </Field>
 
       {/* ── Skills ──────────────────────────────────────────────── */}
-      <Field label="Required Skills" c={c}>
+      <Field label={t("editJob.skills")} c={c}>
         <AppText style={{ fontSize: 11, color: c.textMuted, marginBottom: 8 }}>
-          Add skills the worker should have.
+          {t("editJob.skillsQuestion")}
         </AppText>
         <View
           style={[
@@ -1671,7 +1771,9 @@ export default function EditJobScreen() {
             onBlur={() => {
               if (skillInput.trim()) addSkill(skillInput);
             }}
-            placeholder={form.skills.length === 0 ? "Type a skill…" : ""}
+            placeholder={
+              form.skills.length === 0 ? t("editJob.skillPlaceholder") : ""
+            }
             placeholderTextColor={c.textMuted}
             style={{
               flex: 1,
@@ -1714,11 +1816,11 @@ export default function EditJobScreen() {
       </Field>
 
       {/* ── Notes ───────────────────────────────────────────────── */}
-      <Field label="Additional Notes" c={c}>
+      <Field label={t("editJob.notes")} c={c}>
         <TextInput
           value={form.notes}
           onChangeText={(v) => set("notes", v)}
-          placeholder="Access instructions, tools needed, preferences..."
+          placeholder={t("editJob.notesPlaceholder")}
           placeholderTextColor={c.textMuted}
           multiline
           numberOfLines={3}
@@ -1768,7 +1870,7 @@ export default function EditJobScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <FaBolt size={14} color={c.bg} />
             <AppText style={{ fontSize: 14, fontWeight: "700", color: c.bg }}>
-              Save Changes
+              {t("editJob.saveChanges")}
             </AppText>
           </View>
         )}
@@ -1776,7 +1878,7 @@ export default function EditJobScreen() {
 
       {/* ── Cancel button ───────────────────────────────────────── */}
       <Pressable
-        onPress={() => navigation.replace("JobDetail", { jobId })}
+        onPress={() => navigation.goBack()}
         style={({ pressed }) => [
           styles.cancelBtn,
           { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
@@ -1791,7 +1893,7 @@ export default function EditJobScreen() {
             marginLeft: 6,
           }}
         >
-          Cancel and go back
+          {t("editJob.cancelAndGoBack")}
         </AppText>
       </Pressable>
     </AppScreen>
@@ -1860,7 +1962,7 @@ function OptionGrid({ options, value, onChange, c }) {
   );
 }
 
-function BudgetPreview({ form, c }) {
+function BudgetPreview({ form, c, t }) {
   if (form.scheduleMode === "ONE_OFF") {
     const rate = parseFloat(form.budget);
     if (!Number.isFinite(rate) || rate <= 0) return null;
@@ -1891,31 +1993,36 @@ function BudgetPreview({ form, c }) {
     const total = rate * periods;
 
     const unitNounMap = {
-      HOURLY: ["hour", "hours"],
-      DAILY: ["day", "days"],
-      WEEKLY: ["week", "weeks"],
-      MONTHLY: ["month", "months"],
-      YEARLY: ["year", "years"],
+      HOURLY: [t("editJob.monthsPerHour"), t("editJob.monthsPerHours")],
+      DAILY: [t("editJob.monthsPerDay"), t("editJob.monthsPerDays")],
+      WEEKLY: [t("editJob.monthsPerWeek"), t("editJob.monthsPerWeeks")],
+      MONTHLY: [t("editJob.monthsPerMonth"), t("editJob.monthsPerMonths")],
+      YEARLY: [t("editJob.monthsPerYear"), t("editJob.monthsPerYears")],
     };
     const [sing, plur] = unitNounMap[form.budgetType] || ["unit", "units"];
     const rounded = Number(periods.toFixed(2));
     const periodsLabel = `${rounded} ${rounded === 1 ? sing : plur}`;
-    const periodLabel =
-      {
-        HOURLY: "per hour",
-        DAILY: "per day",
-        WEEKLY: "per week",
-        MONTHLY: "per month",
-        YEARLY: "per year",
-      }[form.budgetType] || `per ${form.budgetType.toLowerCase()}`;
+
+    const periodLabelKey = {
+      HOURLY: "editJob.perHour",
+      DAILY: "editJob.perDay",
+      WEEKLY: "editJob.perWeek",
+      MONTHLY: "editJob.perMonth",
+      YEARLY: "editJob.perYear",
+    }[form.budgetType];
+    const periodLabel = periodLabelKey
+      ? t(periodLabelKey)
+      : `per ${form.budgetType.toLowerCase()}`;
 
     return (
       <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 8 }}>
-        ✓ Total:{" "}
-        <AppText style={{ fontWeight: "700", color: c.text }}>
-          {form.currency} {Math.round(total).toLocaleString()}
-        </AppText>{" "}
-        ({form.currency} {rate.toLocaleString()} {periodLabel} × {periodsLabel})
+        {t("editJob.totalPreview", {
+          currency: form.currency,
+          total: Math.round(total).toLocaleString(),
+          rate: rate.toLocaleString(),
+          period: periodLabel,
+          periods: periodsLabel,
+        })}
       </AppText>
     );
   }
@@ -1930,24 +2037,29 @@ function BudgetPreview({ form, c }) {
   const total = rate * recurring.count;
   const unitLabel =
     recurring.unit === "hours"
-      ? `${recurring.count} hours`
+      ? `${recurring.count} ${t("editJob.monthsPerHours")}`
       : `${recurring.count} ${recurring.unit}`;
-  const periodLabel =
-    {
-      HOURLY: "per hour",
-      DAILY: "per day",
-      WEEKLY: "per week",
-      MONTHLY: "per month",
-      YEARLY: "per year",
-    }[form.budgetType] || `per ${form.budgetType.toLowerCase()}`;
+
+  const periodLabelKey = {
+    HOURLY: "editJob.perHour",
+    DAILY: "editJob.perDay",
+    WEEKLY: "editJob.perWeek",
+    MONTHLY: "editJob.perMonth",
+    YEARLY: "editJob.perYear",
+  }[form.budgetType];
+  const periodLabel = periodLabelKey
+    ? t(periodLabelKey)
+    : `per ${form.budgetType.toLowerCase()}`;
 
   return (
     <AppText style={{ fontSize: 11, color: c.textDim, marginTop: 8 }}>
-      ✓ Total:{" "}
-      <AppText style={{ fontWeight: "700", color: c.text }}>
-        {form.currency} {Math.round(total).toLocaleString()}
-      </AppText>{" "}
-      ({form.currency} {rate.toLocaleString()} {periodLabel} × {unitLabel})
+      {t("editJob.totalPreviewRecurring", {
+        currency: form.currency,
+        total: Math.round(total).toLocaleString(),
+        rate: rate.toLocaleString(),
+        period: periodLabel,
+        unit: unitLabel,
+      })}
     </AppText>
   );
 }
