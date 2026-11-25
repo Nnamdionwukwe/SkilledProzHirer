@@ -12,7 +12,12 @@
           "package_name": "com.skilledproz.hirer"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "541973933569-v0jjdrasjrsra662smlo4to16vmcon1a.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB_k1u3kHXc_Rc0SuqweT1Hudo3rgCdfzA"
@@ -20,7 +25,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "541973933569-v0jjdrasjrsra662smlo4to16vmcon1a.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
