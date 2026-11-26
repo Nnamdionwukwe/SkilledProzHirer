@@ -32,8 +32,11 @@ import {
   StyleSheet,
   TextInput,
   View,
+  Platform,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 
@@ -580,6 +583,54 @@ export default function EditJobScreen() {
     }));
   }
 
+  function openDateTimePicker() {
+    const current = form.scheduledAt ? new Date(form.scheduledAt) : new Date();
+
+    // Android: mode="datetime" is unsupported.
+    // Use the imperative API so React never races the native dismiss.
+    if (Platform.OS === "android") {
+      DateTimePickerAndroid.open({
+        value: current,
+        mode: "date",
+        display: "default",
+        onChange: (dateEvent, pickedDate) => {
+          if (dateEvent.type === "dismissed" || !pickedDate) return;
+
+          // Preserve the existing time (or keep 00:00 default)
+          const base = new Date(current);
+          base.setFullYear(
+            pickedDate.getFullYear(),
+            pickedDate.getMonth(),
+            pickedDate.getDate(),
+          );
+
+          DateTimePickerAndroid.open({
+            value: base,
+            mode: "time",
+            display: "default",
+            is24Hour: true,
+            onChange: (timeEvent, pickedTime) => {
+              if (timeEvent.type === "dismissed" || !pickedTime) return;
+
+              const final = new Date(base);
+              final.setHours(
+                pickedTime.getHours(),
+                pickedTime.getMinutes(),
+                0,
+                0,
+              );
+              set("scheduledAt", final.toISOString());
+            },
+          });
+        },
+      });
+      return;
+    }
+
+    // iOS: component form is reliable — just open it
+    setShowDatePicker(true);
+  }
+
   // ── Submit ───────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!form.categoryId) return setError(t("editJob.errorSelectCategory"));
@@ -704,12 +755,35 @@ export default function EditJobScreen() {
       };
 
       await client.put(`/jobs/${jobId}`, payload);
-      toast.success(t("editJob.jobUpdatedSuccess"));
-      navigation.replace("JobDetail", { jobId });
     } catch (err) {
       setError(err?.response?.data?.message || t("editJob.failedToUpdateJob"));
-    } finally {
       setSaving(false);
+      return;
+    }
+
+    // ── Success path — kept OUTSIDE the try/catch so navigation
+    //    errors can never be reported as "failed to update job". ──
+    setSaving(false);
+    toast.success(t("editJob.jobUpdatedSuccess"));
+
+    try {
+      navigation.replace("JobDetail", { jobId });
+    } catch (navErr) {
+      // If `replace` is unsupported by the current navigator
+      // (e.g. a Drawer), fall back to a plain navigate so the
+      // user still lands on the job.
+      console.warn(
+        "[EditJob] navigation.replace failed, falling back to navigate:",
+        navErr?.message,
+      );
+      try {
+        navigation.navigate("JobDetail", {
+          jobId,
+          _refresh: Date.now(),
+        });
+      } catch {
+        navigation.navigate("JobsManagement");
+      }
     }
   }
 
@@ -1097,7 +1171,7 @@ export default function EditJobScreen() {
       {/* ── Scheduled Date ──────────────────────────────────────── */}
       <Field label={t("editJob.scheduledDateTime")} required c={c}>
         <Pressable
-          onPress={() => setShowDatePicker(true)}
+          onPress={openDateTimePicker}
           style={({ pressed }) => [
             styles.input,
             {
@@ -1119,7 +1193,9 @@ export default function EditJobScreen() {
               : t("editJob.tapToChooseDateTime")}
           </AppText>
         </Pressable>
-        {showDatePicker ? (
+
+        {/* iOS: component form is fine (mode="datetime" is iOS-only) */}
+        {Platform.OS === "ios" && showDatePicker ? (
           <DateTimePicker
             value={form.scheduledAt ? new Date(form.scheduledAt) : new Date()}
             mode="datetime"
@@ -1878,7 +1954,12 @@ export default function EditJobScreen() {
 
       {/* ── Cancel button ───────────────────────────────────────── */}
       <Pressable
-        onPress={() => navigation.goBack()}
+        onPress={() =>
+          navigation.navigate("JobDetail", {
+            jobId,
+            _refresh: Date.now(),
+          })
+        }
         style={({ pressed }) => [
           styles.cancelBtn,
           { borderColor: c.border, opacity: pressed ? 0.85 : 1 },

@@ -34,7 +34,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
+import { Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 
@@ -462,6 +465,54 @@ export default function PostJobScreen() {
       ...f,
       qualifications: f.qualifications.filter((q) => q !== qual),
     }));
+  }
+
+  function openDateTimePicker() {
+    const current = form.scheduledAt ? new Date(form.scheduledAt) : new Date();
+
+    // Android: mode="datetime" is unsupported. Chain date -> time.
+    // Use the imperative API so React never races the native dismiss.
+    if (Platform.OS === "android") {
+      DateTimePickerAndroid.open({
+        value: current,
+        mode: "date",
+        display: "default",
+        onChange: (dateEvent, pickedDate) => {
+          if (dateEvent.type === "dismissed" || !pickedDate) return;
+
+          // Preserve the existing time (or default 09:00)
+          const base = new Date(current);
+          base.setFullYear(
+            pickedDate.getFullYear(),
+            pickedDate.getMonth(),
+            pickedDate.getDate(),
+          );
+
+          DateTimePickerAndroid.open({
+            value: base,
+            mode: "time",
+            display: "default",
+            is24Hour: true,
+            onChange: (timeEvent, pickedTime) => {
+              if (timeEvent.type === "dismissed" || !pickedTime) return;
+
+              const final = new Date(base);
+              final.setHours(
+                pickedTime.getHours(),
+                pickedTime.getMinutes(),
+                0,
+                0,
+              );
+              set("scheduledAt", final.toISOString());
+            },
+          });
+        },
+      });
+      return;
+    }
+
+    // iOS: just open the component form
+    setShowDatePicker(true);
   }
 
   // ── Submit ────────────────────────────────────────────────────────
@@ -1175,7 +1226,7 @@ export default function PostJobScreen() {
       {/* ── Scheduled Date ──────────────────────────────────────── */}
       <Field label={t("postJob.scheduledDateTime")} required c={c}>
         <Pressable
-          onPress={() => setShowDatePicker(true)}
+          onPress={openDateTimePicker}
           style={({ pressed }) => [
             styles.input,
             {
@@ -1197,7 +1248,9 @@ export default function PostJobScreen() {
               : t("postJob.tapToChooseDate")}
           </AppText>
         </Pressable>
-        {showDatePicker ? (
+
+        {/* iOS: component form is fine (mode="datetime" is iOS-only) */}
+        {Platform.OS === "ios" && showDatePicker ? (
           <DateTimePicker
             value={form.scheduledAt ? new Date(form.scheduledAt) : new Date()}
             mode="datetime"
